@@ -29,6 +29,17 @@ import {
 } from "../../composition";
 import { importRuleDocument } from "../../finance";
 import { boundedJson } from "../../http";
+import {
+  captureObservation,
+  DiagnosticEvent,
+  markFailure,
+  type ObservedSpan,
+  observeSpan,
+  Recovery,
+  reportDiagnostic,
+  type SafeFields,
+  SpanName,
+} from "../../observability";
 import { migrationHttp } from "../../sync/controller";
 import { invoke } from "../invoke";
 import type { Envelope } from "../protocol.types";
@@ -43,6 +54,7 @@ import {
   validateSubscriptionWire,
   validateTaskWire,
 } from "../tasks";
+import { streamMcpResponse } from "./response";
 
 const EnvelopeSchema = z.object({
   id: z.union([z.string(), z.number()]).optional(),
@@ -55,6 +67,39 @@ const longKinds = new Map<string, LongOperationKind>([
   [ToolName.reconcile, OperationKind.reconcile],
   [ToolName.reapply, OperationKind.reapply],
 ]);
+const toolActions = new Map<string, NonNullable<SafeFields["action"]>>([
+  [ToolName.aggregate, "aggregate"],
+  [ToolName.explain, "explain"],
+  [ToolName.get_subscriptions, "subscriptions"],
+  [ToolName.live_balance, "live_balance"],
+  [ToolName.override, "correct"],
+  [ToolName.preview, "preview"],
+  [ToolName.query, "query"],
+  [ToolName.reapply, "reapply"],
+  [ToolName.reconcile, "reconcile"],
+  [ToolName.rules, "rules"],
+  [ToolName.setup_status, "setup_status"],
+  [ToolName.status, "status"],
+  [ToolName.sync, "sync"],
+]);
+const taskActions = new Map<string, NonNullable<SafeFields["action"]>>([
+  ["tasks/get", "tasks_get"],
+  ["tasks/cancel", "tasks_cancel"],
+  ["tasks/update", "tasks_update"],
+  ["subscriptions/listen", "subscriptions_listen"],
+]);
+function messageAction(message: Envelope): NonNullable<SafeFields["action"]> {
+  if (message.method === "tools/list") {
+    return "tools_list";
+  }
+  if (
+    message.method === "tools/call" &&
+    typeof message.params?.name === "string"
+  ) {
+    return toolActions.get(message.params.name) ?? "unknown";
+  }
+  return taskActions.get(message.method) ?? "unknown";
+}
 // The catalog is controlled code. Adapt it to the SDK once per isolate,
 // instead of validating the same declarations on every tools/list request.
 const catalog = tools.map((tool) => {
@@ -84,70 +129,28 @@ async function fetchTransport(
   ctx?: ExecutionContext,
 ) {
   let text: string | undefined;
+  let streamAction: NonNullable<SafeFields["action"]> = "unknown";
   if (request.method === "POST") {
     const body = await readMcpBody(request);
     if (body instanceof Response) {
       return body;
     }
     text = body;
-    let message: unknown;
-    try {
-      message = parseJson(body);
-    } catch {
-      message = null;
-    }
-    const parsed = EnvelopeSchema.safeParse(message);
-    if (parsed.success) {
-      const { data: m } = parsed;
-      const params = m.params ?? {};
-      let kind: LongOperationKind | undefined;
-      if (m.method === "tools/call" && typeof params.name === "string") {
-        kind = longKinds.get(params.name);
-      }
-      if (
-        m.method.startsWith("tasks/") ||
-        m.method === "subscriptions/listen" ||
-        kind
-      ) {
-        return handleTaskRequest({ ctx, env, kind, m, params, request });
+    const m = readEnvelope(body);
+    if (m) {
+      streamAction = messageAction(m);
+      const taskResponse = routeTaskRequest({ ctx, env, m, request });
+      if (taskResponse !== undefined) {
+        return taskResponse;
       }
     }
   }
-  const handler = createMcpHandler(
-    () => {
-      const server = new Server(
-        { name: "Caderninho", version: "0.4.0" },
-        {
-          capabilities: { extensions: { [EXTENSION]: {} }, tools: {} },
-          instructions: PRODUCT_INSTRUCTIONS,
-          jsonSchemaValidator: new CfWorkerJsonSchemaValidator(),
-        },
-      );
-      server.setRequestHandler("tools/list", async () => ({ tools: catalog }));
-      server.setRequestHandler("tools/call", async (r) => {
-        const { data, error } = await tryCatch(() =>
-          invoke(
-            financialQueries(env),
-            r.params.name,
-            r.params.arguments ?? {},
-          ),
-        );
-        const payload = error ? { error: error.message } : data;
-        return {
-          content: [{ text: JSON.stringify(payload), type: "text" }],
-          isError: !!error,
-          resultType: "complete",
-        };
-      });
-      return server;
-    },
-    {
-      keepAliveMs: 0,
-      legacy: "stateless",
-      maxRequestBodySize: 32_768,
-      responseMode: "auto",
-    },
-  );
+  const handler = createMcpHandler(() => createToolServer(env), {
+    keepAliveMs: 0,
+    legacy: "stateless",
+    maxRequestBodySize: 32_768,
+    responseMode: "auto",
+  });
   const req =
     text === undefined
       ? request
@@ -167,32 +170,115 @@ async function fetchTransport(
     await handler.close();
     return response;
   }
-  const reader = response.body.getReader();
-  const stream = new ReadableStream({
-    async cancel() {
-      await reader.cancel();
-      await handler.close();
-    },
-    async pull(controller) {
-      const { data: chunk, error: readError } = await tryCatch(() =>
-        reader.read(),
-      );
-      if (readError) {
-        await handler.close();
-        controller.error(readError);
-        return;
-      }
-      if (chunk.done) {
-        await handler.close();
-        controller.close();
-        return;
-      }
-      controller.enqueue(chunk.value);
-    },
+  return streamMcpResponse({
+    action: streamAction,
+    close: () => handler.close(),
+    response,
+    signal: request.signal,
+    ...(ctx && {
+      keepAlive: (lifetime: Promise<void>) => ctx.waitUntil(lifetime),
+    }),
   });
-  const headers = new Headers(response.headers);
-  headers.set("Cache-Control", "no-store");
-  return new Response(stream, { headers, status: response.status });
+}
+
+function readEnvelope(body: string) {
+  let message: unknown;
+  try {
+    message = parseJson(body);
+  } catch {
+    return;
+  }
+  const parsed = EnvelopeSchema.safeParse(message);
+  return parsed.success ? parsed.data : undefined;
+}
+
+function routeTaskRequest({
+  ctx,
+  env,
+  m,
+  request,
+}: {
+  ctx: ExecutionContext | undefined;
+  env: Bindings;
+  m: Envelope;
+  request: Request;
+}) {
+  const params = m.params ?? {};
+  let kind: LongOperationKind | undefined;
+  const action = messageAction(m);
+  if (m.method === "tools/call" && typeof params.name === "string") {
+    kind = longKinds.get(params.name);
+  }
+  if (
+    !(kind || m.method.startsWith("tasks/")) &&
+    m.method !== "subscriptions/listen"
+  ) {
+    return;
+  }
+  return observeSpan(
+    SpanName.mcpCall,
+    (span) =>
+      handleTaskRequest({ action, ctx, env, kind, m, params, request, span }),
+    { action, ...(kind && { operationKind: kind }) },
+  );
+}
+
+function createToolServer(env: Bindings) {
+  const inRequest = captureObservation();
+  const server = new Server(
+    { name: "Caderninho", version: "0.4.0" },
+    {
+      capabilities: { extensions: { [EXTENSION]: {} }, tools: {} },
+      instructions: PRODUCT_INSTRUCTIONS,
+      jsonSchemaValidator: new CfWorkerJsonSchemaValidator(),
+    },
+  );
+  server.setRequestHandler("tools/list", () =>
+    inRequest(() =>
+      observeSpan(SpanName.mcpCall, () => ({ tools: catalog }), {
+        action: "tools_list",
+      }),
+    ),
+  );
+  server.setRequestHandler("tools/call", (r) =>
+    inRequest(() => {
+      const action = toolActions.get(r.params.name) ?? "unknown";
+      return observeSpan(
+        SpanName.mcpCall,
+        async (span) => {
+          const { data, error } = await tryCatch(() =>
+            invoke(
+              financialQueries(env),
+              r.params.name,
+              r.params.arguments ?? {},
+            ),
+          );
+          if (error) {
+            markFailure(error, {
+              phase: SpanName.mcpCall,
+              recovery: Recovery.none,
+            });
+            span.annotate(
+              reportDiagnostic({
+                action,
+                event: DiagnosticEvent.mcp,
+                phase: SpanName.mcpCall,
+                recovery: Recovery.none,
+              }),
+            );
+          }
+          const payload = error ? { error: error.message } : data;
+          return {
+            content: [{ text: JSON.stringify(payload), type: "text" }],
+            isError: !!error,
+            resultType: "complete",
+          };
+        },
+        { action },
+      );
+    }),
+  );
+  return server;
 }
 
 async function handleTaskRequest({
@@ -202,6 +288,8 @@ async function handleTaskRequest({
   params,
   kind,
   ctx,
+  action,
+  span,
 }: {
   request: Request;
   env: Bindings;
@@ -209,14 +297,38 @@ async function handleTaskRequest({
   params: NonNullable<Envelope["params"]>;
   kind: LongOperationKind | undefined;
   ctx: ExecutionContext | undefined;
+  action: NonNullable<SafeFields["action"]>;
+  span: ObservedSpan;
 }) {
   const response = (result: unknown) =>
     Response.json(
       { id: m.id, jsonrpc: "2.0", result },
       { headers: { "Cache-Control": "no-store" } },
     );
-  const failure = (code: number, message: string, details?: unknown) =>
-    Response.json(
+  const failure = ({
+    code,
+    message,
+    details,
+    error: requestError = new Error("INVALID_REQUEST"),
+  }: {
+    code: number;
+    message: string;
+    details?: unknown;
+    error?: Error;
+  }) => {
+    markFailure(requestError, {
+      phase: SpanName.mcpCall,
+      recovery: Recovery.none,
+    });
+    span.annotate(
+      reportDiagnostic({
+        action,
+        event: DiagnosticEvent.mcp,
+        phase: SpanName.mcpCall,
+        recovery: Recovery.none,
+      }),
+    );
+    return Response.json(
       {
         error: { code, message, ...(!!details && { data: details }) },
         id: m.id ?? null,
@@ -224,18 +336,25 @@ async function handleTaskRequest({
       },
       { headers: { "Cache-Control": "no-store" } },
     );
+  };
   if (m.id === undefined) {
-    return failure(-32_600, "Request id required");
+    return failure({ code: -32_600, message: "Request id required" });
   }
   if (request.headers.get("Mcp-Protocol-Version") !== "2026-07-28") {
-    return failure(-32_600, "Tasks require protocol 2026-07-28");
+    return failure({
+      code: -32_600,
+      message: "Tasks require protocol 2026-07-28",
+    });
   }
   const expectedName = kind ? params.name : params.taskId;
   if (
     request.headers.get("Mcp-Method") !== m.method ||
     (expectedName && request.headers.get("Mcp-Name") !== expectedName)
   ) {
-    return failure(-32_020, "MCP routing headers disagree with request");
+    return failure({
+      code: -32_020,
+      message: "MCP routing headers disagree with request",
+    });
   }
   const version = z
     .object({
@@ -244,11 +363,18 @@ async function handleTaskRequest({
     .loose()
     .safeParse(params._meta);
   if (params._meta && !version.success) {
-    return failure(-32_600, "Protocol metadata must match routing version");
+    return failure({
+      code: -32_600,
+      message: "Protocol metadata must match routing version",
+    });
   }
   if (kind !== OperationKind.reapply && !negotiated(params)) {
-    return failure(-32_021, "Missing required client capability", {
-      requiredCapabilities: { extensions: { [EXTENSION]: {} } },
+    return failure({
+      code: -32_021,
+      details: {
+        requiredCapabilities: { extensions: { [EXTENSION]: {} } },
+      },
+      message: "Missing required client capability",
     });
   }
   const { data, error } = await tryCatch(async () => {
@@ -307,7 +433,7 @@ async function handleTaskRequest({
         })
         .parse(params);
       if (!request.headers.get("Accept")?.includes("text/event-stream")) {
-        return failure(-32_600, "SSE Accept required");
+        return failure({ code: -32_600, message: "SSE Accept required" });
       }
       return listen(request, env, {
         id: m.id ?? "",
@@ -317,10 +443,10 @@ async function handleTaskRequest({
         }),
       });
     }
-    return failure(-32_601, "Method not found");
+    return failure({ code: -32_601, message: "Method not found" });
   });
   if (error) {
-    return failure(-32_602, operationError(error));
+    return failure({ code: -32_602, error, message: operationError(error) });
   }
   return data;
 }
