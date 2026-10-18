@@ -180,6 +180,7 @@ await test("native Workflow and complete D1 backup restore", async () => {
       "PASS: native Workflow continues without a connected subscriber, same durable Task",
     );
     await command(["--import", "tsx", "tests/integration/runtime-check.ts"], {
+      PRODUCT_TEST_REQUEST_KEY: "restart-test",
       PRODUCT_TEST_URL: base,
     });
   });

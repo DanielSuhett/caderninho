@@ -47,9 +47,10 @@ Após bootstrap de transações:
 - `createdAtFrom` inclusivo por conta descobre criações, incluindo retrodatadas;
   cursor e filtro permanecem fixos até o fim. Hash relevante evita normalização
   e regras quando um ID reaparece inalterado. `createdAt` não é uma captura de updates.
-- Webhooks são sinais para reler o estado corrente dos IDs, inclusive deletes.
-  Um delete atrasado não apaga um ID ainda presente. A inbox confirma persistência
-  antes do ACK; cron recupera despachos perdidos. EventId deduplica, não prova sequência.
+- Webhooks autenticados consolidam uma intenção de reconciliação por Item antes do ACK.
+  Não criam operação nem Workflow por evento. Uma geração recebida durante o ciclo
+  permanece para o próximo; avisos não removem dados diretamente. A inbox antiga
+  permanece legível para executores anteriores à atualização.
 - Pendências são selecionadas pelo índice e processadas em lotes por conta.
   Futuros amadurecem pelo índice de data, sem rodar regras novamente. O dia financeiro
   vem do calendário `date` da Pluggy; `timestampLocalDate` é um campo distinto.
@@ -67,6 +68,37 @@ Webhooks têm retries limitados e podem se perder. Falhas/backlog aparecem em st
 a ausência de backlog não comprova ausência de lacunas. O onboarding deve comunicar
 isso. O produto nunca faz PATCH de Item nem escrita financeira. MeuPluggy mantém o
 Item proxy, seguindo a origem, sem atualização manual.
+
+## Janela diária e trabalho local
+
+Toda importação nova passa pela mesma reserva atômica D1: no mínimo 24 horas por
+Item desde a admissão, inclusive painel, MCP, onboarding, reconexão e agenda.
+Uma falha não devolve a janela. Uma operação ainda ativa bloqueia outro ciclo do
+mesmo Item mesmo depois de 24 horas. Items novos podem entrar sem liberar os demais.
+O resultado informa admissão/cooldown/pausa por Item e a próxima elegibilidade.
+Reconcile em cooldown deixa uma intenção para o próximo ciclo. A reconciliação
+semanal substitui o incremento. `live_balance` continua uma leitura pontual
+explícita, sem importar ou atualizar Item e sem retry de cooldown.
+
+O cron pode pular o dia seguinte a uma admissão manual próxima das 09:00 UTC.
+Elegibilidade não é promessa de execução naquele instante. Despacho perdido é
+recuperado pelo próximo cron (até um dia) ou pelo botão Sincronizar agora. Repetir
+uma requestKey admitida no MCP recupera o mesmo ID; GET e status só consultam.
+
+`caderninho_reapply` é síncrono e local. Seleções de até 5 transações terminam na
+chamada. Seleções maiores exigem `batches:true`; sem esse consentimento o servidor
+recusa antes de publicar derivados. Envie a `continuation` retornada com a mesma
+requestKey, itemIds e filtro para confirmar apenas o lote seguinte. Nenhum lote
+avança sozinho. Recibo, derivados e progresso são atômicos; replay devolve o
+resultado confirmado. Revisão financeira, versão ativa ou seleção divergente
+exigem nova execução. Overrides, dinheiro exato e moedas continuam preservados.
+Uma execução parcial abandonada mantém seus commits e aparece em status.
+
+Novos clientes podem usar reaplicação sem Tasks. Com a extensão negociada, cada
+lote confirmado tem uma Task terminal (`<operationId>/batch/<n>`), consultável
+por tasks/get e subscriptions/listen. Workflows de reaplicação já admitidos pela
+versão antiga podem terminar pelo executor legado. Regras idênticas e correções
+idênticas não regravam o catálogo nem incrementam a revisão financeira.
 
 ## Consultas, filtros e dinheiro
 
@@ -197,9 +229,8 @@ D1 é a única fonte de progresso. Cada subscriber consulta o estado a cada cinc
 segundos; o timer do SSE não executa trabalho financeiro. O teste wire em workerd
 verifica dois subscribers, desconexão e reconexão terminal. Isso não comprova suporte
 nativo no ChatGPT ou Claude.
-Clientes sem negociação recebem erro de capability, nunca CreateTaskResult indevido;
-consultas pequenas/status continuam disponíveis. A implementação não oferece um
-segundo executor para contornar essa limitação do cliente.
+Importações sem negociação recebem erro de capability, nunca CreateTaskResult indevido;
+consultas pequenas/status continuam disponíveis. A reaplicação local oferece resposta síncrona sem essa extensão.
 
 ## Falhas, upgrade e retenção
 
@@ -207,11 +238,13 @@ A operação D1 e a criação do Workflow não formam uma transação. A operaç
 é o outbox e tem identidade idempotente; cron recupera dispatched=0. Resposta de
 create perdida é resolvida consultando a instância pelo mesmo ID. Cron também
 finaliza operações cujo Workflow terminou com erro, liberando a fila da instalação.
-Lock persistente serializa sync, eventos, migração e reapply; não expira enquanto
+O despacho reserva o lock antes de criar um Workflow; os demais ciclos aguardam
+na outbox, sem executores dormindo. Reaplicações locais usam o mesmo lock só durante
+a chamada, com conflito retomável. O lock não expira enquanto
 um executor possa publicar. Não existe transação SQL atravessando HTTP.
 
-429 respeita Retry-After por sleep durável entre steps; outros erros chegam ao
-retry exponencial de Workflow. Erros de paginação deixam coverage parcial e mantêm
+429 e timeout interrompem o ciclo, sem retry de origem oculto. Retry-After
+pode estender a janela reservada. Outros erros têm até dois retries por step. Erros de paginação deixam coverage parcial e mantêm
 a base já publicada. Retomar a mesma execução usa checkpoints; uma nova intenção
 usa nova requestKey. Uma Task terminal não é reiniciada reutilizando sua chave.
 
@@ -221,11 +254,20 @@ faça backup/time-travel e aplique antes do código que exige o schema. Mudança
 normalizador exige nova versão e reconciliação explícita com `renormalize: true`, nunca invalidação global
 silenciosa. Mantenha o avaliador compatível com revisões referenciadas.
 
-Retenção financeira e de regras/proveniência é indefinida nesta versão. Tasks e
-chaves idempotentes permanecem consultáveis (ttlMs=null). A cada cron, compaction
-remove no máximo 200 checkpoints de páginas e 200 alvos de operações terminais com
-mais de 30 dias, limpa até 200 checkpoints por recurso, compacta os payloads de migração de até 200 operações (preservando hash idempotente) e limpa payload de até 200 eventos processados antigos; preserva
-IDs de deduplicação. Não apaga entidades financeiras ou revisões de regras.
+Retenção financeira e de regras/proveniência é indefinida. Tasks e chaves
+idempotentes permanecem consultáveis (`ttlMs=null`). O cron roda uma vez ao dia,
+às **09:00 UTC** (06:00 em São Paulo), recupera a outbox, verifica a agenda e faz
+manutenção. Sem cliente/evento não há outro despertar automático. Sessões vencem
+na leitura, independentemente da frequência de remoção física.
+
+A limpeza usa índices parciais: escolhe uma operação terminal com mais de 30 dias,
+remove até 200 registros de cada tabela técnica (`checkpoints`, `page_commits`,
+`operation_targets`) e marca a operação compactada quando esvaziada. Também esvazia
+até 200 payloads antigos da inbox sem revisitar os já vazios. IDs, resumos, regras,
+payloads de migração e recibos locais permanecem. Capacidade: uma operação e até
+200 linhas por tabela/dia; backlog grande pode exigir manutenção explícita.
+A [auditoria anterior](auditoria-d1.md) registra a mitigação horária substituída.
+O [aceite de custo mínimo](specs/custo-minimo/aceite.md) registra os limites atuais.
 
 
 Depois de comparação e aprovação do corte: pare imports da instalação anterior, faça

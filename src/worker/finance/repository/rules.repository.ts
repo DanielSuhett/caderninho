@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNull, ne, or } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 
 import { NORMALIZER } from "../../../domain";
@@ -25,6 +25,17 @@ export async function saveRules(
 ) {
   compileValidatedRules(document);
   const id = await hash({ document, normalizer: NORMALIZER });
+  const existing = await database(db)
+    .select({ ready: ruleSetsTable.ready })
+    .from(ruleSetsTable)
+    .where(eq(ruleSetsTable.id, id))
+    .get();
+  if (existing?.ready) {
+    if (activate) {
+      await activateRules(db, id);
+    }
+    return { activated: activate, id, rules: document.rules.length };
+  }
   const statements: BatchItem<"sqlite">[] = [
     database(db)
       .insert(ruleSetsTable)
@@ -108,7 +119,15 @@ export async function saveRules(
     await database(db)
       .update(settingsTable)
       .set({ active_rules: id })
-      .where(eq(settingsTable.id, 1))
+      .where(
+        and(
+          eq(settingsTable.id, 1),
+          or(
+            isNull(settingsTable.active_rules),
+            ne(settingsTable.active_rules, id),
+          ),
+        ),
+      )
       .run();
   }
   return { activated: activate, id, rules: document.rules.length };
@@ -153,7 +172,15 @@ export async function activateRules(db: D1Database, revision: string) {
   await database(db)
     .update(settingsTable)
     .set({ active_rules: revision })
-    .where(eq(settingsTable.id, 1))
+    .where(
+      and(
+        eq(settingsTable.id, 1),
+        or(
+          isNull(settingsTable.active_rules),
+          ne(settingsTable.active_rules, revision),
+        ),
+      ),
+    )
     .run();
   return { activated: revision, historicalReclassification: false };
 }

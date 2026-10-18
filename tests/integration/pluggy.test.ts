@@ -27,8 +27,6 @@ const cursorScopeMismatchPattern = /CURSOR_SCOPE_MISMATCH/;
 const cursorLoopPattern = /CURSOR_LOOP/;
 const sourceIdentityMismatchPattern = /SOURCE_IDENTITY_MISMATCH/;
 const sourceSelectionMismatchPattern = /SOURCE_SELECTION_MISMATCH/;
-const upstreamRateLimitRetriesExhaustedPattern =
-  /UPSTREAM_RATE_LIMIT_RETRIES_EXHAUSTED/;
 
 const credentials = {
   clientId: "synthetic-client",
@@ -415,101 +413,40 @@ test("SDK pages preserve encoded cursors, creation floor, response scope and exp
   );
 });
 
-test("429 Retry-After is returned to the Workflow and waited outside a durable step", async () => {
-  let reads = 0;
-  mockNetwork((input) => {
-    if (sourceUrl(input).pathname === "/auth") {
-      return Promise.resolve(auth());
-    }
-    reads += 1;
-    if (reads > 2) {
-      return Promise.resolve(new Response("private failure", { status: 503 }));
-    }
-    return Promise.resolve(
-      reads === 1
-        ? new Response("private", {
-            headers: { "Retry-After": "90" },
-            status: 429,
-          })
-        : Response.json({ id: "account" }),
-    );
-  });
-  const sleeps: string[] = [];
-  let inside = false;
-  const steps = providerRetries({
-    async do(_name, callback) {
-      inside = true;
-      const value = await callback();
-      inside = false;
-      return value;
+test("429 and timeout stop the current cycle outside the durable step without retry", async () => {
+  await ["UPSTREAM_RATE_LIMIT", "UPSTREAM_TIMEOUT"].reduce(
+    async (previous, code) => {
+      await previous;
+      const attempts: string[] = [];
+      const sleeps: string[] = [];
+      const steps = providerRetries({
+        async do(name, callback) {
+          attempts.push(name);
+          return await callback();
+        },
+        sleep(name) {
+          sleeps.push(name);
+          return Promise.resolve();
+        },
+      });
+      const fault = new Fault(
+        code === "UPSTREAM_TIMEOUT"
+          ? "UPSTREAM_TIMEOUT"
+          : "UPSTREAM_RATE_LIMIT",
+      );
+      fault.details = { retryAfterSeconds: 90 };
+      await assert.rejects(
+        steps.do("source", () => Promise.reject(fault)),
+        (error) =>
+          error instanceof Fault &&
+          error.code === code &&
+          error.details?.retryAfterSeconds === 90,
+      );
+      assert.deepEqual(attempts, ["source-attempt-0"]);
+      assert.deepEqual(sleeps, []);
     },
-    sleep(_name, duration) {
-      assert.equal(inside, false);
-      sleeps.push(duration);
-      assert.equal(reads, 1);
-
-      return Promise.resolve();
-    },
-  });
-  const sdk = client();
-  assert.equal(
-    await steps.do(
-      "account",
-      async () => (await readAccount(sdk, "account")).id,
-    ),
-    "account",
+    Promise.resolve(),
   );
-  assert.deepEqual(sleeps, ["90 seconds"]);
-  assert.equal(reads, 2);
-  await assert.rejects(
-    steps.do("unavailable", async () => (await readAccount(sdk, "account")).id),
-    (error) => error instanceof Fault && error.code === "UPSTREAM_ERROR",
-  );
-  assert.equal(reads, 3);
-  assert.deepEqual(sleeps, ["90 seconds"]);
-});
-
-test("rate limit retry exhaustion preserves the durable attempt names and bounded delay policy", async () => {
-  const attempts: string[] = [];
-  const sleeps: { name: string; duration: string }[] = [];
-  let inside = false;
-  const steps = providerRetries({
-    async do(name, callback) {
-      attempts.push(name);
-      inside = true;
-      const result = await callback();
-      inside = false;
-      return result;
-    },
-    sleep(name, duration) {
-      assert.equal(inside, false);
-      sleeps.push({ duration, name });
-
-      return Promise.resolve();
-    },
-  });
-  await assert.rejects(
-    steps.do("limited", () => Promise.reject(new Fault("UPSTREAM_RATE_LIMIT"))),
-    upstreamRateLimitRetriesExhaustedPattern,
-  );
-  assert.deepEqual(attempts, [
-    "limited-attempt-0",
-    "limited-attempt-1",
-    "limited-attempt-2",
-    "limited-attempt-3",
-    "limited-attempt-4",
-    "limited-attempt-5",
-    "limited-attempt-6",
-  ]);
-  assert.deepEqual(sleeps, [
-    { duration: "10 seconds", name: "limited-rate-limit-0" },
-    { duration: "20 seconds", name: "limited-rate-limit-1" },
-    { duration: "40 seconds", name: "limited-rate-limit-2" },
-    { duration: "80 seconds", name: "limited-rate-limit-3" },
-    { duration: "160 seconds", name: "limited-rate-limit-4" },
-    { duration: "320 seconds", name: "limited-rate-limit-5" },
-    { duration: "640 seconds", name: "limited-rate-limit-6" },
-  ]);
 });
 
 test("every financial resource uses the public SDK operation with one-page checkpoints", async () => {

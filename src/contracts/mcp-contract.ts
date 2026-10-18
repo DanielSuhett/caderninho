@@ -22,6 +22,13 @@ export const LongInput = z
     requestKey: z.string().min(1).max(200),
   })
   .strict();
+export const ReapplicationInputSchema = LongInput.extend({
+  batches: z.boolean().optional(),
+  continuation: z
+    .object({ batch: z.number().int().nonnegative(), operationId: z.string() })
+    .strict()
+    .optional(),
+});
 const declarations = [
   {
     description:
@@ -31,21 +38,21 @@ const declarations = [
   },
   {
     description:
-      "Materializar todos os recursos dos Items selecionados; primeira carga integral, depois incremento. MCP Task durável.",
+      "Importar Items elegíveis, uma admissão por Item a cada 24 horas; informa cooldown, pausa e operação existente. Primeira carga integral, depois incremento. MCP Task durável.",
     name: ToolName.sync,
     schema: LongInput,
   },
   {
     description:
-      "Reconciliação explícita de todos os recursos dos Items indicados. MCP Task.",
+      "Reconciliação dentro da mesma janela de 24 horas por Item; durante cooldown registra intenção para o próximo ciclo. MCP Task quando admitida.",
     name: ToolName.reconcile,
     schema: LongInput,
   },
   {
     description:
-      "Reaplicar versão ativa de regras ao filtro explícito, preservando overrides. MCP Task.",
+      "Reaplicar regras locais sincronamente, até 5 registros, preservando overrides. Para seleções maiores use batches:true e envie a continuation devolvida com a mesma requestKey e seleção. Cada chamada confirma só um lote. Sem Workflow; Task terminal se negociada. Mudanças externas exigem nova execução.",
     name: ToolName.reapply,
-    schema: LongInput,
+    schema: ReapplicationInputSchema,
   },
   {
     description:
@@ -178,4 +185,4 @@ export const ToolCallSchema = z.discriminatedUnion("name", [
 ]) satisfies z.ZodType<ToolCall>;
 
 export const PRODUCT_INSTRUCTIONS =
-  "Consulte a base financeira D1 com query e prefira aggregate para totais exatos por moeda. Nunca coordene páginas Pluggy. Verifique cobertura quando ausente/parcial; inicie sync explicitamente. Sync normal carrega todos os recursos dos Items selecionados inicialmente e depois mantém mudanças. Original é o valor da origem; efetivo aplica override, regras e origem nessa ordem. Valide/simule regras antes da ativação solicitada. Alterar regras não recategoriza o passado; reapply recebe uma seleção explícita e preserva overrides. Sync, reconcile e reapply retornam Tasks somente com negociação io.modelcontextprotocol/tasks; acompanhe tasks/get ou subscriptions/listen. Fechar a escuta não cancela processamento. Recorrências são candidatos, não contratos confirmados. Saldo persistido tem referência temporal; live_balance é intenção pontual distinta e não garante tempo real.";
+  "Consulte a base financeira D1 com query e prefira aggregate para totais exatos por moeda. Nunca coordene páginas Pluggy. Verifique cobertura quando ausente/parcial; inicie sync explicitamente. Sync normal carrega todos os recursos dos Items selecionados inicialmente e depois mantém mudanças. Original é o valor da origem; efetivo aplica override, regras e origem nessa ordem. Valide/simule regras antes da ativação solicitada. Alterar regras não recategoriza o passado; reapply recebe uma seleção explícita e preserva overrides. Sync e reconcile respeitam 24 horas por Item e retornam Tasks com negociação io.modelcontextprotocol/tasks, ou estado de cooldown/pausa sem nova tarefa. Reapply é síncrono até 5 transações; seleções maiores exigem batches:true e continuação explícita com mesma chave e seleção. Com Tasks negociadas, cada lote confirmado tem Task terminal. Acompanhe ingestão por tasks/get ou subscriptions/listen; fechar a escuta não cancela processamento. Recorrências são candidatos, não contratos confirmados. Saldo persistido tem referência temporal; live_balance é intenção pontual distinta e não garante tempo real.";

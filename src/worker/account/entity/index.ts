@@ -33,25 +33,38 @@ export interface AccountRepository {
   requestSync: (now: Date) => Promise<boolean>;
   resume: (now: string) => Promise<void>;
   status: () => Promise<{
+    localApplications: {
+      operationId: string;
+      batch: number;
+      totalProcessed: number;
+    }[];
     config: { sync_enabled: number; connected_at: string };
     latest: {
       status: OperationStatus;
       phase: OperationPhase;
       updated_at: string;
+      dispatched: number;
     } | null;
-    items: { id: string }[];
+    items: {
+      id: string;
+      last_import_at: string | null;
+      next_import_at: string | null;
+      last_admitted_at: string | null;
+      cycle_id: string | null;
+    }[];
     coverage: { total: number; complete: number | null };
   }>;
 }
 
-export function accountPanel(state: WizardState): AccountPanel {
-  const active =
-    state.sync === WizardSyncState.waiting ||
-    state.sync === WizardSyncState.working;
+export function accountPanel(
+  state: WizardState,
+  dispatched = true,
+): AccountPanel {
+  const active = state.sync === WizardSyncState.working;
   return {
     initialStep: state.connected ? AccountStep.assistant : AccountStep.connect,
     polling:
-      state.connected && !state.paused && active
+      state.connected && !state.paused && active && dispatched
         ? { intervalMs: 5000, retryIntervalMs: 30_000 }
         : null,
     support: {

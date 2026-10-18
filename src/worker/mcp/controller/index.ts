@@ -13,6 +13,7 @@ import {
   type LongOperationKind,
   OperationKind,
   PRODUCT_INSTRUCTIONS,
+  ReapplicationInputSchema,
   RuleImportMode,
   ToolName,
   tools,
@@ -20,7 +21,12 @@ import {
 import { RulesSchema } from "../../../domain/rules";
 import { parseJson, tryCatch } from "../../../shared";
 import type { Bindings } from "../../bindings";
-import { financialQueries, ruleActions, syncService } from "../../composition";
+import {
+  financialQueries,
+  reapplyRules,
+  ruleActions,
+  syncService,
+} from "../../composition";
 import { importRuleDocument } from "../../finance";
 import { boundedJson } from "../../http";
 import { migrationHttp } from "../../sync/controller";
@@ -240,18 +246,29 @@ async function handleTaskRequest({
   if (params._meta && !version.success) {
     return failure(-32_600, "Protocol metadata must match routing version");
   }
-  if (!negotiated(params)) {
+  if (kind !== OperationKind.reapply && !negotiated(params)) {
     return failure(-32_021, "Missing required client capability", {
       requiredCapabilities: { extensions: { [EXTENSION]: {} } },
     });
   }
   const { data, error } = await tryCatch(async () => {
+    if (kind === OperationKind.reapply) {
+      return response(await localReapplication(env, params));
+    }
     if (kind) {
-      const op = await createLongOperation(env, { kind, params });
+      const admitted = await createLongOperation(env, { kind, params });
+      if (!admitted.operation) {
+        return response({
+          content: [{ text: JSON.stringify(admitted), type: "text" }],
+          isError: false,
+          resultType: "complete",
+        });
+      }
       return response(
         validateTaskWire("CreateTaskResult", {
-          ...(await task(env, op.id)),
+          ...(await task(env, admitted.operation.id)),
           resultType: "task",
+          statusMessage: JSON.stringify(admitted.items),
         }),
       );
     }
@@ -275,7 +292,7 @@ async function handleTaskRequest({
     if (m.method === "tasks/update") {
       validateTaskWire("UpdateTaskRequest", m);
       const a = UpdateParams.parse(params);
-      await syncService(env).read(a.taskId);
+      await task(env, a.taskId);
       return response(
         validateTaskWire("UpdateTaskResult", {
           resultType: "complete",
@@ -303,9 +320,47 @@ async function handleTaskRequest({
     return failure(-32_601, "Method not found");
   });
   if (error) {
-    return failure(-32_602, "Invalid operation");
+    return failure(-32_602, operationError(error));
   }
   return data;
+}
+
+const operationErrors = new Set([
+  "IDEMPOTENCY_CONFLICT",
+  "REAPPLICATION_CONFLICT_START_NEW_REQUEST",
+  "REAPPLICATION_TOO_LARGE_USE_BATCHES",
+  "REAPPLICATION_SELECTION_CONFLICT",
+  "FINANCIAL_EXECUTOR_BUSY_RETRY_BATCH",
+  "REAPPLICATION_CANCELLED",
+  "RENORMALIZE_REQUIRES_RECONCILIATION",
+  "SYNC_FILTER_NOT_SUPPORTED_USE_ITEM_SCOPE",
+]);
+function operationError(error: Error) {
+  return operationErrors.has(error.message)
+    ? error.message
+    : "Invalid operation";
+}
+
+async function localReapplication(
+  env: Bindings,
+  params: NonNullable<Envelope["params"]>,
+) {
+  const input = ReapplicationInputSchema.parse(params.arguments);
+  const result = await reapplyRules(env)(input);
+  if (!negotiated(params)) {
+    return {
+      content: [{ text: JSON.stringify(result), type: "text" }],
+      isError: false,
+      resultType: "complete",
+    };
+  }
+  return validateTaskWire("CreateTaskResult", {
+    ...(await task(
+      env,
+      `${result.operationId}/batch/${input.continuation?.batch ?? 0}`,
+    )),
+    resultType: "task",
+  });
 }
 
 async function createLongOperation(
@@ -319,17 +374,21 @@ async function createLongOperation(
   },
 ) {
   const args = LongInput.parse(params.arguments);
-  const op = await syncService(env).start(args.requestKey, {
+  const admitted = await syncService(env).start(args.requestKey, {
     itemIds: args.itemIds,
     kind,
     ...(args.renormalize && { renormalize: true }),
     ...(args.filter && { filter: args.filter }),
   });
   // Durable outbox survives uncertain Workflow creation.
+  const op = admitted.operation;
+  if (!op) {
+    return admitted;
+  }
   await tryCatch(() => syncService(env).dispatch(op)).then(({ data, error }) =>
     error ? undefined : data,
   );
-  return op;
+  return admitted;
 }
 
 const MAX_MCP_BODY_BYTES = 32_768;

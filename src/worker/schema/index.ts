@@ -17,7 +17,7 @@ import {
   OperationStatus,
   type WebhookEvent,
 } from "../../contracts";
-import type { ProviderRecord } from "../../domain";
+import type { ProviderRecord, ReapplicationResult } from "../../domain";
 import {
   CorrectionField,
   type CoverageStatus,
@@ -38,9 +38,6 @@ export const settings = sqliteTable(
       .notNull()
       .default(sql`'1970-01-01T00:00:00.000Z'`),
     id: integer("id").notNull().default(1),
-    manual_sync_after: text("manual_sync_after")
-      .notNull()
-      .default(sql`'1970-01-01T00:00:00.000Z'`),
     next_sync_at: text("next_sync_at")
       .notNull()
       .default(sql`'1970-01-01T00:00:00.000Z'`),
@@ -60,7 +57,18 @@ export const settings = sqliteTable(
 export const items = sqliteTable(
   "items",
   {
+    cycle_id: text("cycle_id"),
     id: text("id").notNull(),
+    last_admitted_at: text("last_admitted_at"),
+    last_import_at: text("last_import_at"),
+    last_notice_id: text("last_notice_id"),
+    next_import_at: text("next_import_at"),
+    notice_claimed: integer("notice_claimed").notNull().default(0),
+    notice_consumed: integer("notice_consumed").notNull().default(0),
+    notice_generation: integer("notice_generation").notNull().default(0),
+    renormalize_generation: integer("renormalize_generation")
+      .notNull()
+      .default(0),
   },
   (t) => [primaryKey({ columns: [t.id] })],
 );
@@ -321,9 +329,14 @@ export const operations = sqliteTable(
   "operations",
   {
     cancel_requested: integer("cancel_requested").notNull().default(sql`0`),
+    compacted: integer("compacted").notNull().default(0),
     created_at: text("created_at").notNull(),
     dispatched: integer("dispatched").notNull().default(sql`0`),
     error: text("error", { mode: "json" }).$type<Record<string, JsonValue>>(),
+    execution_mode: text("execution_mode")
+      .$type<"durable" | "local">()
+      .notNull()
+      .default("durable"),
     id: text("id").notNull(),
     input: text("input", { mode: "json" }).$type<OperationInput>().notNull(),
     input_hash: text("input_hash").notNull(),
@@ -354,6 +367,15 @@ export const operations = sqliteTable(
       foreignColumns: [rule_sets.id],
     }),
     index("operations_created").on(t.created_at),
+    index("operations_active").on(
+      t.status,
+      t.execution_mode,
+      t.dispatched,
+      t.created_at,
+    ),
+    index("operations_retention")
+      .on(t.updated_at, t.id)
+      .where(sql`status<>'working' AND compacted=0`),
     index("operations_dispatch").on(t.dispatched, t.status, t.created_at),
     uniqueIndex("operations_request_key_unique").on(t.request_key),
     check("operations_input_check", sql`json_valid(input)`),
@@ -373,6 +395,38 @@ export const locks = sqliteTable(
     foreignKey({ columns: [t.operation_id], foreignColumns: [operations.id] }),
     uniqueIndex("locks_operation_id_unique").on(t.operation_id),
   ],
+);
+
+export const local_runs = sqliteTable(
+  "local_runs",
+  {
+    active_rules: text("active_rules"),
+    after_identity: text("after_identity", { mode: "json" })
+      .$type<string[]>()
+      .notNull()
+      .default(sql`'[]'`),
+    expected_revision: integer("expected_revision").notNull(),
+    next_batch: integer("next_batch").notNull().default(0),
+    operation_id: text("operation_id")
+      .primaryKey()
+      .notNull()
+      .references(() => operations.id),
+  },
+  (t) => [check("local_revision", sql`${t.expected_revision}>=0`)],
+);
+
+export const local_receipts = sqliteTable(
+  "local_receipts",
+  {
+    batch: integer("batch").notNull(),
+    operation_id: text("operation_id")
+      .notNull()
+      .references(() => operations.id),
+    result: text("result", { mode: "json" })
+      .$type<ReapplicationResult>()
+      .notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.operation_id, t.batch] })],
 );
 
 export const coverage = sqliteTable(
@@ -477,6 +531,9 @@ export const inbox = sqliteTable(
     }),
     foreignKey({ columns: [t.operation_id], foreignColumns: [operations.id] }),
     index("inbox_dispatch").on(t.operation_id, t.received_at),
+    index("inbox_retention")
+      .on(t.processed_at, t.event_id)
+      .where(sql`processed_at IS NOT NULL AND payload<>'{}'`),
     check("inbox_payload_check", sql`json_valid(payload)`),
   ],
 );

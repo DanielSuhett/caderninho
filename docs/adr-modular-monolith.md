@@ -68,10 +68,15 @@ Sessão, CSRF, OAuth, HTTP, parsing e ciclo de vida visual têm donos nos respec
 adaptadores. Guards que fazem narrowing de uniões mantêm essa informação de tipos.
 Steps, recibos e batches conservam a ordem e os limites atômicos existentes.
 
-O ciclo da operação, publicação, recursos, eventos, reaplicação e migração ficam
+A ingestão, publicação, recursos, eventos legados, reaplicação legada e migração ficam
 em `sync/execution.service.ts`; não executam queries nem montam statements.
 `runOperation` recebe persistência, preparação, origem e Steps pela composição
 e concentra lock, cancelamento, maturação, escolha da execução e conclusão.
+Novas reaplicações usam `sync/reapplication.service.ts`: uma chamada síncrona
+limitada a 5 transações, com seleção estável, revisão e recibo atômico por lote.
+A admissão em `sync/repository/admission.repository.ts` reserva 24 horas por Item;
+webhooks consolidam gerações, e o despacho reserva o executor antes do Workflow.
+A agenda diária não executa trabalho local; GET nunca despacha ou mantém dados.
 O Workflow e os testes usam essa mesma entrada, sem uma sessão intermediária
 que exponha a sequência interna.
 `sync/repository/execution.repository.ts` faz leituras e commits atômicos por portas tipadas.

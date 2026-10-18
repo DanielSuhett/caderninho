@@ -15,8 +15,9 @@ import {
 import { database } from "../../src/worker/database";
 import { fetchMcp } from "../../src/worker/mcp";
 import {
-  inbox as inboxTable,
   items as itemsTable,
+  operations as operationsTable,
+  settings as settingsTable,
 } from "../../src/worker/schema";
 import { type FinancialSource, runOperation } from "../../src/worker/sync";
 import {
@@ -118,8 +119,9 @@ const worker = {
         "CREATE TABLE IF NOT EXISTS fixture(id TEXT PRIMARY KEY,payload TEXT NOT NULL);",
       );
       await env.DB.exec(
-        "CREATE TRIGGER IF NOT EXISTS fixture_fail BEFORE INSERT ON inbox WHEN NEW.event_id='synthetic-force-failure' BEGIN SELECT RAISE(ABORT,'synthetic storage failure'); END;",
+        "CREATE TRIGGER IF NOT EXISTS fixture_fail BEFORE UPDATE OF notice_generation ON items WHEN NEW.notice_generation=2 BEGIN SELECT RAISE(ABORT,'synthetic storage failure'); END;",
       );
+      await database(env.DB).update(settingsTable).set({ sync_enabled: 1 });
       await database(env.DB)
         .insert(itemsTable)
         .values({
@@ -170,20 +172,24 @@ const worker = {
       return Response.json({ done: true });
     }
     if (path === "/inspect-event") {
-      const eventId = new URL(req.url).searchParams.get("id") ?? "";
-      const receipt = await database(env.DB)
-        .select({
-          operation_id: inboxTable.operation_id,
-          processed_at: inboxTable.processed_at,
-        })
-        .from(inboxTable)
-        .where(eq(inboxTable.event_id, eventId))
+      const notice = await database(env.DB)
+        .select()
+        .from(itemsTable)
+        .where(eq(itemsTable.id, item))
         .get();
+      const rows = await database(env.DB).select().from(operationsTable);
       return Response.json({
-        operations: receipt?.operation_id ? 1 : 0,
-        processed: Boolean(receipt?.processed_at),
-        receipts: receipt ? 1 : 0,
+        generation: notice?.notice_generation,
+        operations: rows.length,
+        pending: !!notice && notice.notice_generation > notice.notice_consumed,
       });
+    }
+    if (path === "/fail-notice") {
+      await database(env.DB)
+        .update(itemsTable)
+        .set({ notice_claimed: itemsTable.notice_generation })
+        .where(eq(itemsTable.id, item));
+      return Response.json({ done: true });
     }
     if (path === "/webhook") {
       const { data, error } = await tryCatch(() => receiveWebhook(req, env));

@@ -9,7 +9,6 @@ import {
   gt,
   gte,
   inArray,
-  isNull,
   lte,
   ne,
   notExists,
@@ -33,7 +32,9 @@ import {
   FilterOperandKind,
   FilterOperator,
   filterOperand,
+  localDay,
   metricFor,
+  nextAutomaticAttempt,
   Resource,
   TagOrigin,
   TransactionStatus,
@@ -45,7 +46,6 @@ import {
   type derived as derivedTable,
   effective_entities as e,
   type entities as entitiesTable,
-  inbox as inboxTable,
   items as itemsTable,
   operations as o,
   settings as settingsTable,
@@ -57,6 +57,9 @@ const jsonFieldPattern = /^[a-zA-Z0-9_.]+$/;
 const effectiveColumns = getViewSelectedFields(e);
 const t = alias(tagsTable, "t"),
   m = alias(tagsTable, "m");
+export function temporalEligibility(referenceDay = localDay(new Date())) {
+  return sql<number>`CASE WHEN ${e.transaction_date} IS NOT NULL AND ${e.transaction_date} <= ${referenceDay} AND COALESCE(${e.status},'') <> 'PENDING' THEN 1 ELSE 0 END`;
+}
 const columns = {
   account: e.parent_id,
   amountMinor: e.amount_key,
@@ -113,7 +116,11 @@ function matchingTags(db: ReturnType<typeof database>) {
   );
 }
 
-export function compileFilter(db: D1Database, filter: Filter): SQL {
+export function compileFilter(
+  db: D1Database,
+  filter: Filter,
+  referenceDay = localDay(new Date()),
+): SQL {
   let parameters = 0;
   function walk(f: Filter, depth: number): SQL {
     if (depth > 12 || parameters > 80) {
@@ -141,11 +148,15 @@ export function compileFilter(db: D1Database, filter: Filter): SQL {
       );
     }
     const value = filterValue(f);
+    const column =
+      f.field === "eligible"
+        ? temporalEligibility(referenceDay)
+        : sql`${columns[f.field]}`;
     parameters += 1;
     if (f.op === FilterOperator.contains) {
-      return gt(sql<number>`instr(${columns[f.field]}, ${value})`, 0);
+      return gt(sql<number>`instr(${column}, ${value})`, 0);
     }
-    return { eq, gte, lte, ne }[f.op](columns[f.field], value);
+    return { eq, gte, lte, ne }[f.op](column, value);
   }
   return walk(filter, 0);
 }
@@ -244,6 +255,7 @@ export async function queryEntities(
   const args = { limit: 50, resource: Resource.transactions, ...input };
   const scope = await hash({
     filter: args.filter ?? null,
+    referenceDay: localDay(new Date()),
     resource: args.resource,
   });
   if (args.cursor) {
@@ -258,7 +270,11 @@ export async function queryEntities(
     .from(t)
     .where(matchingTags(database(db)));
   const result = await database(db)
-    .select({ ...effectiveColumns, effective_tags: sql<string>`(${tags})` })
+    .select({
+      ...effectiveColumns,
+      effective_tags: sql<string>`(${tags})`,
+      eligible: temporalEligibility(),
+    })
     .from(e)
     .where(
       and(
@@ -315,7 +331,9 @@ export async function aggregateEntities(
             eq(e.resource, args.resource),
             eq(e.deleted, 0),
             args.filter ? compileFilter(db, args.filter) : undefined,
-            definition?.temporal === "flow" ? eq(e.eligible, 1) : undefined,
+            definition?.temporal === "flow"
+              ? eq(temporalEligibility(), 1)
+              : undefined,
             definition?.temporal === "flow" &&
               args.resource === Resource.transactions
               ? eq(e.status, TransactionStatus.POSTED)
@@ -387,11 +405,18 @@ export async function aggregateEntities(
 }
 
 export async function readStatus(db: D1Database) {
+  const config = await database(db)
+    .select({ enabled: settingsTable.sync_enabled })
+    .from(settingsTable)
+    .where(eq(settingsTable.id, 1))
+    .get();
   const operations = await database(db)
     .select({
       created_at: o.created_at,
       dispatched: o.dispatched,
+      execution_mode: o.execution_mode,
       id: o.id,
+      kind: o.kind,
       phase: o.phase,
       progress: o.progress,
       status: o.status,
@@ -402,8 +427,8 @@ export async function readStatus(db: D1Database) {
   return {
     backlog: await database(db)
       .select({ pending: count() })
-      .from(inboxTable)
-      .where(isNull(inboxTable.processed_at))
+      .from(itemsTable)
+      .where(gt(itemsTable.notice_generation, itemsTable.notice_consumed))
       .get(),
     coverage: await database(db)
       .select(getTableColumns(coverageTable))
@@ -415,6 +440,10 @@ export async function readStatus(db: D1Database) {
       ...op,
       progress: JSON.stringify(op.progress),
     })),
+    schedule: {
+      nextAutomaticAt: nextAutomaticAttempt(new Date()),
+      paused: !config?.enabled,
+    },
   };
 }
 export async function previewSelection(

@@ -73,7 +73,7 @@ test("deployment credentials connect Meu Pluggy; D1 stores settings without cred
   await service.connectItem(item);
   const state = await service.state();
   assert.equal(state.status.connected, true);
-  assert.equal(state.status.sync, "waiting");
+  assert.equal(state.status.sync, "working");
   assert.equal(state.panel.initialStep, 2);
   assert.equal(state.panel.sync, "preparing");
   assert.deepEqual(state.panel.polling, {
@@ -145,13 +145,13 @@ test("pause and manual sync preserve settings; daily scheduling creates one dura
       .from(operationsTable)
       .get()
       .then((row) => row?.n ?? null),
-    0,
+    1,
   );
   await service.resume();
   await database(bindings.DB)
     .update(settingsTable)
     .set({ next_sync_at: "2099-01-01T00:00:00Z" });
-  assert.equal(await service.requestSync(), true);
+  assert.equal(await service.requestSync(), false);
   assert.equal(await service.requestSync(), false);
   await scheduleSync(config, new Date("2099-01-01T00:00:00Z"));
   await scheduleSync(config, new Date("2099-01-01T00:00:00Z"));
@@ -198,7 +198,8 @@ test("named account commands connect an Item and never return deployment secrets
     ).json(),
   );
   assert.equal(paused.panel.polling, null);
-  assert.equal(paused.panel.sync, "paused");
+  assert.equal(paused.status.paused, true);
+  assert.equal(paused.panel.sync, "preparing");
   const diagnostic = JSON.stringify(paused.panel.support.diagnostic);
   assert.ok(!diagnostic.includes(item));
   assert.ok(!diagnostic.includes(paused.csrf));

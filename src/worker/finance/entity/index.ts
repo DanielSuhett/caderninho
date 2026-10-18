@@ -9,6 +9,7 @@ import type {
 import type {
   EntityChange,
   FinanceRecord,
+  ItemAdmission,
   metricFor,
   ProviderRecord,
   projectEntity,
@@ -80,11 +81,19 @@ export interface FinancialRepository {
     cursor: Cursor | null;
   }>;
   readStatus: () => Promise<{
+    schedule?: { paused: boolean; nextAutomaticAt: string } | undefined;
+    freshness?: ItemAdmission[] | undefined;
     items: (typeof items.$inferSelect)[];
     coverage: (typeof coverage.$inferSelect)[];
     operations: (Pick<
       typeof operations.$inferSelect,
-      "id" | "status" | "phase" | "created_at" | "dispatched"
+      | "id"
+      | "status"
+      | "phase"
+      | "created_at"
+      | "dispatched"
+      | "kind"
+      | "execution_mode"
     > & { progress: string })[];
     backlog: { pending: number } | undefined;
     limitation: string;

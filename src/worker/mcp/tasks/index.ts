@@ -5,7 +5,7 @@ import { z } from "zod/v4";
 import { OperationStatus } from "../../../contracts";
 import { JsonValueSchema, tryCatch } from "../../../shared";
 import type { Bindings } from "../../bindings";
-import { syncService } from "../../composition";
+import { reapplicationTask, syncService } from "../../composition";
 import type { OperationState } from "../../sync/entity";
 import schema from "../../vendor/ext-tasks/schema.json" with { type: "json" };
 import type { Task } from "../protocol.types";
@@ -16,7 +16,12 @@ export const TaskParams = z.object({ taskId: z.string() });
 export const UpdateParams = TaskParams.extend({
   inputResponses: z.record(z.string(), JsonValueSchema),
 });
+const batchPattern = /^\d+$/;
 export async function task(env: Bindings, id: string): Promise<Task> {
+  const [operationId, batch] = id.split("/batch/");
+  if (operationId && batch !== undefined && batchPattern.test(batch)) {
+    return taskResult(await reapplicationTask(env, operationId, Number(batch)));
+  }
   return taskResult(await syncService(env).state(id));
 }
 
@@ -60,6 +65,10 @@ export function negotiated(input: unknown) {
   return !!extensions && Object.hasOwn(extensions, EXTENSION);
 }
 export async function cancel(env: Bindings, id: string) {
+  if (id.includes("/batch/")) {
+    await task(env, id);
+    return { resultType: "complete" };
+  }
   await syncService(env).cancel(id);
   return { resultType: "complete" };
 }
@@ -80,7 +89,7 @@ export async function listen(
     throw new Error("SUBSCRIPTION_LIMIT");
   }
   const readTasks = async () =>
-    (await syncService(env).states(ids)).map(taskResult);
+    Promise.all(ids.map((taskId) => task(env, taskId)));
   const current = await readTasks();
   const polling = current.some(
     (state) => state.status === OperationStatus.working,

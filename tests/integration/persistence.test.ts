@@ -1009,12 +1009,14 @@ const rpc = (
     method: "POST",
   });
 test("modern Tasks wire rejects absent capability, returns flat durable handle and validates get/update/cancel", async () => {
-  const { db } = await setup(),
+  const { db, op } = await setup(),
     e = env(db),
     args = {
       arguments: { itemIds: ["item"], requestKey: "wire" },
       name: "caderninho_sync",
     };
+  await finish(db, op, "completed");
+  await database(db).update(settingsTable).set({ sync_enabled: 1 });
   const catalogue = await responseJson(
     await fetchMcp(rpc("tools/list", { _meta: meta }), e),
   );

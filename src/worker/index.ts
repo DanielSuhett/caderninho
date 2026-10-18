@@ -69,9 +69,9 @@ const worker = {
   fetch(request: Request, env: Bindings, ctx: ExecutionContext) {
     return createRoutes(ctx).fetch(request, env, ctx);
   },
-  async scheduled(_event: ScheduledController, env: Bindings) {
+  async scheduled(event: ScheduledController, env: Bindings) {
     await syncService(env).recover();
-    await scheduleSync(env);
+    await scheduleSync(env, new Date(event.scheduledTime));
     await syncService(env).compact();
     await authService(env).compact();
   },

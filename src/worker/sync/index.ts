@@ -8,4 +8,5 @@ export type {
   SynchronizationDependencies,
 } from "./entity";
 export { publishPage, runOperation } from "./execution.service";
+export { createReapplicationService } from "./reapplication.service";
 export { createSyncService, scheduleSync } from "./service";

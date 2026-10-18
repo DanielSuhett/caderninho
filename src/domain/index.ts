@@ -59,6 +59,7 @@ export {
 } from "./finance.schema";
 export { DEFINITIONS, metricFor, normalizeResource } from "./finance-model";
 export {
+  AdmissionStatus,
   assertCollectionComplete,
   assertIdempotency,
   assertOperationInput,
@@ -66,6 +67,7 @@ export {
   assertWebhookEvent,
   deleteMissingAfterPage,
   type FinishedOperationStatus,
+  type ItemAdmission,
   type LongOperationKind,
   latestCreatedAt,
   MigrationDecision,
@@ -73,6 +75,7 @@ export {
   type MigrationRequest,
   type MigrationRow,
   migrationDecision,
+  nextAutomaticAttempt,
   nextSyncSchedule,
   type OperationInput,
   OperationKind,
@@ -80,6 +83,8 @@ export {
   type OperationSelection,
   OperationStatus,
   pageCoverage,
+  type ReapplicationInput,
+  type ReapplicationResult,
   resourceParentAllowed,
   SYNC_POLICY,
   sourceFailureCoverage,
