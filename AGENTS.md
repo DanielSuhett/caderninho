@@ -2,15 +2,18 @@
 
 ## Como escrever código
 
-- Prefira TypeScript ESM estrito e modelos reutilizáveis em arquivos `.types.ts`,
-  com interfaces e uniões independentes de Zod. Mantenha schemas nas fronteiras
-  que validam entradas em runtime, compatíveis com os tipos via `satisfies`.
+- Prefira TypeScript ESM estrito. No domínio, reúna interfaces, uniões, enums e
+  regras puras por conceito em arquivos `*.entity.ts`. Use `.types.ts` para DTOs
+  de transporte e modelos técnicos sem comportamento. Mantenha schemas nas
+  fronteiras que validam entradas em runtime, compatíveis com os tipos via `satisfies`.
   Use tipos inferidos de tabelas/projeções Drizzle. Sem `any`, casts para convencer
   o compilador,
   non-null assertions ou supressões; `as const` é permitido.
 - Valide entradas externas com Zod na fronteira. Confie nos contratos internos e
   nas escritas controladas; não repita parses, `typeof` ou guardas estruturais em
-  cada consumidor. Preserve invariantes de identidade, autorização e finanças.
+  cada consumidor. Preserve a identidade dos registros, a autenticação da
+  instalação e os invariantes financeiros. Toda a base pertence ao dono da
+  instalação; não crie permissões por Item, recurso, conta ou operação.
 - Use entradas nomeadas, campos conhecidos e early returns. Toda cláusula tem
   chaves. Evite ternários aninhados, regras de negócio e extração dinâmica inline.
   Trate ausências reais; omita opcionais ausentes em vez de passar `undefined`.
@@ -45,8 +48,20 @@
 
 - Preserve um pacote npm e um deploy: `src/domain`, `contracts`, `worker`, `web`
   e `shared`. Controllers tratam transporte; services recebem dependências
-  explícitas, sem SQL/HTTP/Bindings; repositories concentram SQL. `composition.ts`
-  liga implementações. Use aliases `#` do `package.json` com extensões explícitas.
+  explícitas, sem SQL/HTTP/Bindings; repositories concentram SQL. Cada módulo de
+  aplicação concentra modelos e portas em `entity.ts`, transporte em
+  `controller.ts`, casos de uso em `service.ts`, SQL em `repository.ts` e testes
+  em `__tests__`. Services dependem das portas, nunca dos factories ou
+  `ReturnType` de repositories concretos. `composition.ts` liga implementações.
+  `index.ts` do módulo não exporta repositories. Fluxos duráveis de `sync` e
+  persistência de `finance` podem ter arquivos especializados com o mesmo sufixo
+  de camada; adapters de provedor, OAuth e Workflow permanecem explícitos.
+  O Biome bloqueia imports entre camadas, inclusive em novos helpers; mantenha
+  os testes de controle dessas regras. Defina aliases `@/` no `tsconfig.json`, sem extensões
+  `.ts`/`.tsx` nos imports. Prefira relativos curtos dentro do módulo e aliases
+  entre módulos. `index.ts` expõe apenas APIs públicas com exports explícitos;
+  arquivos internos importam as implementações diretamente, sem usar o próprio
+  índice. Execute scripts e testes Node com o loader `tsx` pelos comandos npm/mise.
 - D1 é a fonte das consultas e do progresso. Preserve precisão monetária, moedas,
   semântica do provedor, nomes dos steps e batches atômicos com checkpoints.
   Dados sintéticos nos testes; secrets e dados financeiros privados fora do Git.

@@ -1,17 +1,15 @@
+import type { CorrectionInput, RecordReference } from "@/domain/finance.entity";
+
 import type {
   LiveBalanceInput,
   PreviewInput,
   RuleCommand,
   SubscriptionInput,
-} from "#contracts/finance.types.ts";
-import type { OperationScope } from "#contracts/operation.types.ts";
-import type { Aggregate, Query } from "#contracts/queries.types.ts";
-import type {
-  CorrectionInput,
-  RecordReference,
-} from "#domain/record-correction.types.ts";
+} from "./finance.types";
+import type { OperationSelection } from "./operation.types";
+import type { Aggregate, Query } from "./queries.types";
 
-interface LongInput extends OperationScope {
+interface LongInput extends OperationSelection {
   requestKey: string;
 }
 

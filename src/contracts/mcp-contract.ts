@@ -1,18 +1,19 @@
 import { z } from "zod/v4";
 
+import { FilterSchema } from "@/domain/filter.schema";
+import {
+  CorrectionInputSchema,
+  RecordReferenceSchema,
+} from "@/domain/finance.schema";
+
 import {
   LiveBalanceInputSchema,
   PreviewInputSchema,
   RuleCommandSchema,
   SubscriptionInputSchema,
-} from "#contracts/finance.ts";
-import { type ToolCall, ToolName } from "#contracts/mcp.types.ts";
-import { AggregateSchema, QuerySchema } from "#contracts/queries.ts";
-import { FilterSchema } from "#domain/filter.ts";
-import {
-  CorrectionInputSchema,
-  RecordReferenceSchema,
-} from "#domain/record-correction.schema.ts";
+} from "./finance";
+import { type ToolCall, ToolName } from "./mcp.types";
+import { AggregateSchema, QuerySchema } from "./queries";
 
 export const LongInput = z
   .object({
@@ -32,7 +33,7 @@ const declarations = [
   {
     name: ToolName.sync,
     description:
-      "Materializar todos os recursos autorizados; primeira carga integral, depois incremento. MCP Task durável.",
+      "Materializar todos os recursos dos Items selecionados; primeira carga integral, depois incremento. MCP Task durável.",
     schema: LongInput,
   },
   {
@@ -178,4 +179,4 @@ export const ToolCallSchema = z.discriminatedUnion("name", [
 ]) satisfies z.ZodType<ToolCall>;
 
 export const PRODUCT_INSTRUCTIONS =
-  "Consulte a base financeira D1 com query e prefira aggregate para totais exatos por moeda. Nunca coordene páginas Pluggy. Verifique cobertura quando ausente/parcial; inicie sync explicitamente. Sync normal carrega toda a base autorizada inicialmente e depois mantém mudanças. Original é o valor da origem; efetivo aplica override, regras e origem nessa ordem. Valide/simule regras antes da ativação solicitada. Alterar regras não recategoriza o passado; reapply tem escopo explícito e preserva overrides. Sync, reconcile e reapply retornam Tasks somente com negociação io.modelcontextprotocol/tasks; acompanhe tasks/get ou subscriptions/listen. Fechar a escuta não cancela processamento. Recorrências são candidatos, não contratos confirmados. Saldo persistido tem referência temporal; live_balance é intenção pontual distinta e não garante tempo real.";
+  "Consulte a base financeira D1 com query e prefira aggregate para totais exatos por moeda. Nunca coordene páginas Pluggy. Verifique cobertura quando ausente/parcial; inicie sync explicitamente. Sync normal carrega todos os recursos dos Items selecionados inicialmente e depois mantém mudanças. Original é o valor da origem; efetivo aplica override, regras e origem nessa ordem. Valide/simule regras antes da ativação solicitada. Alterar regras não recategoriza o passado; reapply recebe uma seleção explícita e preserva overrides. Sync, reconcile e reapply retornam Tasks somente com negociação io.modelcontextprotocol/tasks; acompanhe tasks/get ou subscriptions/listen. Fechar a escuta não cancela processamento. Recorrências são candidatos, não contratos confirmados. Saldo persistido tem referência temporal; live_balance é intenção pontual distinta e não garante tempo real.";

@@ -11,9 +11,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { tryCatch } from "#shared/result.ts";
-import { required, responseJson } from "#testing/helpers.ts";
-import { spawnManaged } from "#testing/process.ts";
+import { createLogger } from "@/shared/logger";
+import { tryCatch } from "@/shared/result";
+import { required, responseJson } from "@/testing/helpers";
+import { spawnManaged } from "@/testing/process";
+
+const logger = createLogger({ name: "run-runtime", level: "info" });
 
 const cwd = fileURLToPath(new URL("../..", import.meta.url)),
   state = await mkdtemp(join(tmpdir(), "caderninho-test-")),
@@ -157,16 +160,16 @@ const { data: _data, error } = await tryCatch(async () => {
   }
   assert.equal(terminal?.status, "completed");
   assert.equal(required(terminal.result).isError, false);
-  console.log(
+  logger.info(
     "PASS: native Workflow continues without a connected subscriber, same durable Task",
   );
-  await command(["tests/integration/runtime-check.ts"], {
+  await command(["--import", "tsx", "tests/integration/runtime-check.ts"], {
     PRODUCT_TEST_URL: base,
   });
 });
 await worker.stop();
 if (error) {
-  console.error("Synthetic runtime diagnostic:", logs);
+  logger.error({ logs }, "Synthetic runtime diagnostic");
   throw error;
 }
 // Restore only into a new, isolated local database. Never reuse the source state.
@@ -230,9 +233,10 @@ assert.deepEqual(
   canonical(await readFile(reexport, "utf8")),
   canonical(await readFile(backup, "utf8")),
 );
-console.log(
+logger.info(
   "PASS: complete synthetic D1 export restores into an empty local database without loss",
 );
-console.log(
-  `Local workerd integration passed; isolated synthetic state: ${state}`,
+logger.info(
+  { state },
+  "Local workerd integration passed; isolated synthetic state",
 );

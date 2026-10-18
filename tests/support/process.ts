@@ -1,6 +1,9 @@
 import { type SpawnOptions, spawn } from "node:child_process";
 
-import { tryCatch } from "#shared/result.ts";
+import { createLogger } from "@/shared/logger";
+import { tryCatch } from "@/shared/result";
+
+const logger = createLogger({ name: "test-process" });
 
 // Wrangler owns workerd subprocesses. Give each fixture a process group so a
 // failed check or interrupted runner closes the whole synthetic runtime.
@@ -43,7 +46,10 @@ export function spawnManaged(args: string[], options: SpawnOptions = {}) {
     const timer = setTimeout(() => {
       void tryCatch(() => kill("SIGKILL")).then(({ data: _data, error }) => {
         if (error) {
-          console.error(error.message);
+          logger.error(
+            { reason: error.message },
+            "Managed process kill failed",
+          );
         }
       });
     }, 3000);
@@ -65,7 +71,10 @@ export function spawnManaged(args: string[], options: SpawnOptions = {}) {
     process.exitCode = code;
     void tryCatch(stop).then(({ data: _data, error }) => {
       if (error) {
-        console.error(error.message);
+        logger.error(
+          { reason: error.message },
+          "Managed process shutdown failed",
+        );
       }
     });
   }

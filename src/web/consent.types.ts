@@ -3,5 +3,4 @@ export interface ConsentDetails {
   clientDomain?: string | null | undefined;
   redirectHost: string;
   redirectIsLoopback: boolean;
-  scope: string[];
 }

@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import { Document } from "#web/document.tsx";
+import { Document } from "./document";
 
 export function Portal({ children }: { children: ReactNode }) {
   return (

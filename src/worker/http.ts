@@ -1,8 +1,10 @@
 import { readRequestBody } from "@modelcontextprotocol/server";
+import type { Logger } from "pino";
 import { z } from "zod/v4";
 
-import { exactJSON } from "#domain/exact.ts";
-import { parseRuleJson } from "#domain/rules/import-rules.ts";
+import { exactJSON } from "@/domain/exact";
+import { parseRuleJson } from "@/domain/rules";
+import { logger } from "@/shared/logger";
 
 const invalidRequests = new Set([
   "EMPTY_FORM",
@@ -16,17 +18,31 @@ export function failureStatus(error: Error): 400 | 500 {
     ? 400
     : 500;
 }
-export function requestDiagnostic(input: {
-  correlation: string;
-  status: number;
-  durationMs: number;
-  route: string;
-}) {
+export function requestDiagnostic(
+  input: {
+    correlation: string;
+    status: number;
+    durationMs: number;
+    route: string;
+  },
+  output: Pick<Logger, "debug" | "warn" | "error"> = logger,
+) {
   // Deliberately omit URL, query strings, bodies, identities and exception text.
-  console.info({
-    code: input.status >= 500 ? "REQUEST_FAILED" : "REQUEST_COMPLETED",
-    ...input,
-  });
+  const diagnostic = {
+    correlation: input.correlation,
+    status: input.status,
+    durationMs: input.durationMs,
+    route: input.route,
+  };
+  if (input.status >= 500) {
+    output.error({ code: "REQUEST_FAILED", ...diagnostic });
+    return;
+  }
+  if (input.status >= 400) {
+    output.warn({ code: "REQUEST_REJECTED", ...diagnostic });
+    return;
+  }
+  output.debug({ code: "REQUEST_COMPLETED", ...diagnostic });
 }
 
 export async function boundedJson(

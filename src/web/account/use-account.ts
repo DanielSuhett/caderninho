@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 
-import { createAccountController } from "./account-controller.ts";
-import { pollingDelay } from "./account-model.ts";
+import { createAccountController, pollingDelay } from "./account-controller";
 
 export function useAccount() {
   const [controller] = useState(createAccountController);

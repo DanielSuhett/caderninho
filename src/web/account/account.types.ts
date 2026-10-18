@@ -1,4 +1,7 @@
-import type { AccountResponse } from "#contracts/portal.types.ts";
+import type {
+  AccountConnectToken,
+  AccountResponse,
+} from "@/contracts/portal.types";
 
 export type LoadState =
   | { kind: typeof LoadStatus.loading }
@@ -41,7 +44,7 @@ export interface AccountApi {
   connectToken(
     context: CommandContext,
     itemId?: string,
-  ): Promise<{ accessToken: string }>;
+  ): Promise<AccountConnectToken>;
   connectItem(context: CommandContext, itemId: string): Promise<void>;
   pauseSync(context: CommandContext): Promise<void>;
   resumeSync(context: CommandContext): Promise<void>;
@@ -50,8 +53,7 @@ export interface AccountApi {
   logout(context: CommandContext): Promise<void>;
 }
 
-export interface ConnectRequest {
-  accessToken: string;
+export interface ConnectRequest extends AccountConnectToken {
   itemId: string | undefined;
   onSuccess(itemId: string): void;
   onError(): void;

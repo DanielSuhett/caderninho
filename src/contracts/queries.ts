@@ -1,9 +1,10 @@
 import { z } from "zod/v4";
 
-import type { Aggregate, Query } from "#contracts/queries.types.ts";
-import { ResourceSchema } from "#domain/enums.schema.ts";
-import { Resource } from "#domain/enums.ts";
-import { FilterSchema } from "#domain/filter.ts";
+import { Resource } from "@/domain/enums";
+import { ResourceSchema } from "@/domain/enums.schema";
+import { FilterSchema } from "@/domain/filter.schema";
+
+import type { Aggregate, Query } from "./queries.types";
 
 const CursorSchema = z
   .object({

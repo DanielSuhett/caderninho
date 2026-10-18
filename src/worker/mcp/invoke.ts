@@ -1,6 +1,6 @@
-import { ToolName } from "#contracts/mcp.types.ts";
-import { ToolCallSchema } from "#contracts/mcp-contract.ts";
-import type { FinancialQueries } from "#worker/finance/service.ts";
+import { ToolName } from "@/contracts/mcp.types";
+import { ToolCallSchema } from "@/contracts/mcp-contract";
+import type { FinancialQueries } from "@/worker/finance";
 
 export async function invoke(
   queries: FinancialQueries,
@@ -28,7 +28,6 @@ export async function invoke(
     case ToolName.get_subscriptions:
       return queries.readSubscriptions(call.input);
     case ToolName.live_balance: {
-      await queries.authorizeAccount(call.input);
       const raw = await queries.readAccount(call.input.accountId);
       return {
         balance: raw.balance,

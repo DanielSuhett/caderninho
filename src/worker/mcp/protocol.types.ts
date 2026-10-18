@@ -1,5 +1,5 @@
-import type { OperationStatus } from "#contracts/operation.types.ts";
-import type { JsonValue } from "#shared/json.types.ts";
+import type { OperationStatus } from "@/contracts/operation.types";
+import type { JsonValue } from "@/shared/json.types";
 
 interface TaskState {
   taskId: string;

@@ -1,6 +1,6 @@
-import type { Filter } from "#domain/filter.types.ts";
-import type { Catalog } from "#domain/rules/rules.types.ts";
-import type { JsonValue } from "#shared/json.types.ts";
+import type { Filter } from "@/domain/query.entity";
+import type { Catalog } from "@/domain/rules";
+import type { JsonValue } from "@/shared/json.types";
 
 export const RuleCommandAction = {
   validate: "validate",
@@ -41,6 +41,5 @@ export interface SubscriptionInput {
 }
 
 export interface LiveBalanceInput {
-  itemId: string;
   accountId: string;
 }

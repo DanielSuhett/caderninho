@@ -1,14 +1,15 @@
 import { z } from "zod/v4";
 
+import { FilterSchema } from "@/domain/filter.schema";
+import { RulesSchema } from "@/domain/rules";
+
 import {
   type LiveBalanceInput,
   type PreviewInput,
   type RuleCommand,
   RuleCommandAction,
   type SubscriptionInput,
-} from "#contracts/finance.types.ts";
-import { FilterSchema } from "#domain/filter.ts";
-import { RulesSchema } from "#domain/rules/rules-schema.ts";
+} from "./finance.types";
 
 export const RuleCommandSchema = z.object({
   action: z.enum(RuleCommandAction),
@@ -32,6 +33,5 @@ export const SubscriptionInputSchema = z.object({
 }) satisfies z.ZodType<SubscriptionInput>;
 
 export const LiveBalanceInputSchema = z.object({
-  itemId: z.string(),
   accountId: z.string(),
 }) satisfies z.ZodType<LiveBalanceInput>;

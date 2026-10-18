@@ -1,10 +1,11 @@
 import type { Context, Next } from "hono";
 import { getCookie, setCookie } from "hono/cookie";
 
-import { WizardIssue } from "#contracts/wizard.types.ts";
-import type { PortalSession } from "#worker/auth/repository.ts";
-import type { Bindings } from "#worker/bindings.ts";
-import { authService } from "#worker/composition.ts";
+import { WizardIssue } from "@/contracts/wizard.types";
+
+import type { Bindings } from "../bindings";
+import { authService } from "../composition";
+import type { PortalSession } from "./entity";
 
 export const sessionCookie = "__Host-caderninho";
 export const cookieOptions = {

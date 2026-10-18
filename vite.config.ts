@@ -27,6 +27,7 @@ function copyPortalAssets(): Plugin {
 }
 
 export default defineConfig({
+  resolve: { tsconfigPaths: true },
   plugins: [copyPortalAssets()],
   build: {
     outDir: "dist/web",

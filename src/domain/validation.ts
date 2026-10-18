@@ -1,7 +1,7 @@
 import type { z } from "zod/v4";
 
-import { FaultCode, type FaultCode as FaultCodeType } from "#domain/enums.ts";
-import { Fault } from "#domain/fault.ts";
+import { FaultCode, type FaultCode as FaultCodeType } from "./enums";
+import { Fault } from "./fault.entity";
 
 export function parseDomain<T extends z.ZodType>(
   schema: T,

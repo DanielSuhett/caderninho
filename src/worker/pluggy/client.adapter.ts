@@ -1,24 +1,40 @@
-import ky from "ky";
 import { PluggyClient } from "pluggy-sdk";
 import { z } from "zod/v4";
 
-import { FaultCode } from "#domain/enums.ts";
-import { exactJSON } from "#domain/exact.ts";
-import { tryCatch } from "#shared/result.ts";
+import { FaultCode } from "@/domain/enums";
+import { exactJSON } from "@/domain/exact";
+import { HttpRequestError, httpClient, requestJson } from "@/shared/http";
+import { type HttpFailure, HttpFailureKind } from "@/shared/http.types";
+import { tryCatch } from "@/shared/result";
 
 type QueryParameters = Record<
   string,
   number | number[] | string | string[] | boolean
 >;
 
-function transportError(code: string, response?: Response) {
+const transportCodes: Record<HttpFailureKind, string> = {
+  unauthorized: "UPSTREAM_HTTP_ERROR",
+  forbidden: "UPSTREAM_HTTP_ERROR",
+  not_found: "UPSTREAM_HTTP_ERROR",
+  rate_limit: "UPSTREAM_HTTP_ERROR",
+  invalid_request: "UPSTREAM_HTTP_ERROR",
+  server: "UPSTREAM_HTTP_ERROR",
+  redirect: FaultCode.UPSTREAM_REDIRECT,
+  timeout: "ETIMEDOUT",
+  too_large: FaultCode.UPSTREAM_TOO_LARGE,
+  invalid_response: "ERR_BODY_PARSE_FAILURE",
+  network: "UPSTREAM_HTTP_ERROR",
+};
+
+function transportError(failure: HttpFailure) {
+  const code = transportCodes[failure.kind];
   return Object.assign(new Error(code), {
     code,
-    ...(response && {
+    ...(failure.status != null && {
       response: {
-        statusCode: response.status,
+        statusCode: failure.status,
         headers: {
-          "retry-after": response.headers.get("Retry-After") ?? "",
+          "retry-after": failure.retryAfter ?? "",
         },
       },
     }),
@@ -31,6 +47,9 @@ export class PersonalPluggyClient extends PluggyClient {
   private cachedKey: string = "";
   private readonly maximum: number;
   private readonly timeoutMs: number;
+  private readonly http = httpClient.extend({
+    parseJson: exactJSON,
+  });
 
   constructor(
     credentials: { clientId: string; clientSecret: string },
@@ -91,109 +110,28 @@ export class PersonalPluggyClient extends PluggyClient {
     body?: Record<string, unknown>,
     apiKey?: string,
   ): Promise<T> {
-    const deadline = AbortSignal.timeout(this.timeoutMs);
     const { data, error } = await tryCatch(() =>
-      ky(`https://api.pluggy.ai/${endpoint}`, {
-        method,
-        ...(body && { json: body }),
-        headers: apiKey ? { "X-API-KEY": apiKey } : {},
-        signal: deadline,
-        timeout: false,
-        retry: 0,
-        redirect: "manual",
-        throwHttpErrors: false,
-        parseJson: exactJSON,
-        fetch: (input, init) => this.fetchResponse(input, init, deadline),
-      }).json<T>(),
+      requestJson<T>({
+        client: this.http,
+        input: `https://api.pluggy.ai/${endpoint}`,
+        options: {
+          method,
+          ...(body && { json: body }),
+          headers: apiKey ? { "X-API-KEY": apiKey } : {},
+          totalTimeout: this.timeoutMs,
+          maxResponseSize: this.maximum,
+        },
+      }),
     );
     if (error) {
-      if (deadline.aborted) {
-        throw transportError("ETIMEDOUT");
-      }
-      if (error instanceof SyntaxError) {
-        throw transportError("ERR_BODY_PARSE_FAILURE");
+      if (error instanceof HttpRequestError) {
+        if (error.failure.kind === HttpFailureKind.unauthorized) {
+          this.cachedKey = "";
+        }
+        throw transportError(error.failure);
       }
       throw error;
     }
     return data;
   }
-  private async fetchResponse(
-    input: Parameters<typeof fetch>[0],
-    init: Parameters<typeof fetch>[1],
-    deadline: AbortSignal,
-  ) {
-    const response = await fetch(input, init);
-    if (response.status === 401) {
-      this.cachedKey = "";
-    }
-    if (!response.ok) {
-      void cancelBody(response.body);
-      throw transportError(
-        response.status >= 300 && response.status < 400
-          ? FaultCode.UPSTREAM_REDIRECT
-          : "UPSTREAM_HTTP_ERROR",
-        response,
-      );
-    }
-    if (Number(response.headers.get("Content-Length")) > this.maximum) {
-      void cancelBody(response.body);
-      throw transportError(FaultCode.UPSTREAM_TOO_LARGE);
-    }
-    const bytes = await readLimitedBody(response.body, deadline, this.maximum);
-    const headers = new Headers(response.headers);
-    headers.delete("Content-Encoding");
-    headers.delete("Content-Length");
-    return new Response(bytes, { status: response.status, headers });
-  }
-}
-
-// Cancellation must not replace the original HTTP, size or timeout failure.
-async function cancelBody(
-  body: Pick<ReadableStream<Uint8Array>, "cancel"> | null,
-) {
-  const { data, error } = await tryCatch(() => body?.cancel());
-  return error ? undefined : data;
-}
-
-async function readLimitedBody(
-  body: ReadableStream<Uint8Array> | null,
-  deadline: AbortSignal,
-  maximum: number,
-) {
-  const reader = body?.getReader();
-  const chunks: Uint8Array[] = [];
-  let size = 0;
-  if (reader) {
-    const abort = () => {
-      void cancelBody(reader);
-    };
-    deadline.addEventListener("abort", abort, { once: true });
-    if (deadline.aborted) {
-      abort();
-    }
-    try {
-      for (;;) {
-        const chunk = await reader.read();
-        if (chunk.done) {
-          break;
-        }
-        size += chunk.value.byteLength;
-        if (size > maximum) {
-          void cancelBody(reader);
-          throw transportError(FaultCode.UPSTREAM_TOO_LARGE);
-        }
-        chunks.push(chunk.value);
-      }
-    } finally {
-      deadline.removeEventListener("abort", abort);
-      reader.releaseLock();
-    }
-  }
-  const bytes = new Uint8Array(size);
-  let offset = 0;
-  for (const chunk of chunks) {
-    bytes.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return bytes;
 }

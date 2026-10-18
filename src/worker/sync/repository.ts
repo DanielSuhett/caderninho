@@ -2,14 +2,12 @@ import {
   and,
   asc,
   eq,
-  exists,
   inArray,
   isNull,
   lt,
   lte,
   ne,
   notExists,
-  or,
   sql,
 } from "drizzle-orm";
 
@@ -17,39 +15,31 @@ import {
   type FinishedOperationStatus,
   type MigrationRequest,
   type OperationInput,
-  OperationKind,
   OperationPhase,
   OperationStatus,
   type WebhookEvent,
-} from "#contracts/operation.types.ts";
-import { FaultCode, Resource, TransactionStatus } from "#domain/enums.ts";
-import { localDay } from "#domain/exact.ts";
-import { EMPTY_RULES } from "#domain/rules/rules.ts";
-import type { EntityPreparer } from "#worker/composition.ts";
-import { database, hash, required } from "#worker/database.ts";
-import { authorizedItems } from "#worker/finance/repository.ts";
-import { rulesFor, saveRules } from "#worker/finance/rules.repository.ts";
-import * as tables from "#worker/schema.ts";
-import { resolveEvent } from "#worker/sync/events.ts";
-import { migrateLegacy } from "#worker/sync/migration.ts";
+} from "@/contracts/operation.types";
+import { localDay } from "@/domain/exact";
 import {
-  type Operation,
-  progressWithDefaults,
-} from "#worker/sync/operation-storage.ts";
-import { reapplyRules } from "#worker/sync/reapplication.ts";
-import { synchronizeResources } from "#worker/sync/resources.ts";
-import type {
-  SchedulingStore,
-  SynchronizationSession,
-} from "#worker/sync/service.ts";
+  assertIdempotency,
+  assertOperationInput,
+} from "@/domain/operation.entity";
+import { EMPTY_RULES } from "@/domain/rules";
+import { hash } from "@/shared/crypto";
+import { connectedItems } from "@/worker/finance/repository";
+import { saveRules } from "@/worker/finance/rules.repository";
+
+import { database, required } from "../database";
+import * as tables from "../schema";
+import type { Operation, SchedulingStore, SyncRepository } from "./entity";
 
 export async function startOperation(
   db: D1Database,
   requestKey: string,
   input: OperationInput,
 ) {
+  assertOperationInput(input);
   const fingerprint = await hash(input);
-  await authorizedItems(db, input.itemIds);
   const prior = await database(db)
     .select()
     .from(tables.operations)
@@ -57,9 +47,7 @@ export async function startOperation(
     .get();
   if (prior) {
     const op = prior;
-    if (op.input_hash !== fingerprint) {
-      throw new Error("IDEMPOTENCY_CONFLICT");
-    }
+    assertIdempotency({ expected: op.input_hash, actual: fingerprint });
     return op;
   }
   let revision = await database(db)
@@ -108,9 +96,7 @@ export async function startOperation(
       .where(eq(tables.operations.request_key, requestKey))
       .get(),
   );
-  if (op.input_hash !== fingerprint) {
-    throw new Error("IDEMPOTENCY_CONFLICT");
-  }
+  assertIdempotency({ expected: op.input_hash, actual: fingerprint });
   return op;
 }
 
@@ -128,9 +114,6 @@ export async function operationStates(db: D1Database, ids: string[]) {
     .where(inArray(tables.operations.id, ids));
   const byId = new Map(rows.map((row) => [row.id, row]));
   const ordered = ids.map((id) => required(byId.get(id)));
-  await authorizedItems(db, [
-    ...new Set(ordered.flatMap((op) => op.input.itemIds)),
-  ]);
   return ordered.map(operationSummary);
 }
 
@@ -154,7 +137,6 @@ export async function getOperation(db: D1Database, id: string) {
       .where(eq(tables.operations.id, id))
       .get(),
   );
-  await authorizedItems(db, op.input.itemIds);
   return op;
 }
 
@@ -231,7 +213,7 @@ export function schedulingStore(db: D1Database): SchedulingStore {
       );
     },
     async enqueue(account, kind, next, reconcileAfter) {
-      const items = await authorizedItems(db);
+      const items = await connectedItems(db);
       if (!items.length) {
         return null;
       }
@@ -358,111 +340,12 @@ export async function compactOperations(db: D1Database, now = new Date()) {
   ]);
 }
 
-export async function openSynchronization(
-  db: D1Database,
-  id: string,
-  prepare: EntityPreparer,
-): Promise<SynchronizationSession> {
-  const op = await stillWorking(db, id);
-  const input = op.input;
-  const engine = await rulesFor(db, op.rules_revision);
+export function createSyncRepository(db: D1Database): SyncRepository {
   return {
-    operation: {
-      id: op.id,
-      status: op.status,
-      kind: input.kind,
-    },
-    cancelled: async () =>
-      Boolean((await stillWorking(db, id)).cancel_requested),
-    acquire: async () => {
-      await database(db)
-        .insert(tables.locks)
-        .values({ id: 1, operation_id: id })
-        .onConflictDoNothing()
-        .run();
-      return (
-        (await database(db)
-          .select({ operation_id: tables.locks.operation_id })
-          .from(tables.locks)
-          .where(eq(tables.locks.id, 1))
-          .get()
-          .then((row) => row?.operation_id ?? null)) === id
-      );
-    },
-    mature: async () => {
-      await authorizedItems(db, input.itemIds);
-      await database(db).batch([
-        database(db)
-          .update(tables.entities)
-          .set({ eligible: 1 })
-          .where(
-            and(
-              inArray(tables.entities.item_id, input.itemIds),
-              eq(tables.entities.eligible, 0),
-              eq(tables.entities.deleted, 0),
-              lte(tables.entities.transaction_date, op.reference_day),
-              or(
-                isNull(tables.entities.status),
-                ne(tables.entities.status, TransactionStatus.PENDING),
-              ),
-            ),
-          ),
-        database(db)
-          .update(tables.settings)
-          .set({ revision: sql`${tables.settings.revision} + 1` })
-          .where(and(eq(tables.settings.id, 1), sql`changes() > 0`)),
-      ]);
-      return { phase: OperationPhase.matured };
-    },
-    migrate: async (step) => {
-      if (input.kind !== OperationKind.migration) {
-        throw new Error("OPERATION_KIND_MISMATCH");
-      }
-      const items = await authorizedItems(db, input.itemIds);
-      await migrateLegacy({ db, op, input, items, engine, prepare, step });
-    },
-    reapply: async (step) => {
-      if (input.kind !== OperationKind.reapply) {
-        throw new Error("OPERATION_KIND_MISMATCH");
-      }
-      const items = await authorizedItems(db, input.itemIds);
-      return reapplyRules({ db, op, input, items, engine, step });
-    },
-    resolveEvent: async (provider, step) => {
-      if (input.kind !== OperationKind.webhook) {
-        throw new Error("OPERATION_KIND_MISMATCH");
-      }
-      await authorizedItems(db, input.itemIds);
-      return resolveEvent(db, {
-        operation: op,
-        provider: provider,
-        engine: engine,
-        prepare,
-        eventId: input.eventId,
-        step: step,
-      });
-    },
-    synchronize: async (provider, step) => {
-      const items = await authorizedItems(db, input.itemIds);
-      return synchronizeResources({
-        db,
-        op,
-        input,
-        items,
-        engine,
-        prepare,
-        provider,
-        step,
-      });
-    },
-    hasErrors: async () =>
-      progressWithDefaults((await stillWorking(db, id)).progress).errors > 0,
-    finish: (status, isError = false) => finish(db, op, status, isError),
-  };
-}
-
-export function createSyncRepository(db: D1Database) {
-  return {
+    read: (id) => getOperation(db, id),
+    state: (id) => operationState(db, id),
+    states: (ids) => operationStates(db, ids),
+    compact: () => compactOperations(db),
     async markDispatched(id: string) {
       await database(db)
         .update(tables.operations)
@@ -553,18 +436,7 @@ export function createSyncRepository(db: D1Database) {
       const item = await database(db)
         .select({ id: tables.items.id })
         .from(tables.items)
-        .where(
-          and(
-            eq(tables.items.id, event.itemId),
-            eq(tables.items.enabled, 1),
-            exists(
-              database(db)
-                .select({ one: sql`1` })
-                .from(sql`json_each(${tables.items.resources})`)
-                .where(eq(sql`value`, Resource.transactions)),
-            ),
-          ),
-        )
+        .where(eq(tables.items.id, event.itemId))
         .get();
       if (!item) {
         return false;
@@ -585,16 +457,8 @@ export function createSyncRepository(db: D1Database) {
       return true;
     },
     async migrationOverlaps(input: MigrationRequest) {
-      const [item] = await authorizedItems(db, [input.itemId]);
-      if (!item) {
-        throw new Error(FaultCode.ITEM_NOT_AUTHORIZED);
-      }
-      const allowed = item.resources;
       let overlaps = 0;
       for (const row of input.rows) {
-        if (!allowed.includes(row.resource)) {
-          throw new Error("RESOURCE_NOT_AUTHORIZED");
-        }
         const existing = await database(db)
           .select({ normalized: tables.entities.normalized })
           .from(tables.entities)

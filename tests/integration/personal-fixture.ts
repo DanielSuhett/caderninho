@@ -1,9 +1,9 @@
 import { getOAuthApi } from "@cloudflare/workers-oauth-provider";
 import { z } from "zod/v4";
 
-import { AccountResponseSchema } from "#contracts/portal-contract.ts";
-import { oauth } from "#worker/auth/controller.ts";
-import type { Bindings } from "#worker/bindings.ts";
+import { AccountResponseSchema } from "@/contracts/portal-contract";
+import { oauth } from "@/worker/auth/controller";
+import type { Bindings } from "@/worker/bindings";
 
 import { createExecutionContext } from "cloudflare:test";
 import { env as bindings } from "cloudflare:workers";

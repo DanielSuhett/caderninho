@@ -4,24 +4,22 @@ import { count } from "drizzle-orm";
 import { afterEach, beforeEach, test, vi } from "vitest";
 import { z } from "zod/v4";
 
-import { sourceUrl } from "#testing/helpers.ts";
-import { mockNetwork, syntheticJwt } from "#testing/network.ts";
+import {
+  AccountConnectTokenSchema,
+  AccountResponseSchema,
+} from "@/contracts/portal-contract";
+import { sourceUrl } from "@/testing/helpers";
+import { mockNetwork, syntheticJwt } from "@/testing/network";
 import {
   accountService,
   financialQueries,
   scheduleSync,
-} from "#worker/composition.ts";
-import { database } from "#worker/database.ts";
-import { invoke } from "#worker/mcp/invoke.ts";
-import * as tables from "#worker/schema.ts";
+} from "@/worker/composition";
+import { database } from "@/worker/database";
+import { invoke } from "@/worker/mcp/invoke";
+import * as tables from "@/worker/schema";
 
-import {
-  command,
-  cookies,
-  fixture,
-  login,
-  settings,
-} from "./personal-fixture.ts";
+import { command, cookies, fixture, login, settings } from "./personal-fixture";
 import { applyD1Migrations, reset } from "cloudflare:test";
 import { env as bindings } from "cloudflare:workers";
 
@@ -47,7 +45,7 @@ function source(connector = 200) {
   });
 }
 
-test("deployment credentials connect Meu Pluggy; D1 stores only settings and the application fingerprint", async () => {
+test("deployment credentials connect Meu Pluggy; D1 stores settings without credentials", async () => {
   source();
   const config = settings();
   const service = accountService(config);
@@ -58,6 +56,12 @@ test("deployment credentials connect Meu Pluggy; D1 stores only settings and the
   const state = await service.state();
   assert.equal(state.status.connected, true);
   assert.equal(state.status.sync, "waiting");
+  assert.equal(state.panel.initialStep, 2);
+  assert.equal(state.panel.sync, "preparing");
+  assert.deepEqual(state.panel.polling, {
+    intervalMs: 5000,
+    retryIntervalMs: 30000,
+  });
   const stored = await database(bindings.DB)
     .select()
     .from(tables.settings)
@@ -66,9 +70,9 @@ test("deployment credentials connect Meu Pluggy; D1 stores only settings and the
   assert.ok(!JSON.stringify(stored).includes("synthetic-secret"));
   assert.ok(!JSON.stringify(stored).includes("synthetic-client"));
   const bad = { ...config, PLUGGY_CLIENT_ID: "different-application" };
-  await assert.rejects(
-    accountService(bad).token(),
-    /APPLICATION_CHANGE_REQUIRES_MIGRATION/,
+  assert.equal(
+    (await accountService(bad).token()).accessToken,
+    "synthetic-widget-token",
   );
   assert.equal((await financialQueries(bad).readStatus()).items.length, 1);
 });
@@ -82,7 +86,7 @@ test("upstream validation rejects a wrong Item and direct bank connector before 
   });
   await assert.rejects(
     accountService(settings()).connectItem(item),
-    /SOURCE_SCOPE_MISMATCH/,
+    /SOURCE_IDENTITY_MISMATCH/,
   );
   source(1);
   const config = settings();
@@ -100,9 +104,10 @@ test("upstream validation rejects a wrong Item and direct bank connector before 
   );
   source();
   await accountService(config).connectItem(item);
-  await assert.rejects(
-    accountService(config).token("99999999-9999-4999-8999-999999999999"),
-    /ITEM_NOT_AUTHORIZED/,
+  assert.equal(
+    (await accountService(config).token("99999999-9999-4999-8999-999999999999"))
+      .accessToken,
+    "synthetic-widget-token",
   );
 });
 
@@ -158,8 +163,25 @@ test("named account commands connect an Item and never return deployment secrets
   );
   const token = await command(app, cookie, "connect-token", { itemId: item });
   assert.equal(token.status, 200);
-  assert.ok(!(await token.text()).includes("synthetic-secret"));
+  const tokenBody = AccountConnectTokenSchema.parse(await token.json());
+  assert.equal(tokenBody.accessToken, "synthetic-widget-token");
+  assert.deepEqual(tokenBody.configuration, {
+    connectorIds: [200],
+    selectedConnectorId: 200,
+    includeSandbox: false,
+  });
+  assert.ok(!JSON.stringify(tokenBody).includes("synthetic-secret"));
   assert.equal((await command(app, cookie, "pause")).status, 200);
+  const paused = AccountResponseSchema.parse(
+    await (
+      await app.request("/api/account", { headers: { Cookie: cookie } })
+    ).json(),
+  );
+  assert.equal(paused.panel.polling, null);
+  assert.equal(paused.panel.sync, "paused");
+  const diagnostic = JSON.stringify(paused.panel.support.diagnostic);
+  assert.ok(!diagnostic.includes(item));
+  assert.ok(!diagnostic.includes(paused.csrf));
   assert.equal((await command(app, cookie, "resume")).status, 200);
   const missing = settings();
   delete missing.PLUGGY_CLIENT_SECRET;
@@ -174,25 +196,9 @@ test("named account commands connect an Item and never return deployment secrets
   );
 });
 
-test("live balance authorizes the stored account before network and uses renewed installation secrets", async () => {
-  source();
+test("live balance reads the owner's account directly with renewed installation secrets", async () => {
   const config = settings();
-  await accountService(config).connectItem(item);
   const accountId = "22222222-2222-4222-8222-222222222222";
-  await database(bindings.DB)
-    .insert(tables.entities)
-    .values({
-      item_id: item,
-      resource: "accounts",
-      id: accountId,
-      source: {},
-      normalized: { id: accountId },
-      relevant_hash: "synthetic",
-      normalizer: "test",
-      first_seen_at: "now",
-      observed_at: "now",
-    })
-    .run();
   let requests = 0;
   config.PLUGGY_CLIENT_SECRET = "renewed-synthetic-secret";
   mockNetwork(async (input, init) => {
@@ -213,17 +219,8 @@ test("live balance authorizes the stored account before network and uses renewed
     );
   });
   const queries = financialQueries(config);
-  await assert.rejects(
-    invoke(queries, "caderninho_live_balance", {
-      itemId: item,
-      accountId: "unregistered-account",
-    }),
-    /ACCOUNT_NOT_AUTHORIZED/,
-  );
-  assert.equal(requests, 0);
   await accountService(config).pause();
   const result = await invoke(queries, "caderninho_live_balance", {
-    itemId: item,
     accountId,
   });
   const balance = z

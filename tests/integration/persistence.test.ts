@@ -6,43 +6,34 @@ import type { BatchItem } from "drizzle-orm/batch";
 import { afterEach, beforeEach, test, vi } from "vitest";
 import { z } from "zod/v4";
 
-import type { OperationInput } from "#contracts/operation.types.ts";
-import type { Identity } from "#contracts/queries.types.ts";
-import { Resource } from "#domain/enums.ts";
-import type { Filter } from "#domain/filter.types.ts";
-import type { ProviderRecord } from "#domain/provider.types.ts";
-import { convertPredicate } from "#domain/rules/convert-rules.ts";
-import { importRules } from "#domain/rules/import-rules.ts";
-import { EMPTY_RULES, txContext } from "#domain/rules/rules.ts";
-import type { Rule } from "#domain/rules/rules.types.ts";
-import type { JsonValue } from "#shared/json.types.ts";
-import { required, responseJson } from "#testing/helpers.ts";
-import { mockNetwork } from "#testing/network.ts";
-import type { DurableInstance } from "#worker/bindings.ts";
+import type { OperationInput } from "@/contracts/operation.types";
+import type { Identity } from "@/contracts/queries.types";
+import { Resource } from "@/domain/enums";
+import type { ProviderRecord } from "@/domain/provider.entity";
+import type { Filter } from "@/domain/query.entity";
+import { EMPTY_RULES, importRules, type Rule, txContext } from "@/domain/rules";
+import { convertPredicate } from "@/domain/rules/convert-rules";
+import type { JsonValue } from "@/shared/json.types";
+import { prepareEntity } from "@/testing/finance";
+import { required, responseJson } from "@/testing/helpers";
+import { mockNetwork } from "@/testing/network";
+import type { DurableInstance } from "@/worker/bindings";
 import {
   financialQueries,
-  prepareEntity,
   synchronizationDependencies,
   syncService,
-} from "#worker/composition.ts";
-import { database } from "#worker/database.ts";
-import { override } from "#worker/finance/entities.repository.ts";
-import {
-  aggregateEntities,
-  queryEntities,
-} from "#worker/finance/repository.ts";
-import { rulesFor, saveRules } from "#worker/finance/rules.repository.ts";
-import { fetchMcp } from "#worker/mcp/controller.ts";
-import { listen, task } from "#worker/mcp/tasks.ts";
-import * as tables from "#worker/schema.ts";
-import {
-  finish,
-  getOperation,
-  startOperation,
-} from "#worker/sync/repository.ts";
-import { type FinancialSource, runOperation } from "#worker/sync/service.ts";
+} from "@/worker/composition";
+import { database } from "@/worker/database";
+import { override } from "@/worker/finance/entities.repository";
+import { aggregateEntities, queryEntities } from "@/worker/finance/repository";
+import { rulesFor, saveRules } from "@/worker/finance/rules.repository";
+import { fetchMcp } from "@/worker/mcp/controller";
+import { listen, task } from "@/worker/mcp/tasks";
+import * as tables from "@/worker/schema";
+import { type FinancialSource, runOperation } from "@/worker/sync";
+import { finish, getOperation, startOperation } from "@/worker/sync/repository";
 
-import { settings } from "./personal-fixture.ts";
+import { settings } from "./personal-fixture";
 import { applyD1Migrations, reset } from "cloudflare:test";
 import { env as bindings } from "cloudflare:workers";
 
@@ -60,6 +51,51 @@ beforeEach(async () => {
   await applyD1Migrations(bindings.DB, bindings.TEST_MIGRATIONS);
 });
 afterEach(() => vi.unstubAllGlobals());
+
+test("owner-data migration preserves existing financial records and makes the full history readable", async () => {
+  await reset();
+  const initial = required(
+    bindings.TEST_MIGRATIONS.find(
+      (migration) => migration.name === "0001_personal.sql",
+    ),
+  );
+  await applyD1Migrations(bindings.DB, [initial]);
+  await bindings.DB.prepare(
+    "INSERT INTO items(id, resources, enabled) VALUES (?, ?, ?)",
+  )
+    .bind("legacy-item", JSON.stringify([]), 0)
+    .run();
+  await database(bindings.DB)
+    .insert(tables.entities)
+    .values({
+      item_id: "legacy-item",
+      resource: Resource.transactions,
+      parent_id: "legacy-account",
+      id: "legacy-transaction",
+      source: { id: "legacy-transaction" },
+      normalized: {
+        id: "legacy-transaction",
+        amountMinor: "-900719925474099329",
+        currency: "BRL",
+      },
+      relevant_hash: "synthetic",
+      normalizer: "synthetic",
+      first_seen_at: "2026-10-01T00:00:00.000Z",
+      observed_at: "2026-10-01T00:00:00.000Z",
+    })
+    .run();
+  await applyD1Migrations(bindings.DB, bindings.TEST_MIGRATIONS);
+  const result = await queryEntities(bindings.DB, {
+    resource: Resource.transactions,
+  });
+  assert.equal(result.records.length, 1);
+  assert.equal(result.records[0]?.id, "legacy-transaction");
+  const normalized = z
+    .object({ amountMinor: z.string() })
+    .parse(JSON.parse(required(result.records[0]).normalized));
+  assert.equal(normalized.amountMinor, "-900719925474099329");
+  assert.equal(result.coverage[0]?.itemId, "legacy-item");
+});
 
 test("D1 queries, local corrections and task progress remain available without Pluggy credentials", async () => {
   const { db, op } = await setup();
@@ -159,6 +195,10 @@ const account = {
   currencyCode: "BRL",
   balance: "100.00",
 };
+const connection = {
+  id: "item",
+  connector: { id: 200, isOpenFinance: false },
+};
 const transaction = (id: string, extra: Partial<ProviderRecord> = {}) => ({
   id,
   accountId: "account",
@@ -173,13 +213,9 @@ const transaction = (id: string, extra: Partial<ProviderRecord> = {}) => ({
 });
 async function setup() {
   const db = bindings.DB;
-  await database(db)
-    .insert(tables.items)
-    .values({
-      id: "item",
-      resources: ["accounts", "transactions"],
-      enabled: 1,
-    });
+  await database(db).insert(tables.items).values({
+    id: "item",
+  });
   const op = await startOperation(db, "first", {
     kind: "sync",
     itemIds: ["item"],
@@ -193,19 +229,13 @@ const identity = (id: string): Identity => ({
   id,
 });
 
-test("coverage groups authorized Items and retains not-synced entries without exposing disabled or disallowed scopes", async () => {
+test("coverage groups connected Items and retains not-synced entries", async () => {
   const { db } = await setup();
-  await database(db)
-    .insert(tables.items)
-    .values([
-      { id: "other", resources: ["transactions"], enabled: 1 },
-      { id: "restricted", resources: ["accounts"], enabled: 1 },
-      { id: "disabled", resources: ["transactions"], enabled: 0 },
-    ]);
+  await database(db).insert(tables.items).values({ id: "other" });
   await database(db)
     .insert(tables.coverage)
     .values(
-      ["item", "restricted", "disabled"].map((item_id) => ({
+      ["item"].map((item_id) => ({
         item_id,
         resource: Resource.transactions,
         parent_id: "account",
@@ -241,15 +271,11 @@ test("coverage groups authorized Items and retains not-synced entries without ex
   ]);
 });
 
-test("bulk Task subscriptions preserve requested order and reject missing Tasks or a disabled Item in any scope", async () => {
+test("bulk Task subscriptions preserve requested order and reject missing Tasks", async () => {
   const { db, op } = await setup();
-  await database(db)
-    .insert(tables.items)
-    .values({
-      id: "other",
-      resources: ["transactions"],
-      enabled: 1,
-    });
+  await database(db).insert(tables.items).values({
+    id: "other",
+  });
   const other = await startOperation(db, "other-task", {
     kind: "sync",
     itemIds: ["other"],
@@ -287,14 +313,6 @@ test("bulk Task subscriptions preserve requested order and reject missing Tasks 
     listen(request, env(db), { id: 0, ids: [op.id, "missing-task"] }),
     /NOT_FOUND/,
   );
-  await database(db)
-    .update(tables.items)
-    .set({ enabled: 0 })
-    .where(eq(tables.items.id, "other"));
-  await assert.rejects(
-    listen(request, env(db), { id: 0, ids: [op.id, other.id] }),
-    /ITEM_NOT_AUTHORIZED/,
-  );
 });
 
 function steps() {
@@ -311,7 +329,7 @@ function steps() {
 }
 
 test("cancelling a waiting subscription closes the reader and releases its lifetime without cancelling the operation", async () => {
-  const { listen } = await import("#worker/mcp/tasks.ts");
+  const { listen } = await import("@/worker/mcp/tasks");
   const { db, op } = await setup();
   const released = Promise.withResolvers<void>();
   const response = await listen(new Request("https://local/mcp"), env(db), {
@@ -355,8 +373,14 @@ function providerFixture() {
       floor,
     }: Parameters<FinancialSource["page"]>[0]) {
       calls.push({ resource, parent, cursor, floor });
+      if (resource === "connections") {
+        return { records: [connection], next: null };
+      }
       if (resource === "accounts") {
         return { records: [account], next: null };
+      }
+      if (resource !== "transactions") {
+        return { records: [], next: null };
       }
       count++;
       if (!floor && cursor === null) {
@@ -457,8 +481,24 @@ test("bootstrap all pages, incremental floor excludes old history and classifies
     2,
   );
 });
-test("idempotent operation, unknown Items denied and dispatch response loss recovered", async () => {
+test("idempotent operation and dispatch response loss recovery", async () => {
   const { db, op } = await setup();
+  await assert.rejects(
+    startOperation(db, "invalid-filter", {
+      kind: "sync",
+      itemIds: ["item"],
+      filter: { tag: "project", value: "personal" },
+    }),
+    /SYNC_FILTER_NOT_SUPPORTED_USE_ITEM_SCOPE/,
+  );
+  await assert.rejects(
+    startOperation(db, "invalid-renormalization", {
+      kind: "sync",
+      itemIds: ["item"],
+      renormalize: true,
+    }),
+    /RENORMALIZE_REQUIRES_RECONCILIATION/,
+  );
   assert.equal(
     (
       await startOperation(db, "first", {
@@ -469,9 +509,6 @@ test("idempotent operation, unknown Items denied and dispatch response loss reco
     op.id,
   );
   await assert.rejects(getOperation(db, "unknown-operation"));
-  await assert.rejects(
-    startOperation(db, "bad", { kind: "sync", itemIds: ["other"] }),
-  );
   let creates = 0;
   await syncService({
     ...env(db),
@@ -511,7 +548,7 @@ test("manual override survives sync, rule version changes and exact SQL aggregat
     engine: engine,
   });
   await commit(db, p.statements);
-  const { invoke } = await import("#worker/mcp/invoke.ts");
+  const { invoke } = await import("@/worker/mcp/invoke");
   const queries = financialQueries(env(db));
   const manual = "x".repeat(2048);
   await invoke(queries, "caderninho_override", {
@@ -986,11 +1023,6 @@ test("page commit is replay-safe when Workflow loses the step acknowledgement", 
 test("bootstrap retains every supported resource and both account/investment parents", async () => {
   const resources = Object.values(Resource);
   const { db, op } = await setup();
-  await database(db)
-    .update(tables.items)
-    .set({ resources: resources })
-    .where(eq(tables.items.id, "item"))
-    .run();
   const calls: [
     Parameters<FinancialSource["page"]>[0]["resource"],
     string | null,
@@ -1089,9 +1121,13 @@ test("exact metrics retain BANK/CREDIT signs and ignore manual tags without eras
   }
   const gross = await aggregateEntities(db, { metric: "amount" }),
     flow = await aggregateEntities(db, { metric: "cashFlow" });
+  await assert.rejects(
+    aggregateEntities(db, { metric: "toString" }),
+    /UNKNOWN_METRIC/,
+  );
   assert.equal(required(gross.groups[0]).totalMinor, "2000");
   assert.equal(required(flow.groups[0]).totalMinor, "-1000");
-  const { invoke } = await import("#worker/mcp/invoke.ts");
+  const { invoke } = await import("@/worker/mcp/invoke");
   await invoke(financialQueries(env(db)), "caderninho_override", {
     ...identity("bank"),
     field: "tag",
@@ -1219,7 +1255,7 @@ test("migration is replay-safe, preserves useful legacy-only history and reports
   );
 });
 
-test("preview, SQL filters and reapply select the same scoped universe; cursor cannot change filter", async () => {
+test("preview, SQL filters and reapply select the same selected records; cursor cannot change filter", async () => {
   const { db, op } = await setup(),
     engine = await rulesFor(db, op.rules_revision);
   for (let n = 0; n < 4; n++) {
@@ -1254,7 +1290,7 @@ test("preview, SQL filters and reapply select the same scoped universe; cursor c
       op: "lte",
       value: "-200",
     } satisfies Filter;
-  const { invoke } = await import("#worker/mcp/invoke.ts");
+  const { invoke } = await import("@/worker/mcp/invoke");
   const preview = z
     .object({ selected: z.number(), differences: z.array(z.json()) })
     .parse(
@@ -1562,7 +1598,7 @@ test("operational retention does not remove financial records, rule provenance o
     op.id,
     steps(),
   );
-  const { compactOperations } = await import("#worker/sync/repository.ts");
+  const { compactOperations } = await import("@/worker/sync/repository");
   const financialCount = required(
     await database(db)
       .select({ n: count() })
@@ -1605,15 +1641,17 @@ test("operational retention does not remove financial records, rule provenance o
 
 test("changed totals during pagination retain partial coverage and never advance complete checkpoint", async () => {
   const { db, op } = await setup();
-  await database(db)
-    .update(tables.items)
-    .set({ resources: ["accounts"] })
-    .where(eq(tables.items.id, "item"));
   const source = {
     async ids() {
       return [];
     },
-    async page({ cursor }: Parameters<FinancialSource["page"]>[0]) {
+    async page({ resource, cursor }: Parameters<FinancialSource["page"]>[0]) {
+      if (resource === "connections") {
+        return { records: [connection], next: null };
+      }
+      if (resource !== "accounts") {
+        return { records: [], next: null };
+      }
       return cursor
         ? { records: [{ ...account, id: "second" }], next: null, total: 3 }
         : { records: [account], next: "2", total: 2 };
@@ -1632,6 +1670,7 @@ test("changed totals during pagination retain partial coverage and never advance
       await database(db)
         .select({ bootstrap_complete: tables.coverage.bootstrap_complete })
         .from(tables.coverage)
+        .where(eq(tables.coverage.resource, Resource.accounts))
         .get()
         .then((row) => row ?? null),
     ).bootstrap_complete,
@@ -1642,6 +1681,7 @@ test("changed totals during pagination retain partial coverage and never advance
       await database(db)
         .select({ status: tables.coverage.status })
         .from(tables.coverage)
+        .where(eq(tables.coverage.resource, Resource.accounts))
         .get()
         .then((row) => row ?? null),
     ).status,
@@ -1652,6 +1692,7 @@ test("changed totals during pagination retain partial coverage and never advance
       await database(db)
         .select({ n: count() })
         .from(tables.entities)
+        .where(eq(tables.entities.resource, Resource.accounts))
         .get()
         .then((row) => row ?? null),
     ).n,
@@ -1681,9 +1722,9 @@ function fixtureRule(r: {
 
 test("legacy revisions remain readable; explicit conversion creates a new revision without rewriting frozen operations", async () => {
   const { db } = await setup();
-  const { readRules } = await import("#worker/finance/rules.repository.ts");
-  const { NORMALIZER } = await import("#domain/entity.ts");
-  const { invoke } = await import("#worker/mcp/invoke.ts");
+  const { readRules } = await import("@/worker/finance/rules.repository");
+  const { NORMALIZER } = await import("@/domain/finance.entity");
+  const { invoke } = await import("@/worker/mcp/invoke");
   const old = {
     ...EMPTY_RULES,
     version: 1,
@@ -1753,7 +1794,7 @@ test("legacy revisions remain readable; explicit conversion creates a new revisi
 });
 
 test("HTTP conversion defaults to dry run and oversized import bodies fail before storage", async () => {
-  const { boundedJson } = await import("#worker/http.ts");
+  const { boundedJson } = await import("@/worker/http");
   assert.deepEqual(
     await boundedJson(
       new Request("https://local/import", {
@@ -1806,7 +1847,10 @@ test("HTTP conversion defaults to dry run and oversized import bodies fail befor
 });
 
 test("page publication rolls back data, progress, checkpoint and receipt together, then replays once", async () => {
-  const { publishPage } = await import("#worker/sync/publication.ts");
+  const { publishPage } = await import("@/worker/sync/execution.service");
+  const { createExecutionRepository } = await import(
+    "@/worker/sync/execution.repository"
+  );
   const { db, op } = await setup();
   const engine = await rulesFor(db, op.rules_revision);
   await database(db)
@@ -1828,25 +1872,40 @@ test("page publication rolls back data, progress, checkpoint and receipt togethe
     "CREATE TRIGGER fail_page_receipt BEFORE INSERT ON page_commits BEGIN SELECT RAISE(ABORT, 'synthetic receipt failure'); END",
   );
   let fetched = 0;
-  const publication = {
-    db,
+  const execution = {
+    repository: createExecutionRepository(db),
     op,
-    name: "atomic-page",
     prepare: (input: Parameters<typeof prepareEntity>[1]) =>
       prepareEntity(db, input),
-    resource: "transactions" as const,
-    item: { id: "item" },
-    parentId: "account",
-    parent: { normalized: account, relevant_hash: "synthetic-parent" },
     engine,
-    provider: {
-      async page() {
-        fetched++;
-        return { records: [transaction("atomic-page")], next: null, total: 1 };
-      },
+    step: {
+      do: async <T>(_name: string, fn: () => Promise<T>) => fn(),
+      sleep: async () => {},
     },
   };
-  await assert.rejects(publishPage(publication), /synthetic receipt failure/);
+  const provider = {
+    async page() {
+      fetched++;
+      return { records: [transaction("atomic-page")], next: null, total: 1 };
+    },
+    async ids() {
+      return [];
+    },
+  };
+  const publication = {
+    name: "atomic-page",
+    identity: {
+      operationId: op.id,
+      itemId: "item",
+      resource: Resource.transactions,
+      parentId: "account",
+    },
+    parent: { normalized: account, relevant_hash: "synthetic-parent" },
+  };
+  await assert.rejects(
+    publishPage(execution, provider, publication),
+    /synthetic receipt failure/,
+  );
   assert.equal(
     await database(db)
       .select({ n: count() })
@@ -1890,14 +1949,14 @@ test("page publication rolls back data, progress, checkpoint and receipt togethe
     before,
   );
   await db.exec("DROP TRIGGER fail_page_receipt");
-  await publishPage(publication);
+  await publishPage(execution, provider, publication);
   const progress = await database(db)
     .select({ progress: sql<string>`${tables.operations.progress}` })
     .from(tables.operations)
     .where(and(eq(tables.operations.id, op.id)))
     .get()
     .then((row) => row?.progress ?? null);
-  await publishPage(publication);
+  await publishPage(execution, provider, publication);
   assert.equal(fetched, 2);
   assert.equal(
     await database(db)
@@ -1961,7 +2020,7 @@ test("Drizzle JSON mapping preserves public strings, default progress and manual
   );
   assert.deepEqual(stored.source, source);
   assert.equal(stored.normalized.description, source.description);
-  const { invoke } = await import("#worker/mcp/invoke.ts");
+  const { invoke } = await import("@/worker/mcp/invoke");
   await database(db).insert(tables.tags).values({
     item_id: "item",
     resource: "transactions",

@@ -1,4 +1,4 @@
-import type { JsonValue } from "#shared/json.types.ts";
+import type { JsonValue } from "@/shared/json.types";
 
 export interface SecuroCondition {
   op: string;

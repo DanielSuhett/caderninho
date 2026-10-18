@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { accountingDay, localDay } from "#domain/exact.ts";
-import { normalizeResource } from "#domain/finance-model.ts";
+import { accountingDay, localDay } from "../exact";
+import { normalizeResource } from "../finance-model";
 
 const aid = "22222222-2222-2222-2222-222222222222",
   cid = "33333333-3333-3333-3333-333333333333";
@@ -84,13 +84,22 @@ await test("card signs, uncertainty and nulls remain explicit; no ticker dedupli
 });
 
 await test("provider capabilities distinguish missing products, revoked consent and unsupported resources", async () => {
-  const { itemInfo, productState } = await import("#domain/provider-state.ts");
+  const { itemInfo, productState } = await import("../provider.entity");
 
   const item = itemInfo({
     id: "synthetic-item",
     products: ["INVESTMENTS"],
     connector: { id: 1, isOpenFinance: false, products: ["INVESTMENTS"] },
   });
+  const cardOnly = itemInfo({
+    id: "synthetic-card-item",
+    products: ["CREDIT_CARDS"],
+    connector: { id: 1, products: ["CREDIT_CARDS"] },
+  });
+  assert.equal(
+    productState("accounts", cardOnly, [], Date.parse("2026-09-30")),
+    null,
+  );
 
   assert.equal(
     productState("investments", item, [], Date.parse("2026-09-30")),

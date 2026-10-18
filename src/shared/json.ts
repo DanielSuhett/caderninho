@@ -1,6 +1,6 @@
 import { z } from "zod/v4";
 
-import type { JsonValue } from "#shared/json.types.ts";
+import type { JsonValue } from "./json.types";
 
 export const JsonValueSchema = z.json();
 

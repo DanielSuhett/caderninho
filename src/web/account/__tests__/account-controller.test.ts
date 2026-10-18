@@ -1,18 +1,18 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import type { AccountResponse } from "#contracts/portal.types.ts";
-import { accountSnapshot } from "#testing/account.ts";
-import { required } from "#testing/helpers.ts";
+import type { AccountResponse } from "@/contracts/portal.types";
+import { accountConnectToken, accountSnapshot } from "@/testing/account";
+import { required } from "@/testing/helpers";
+
 import type {
   AccountApi,
   AccountBrowser,
   ConnectRequest,
   ConnectWidget,
-} from "#web/account/account.types.ts";
-import { AccountRequestError } from "#web/account/account-api.ts";
-import { createAccountController } from "#web/account/account-controller.ts";
-import { pollingDelay } from "#web/account/account-model.ts";
+} from "../account.types";
+import { AccountRequestError } from "../account-api";
+import { createAccountController, pollingDelay } from "../account-controller";
 
 function controllerFixture({
   api = {},
@@ -26,7 +26,7 @@ function controllerFixture({
   return createAccountController({
     api: {
       read: async () => accountSnapshot(),
-      connectToken: async () => ({ accessToken: "synthetic-token" }),
+      connectToken: async () => accountConnectToken(),
       async connectItem() {},
       async pauseSync() {},
       async resumeSync() {},
@@ -112,6 +112,36 @@ await test("account commands serialize, use the confirmed CSRF and retain the sn
     session: true,
   });
   assert.equal(pollingDelay(controller.getSnapshot()), undefined);
+  dispose();
+});
+
+await test("the client follows backend navigation and polling decisions and preserves visual selection on refresh", async () => {
+  const snapshot = accountSnapshot();
+  snapshot.panel.initialStep = 1;
+  snapshot.panel.polling = { intervalMs: 12000, retryIntervalMs: 45000 };
+  snapshot.status.sync = "completed";
+  let reads = 0;
+  const controller = controllerFixture({
+    api: {
+      async read() {
+        reads++;
+        if (reads > 2) {
+          throw new Error("Synthetic transient failure");
+        }
+        return snapshot;
+      },
+    },
+  });
+  const dispose = controller.start(() => {});
+  await controller.actions.refresh();
+  assert.equal(controller.getSnapshot().step, 1);
+  assert.equal(pollingDelay(controller.getSnapshot()), 12000);
+  controller.actions.selectStep(2);
+  await controller.actions.refresh();
+  assert.equal(controller.getSnapshot().step, 2);
+  await controller.actions.refresh();
+  assert.equal(pollingDelay(controller.getSnapshot()), 45000);
+  assert.equal(controller.getSnapshot().snapshot, snapshot);
   dispose();
 });
 
@@ -212,7 +242,7 @@ await test("disposing pending token, maintenance and logout work prevents later 
         },
         async connectToken() {
           await pending.promise;
-          return { accessToken: "synthetic-token" };
+          return accountConnectToken();
         },
         pauseSync: () => pending.promise,
         logout: () => pending.promise,

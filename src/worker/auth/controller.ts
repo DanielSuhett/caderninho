@@ -1,28 +1,23 @@
 import { OAuthProvider } from "@cloudflare/workers-oauth-provider";
 import { Hono } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
-import { z } from "zod/v4";
 
-import { tryCatch } from "#shared/result.ts";
-import { accessPage } from "#web/access-view.tsx";
-import { consentPage } from "#web/consent-view.tsx";
-import { renderPage } from "#web/document.tsx";
-import { accountRoutes } from "#worker/account/controller.ts";
-import {
-  adminConfigured,
-  returnPath,
-  token,
-  verifyPassword,
-} from "#worker/auth/service.ts";
+import { tryCatch } from "@/shared/result";
+import { accessPage } from "@/web/access-view";
+import { consentPage } from "@/web/consent-view";
+import { renderPage } from "@/web/document";
+import { accountRoutes } from "@/worker/account/controller";
+
+import type { Bindings } from "../bindings";
+import { authService } from "../composition";
+import { boundedForm, failureStatus, requestOrigin } from "../http";
+import { adminConfigured, returnPath, token, verifyPassword } from "./service";
 import {
   cookieOptions,
   createSession,
   type PortalEnv,
   readSession,
-} from "#worker/auth/session.ts";
-import type { Bindings } from "#worker/bindings.ts";
-import { authService } from "#worker/composition.ts";
-import { boundedForm, failureStatus, requestOrigin } from "#worker/http.ts";
+} from "./session";
 
 type McpHandler = (request: Request, env: Bindings) => Promise<Response>;
 
@@ -92,38 +87,18 @@ export function oauth(api: McpHandler, origin: string) {
     return new Response(null, { status: 302, headers: approved.headers });
   });
 
-  const authenticated = new Hono<{ Bindings: Bindings }>();
-  authenticated.onError((error) => {
-    throw error;
-  });
-  authenticated.use("*", async (c, next) => {
-    const verified = z
-      .object({
-        props: z.object({}).strict(),
-        auth: z.object({ scope: z.array(z.string()) }),
-      })
-      .parse(c.executionCtx);
-    if (!verified.auth.scope.includes("finance")) {
-      return c.text("Forbidden", 403);
-    }
-    await next();
-  });
-  authenticated.all("/mcp/*", (c) => api(c.req.raw, c.env));
-  authenticated.all("/mcp", (c) => api(c.req.raw, c.env));
   return new OAuthProvider<Bindings>({
     apiRoute: "/mcp",
     authorizeEndpoint: "/authorize",
     tokenEndpoint: "/oauth/token",
     clientRegistrationEndpoint: "/oauth/register",
-    scopesSupported: ["finance", "offline_access"],
-    requiredScopes: ["finance"],
+    scopesSupported: ["offline_access"],
     resourceMetadata: {
       resource: `${origin}/mcp`,
       authorization_servers: [origin],
     },
     apiHandler: {
-      fetch: (request, bindings, ctx) =>
-        authenticated.fetch(request, bindings, ctx),
+      fetch: (request, bindings) => api(request, bindings),
     },
     defaultHandler: {
       fetch: (request, bindings, ctx) => routes.fetch(request, bindings, ctx),

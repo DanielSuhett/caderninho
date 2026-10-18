@@ -3,19 +3,16 @@
 import { eq, sql } from "drizzle-orm";
 import { sqliteTable, text } from "drizzle-orm/sqlite-core";
 
-import type { ProviderRecord } from "#domain/provider.types.ts";
-import { tryCatch } from "#shared/result.ts";
-import { authenticatedFetch } from "#worker/auth/controller.ts";
-import type { Bindings } from "#worker/bindings.ts";
-import {
-  synchronizationDependencies,
-  syncService,
-} from "#worker/composition.ts";
-import { database } from "#worker/database.ts";
-import { receiveWebhook } from "#worker/index.ts";
-import { fetchMcp } from "#worker/mcp/controller.ts";
-import * as tables from "#worker/schema.ts";
-import { type FinancialSource, runOperation } from "#worker/sync/service.ts";
+import type { ProviderRecord } from "@/domain/provider.entity";
+import { tryCatch } from "@/shared/result";
+import { receiveWebhook } from "@/worker";
+import { authenticatedFetch } from "@/worker/auth/controller";
+import type { Bindings } from "@/worker/bindings";
+import { synchronizationDependencies, syncService } from "@/worker/composition";
+import { database } from "@/worker/database";
+import { fetchMcp } from "@/worker/mcp/controller";
+import * as tables from "@/worker/schema";
+import { type FinancialSource, runOperation } from "@/worker/sync";
 
 import {
   WorkflowEntrypoint,
@@ -39,6 +36,12 @@ class Fixture implements FinancialSource {
     cursor,
     floor,
   }: Parameters<FinancialSource["page"]>[0]) {
+    if (resource === "connections") {
+      return {
+        records: [{ id: item, connector: { id: 200, isOpenFinance: false } }],
+        next: null,
+      };
+    }
     if (resource === "accounts") {
       return {
         records: [
@@ -116,8 +119,6 @@ const worker = {
         .insert(tables.items)
         .values({
           id: item,
-          resources: ["accounts", "transactions"],
-          enabled: 1,
         })
         .onConflictDoNothing()
         .run();

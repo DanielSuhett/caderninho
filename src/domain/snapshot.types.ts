@@ -1,7 +1,8 @@
-import type { Availability, Resource } from "#domain/enums.ts";
-import type { OptionalText } from "#domain/finance.types.ts";
-import type { ItemInfo } from "#domain/provider.types.ts";
-import type { JsonValue } from "#shared/json.types.ts";
+import type { JsonValue } from "@/shared/json.types";
+
+import type { Availability, Resource } from "./enums";
+import type { OptionalText } from "./finance.entity";
+import type { ItemInfo } from "./provider.entity";
 
 export interface ImportArgs {
   resource?: Resource | undefined;

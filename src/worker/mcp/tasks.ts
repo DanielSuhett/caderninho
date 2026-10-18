@@ -2,14 +2,17 @@ import { Validator } from "@cfworker/json-schema";
 import { specTypeSchemas } from "@modelcontextprotocol/server";
 import { z } from "zod/v4";
 
-import { OperationStatus } from "#contracts/operation.types.ts";
-import { JsonValueSchema } from "#shared/json.ts";
-import { tryCatch } from "#shared/result.ts";
-import type { Bindings } from "#worker/bindings.ts";
-import { syncService } from "#worker/composition.ts";
-import type { Task } from "#worker/mcp/protocol.types.ts";
-import { operationState, operationStates } from "#worker/sync/repository.ts";
-import schema from "#worker/vendor/ext-tasks/schema.json" with { type: "json" };
+import { OperationStatus } from "@/contracts/operation.types";
+import { JsonValueSchema } from "@/shared/json";
+import { tryCatch } from "@/shared/result";
+import type { OperationState } from "@/worker/sync/entity";
+import schema from "@/worker/vendor/ext-tasks/schema.json" with {
+  type: "json",
+};
+
+import type { Bindings } from "../bindings";
+import { syncService } from "../composition";
+import type { Task } from "./protocol.types";
 
 // Shape of ext-tasks/schema/2026-07-28, not the legacy SDK Task aliases.
 export const EXTENSION = "io.modelcontextprotocol/tasks";
@@ -18,10 +21,10 @@ export const UpdateParams = TaskParams.extend({
   inputResponses: z.record(z.string(), JsonValueSchema),
 });
 export async function task(env: Bindings, id: string): Promise<Task> {
-  return taskResult(await operationState(env.DB, id));
+  return taskResult(await syncService(env).state(id));
 }
 
-function taskResult(state: Awaited<ReturnType<typeof operationState>>): Task {
+function taskResult(state: OperationState): Task {
   const base = {
     taskId: state.id,
     createdAt: state.createdAt,
@@ -81,7 +84,7 @@ export async function listen(
     throw new Error("SUBSCRIPTION_LIMIT");
   }
   const readTasks = async () =>
-    (await operationStates(env.DB, ids)).map(taskResult);
+    (await syncService(env).states(ids)).map(taskResult);
   const current = await readTasks();
   const polling = current.some(
     (state) => state.status === OperationStatus.working,

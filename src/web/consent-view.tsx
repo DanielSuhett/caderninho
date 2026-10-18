@@ -1,6 +1,6 @@
-import type { ConsentDetails } from "#web/consent.types.ts";
-import { Portal } from "#web/portal-view.tsx";
-import { UiButton } from "#web/ui.tsx";
+import type { ConsentDetails } from "./consent.types";
+import { Portal } from "./portal-view";
+import { UiButton } from "./ui";
 
 export function Consent({
   details,
@@ -20,9 +20,9 @@ export function Consent({
         <p>O destino é um aplicativo neste computador.</p>
       )}
       <p>
-        Acesso solicitado: {details.scope.join(", ")}. Permite consultar dados
-        financeiros, solicitar sincronizações e alterar regras e correções
-        locais. Os resultados consultados serão enviados ao serviço autorizado.
+        O assistente poderá consultar seus dados financeiros, solicitar
+        sincronizações e alterar regras e correções locais. Os resultados
+        consultados serão enviados ao serviço autorizado.
       </p>
       <form method="post">
         <input

@@ -1,5 +1,5 @@
-import { Portal } from "#web/portal-view.tsx";
-import { UiButton, UiField } from "#web/ui.tsx";
+import { Portal } from "./portal-view";
+import { UiButton, UiField } from "./ui";
 
 export function accessPage({
   origin,

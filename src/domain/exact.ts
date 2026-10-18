@@ -2,11 +2,12 @@ import Big from "big.js";
 import { parse } from "lossless-json";
 import { z } from "zod/v4";
 
-import { FaultCode } from "#domain/enums.ts";
-import { fail } from "#domain/fault.ts";
-import type { MoneyInput } from "#domain/finance.types.ts";
-import { parseDomain } from "#domain/validation.ts";
-import { JsonValueSchema } from "#shared/json.ts";
+import { JsonValueSchema } from "@/shared/json";
+
+import { FaultCode } from "./enums";
+import { fail } from "./fault.entity";
+import type { MoneyInput } from "./finance.entity";
+import { parseDomain } from "./validation";
 
 export { fail };
 
@@ -98,6 +99,16 @@ export function day(value: unknown) {
 
 export const accountingDay = (value: string | null | undefined) =>
   value == null ? null : day(value.slice(0, 10));
+
+export function isMatureDate({
+  date,
+  referenceDay,
+}: {
+  date: string | null | undefined;
+  referenceDay: string | null;
+}) {
+  return date != null && referenceDay !== null && date <= referenceDay;
+}
 
 export function localDay(value: Date) {
   return new Intl.DateTimeFormat("en-CA", {

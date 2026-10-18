@@ -22,20 +22,27 @@ import { alias } from "drizzle-orm/sqlite-core";
 import type {
   PreviewInput,
   SubscriptionInput,
-} from "#contracts/finance.types.ts";
-import type { Aggregate, Query } from "#contracts/queries.types.ts";
+} from "@/contracts/finance.types";
+import type { Aggregate, Query } from "@/contracts/queries.types";
 import {
   Availability,
-  FaultCode,
   Resource,
   TagOrigin,
   TransactionStatus,
-} from "#domain/enums.ts";
-import { assertMinor } from "#domain/exact.ts";
-import { Field, type Filter, FilterOperator } from "#domain/filter.types.ts";
-import { metricsFor } from "#domain/finance-model.ts";
-import { database, hash } from "#worker/database.ts";
-import * as tables from "#worker/schema.ts";
+} from "@/domain/enums";
+import { metricFor } from "@/domain/finance-model";
+import {
+  assertCursorScope,
+  assertReadRevision,
+  type Filter,
+  FilterOperandKind,
+  FilterOperator,
+  filterOperand,
+} from "@/domain/query.entity";
+import { hash } from "@/shared/crypto";
+
+import { database } from "../database";
+import * as tables from "../schema";
 
 const e = tables.effective_entities;
 const effectiveColumns = getViewSelectedFields(e);
@@ -127,9 +134,6 @@ export function compileFilter(db: D1Database, filter: Filter): SQL {
     const value = filterValue(f);
     parameters++;
     if (f.op === FilterOperator.contains) {
-      if (!f.field.endsWith("description")) {
-        throw new Error("contains only supports description");
-      }
       return gt(sql<number>`instr(${columns[f.field]}, ${value})`, 0);
     }
     return { eq, ne, gte, lte }[f.op](columns[f.field], value);
@@ -138,65 +142,23 @@ export function compileFilter(db: D1Database, filter: Filter): SQL {
 }
 
 function filterValue(filter: Extract<Filter, { field: string }>) {
-  if (filter.field === Field.amountMinor) {
-    if (typeof filter.value !== "string") {
-      throw new Error("Invalid amount filter");
-    }
-    assertMinor(filter.value);
-    return moneyKey(filter.value);
+  const operand = filterOperand(filter);
+  if (operand.kind === FilterOperandKind.amount) {
+    return moneyKey(operand.value);
   }
-  return typeof filter.value === "boolean"
-    ? Number(filter.value)
-    : filter.value;
+  return typeof operand.value === "boolean"
+    ? Number(operand.value)
+    : operand.value;
 }
 
-export async function authorizedItems(db: D1Database, ids?: string[]) {
-  const all = await database(db)
+export async function connectedItems(db: D1Database, ids?: string[]) {
+  return database(db)
     .select()
     .from(tables.items)
-    .where(eq(tables.items.enabled, 1));
-  if (ids?.some((id) => !all.some((item) => item.id === id))) {
-    throw new Error(FaultCode.ITEM_NOT_AUTHORIZED);
-  }
-  return ids ? all.filter((item) => ids.includes(item.id)) : all;
-}
-export async function requireResource(
-  db: D1Database,
-  itemId: string,
-  resource: Resource,
-) {
-  const [item] = await authorizedItems(db, [itemId]);
-  if (!item) {
-    throw new Error(FaultCode.ITEM_NOT_AUTHORIZED);
-  }
-  if (!item.resources.includes(resource)) {
-    throw new Error("RESOURCE_NOT_AUTHORIZED");
-  }
-}
-
-function authorizedEntity(db: D1Database) {
-  return exists(
-    database(db)
-      .select({ one: sql`1` })
-      .from(tables.items)
-      .where(
-        and(
-          eq(tables.items.id, e.item_id),
-          eq(tables.items.enabled, 1),
-          exists(
-            database(db)
-              .select({ one: sql`1` })
-              .from(sql`json_each(${tables.items.resources})`)
-              .where(eq(sql`value`, e.resource)),
-          ),
-        ),
-      ),
-  );
+    .where(ids ? inArray(tables.items.id, ids) : undefined);
 }
 async function coverageFor(db: D1Database, resource: Resource) {
-  const items = (await authorizedItems(db)).filter((item) =>
-    item.resources.includes(resource),
-  );
+  const items = await connectedItems(db);
   if (!items.length) {
     return [];
   }
@@ -275,12 +237,12 @@ export async function queryEntities(
     resource: args.resource,
     filter: args.filter ?? null,
   });
-  if (args.cursor && args.cursor.scope !== scope) {
-    throw new Error("CURSOR_SCOPE_MISMATCH");
+  if (args.cursor) {
+    assertCursorScope({ expected: scope, actual: args.cursor.scope });
   }
   const before = await revision(db);
-  if (args.cursor && args.cursor.revision !== before) {
-    throw new Error("RESTART_REQUIRED");
+  if (args.cursor) {
+    assertReadRevision({ expected: before, actual: args.cursor.revision });
   }
   const tags = database(db)
     .select({ value: sql<string>`json_group_object(${t.key}, ${t.value})` })
@@ -293,7 +255,6 @@ export async function queryEntities(
       and(
         eq(e.resource, args.resource),
         eq(e.deleted, 0),
-        authorizedEntity(db),
         args.filter ? compileFilter(db, args.filter) : undefined,
       ),
     )
@@ -301,9 +262,7 @@ export async function queryEntities(
     .limit(args.limit + 1)
     .offset(args.cursor?.offset ?? 0);
   const coverage = await coverageFor(db, args.resource);
-  if ((await revision(db)) !== before) {
-    throw new Error("RESTART_REQUIRED");
-  }
+  assertReadRevision({ expected: before, actual: await revision(db) });
   return {
     revision: before,
     coverage,
@@ -325,12 +284,7 @@ export async function aggregateEntities(
 ) {
   const args = { resource: Resource.transactions, ...input };
   const before = await revision(db),
-    definition = args.metric
-      ? metricsFor(args.resource)[args.metric]
-      : undefined;
-  if (args.metric && !definition) {
-    throw new Error("UNKNOWN_METRIC");
-  }
+    definition = metricFor({ resource: args.resource, metric: args.metric });
   const field = definition?.field;
   if (field && !/^[a-zA-Z0-9_.]+$/.test(field)) {
     throw new Error("INVALID_METRIC_FIELD");
@@ -351,7 +305,6 @@ export async function aggregateEntities(
           and(
             eq(e.resource, args.resource),
             eq(e.deleted, 0),
-            authorizedEntity(db),
             args.filter ? compileFilter(db, args.filter) : undefined,
             definition?.temporal === "flow" ? eq(e.eligible, 1) : undefined,
             definition?.temporal === "flow" &&
@@ -387,9 +340,7 @@ export async function aggregateEntities(
     .from(selected)
     .groupBy(selected.currency);
   const coverage = await coverageFor(db, args.resource);
-  if ((await revision(db)) !== before) {
-    throw new Error("RESTART_REQUIRED");
-  }
+  assertReadRevision({ expected: before, actual: await revision(db) });
   return {
     revision: before,
     coverage,
@@ -438,38 +389,13 @@ export async function readStatus(db: D1Database) {
       dispatched: o.dispatched,
     })
     .from(o)
-    .where(
-      notExists(
-        database(db)
-          .select({ one: sql`1` })
-          .from(sql`json_each(${o.input}, '$.itemIds') as ids`)
-          .where(
-            notExists(
-              database(db)
-                .select({ one: sql`1` })
-                .from(tables.items)
-                .where(
-                  and(
-                    eq(tables.items.id, sql`ids.value`),
-                    eq(tables.items.enabled, 1),
-                  ),
-                ),
-            ),
-          ),
-      ),
-    )
     .orderBy(desc(o.created_at))
     .limit(50);
   return {
-    items: (await authorizedItems(db)).map((item) => ({
-      ...item,
-      resources: JSON.stringify(item.resources),
-    })),
+    items: await connectedItems(db),
     coverage: await database(db)
       .select(getTableColumns(tables.coverage))
-      .from(tables.coverage)
-      .innerJoin(tables.items, eq(tables.items.id, tables.coverage.item_id))
-      .where(eq(tables.items.enabled, 1)),
+      .from(tables.coverage),
     operations: operations.map((op) => ({
       ...op,
       progress: JSON.stringify(op.progress),
@@ -488,12 +414,10 @@ export async function previewSelection(
   a: PreviewInput,
   before: number,
 ) {
-  await authorizedItems(db, a.itemIds);
   const predicate = and(
     eq(e.resource, Resource.transactions),
     eq(e.deleted, 0),
     inArray(e.item_id, a.itemIds),
-    authorizedEntity(db),
     a.filter ? compileFilter(db, a.filter) : undefined,
   );
   const total = await database(db)
@@ -538,7 +462,6 @@ export async function subscriptionRecords(
         gte(e.transaction_date, a.from),
         lte(e.transaction_date, a.to),
         eq(e.currency, a.currency),
-        authorizedEntity(db),
       ),
     )
     .limit(10001);

@@ -1,21 +1,18 @@
 import { z } from "zod/v4";
 
-import { compileValidatedRules } from "#domain/rules/rules.ts";
+import { JsonValueSchema } from "@/shared/json";
+import type { JsonValue } from "@/shared/json.types";
+
 import {
   Comparator,
   type Condition,
+  compileValidatedRules,
   type LegacyRules,
   type RuleImportReport,
   RuleOperator,
   RulePhase,
-} from "#domain/rules/rules.types.ts";
-import {
-  ActionSchema,
-  CatalogSchema,
-  RulesSchema,
-} from "#domain/rules/rules-schema.ts";
-import { JsonValueSchema } from "#shared/json.ts";
-import type { JsonValue } from "#shared/json.types.ts";
+} from "./rule.entity";
+import { ActionSchema, CatalogSchema, RulesSchema } from "./rule.schema";
 
 export const LegacyRulesSchema = CatalogSchema.extend({
   version: z.literal(1),

@@ -2,24 +2,25 @@ import { Hono } from "hono";
 import { deleteCookie, getCookie } from "hono/cookie";
 import type { z } from "zod/v4";
 
-import type { AccountResponse } from "#contracts/portal.types.ts";
+import type { AccountResponse } from "@/contracts/portal.types";
 import {
   AccountActionSchema,
   ConnectTokenActionSchema,
   ItemActionSchema,
-} from "#contracts/portal-contract.ts";
-import { WizardIssue } from "#contracts/wizard.types.ts";
-import { renderPage } from "#web/document.tsx";
-import { accountPage } from "#web/portal-view.tsx";
-import { wizardIssue } from "#worker/account/errors.ts";
+} from "@/contracts/portal-contract";
+import { WizardIssue } from "@/contracts/wizard.types";
+import { renderPage } from "@/web/document";
+import { accountPage } from "@/web/portal-view";
 import {
   cookieOptions,
   type PortalEnv,
   sessionCookie,
   sessionMiddleware,
-} from "#worker/auth/session.ts";
-import { accountService, authService } from "#worker/composition.ts";
-import { boundedJson, failureStatus, requestOrigin } from "#worker/http.ts";
+} from "@/worker/auth/session";
+
+import { accountService, authService } from "../composition";
+import { boundedJson, failureStatus, requestOrigin } from "../http";
+import { wizardIssue } from "./entity";
 
 export function accountRoutes(accessRoutes: Hono<PortalEnv>) {
   const app = new Hono<PortalEnv>();

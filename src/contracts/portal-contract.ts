@@ -1,10 +1,14 @@
 import { z } from "zod/v4";
 
-import type {
-  AccountResponse,
-  InstallationChecks,
-} from "#contracts/portal.types.ts";
-import { WizardStateSchema } from "#contracts/wizard-contract.ts";
+import {
+  type AccountConnectToken,
+  type AccountPanel,
+  type AccountResponse,
+  AccountStep,
+  AccountSyncOutcome,
+  type InstallationChecks,
+} from "./portal.types";
+import { WizardStateSchema } from "./wizard-contract";
 
 const InstallationChecksSchema = z.object({
   database: z.boolean(),
@@ -12,8 +16,36 @@ const InstallationChecksSchema = z.object({
   oauth: z.boolean(),
   migrations: z.boolean(),
 }) satisfies z.ZodType<InstallationChecks>;
+const AccountPanelSchema = z.object({
+  initialStep: z.union([
+    z.literal(AccountStep.connect),
+    z.literal(AccountStep.assistant),
+  ]),
+  sync: z.enum(AccountSyncOutcome),
+  polling: z
+    .object({
+      intervalMs: z.number().int().positive(),
+      retryIntervalMs: z.number().int().positive(),
+    })
+    .nullable(),
+  support: z.object({
+    diagnostic: WizardStateSchema.extend({ issue: z.null() }),
+    connectorId: z.number().int().positive(),
+  }),
+}) satisfies z.ZodType<AccountPanel>;
+
+export const AccountConnectTokenSchema = z.object({
+  accessToken: z.string().min(1),
+  configuration: z.object({
+    connectorIds: z.array(z.number().int().positive()).min(1),
+    selectedConnectorId: z.number().int().positive(),
+    includeSandbox: z.boolean(),
+  }),
+}) satisfies z.ZodType<AccountConnectToken>;
+
 export const AccountResponseSchema = z.object({
   status: WizardStateSchema,
+  panel: AccountPanelSchema,
   checks: InstallationChecksSchema,
   items: z.array(z.object({ id: z.string() })),
   latest: z

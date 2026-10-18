@@ -3,17 +3,17 @@ import assert from "node:assert/strict";
 import { afterEach, beforeEach, test, vi } from "vitest";
 import { z } from "zod/v4";
 
-import { Fault } from "#domain/fault.ts";
-import { required, sourceUrl } from "#testing/helpers.ts";
-import { mockNetwork, syntheticJwt } from "#testing/network.ts";
-import { createPluggyAccess } from "#worker/pluggy/access.adapter.ts";
-import { PersonalPluggyClient } from "#worker/pluggy/client.adapter.ts";
+import { Fault } from "@/domain/fault.entity";
+import { required, sourceUrl } from "@/testing/helpers";
+import { mockNetwork, syntheticJwt } from "@/testing/network";
+import { createPluggyAdapter } from "@/worker/pluggy/adapter";
+import { PersonalPluggyClient } from "@/worker/pluggy/client.adapter";
 import {
   connectToken,
   financialSource,
   providerRetries,
   readAccount,
-} from "#worker/pluggy/source.ts";
+} from "@/worker/pluggy/source";
 
 const credentials = {
   clientId: "synthetic-client",
@@ -33,14 +33,10 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-test("Pluggy access stays lazy and denies upstream operations with missing or different application credentials", async () => {
-  let authorized = 0;
-  const missing = createPluggyAccess({
+test("Pluggy adapter stays lazy and reports missing deployment credentials", async () => {
+  const missing = createPluggyAdapter({
     clientId: undefined,
     clientSecret: undefined,
-    async authorizeApplication() {
-      authorized++;
-    },
   });
   assert.equal(missing.account.configured, false);
   for (const use of [
@@ -50,25 +46,6 @@ test("Pluggy access stays lazy and denies upstream operations with missing or di
   ]) {
     await assert.rejects(use(), /PLUGGY_ACCOUNT_NOT_CONFIGURED/);
   }
-  assert.equal(authorized, 0);
-  const changed = createPluggyAccess({
-    ...credentials,
-    async authorizeApplication(clientId) {
-      assert.equal(clientId, credentials.clientId);
-      authorized++;
-      throw new Error("APPLICATION_CHANGE_REQUIRES_MIGRATION");
-    },
-  });
-  assert.equal(changed.account.configured, true);
-  assert.equal(authorized, 0);
-  for (const use of [
-    () => changed.account.application(),
-    () => changed.financialSource(),
-    () => changed.readAccount("synthetic-account"),
-  ]) {
-    await assert.rejects(use(), /APPLICATION_CHANGE_REQUIRES_MIGRATION/);
-  }
-  assert.equal(authorized, 3);
 });
 
 test("SDK/Fetch in workerd preserve numeric lexemes and date strings on auth, reads and mutations", async () => {
@@ -371,11 +348,11 @@ test("SDK pages preserve encoded cursors, creation floor, response scope and exp
       cursor: null,
       floor: floor,
     }),
-    /SOURCE_SCOPE_MISMATCH/,
+    /SOURCE_IDENTITY_MISMATCH/,
   );
   await assert.rejects(
     financialSource(client()).ids("account", ["tx"]),
-    /IDS_SCOPE_MISMATCH/,
+    /SOURCE_SELECTION_MISMATCH/,
   );
   mockNetwork(async (input) =>
     sourceUrl(input).pathname === "/auth"
@@ -384,7 +361,7 @@ test("SDK pages preserve encoded cursors, creation floor, response scope and exp
   );
   await assert.rejects(
     readAccount(client(), "account"),
-    /SOURCE_SCOPE_MISMATCH/,
+    /SOURCE_IDENTITY_MISMATCH/,
   );
 });
 
@@ -436,6 +413,49 @@ test("429 Retry-After is returned to the Workflow and waited outside a durable s
   );
   assert.equal(reads, 3);
   assert.deepEqual(sleeps, ["90 seconds"]);
+});
+
+test("rate limit retry exhaustion preserves the durable attempt names and bounded delay policy", async () => {
+  const attempts: string[] = [];
+  const sleeps: { name: string; duration: string }[] = [];
+  let inside = false;
+  const steps = providerRetries({
+    async do(name, callback) {
+      attempts.push(name);
+      inside = true;
+      const result = await callback();
+      inside = false;
+      return result;
+    },
+    async sleep(name, duration) {
+      assert.equal(inside, false);
+      sleeps.push({ name, duration });
+    },
+  });
+  await assert.rejects(
+    steps.do("limited", async () => {
+      throw new Fault("UPSTREAM_RATE_LIMIT");
+    }),
+    /UPSTREAM_RATE_LIMIT_RETRIES_EXHAUSTED/,
+  );
+  assert.deepEqual(attempts, [
+    "limited-attempt-0",
+    "limited-attempt-1",
+    "limited-attempt-2",
+    "limited-attempt-3",
+    "limited-attempt-4",
+    "limited-attempt-5",
+    "limited-attempt-6",
+  ]);
+  assert.deepEqual(sleeps, [
+    { name: "limited-rate-limit-0", duration: "10 seconds" },
+    { name: "limited-rate-limit-1", duration: "20 seconds" },
+    { name: "limited-rate-limit-2", duration: "40 seconds" },
+    { name: "limited-rate-limit-3", duration: "80 seconds" },
+    { name: "limited-rate-limit-4", duration: "160 seconds" },
+    { name: "limited-rate-limit-5", duration: "320 seconds" },
+    { name: "limited-rate-limit-6", duration: "640 seconds" },
+  ]);
 });
 
 test("every financial resource uses the public SDK operation with one-page checkpoints", async () => {

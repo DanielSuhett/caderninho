@@ -1,22 +1,20 @@
 import { and, eq, sql } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 
-import type { Identity } from "#contracts/queries.types.ts";
-import type { projectEntity } from "#domain/entity.ts";
-import { Resource, TagOrigin } from "#domain/enums.ts";
-import type { ProviderRecord } from "#domain/provider.types.ts";
-import {
-  CorrectionField,
-  type RecordChange,
-} from "#domain/record-correction.types.ts";
-import type { Derived } from "#domain/rules/rules.types.ts";
-import { database } from "#worker/database.ts";
-import {
-  moneyKey,
-  requireResource,
-  serializedEntity,
-} from "#worker/finance/repository.ts";
-import * as tables from "#worker/schema.ts";
+import type { Identity } from "@/contracts/queries.types";
+import { TagOrigin } from "@/domain/enums";
+import { CorrectionField, type RecordChange } from "@/domain/finance.entity";
+import type { Derived } from "@/domain/rules";
+
+import { database } from "../database";
+import * as tables from "../schema";
+import type {
+  EntityMutation,
+  EntityObservation,
+  EntityPublication,
+  EntityReader,
+} from "./entity";
+import { moneyKey, serializedEntity } from "./repository";
 
 export function derivedStatements(
   db: D1Database,
@@ -91,22 +89,18 @@ export function derivedStatements(
   return out;
 }
 
-interface EntityObservation {
-  identity: Identity;
-  source: ProviderRecord;
-  operationId: string;
-  observedAt: string;
+export function entityReader(db: D1Database): EntityReader {
+  return { read: (identity) => entityPersistence(db).read(identity) };
 }
 
-interface EntityPublication extends EntityObservation {
-  projection: ReturnType<typeof projectEntity>;
-  digest: string;
-  normalizer: string;
-  rulesRevision: string;
-  derived: Derived | undefined;
+export function entityStatements(db: D1Database, mutation: EntityMutation) {
+  const persistence = entityPersistence(db);
+  return mutation.kind === "observe"
+    ? persistence.observe(mutation.value)
+    : persistence.save(mutation.value);
 }
 
-export function entityPersistence(db: D1Database) {
+function entityPersistence(db: D1Database) {
   return {
     read: (identity: Identity) =>
       database(db)
@@ -224,7 +218,6 @@ export async function override(
   field: Exclude<CorrectionField, typeof CorrectionField.tag>,
   value: string | null,
 ) {
-  await requireResource(db, i.itemId, i.resource);
   const exists = await database(db)
     .select({ id: tables.entities.id })
     .from(tables.entities)
@@ -309,7 +302,6 @@ export async function correctRecord(
 ) {
   const a = { ...identity, ...change };
   if (a.field === CorrectionField.tag) {
-    await requireResource(db, a.itemId, a.resource);
     const key = a.key;
     const edit =
       a.value === null
@@ -361,7 +353,6 @@ export async function correctRecord(
 }
 
 export async function explainRecord(db: D1Database, a: Identity) {
-  await requireResource(db, a.itemId, a.resource);
   const explanation = {
     tags: await database(db)
       .select({
@@ -411,26 +402,4 @@ export async function explainRecord(db: D1Database, a: Identity) {
     ...explanation,
     record: explanation.record ? serializedEntity(explanation.record) : null,
   };
-}
-
-export async function authorizeAccount(
-  db: D1Database,
-  a: { itemId: string; accountId: string },
-) {
-  await requireResource(db, a.itemId, Resource.accounts);
-  if (
-    !(await database(db)
-      .select({ id: tables.entities.id })
-      .from(tables.entities)
-      .where(
-        and(
-          eq(tables.entities.item_id, a.itemId),
-          eq(tables.entities.resource, Resource.accounts),
-          eq(tables.entities.id, a.accountId),
-        ),
-      )
-      .get())
-  ) {
-    throw new Error("ACCOUNT_NOT_AUTHORIZED");
-  }
 }

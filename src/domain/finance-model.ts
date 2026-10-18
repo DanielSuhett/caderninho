@@ -1,5 +1,7 @@
 import { z } from "zod/v4";
 
+import type { JsonValue } from "@/shared/json.types";
+
 import {
   AccountType,
   Classification,
@@ -10,26 +12,26 @@ import {
   Resource,
   TransactionStatus,
   TransactionType,
-} from "#domain/enums.ts";
+} from "./enums";
 import {
   accountingDay,
   assertMinor,
   decimal,
   fail,
   id,
+  isMatureDate,
   localDay,
   minor,
-} from "#domain/exact.ts";
-import { Fault } from "#domain/fault.ts";
+} from "./exact";
+import { Fault } from "./fault.entity";
 import type {
   FinanceRecord,
   MetricDefinition,
   ResourceDefinition,
-} from "#domain/finance.types.ts";
-import type { ProviderField, ProviderRecord } from "#domain/provider.types.ts";
-import providerFields from "#domain/provider-fields.ts";
-import { parseDomain } from "#domain/validation.ts";
-import type { JsonValue } from "#shared/json.types.ts";
+} from "./finance.entity";
+import type { ProviderField, ProviderRecord } from "./provider.entity";
+import providerFields from "./provider-fields";
+import { parseDomain } from "./validation";
 
 const providerMap: Record<
   Resource,
@@ -300,6 +302,23 @@ export function metricsFor(
       },
     }),
   };
+}
+
+export function metricFor({
+  resource,
+  metric,
+}: {
+  resource: Resource;
+  metric: string | undefined;
+}) {
+  if (!metric) {
+    return undefined;
+  }
+  const definition = new Map(Object.entries(metricsFor(resource))).get(metric);
+  if (!definition) {
+    throw new Error("UNKNOWN_METRIC");
+  }
+  return definition;
 }
 
 export function providerFieldValue(obj: unknown, path: string): unknown {
@@ -712,8 +731,7 @@ function applyTransactionAmounts(
   const valid =
     raw.status === TransactionStatus.POSTED &&
     r.accountingDate &&
-    referenceDay !== null &&
-    r.accountingDate <= referenceDay &&
+    isMatureDate({ date: r.accountingDate, referenceDay }) &&
     isOneOf(raw.type ?? "", [TransactionType.CREDIT, TransactionType.DEBIT]) &&
     r.amountMinor != null;
 

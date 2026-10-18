@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 
 import { z } from "zod/v4";
 
-import { required, responseJson } from "#testing/helpers.ts";
+import { createLogger } from "@/shared/logger";
+import { required, responseJson } from "@/testing/helpers";
+
+const logger = createLogger({ name: "runtime-check", level: "info" });
 
 const base = process.env.PRODUCT_TEST_URL ?? "http://127.0.0.1:8894";
 const meta = {
@@ -55,7 +58,7 @@ const result = await responseJson(
 );
 assert.ok(result.result?.taskId, JSON.stringify(result));
 const taskId = result.result.taskId;
-console.log("durable handle", taskId);
+logger.info({ taskId }, "Durable handle created");
 async function subscriber() {
   const response = await rpc("subscriptions/listen", {
     notifications: { taskIds: [taskId] },
@@ -129,7 +132,7 @@ const aggregate = z
     JSON.parse(required(required(required(total.result.content)[0]).text)),
   );
 assert.equal(required(aggregate.groups[0]).totalMinor, "-1801439850948198602");
-console.log(
+logger.info(
   "PASS: durable Workflow, D1, two subscribers, disconnect, terminal reconnect isolation",
 );
 
@@ -170,7 +173,7 @@ for (let i = 0; i < 2; i++) {
   );
 }
 await fetch(`${base}/recover`, { method: "POST" });
-console.log(
+logger.info(
   "PASS: maintained OAuth rejects forged headers; authenticated webhook duplicate receipt and outbox recovery",
 );
 

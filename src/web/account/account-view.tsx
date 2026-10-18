@@ -7,8 +7,8 @@ import {
   type AccountState,
   type LoadState,
   LoadStatus,
-} from "./account.types.ts";
-import { supportPrompt, syncPresentation } from "./account-model.ts";
+} from "./account.types";
+import { SYNC_PRESENTATION, supportPrompt } from "./account-presentation";
 
 const labels = ["Conectar bancos", "Conectar assistente"];
 const firstQuestion =
@@ -71,7 +71,8 @@ export function AccountView({
     );
   }
   const state = snapshot.status,
-    sync = syncPresentation(state);
+    sync = SYNC_PRESENTATION[snapshot.panel.sync],
+    diagnostic = supportPrompt(snapshot.panel.support);
   return (
     <>
       <h1>Seu Caderninho.</h1>
@@ -249,9 +250,9 @@ export function AccountView({
         <textarea
           readOnly
           aria-label="Diagnóstico seguro"
-          value={supportPrompt(state)}
+          value={diagnostic}
         />
-        <Action onClick={() => actions.copy(supportPrompt(state))}>
+        <Action onClick={() => actions.copy(diagnostic)}>
           Copiar diagnóstico
         </Action>
         <Action onClick={actions.refresh}>Verificar novamente</Action>

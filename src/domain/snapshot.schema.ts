@@ -1,8 +1,8 @@
 import { z } from "zod/v4";
 
-import { AvailabilitySchema, ResourceSchema } from "#domain/enums.schema.ts";
-import type { ItemInfo } from "#domain/provider.types.ts";
-import type { Snapshot } from "#domain/snapshot.types.ts";
+import { AvailabilitySchema, ResourceSchema } from "./enums.schema";
+import type { ItemInfo } from "./provider.entity";
+import type { Snapshot } from "./snapshot.types";
 
 const text = z.string().nullish();
 const scalar = z.union([z.string(), z.number(), z.boolean()]).nullish();

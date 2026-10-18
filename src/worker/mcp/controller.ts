@@ -8,30 +8,28 @@ import { CfWorkerJsonSchemaValidator } from "@modelcontextprotocol/server/valida
 import { Hono } from "hono";
 import { z } from "zod/v4";
 
-import { RuleImportMode } from "#contracts/finance.types.ts";
-import { ToolName } from "#contracts/mcp.types.ts";
+import { RuleImportMode } from "@/contracts/finance.types";
+import { ToolName } from "@/contracts/mcp.types";
 import {
   LongInput,
   PRODUCT_INSTRUCTIONS,
   tools,
-} from "#contracts/mcp-contract.ts";
+} from "@/contracts/mcp-contract";
 import {
   type LongOperationKind,
   OperationKind,
-} from "#contracts/operation.types.ts";
-import { RulesSchema } from "#domain/rules/rules-schema.ts";
-import { parseJson } from "#shared/json.ts";
-import { tryCatch } from "#shared/result.ts";
-import type { Bindings } from "#worker/bindings.ts";
-import {
-  financialQueries,
-  ruleActions,
-  syncService,
-} from "#worker/composition.ts";
-import { importRuleDocument } from "#worker/finance/service.ts";
-import { boundedJson } from "#worker/http.ts";
-import { invoke } from "#worker/mcp/invoke.ts";
-import type { Envelope } from "#worker/mcp/protocol.types.ts";
+} from "@/contracts/operation.types";
+import { RulesSchema } from "@/domain/rules";
+import { parseJson } from "@/shared/json";
+import { tryCatch } from "@/shared/result";
+import { importRuleDocument } from "@/worker/finance";
+import { migrationHttp } from "@/worker/sync/controller";
+
+import type { Bindings } from "../bindings";
+import { financialQueries, ruleActions, syncService } from "../composition";
+import { boundedJson } from "../http";
+import { invoke } from "./invoke";
+import type { Envelope } from "./protocol.types";
 import {
   cancel,
   EXTENSION,
@@ -42,9 +40,7 @@ import {
   UpdateParams,
   validateSubscriptionWire,
   validateTaskWire,
-} from "#worker/mcp/tasks.ts";
-import { migrationHttp } from "#worker/sync/controller.ts";
-import { getOperation, startOperation } from "#worker/sync/repository.ts";
+} from "./tasks";
 
 const EnvelopeSchema = z.object({
   jsonrpc: z.literal("2.0"),
@@ -281,7 +277,7 @@ async function handleTaskRequest({
     if (m.method === "tasks/update") {
       validateTaskWire("UpdateTaskRequest", m);
       const a = UpdateParams.parse(params);
-      await getOperation(env.DB, a.taskId);
+      await syncService(env).read(a.taskId);
       return response(
         validateTaskWire("UpdateTaskResult", {
           resultType: "complete",
@@ -309,7 +305,7 @@ async function handleTaskRequest({
     return failure(-32601, "Method not found");
   });
   if (error) {
-    return failure(-32602, "Invalid or unauthorized operation");
+    return failure(-32602, "Invalid operation");
   }
   return data;
 }
@@ -325,13 +321,7 @@ async function createLongOperation(
   },
 ) {
   const args = LongInput.parse(params.arguments);
-  if (kind !== OperationKind.reapply && args.filter) {
-    throw new Error("SYNC_FILTER_NOT_SUPPORTED_USE_ITEM_SCOPE");
-  }
-  if (args.renormalize && kind !== OperationKind.reconcile) {
-    throw new Error("RENORMALIZE_REQUIRES_RECONCILIATION");
-  }
-  const op = await startOperation(env.DB, args.requestKey, {
+  const op = await syncService(env).start(args.requestKey, {
     kind,
     itemIds: args.itemIds,
     ...(args.renormalize && { renormalize: true }),

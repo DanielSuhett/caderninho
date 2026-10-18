@@ -36,10 +36,9 @@ Na sua Cloudflare, abra o Worker em **Settings → Variables and Secrets**. Edit
 secret desejado e publique a alteração. A recuperação da senha troca somente
 `ADMIN_PASSWORD`; use de 16 a 256 caracteres. Após uma publicação, entre novamente.
 
-Para renovar o acesso Pluggy, altere `PLUGGY_CLIENT_SECRET` da mesma aplicação.
-Uma aplicação diferente exige instalação separada: o Caderninho bloqueia a troca
-silenciosa quando já existem conexões cadastradas. Não tente recuperar acesso
-apagando o banco.
+Para atualizar as credenciais Pluggy, altere `PLUGGY_CLIENT_ID` e
+`PLUGGY_CLIENT_SECRET` conforme a aplicação escolhida. As chamadas seguintes usam
+esses secrets, e o histórico importado continua no D1.
 
 ## Dados e backups
 

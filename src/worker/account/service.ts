@@ -1,42 +1,22 @@
-import { OperationPhase, OperationStatus } from "#contracts/operation.types.ts";
-import type { InstallationChecks } from "#contracts/portal.types.ts";
-import { type WizardState, WizardSyncState } from "#contracts/wizard.types.ts";
-import {
-  isPersonalConnector,
-  MAX_PERSONAL_CONNECTIONS,
-} from "#domain/connection-policy.ts";
-import type { AccountSource } from "#worker/account/account.types.ts";
 import type {
-  createAccountRepository,
-  readPortalStatus,
-} from "#worker/account/repository.ts";
+  AccountConnectToken,
+  InstallationChecks,
+} from "@/contracts/portal.types";
+import { accountState } from "@/domain/account.entity";
+import {
+  assertConnectionCapacity,
+  assertPersonalConnector,
+  PERSONAL_CONNECTOR_ID,
+} from "@/domain/connection.entity";
 
-export function wizardState(
-  evidence: Awaited<ReturnType<typeof readPortalStatus>>,
-  configured: boolean,
-): WizardState {
-  const { config, latest, items, coverage } = evidence;
-  const connected = !!items.length;
-  let sync: WizardState["sync"] = WizardSyncState.waiting;
-  if (
-    latest?.phase === OperationPhase.error ||
-    latest?.status === OperationStatus.failed
-  ) {
-    sync = WizardSyncState.error;
-  } else if (latest) {
-    sync = latest.status;
-  }
-  return {
-    credentials: configured,
-    connected,
-    sync,
-    coverage: { total: coverage.total, complete: coverage.complete ?? 0 },
-    paused: config.sync_enabled === 0 && connected,
-  };
-}
+import {
+  type AccountRepository,
+  type AccountSource,
+  accountPanel,
+} from "./entity";
 
 interface AccountDependencies {
-  repository: ReturnType<typeof createAccountRepository>;
+  repository: AccountRepository;
   source: AccountSource;
   disconnectAssistants(): Promise<void>;
   installation(): Promise<InstallationChecks>;
@@ -44,14 +24,26 @@ interface AccountDependencies {
 }
 
 export function createAccountService(deps: AccountDependencies) {
+  async function readState() {
+    const evidence = await deps.repository.status();
+    const status = accountState({
+      configured: deps.source.configured,
+      connected: !!evidence.items.length,
+      syncEnabled: evidence.config.sync_enabled !== 0,
+      latest: evidence.latest,
+      coverage: evidence.coverage,
+    });
+    return { evidence, status };
+  }
   return {
     async state() {
-      const [evidence, checks] = await Promise.all([
-        deps.repository.status(),
+      const [{ evidence, status }, checks] = await Promise.all([
+        readState(),
         deps.installation(),
       ]);
       return {
-        status: wizardState(evidence, deps.source.configured),
+        status,
+        panel: accountPanel(status),
         checks,
         items: evidence.items,
         latest: evidence.latest,
@@ -59,32 +51,31 @@ export function createAccountService(deps: AccountDependencies) {
       };
     },
     async wizardState() {
-      return wizardState(
-        await deps.repository.status(),
-        deps.source.configured,
-      );
+      return (await readState()).status;
     },
     async connectItem(itemId: string) {
       const application = await deps.source.application();
-      const access = await deps.repository.connection.itemAccess(itemId);
-      if (access.count >= MAX_PERSONAL_CONNECTIONS && !access.exists) {
-        throw new Error("ITEM_LIMIT");
-      }
+      const connections =
+        await deps.repository.connection.connectionCount(itemId);
+      assertConnectionCapacity(connections);
       const item = await application.readItem(itemId);
-      if (!isPersonalConnector(item.connector?.id)) {
-        throw new Error("MEU_PLUGGY_REQUIRED");
-      }
+      assertPersonalConnector(item.connector?.id);
       await deps.repository.connection.connect(
         itemId,
-        application.clientId,
         deps.now().toISOString(),
       );
     },
-    async token(itemId?: string) {
-      if (itemId) {
-        await deps.repository.authorizeItems([itemId]);
-      }
-      return (await deps.source.application()).token(itemId);
+    async token(itemId?: string): Promise<AccountConnectToken> {
+      const application = await deps.source.application();
+      const token = await application.token(itemId);
+      return {
+        accessToken: token.accessToken,
+        configuration: {
+          connectorIds: [PERSONAL_CONNECTOR_ID],
+          selectedConnectorId: PERSONAL_CONNECTOR_ID,
+          includeSandbox: false,
+        },
+      };
     },
     pause: () => deps.repository.pause(),
     async resume() {

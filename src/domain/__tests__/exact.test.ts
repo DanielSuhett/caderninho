@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { assertMinor, compareDecimal, decimal, minor } from "#domain/exact.ts";
+import { assertMinor, compareDecimal, decimal, minor } from "../exact";
 
 await test("stored minor units preserve the shared integer and 30-digit precision boundary", () => {
   for (const value of [

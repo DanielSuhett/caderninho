@@ -54,6 +54,7 @@
         }
       },
       "suspicious": {
+        "noConsole": "error",
         "noExplicitAny": "error",
         "noTsIgnore": "error",
         "noDuplicateEnumValues": "error",
@@ -67,6 +68,28 @@
         "noVar": "error"
       },
       "style": {
+        "noRestrictedImports": {
+          "level": "error",
+          "options": {
+            "patterns": [
+              {
+                "group": ["#*/**"],
+                "message": "Use aliases @/ definidos no tsconfig.json."
+              },
+              {
+                "group": [
+                  "./**/*.ts",
+                  "./**/*.tsx",
+                  "../**/*.ts",
+                  "../**/*.tsx",
+                  "@/**/*.ts",
+                  "@/**/*.tsx"
+                ],
+                "message": "Omita .ts e .tsx nos imports de codigo do projeto."
+              }
+            ]
+          }
+        },
         "noNonNullAssertion": "error",
         "noNestedTernary": "error",
         "useAsConstAssertion": "error",
@@ -145,6 +168,496 @@
           "complexity": {
             "noExcessiveCognitiveComplexity": "off",
             "useMaxParams": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "src/worker/**/*.ts",
+        "!src/worker/**/*repository.ts",
+        "!src/worker/**/entity.ts",
+        "!src/worker/composition.ts",
+        "!src/worker/database.ts",
+        "!src/worker/schema.ts",
+        "!src/worker/runtime.d.ts",
+        "!src/worker/**/__tests__/**"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": ["#*/**"],
+                    "message": "Use aliases @/ definidos no tsconfig.json."
+                  },
+                  {
+                    "group": [
+                      "./**/*.ts",
+                      "./**/*.tsx",
+                      "../**/*.ts",
+                      "../**/*.tsx",
+                      "@/**/*.ts",
+                      "@/**/*.tsx"
+                    ],
+                    "message": "Omita .ts e .tsx nos imports de codigo do projeto."
+                  },
+                  {
+                    "group": [
+                      "drizzle-orm",
+                      "drizzle-orm/**",
+                      "**/database",
+                      "**/schema",
+                      "**/repository",
+                      "**/*.repository"
+                    ],
+                    "message": "SQL e D1 pertencem aos repositories; use um service e um contrato de entity."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "src/worker/**/service.ts",
+        "src/worker/**/*.service.ts",
+        "!src/worker/**/__tests__/**"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": ["#*/**"],
+                    "message": "Use aliases @/ definidos no tsconfig.json."
+                  },
+                  {
+                    "group": [
+                      "./**/*.ts",
+                      "./**/*.tsx",
+                      "../**/*.ts",
+                      "../**/*.tsx",
+                      "@/**/*.ts",
+                      "@/**/*.tsx"
+                    ],
+                    "message": "Omita .ts e .tsx nos imports de codigo do projeto."
+                  },
+                  {
+                    "group": [
+                      "drizzle-orm",
+                      "drizzle-orm/**",
+                      "**/database",
+                      "**/schema",
+                      "**/repository",
+                      "**/*.repository",
+                      "hono",
+                      "hono/**",
+                      "ky",
+                      "ky/**",
+                      "pluggy-sdk",
+                      "pluggy-sdk/**",
+                      "cloudflare:*",
+                      "@cloudflare/**",
+                      "**/bindings",
+                      "**/composition",
+                      "**/controller",
+                      "**/*.adapter",
+                      "**/http",
+                      "@/web/**",
+                      "**/web/**",
+                      "@/worker/pluggy/**",
+                      "**/pluggy/**"
+                    ],
+                    "message": "Services coordenam casos de uso por contratos; persistencia e transporte entram pela composicao."
+                  }
+                ]
+              }
+            },
+            "noRestrictedGlobals": {
+              "level": "error",
+              "options": {
+                "deniedGlobals": {
+                  "fetch": "Injete uma porta de origem no service; HTTP pertence ao adapter.",
+                  "D1Database": "D1 pertence ao repository.",
+                  "Request": "Request pertence ao controller.",
+                  "Response": "Response pertence ao controller."
+                }
+              }
+            },
+            "noRestrictedTypes": {
+              "level": "error",
+              "options": {
+                "types": {
+                  "D1Database": "D1 pertence ao repository; declare uma porta em entity.ts.",
+                  "D1PreparedStatement": "Statements pertencem ao repository.",
+                  "Request": "Request pertence ao controller.",
+                  "Response": "Response pertence ao controller.",
+                  "Bindings": "Bindings pertencem a composicao e aos adapters."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["src/worker/**/entity.ts"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": ["#*/**"],
+                    "message": "Use aliases @/ definidos no tsconfig.json."
+                  },
+                  {
+                    "group": [
+                      "./**/*.ts",
+                      "./**/*.tsx",
+                      "../**/*.ts",
+                      "../**/*.tsx",
+                      "@/**/*.ts",
+                      "@/**/*.tsx"
+                    ],
+                    "message": "Omita .ts e .tsx nos imports de codigo do projeto."
+                  },
+                  {
+                    "group": [
+                      "drizzle-orm",
+                      "drizzle-orm/**",
+                      "**/database",
+                      "**/repository",
+                      "**/*.repository",
+                      "hono",
+                      "hono/**",
+                      "ky",
+                      "ky/**",
+                      "pluggy-sdk",
+                      "pluggy-sdk/**",
+                      "cloudflare:*",
+                      "@cloudflare/**",
+                      "**/bindings",
+                      "**/composition",
+                      "**/controller",
+                      "**/*.adapter",
+                      "**/http",
+                      "@/web/**",
+                      "**/web/**",
+                      "@/worker/pluggy/**",
+                      "**/pluggy/**",
+                      "**/service",
+                      "**/*.service"
+                    ],
+                    "message": "Entities definem modelos, portas e regras puras; nao dependem de implementacoes."
+                  },
+                  {
+                    "group": [
+                      "@/worker/account",
+                      "@/worker/auth",
+                      "@/worker/finance",
+                      "@/worker/sync",
+                      "**/index"
+                    ],
+                    "message": "Importe portas de entity diretamente; indices publicos expoem services."
+                  }
+                ]
+              }
+            },
+            "noRestrictedGlobals": {
+              "level": "error",
+              "options": {
+                "deniedGlobals": {
+                  "fetch": "Injete uma porta de origem no service; HTTP pertence ao adapter.",
+                  "D1Database": "D1 pertence ao repository.",
+                  "Request": "Request pertence ao controller.",
+                  "Response": "Response pertence ao controller."
+                }
+              }
+            },
+            "noRestrictedTypes": {
+              "level": "error",
+              "options": {
+                "types": {
+                  "D1Database": "D1 pertence ao repository; declare uma porta em entity.ts.",
+                  "D1PreparedStatement": "Statements pertencem ao repository.",
+                  "Request": "Request pertence ao controller.",
+                  "Response": "Response pertence ao controller.",
+                  "Bindings": "Bindings pertencem a composicao e aos adapters."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["src/worker/**/*repository.ts"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": ["#*/**"],
+                    "message": "Use aliases @/ definidos no tsconfig.json."
+                  },
+                  {
+                    "group": [
+                      "./**/*.ts",
+                      "./**/*.tsx",
+                      "../**/*.ts",
+                      "../**/*.tsx",
+                      "@/**/*.ts",
+                      "@/**/*.tsx"
+                    ],
+                    "message": "Omita .ts e .tsx nos imports de codigo do projeto."
+                  },
+                  {
+                    "group": [
+                      "hono",
+                      "hono/**",
+                      "ky",
+                      "ky/**",
+                      "pluggy-sdk",
+                      "pluggy-sdk/**",
+                      "cloudflare:*",
+                      "@cloudflare/**",
+                      "**/bindings",
+                      "**/composition",
+                      "**/controller",
+                      "**/*.adapter",
+                      "**/http",
+                      "@/web/**",
+                      "**/web/**",
+                      "@/worker/pluggy/**",
+                      "**/pluggy/**",
+                      "**/service",
+                      "**/*.service"
+                    ],
+                    "message": "Repositories fazem persistencia; services coordenam os casos de uso e adapters fazem HTTP."
+                  },
+                  {
+                    "group": [
+                      "@/worker/account",
+                      "@/worker/auth",
+                      "@/worker/finance",
+                      "@/worker/sync",
+                      "**/index"
+                    ],
+                    "message": "Importe portas de entity diretamente; indices publicos expoem services."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "src/domain/**/*.ts",
+        "src/contracts/**/*.ts",
+        "src/shared/**/*.ts",
+        "!src/**/__tests__/**"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": ["#*/**"],
+                    "message": "Use aliases @/ definidos no tsconfig.json."
+                  },
+                  {
+                    "group": [
+                      "./**/*.ts",
+                      "./**/*.tsx",
+                      "../**/*.ts",
+                      "../**/*.tsx",
+                      "@/**/*.ts",
+                      "@/**/*.tsx"
+                    ],
+                    "message": "Omita .ts e .tsx nos imports de codigo do projeto."
+                  },
+                  {
+                    "group": [
+                      "@/worker",
+                      "@/worker/**",
+                      "**/worker/**",
+                      "@/web",
+                      "@/web/**",
+                      "**/web/**",
+                      "drizzle-orm",
+                      "drizzle-orm/**"
+                    ],
+                    "message": "Dominio, contratos e utilitarios nao dependem do Worker, da UI ou do banco."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "src/web/**/*.ts",
+        "src/web/**/*.tsx",
+        "!src/web/**/__tests__/**"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": ["#*/**"],
+                    "message": "Use aliases @/ definidos no tsconfig.json."
+                  },
+                  {
+                    "group": [
+                      "./**/*.ts",
+                      "./**/*.tsx",
+                      "../**/*.ts",
+                      "../**/*.tsx",
+                      "@/**/*.ts",
+                      "@/**/*.tsx"
+                    ],
+                    "message": "Omita .ts e .tsx nos imports de codigo do projeto."
+                  },
+                  {
+                    "group": [
+                      "@/worker",
+                      "@/worker/**",
+                      "**/worker/**",
+                      "drizzle-orm",
+                      "drizzle-orm/**"
+                    ],
+                    "message": "Frontend consome contratos e HTTP; nao importa modulos do backend."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "src/worker/**/*.ts",
+        "!src/worker/**/*repository.ts",
+        "!src/worker/**/entity.ts",
+        "!src/worker/*/controller.ts",
+        "!src/worker/auth/session.ts",
+        "!src/worker/auth/grants.adapter.ts",
+        "!src/worker/pluggy/**",
+        "!src/worker/mcp/tasks.ts",
+        "!src/worker/sync/workflow.ts",
+        "!src/worker/index.ts",
+        "!src/worker/composition.ts",
+        "!src/worker/bindings.ts",
+        "!src/worker/database.ts",
+        "!src/worker/schema.ts",
+        "!src/worker/http.ts",
+        "!src/worker/runtime.d.ts",
+        "!src/worker/vendor/**",
+        "!src/worker/**/__tests__/**"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": ["#*/**"],
+                    "message": "Use aliases @/ definidos no tsconfig.json."
+                  },
+                  {
+                    "group": [
+                      "./**/*.ts",
+                      "./**/*.tsx",
+                      "../**/*.ts",
+                      "../**/*.tsx",
+                      "@/**/*.ts",
+                      "@/**/*.tsx"
+                    ],
+                    "message": "Omita .ts e .tsx nos imports de codigo do projeto."
+                  },
+                  {
+                    "group": [
+                      "drizzle-orm",
+                      "drizzle-orm/**",
+                      "**/database",
+                      "**/schema",
+                      "**/repository",
+                      "**/*.repository",
+                      "hono",
+                      "hono/**",
+                      "ky",
+                      "ky/**",
+                      "pluggy-sdk",
+                      "pluggy-sdk/**",
+                      "cloudflare:*",
+                      "@cloudflare/**",
+                      "**/bindings",
+                      "**/composition",
+                      "**/controller",
+                      "**/*.adapter",
+                      "**/http",
+                      "@/web/**",
+                      "**/web/**",
+                      "@/worker/pluggy/**",
+                      "**/pluggy/**"
+                    ],
+                    "message": "Services coordenam casos de uso por contratos; persistencia e transporte entram pela composicao."
+                  }
+                ]
+              }
+            },
+            "noRestrictedGlobals": {
+              "level": "error",
+              "options": {
+                "deniedGlobals": {
+                  "fetch": "Injete uma porta de origem no service; HTTP pertence ao adapter.",
+                  "D1Database": "D1 pertence ao repository.",
+                  "Request": "Request pertence ao controller.",
+                  "Response": "Response pertence ao controller."
+                }
+              }
+            },
+            "noRestrictedTypes": {
+              "level": "error",
+              "options": {
+                "types": {
+                  "D1Database": "D1 pertence ao repository; declare uma porta em entity.ts.",
+                  "D1PreparedStatement": "Statements pertencem ao repository.",
+                  "Request": "Request pertence ao controller.",
+                  "Response": "Response pertence ao controller.",
+                  "Bindings": "Bindings pertencem a composicao e aos adapters."
+                }
+              }
+            }
           }
         }
       }

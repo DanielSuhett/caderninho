@@ -1,18 +1,16 @@
 import { and, eq, gt, lte, sql } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 
-import type { Bindings } from "#worker/bindings.ts";
-import { database, hash } from "#worker/database.ts";
-import { login_attempts, portal_sessions } from "#worker/schema.ts";
+import { hash } from "@/shared/crypto";
 
-export type PortalSession = Pick<
-  typeof portal_sessions.$inferSelect,
-  "csrf" | "expires" | "auth_version"
->;
+import { database } from "../database";
+import { login_attempts, portal_sessions } from "../schema";
+import type { AuthRepository } from "./entity";
 
-export function createAuthRepository(env: Bindings) {
-  const db = database(env.DB);
+export function createAuthRepository(binding: D1Database): AuthRepository {
+  const db = database(binding);
   return {
+    compact: () => compactAccess(binding),
     async session(id: string, now: number) {
       return (
         (await db

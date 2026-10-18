@@ -1,16 +1,15 @@
 import { Hono } from "hono";
 
-import { FaultCode } from "#domain/enums.ts";
-import { tryCatch } from "#shared/result.ts";
-import { authenticatedFetch } from "#worker/auth/controller.ts";
-import { compactAccess } from "#worker/auth/repository.ts";
-import type { Bindings } from "#worker/bindings.ts";
-import { scheduleSync, syncService } from "#worker/composition.ts";
-import { failureStatus, requestDiagnostic } from "#worker/http.ts";
-import { fetchMcp } from "#worker/mcp/controller.ts";
-import { receiveWebhook } from "#worker/sync/controller.ts";
-import { compactOperations } from "#worker/sync/repository.ts";
-import { FinanceWorkflow } from "#worker/sync/workflow.ts";
+import { FaultCode } from "@/domain/enums";
+import { tryCatch } from "@/shared/result";
+import { authenticatedFetch } from "@/worker/auth/controller";
+import { fetchMcp } from "@/worker/mcp/controller";
+import { receiveWebhook } from "@/worker/sync/controller";
+import { FinanceWorkflow } from "@/worker/sync/workflow";
+
+import type { Bindings } from "./bindings";
+import { authService, scheduleSync, syncService } from "./composition";
+import { failureStatus, requestDiagnostic } from "./http";
 
 export { FinanceWorkflow, receiveWebhook };
 
@@ -74,8 +73,8 @@ const worker = {
   async scheduled(_event: ScheduledController, env: Bindings) {
     await syncService(env).recover();
     await scheduleSync(env);
-    await compactOperations(env.DB);
-    await compactAccess(env.DB);
+    await syncService(env).compact();
+    await authService(env).compact();
   },
 };
 

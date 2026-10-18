@@ -1,11 +1,10 @@
 import { and, count, desc, eq, gt, gte, inArray, lte, sql } from "drizzle-orm";
 
-import { OperationKind } from "#contracts/operation.types.ts";
-import { Resource } from "#domain/enums.ts";
-import { tryCatch } from "#shared/result.ts";
-import type { Bindings } from "#worker/bindings.ts";
-import { database, hash } from "#worker/database.ts";
-import { authorizedItems } from "#worker/finance/repository.ts";
+import { OperationKind } from "@/contracts/operation.types";
+import { SYNC_POLICY } from "@/domain/operation.entity";
+import { tryCatch } from "@/shared/result";
+
+import { database } from "../database";
 import {
   coverage,
   items,
@@ -13,30 +12,13 @@ import {
   operations,
   portal_sessions,
   settings,
-} from "#worker/schema.ts";
+} from "../schema";
+import type { AccountRepository } from "./entity";
 
-export async function assertPluggyApplication(
-  binding: D1Database,
-  clientId: string,
-) {
-  const configured = await database(binding)
-    .select({ client_id_hash: settings.client_id_hash })
-    .from(settings)
-    .where(eq(settings.id, 1))
-    .get();
-  if (!configured) {
-    throw new Error("SETTINGS_MISSING");
-  }
-  const fingerprint = await hash(clientId);
-  if (configured.client_id_hash && configured.client_id_hash !== fingerprint) {
-    throw new Error("APPLICATION_CHANGE_REQUIRES_MIGRATION");
-  }
-  return fingerprint;
-}
 function connectionStore(binding: D1Database) {
   const db = database(binding);
   return {
-    async itemAccess(itemId: string) {
+    async connectionCount(itemId: string) {
       const row = await db.select({ count: count() }).from(items).get();
       return {
         count: row?.count ?? 0,
@@ -49,25 +31,17 @@ function connectionStore(binding: D1Database) {
         ),
       };
     },
-    async connect(itemId: string, clientId: string, now: string) {
+    async connect(itemId: string, now: string) {
       await db.batch([
         db
           .update(settings)
           .set({
-            client_id_hash: await hash(clientId),
             sync_enabled: 1,
             next_sync_at: now,
             connected_at: now,
           })
           .where(eq(settings.id, 1)),
-        db
-          .insert(items)
-          .values({
-            id: itemId,
-            resources: Object.values(Resource),
-            enabled: 1,
-          })
-          .onConflictDoUpdate({ target: items.id, set: { enabled: 1 } }),
+        db.insert(items).values({ id: itemId }).onConflictDoNothing(),
       ]);
     },
   };
@@ -108,7 +82,6 @@ export async function readPortalStatus(binding: D1Database) {
   const connected = await db
     .select({ id: items.id })
     .from(items)
-    .where(eq(items.enabled, 1))
     .orderBy(items.id);
   const totals = await db
     .select({
@@ -126,16 +99,8 @@ export async function readPortalStatus(binding: D1Database) {
     coverage: totals ?? { total: 0, complete: null },
   };
 }
-export async function installationReadiness(env: Bindings) {
-  const checks = {
-    database: Boolean(env.DB),
-    workflow: Boolean(env.FINANCE),
-    oauth: Boolean(env.OAUTH_KV),
-  };
-  if (!checks.database) {
-    return { ...checks, migrations: false };
-  }
-  const db = database(env.DB);
+export async function migrationsReady(binding: D1Database) {
+  const db = database(binding);
   const { data: _data, error } = await tryCatch(() =>
     db.batch([
       db.select().from(portal_sessions).limit(0),
@@ -150,14 +115,15 @@ export async function installationReadiness(env: Bindings) {
         .limit(0),
     ]),
   );
-  return { ...checks, migrations: !error };
+  return !error;
 }
-export function createAccountRepository(env: Bindings) {
-  const db = database(env.DB);
+export function createAccountRepository(
+  binding: D1Database,
+): AccountRepository {
+  const db = database(binding);
   return {
-    connection: connectionStore(env.DB),
-    status: () => readPortalStatus(env.DB),
-    authorizeItems: (ids: string[]) => authorizedItems(env.DB, ids),
+    connection: connectionStore(binding),
+    status: () => readPortalStatus(binding),
     async pause() {
       await db
         .update(settings)
@@ -175,7 +141,9 @@ export function createAccountRepository(env: Bindings) {
         .update(settings)
         .set({
           next_sync_at: now.toISOString(),
-          manual_sync_after: new Date(now.getTime() + 900000).toISOString(),
+          manual_sync_after: new Date(
+            now.getTime() + SYNC_POLICY.manualIntervalMs,
+          ).toISOString(),
         })
         .where(
           and(

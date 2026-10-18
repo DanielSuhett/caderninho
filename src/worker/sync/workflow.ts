@@ -1,8 +1,8 @@
-import type { Bindings } from "#worker/bindings.ts";
-import { synchronizationDependencies } from "#worker/composition.ts";
-import { providerRetries } from "#worker/pluggy/source.ts";
-import { runOperation } from "#worker/sync/service.ts";
+import { providerRetries } from "@/worker/pluggy/source";
 
+import type { Bindings } from "../bindings";
+import { synchronizationDependencies } from "../composition";
+import { runOperation } from "./service";
 import {
   WorkflowEntrypoint,
   type WorkflowEvent,

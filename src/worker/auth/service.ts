@@ -1,4 +1,6 @@
-import type { createAuthRepository } from "#worker/auth/repository.ts";
+import { secretsEqual } from "@/shared/crypto";
+
+import type { AuthRepository } from "./entity";
 
 export function adminConfigured(password: string | undefined) {
   return !!password && password.length >= 16 && password.length <= 256;
@@ -8,23 +10,10 @@ export async function verifyPassword(
   expected: string | undefined,
   supplied: string,
 ) {
-  if (
-    !adminConfigured(expected) ||
-    supplied.length < 16 ||
-    supplied.length > 256
-  ) {
+  if (!adminConfigured(expected) || !adminConfigured(supplied)) {
     return false;
   }
-  const digest = (value: string) =>
-    crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
-  const [a, b] = await Promise.all([digest(expected ?? ""), digest(supplied)]);
-  const left = new Uint8Array(a),
-    right = new Uint8Array(b);
-  let difference = 0;
-  for (let i = 0; i < left.length; i++) {
-    difference |= (left[i] ?? 0) ^ (right[i] ?? 0);
-  }
-  return difference === 0;
+  return secretsEqual({ expected: expected ?? "", supplied });
 }
 
 export function returnPath(value: string | undefined) {
@@ -40,11 +29,12 @@ export function returnPath(value: string | undefined) {
 export const token = () => crypto.randomUUID() + crypto.randomUUID();
 
 export function createAuthService(
-  repository: ReturnType<typeof createAuthRepository>,
+  repository: AuthRepository,
   version: string,
   now: () => number = Date.now,
 ) {
   return {
+    compact: repository.compact,
     async readSession(id: string) {
       if (id.length > 100) {
         return null;

@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { FaultCode } from "#domain/enums.ts";
-import { Fault } from "#domain/fault.ts";
-import { tryCatch } from "#shared/result.ts";
+import { FaultCode } from "@/domain/enums";
+import { Fault } from "@/domain/fault.entity";
+
+import { tryCatch } from "../result";
 
 await test("tryCatch preserves falsy successes and normalizes rejected or synchronously thrown values", async () => {
   for (const value of [null, 0, false, ""] as const) {

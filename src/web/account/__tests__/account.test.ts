@@ -3,14 +3,11 @@ import test from "node:test";
 
 import type { PluggyConnect } from "pluggy-connect-sdk";
 
-import { accountSnapshot } from "#testing/account.ts";
-import { required } from "#testing/helpers.ts";
-import {
-  AccountRequestError,
-  createAccountApi,
-} from "#web/account/account-api.ts";
-import { supportPrompt } from "#web/account/account-model.ts";
-import { createConnectWidget } from "#web/account/connect-widget.ts";
+import { accountConnectToken, accountSnapshot } from "@/testing/account";
+import { required } from "@/testing/helpers";
+
+import { AccountRequestError, createAccountApi } from "../account-api";
+import { createConnectWidget } from "../connect-widget";
 
 await test("account commands preserve CSRF, validate responses and never retry an uncertain mutation", async () => {
   const requests: Request[] = [];
@@ -42,12 +39,15 @@ await test("account commands preserve CSRF, validate responses and never retry a
       !error.message.includes("never exposed"),
   );
   assert.equal(requests.length, 3);
+  let applied = 0;
   const unavailable = createAccountApi("https://caderninho.test", async () => {
-    throw new Error("Network unavailable");
+    applied++;
+    throw new Error("Response lost after the command was applied");
   });
   await assert.rejects(
     unavailable.pauseSync({ csrf: "synthetic-csrf", signal }),
   );
+  assert.equal(applied, 1);
 });
 
 await test("expired session, redirected login and malformed account response cannot become valid state", async () => {
@@ -62,19 +62,97 @@ await test("expired session, redirected login and malformed account response can
         error instanceof AccountRequestError && error.issue === "session",
     );
   }
-  const api = createAccountApi("https://caderninho.test", async () =>
-    Response.json({ data: {} }),
-  );
-  await assert.rejects(api.read(new AbortController().signal));
+  for (const body of [JSON.stringify({ data: {} }), "invalid JSON", ""]) {
+    const api = createAccountApi(
+      "https://caderninho.test",
+      async () => new Response(body),
+    );
+    await assert.rejects(api.read(new AbortController().signal));
+  }
+  for (const body of [
+    "invalid JSON",
+    JSON.stringify({ issue: "private-code" }),
+  ]) {
+    const api = createAccountApi(
+      "https://caderninho.test",
+      async () => new Response(body, { status: 500 }),
+    );
+    await assert.rejects(
+      api.read(new AbortController().signal),
+      (error) =>
+        error instanceof AccountRequestError && error.issue === "unknown",
+    );
+  }
 });
 
-await test("diagnostic contains only safe state and never claims complete coverage", () => {
-  const snapshot = accountSnapshot();
-  snapshot.status.sync = "error";
-  const prompt = supportPrompt(snapshot.status);
-  assert.ok(prompt.includes('"complete":1'));
-  assert.ok(!prompt.includes(snapshot.origin));
-  assert.ok(!prompt.includes(snapshot.csrf));
+await test("account token and Item commands consume one response and preserve command fields", async () => {
+  const requests: Request[] = [];
+  const api = createAccountApi("https://caderninho.test", async (input) => {
+    const request = new Request(input);
+    requests.push(request);
+    assert.equal(request.headers.get("Accept"), "application/json");
+    assert.equal(request.redirect, "manual");
+    return request.url.endsWith("connect-token")
+      ? Response.json(accountConnectToken())
+      : Response.json({ ok: true });
+  });
+  const context = {
+    csrf: "synthetic-csrf",
+    signal: new AbortController().signal,
+  };
+  assert.deepEqual(await api.connectToken(context), accountConnectToken());
+  await api.connectToken(context, "synthetic-item");
+  await api.connectItem(context, "synthetic-item");
+  assert.equal(requests.length, 3);
+  assert.deepEqual(await required(requests[0]).json(), { csrf: context.csrf });
+  for (const request of requests.slice(1)) {
+    assert.deepEqual(await request.json(), {
+      csrf: context.csrf,
+      itemId: "synthetic-item",
+    });
+  }
+});
+
+await test("account cancellation interrupts a stalled response body without retry", async () => {
+  const controller = new AbortController();
+  let bodyRead: (() => void) | undefined;
+  const reading = new Promise<void>((resolve) => {
+    bodyRead = resolve;
+  });
+  let calls = 0;
+  let cancelled = false;
+  const api = createAccountApi("https://caderninho.test", async (input) => {
+    calls++;
+    const { signal } = new Request(input);
+    return new Response(
+      new ReadableStream({
+        start(stream) {
+          stream.enqueue(new TextEncoder().encode("{"));
+          signal.addEventListener(
+            "abort",
+            () => {
+              cancelled = true;
+              stream.error(signal.reason);
+            },
+            { once: true },
+          );
+        },
+        pull() {
+          bodyRead?.();
+        },
+      }),
+    );
+  });
+  const reason = new Error("View disposed");
+  const pending = assert.rejects(
+    api.read(controller.signal),
+    (error) => error === reason,
+  );
+  await reading;
+  controller.abort(reason);
+  await pending;
+  assert.equal(calls, 1);
+  assert.equal(cancelled, true);
 });
 
 await test("widget ignores late SDK loading and stale events after replacement or disposal", async () => {
@@ -94,7 +172,12 @@ await test("widget ignores late SDK loading and stale events after replacement o
     }
   }
   const callbacks = {
-    accessToken: "synthetic-token",
+    ...accountConnectToken(),
+    configuration: {
+      connectorIds: [321],
+      selectedConnectorId: 321,
+      includeSandbox: false,
+    },
     itemId: undefined,
     onSuccess() {},
     onClose() {
@@ -110,7 +193,8 @@ await test("widget ignores late SDK loading and stale events after replacement o
   assert.equal(destroyed, 1);
   await events[0]?.onError?.({ message: "ignored" });
   await events[0]?.onClose?.();
-  assert.deepEqual(required(events[1]).connectorIds, [200]);
+  assert.deepEqual(required(events[1]).connectorIds, [321]);
+  assert.equal(required(events[1]).selectedConnectorId, 321);
   await widget.destroy();
   await events[1]?.onClose?.();
   assert.equal(destroyed, 2);
@@ -154,7 +238,7 @@ await test("overlapping opens wait for old widget cleanup and only the latest re
   }
   const widget = createConnectWidget(async () => ({ PluggyConnect: Widget }));
   const options = {
-    accessToken: "synthetic-token",
+    ...accountConnectToken(),
     itemId: undefined,
     onSuccess() {},
     onClose() {},

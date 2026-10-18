@@ -59,13 +59,72 @@ com efeitos colaterais. Reexports usam bindings locais quando já importados.
 
 `biome.json` é a fonte das regras ativas. Use regras nativas, sem plugins próprios
 para reproduzir regras indisponíveis. Políticas como a forma de consumir
-`tryCatch` e a separação de responsabilidades são convenções de revisão em
-`AGENTS.md`; o lint de promises complementa essa revisão e o `tsc`.
+`tryCatch` e a localização semântica das regras de negócio são convenções de
+revisão em `AGENTS.md`. As dependências entre camadas são verificadas pelas
+restrições nativas de imports; o lint de promises complementa essa revisão e o `tsc`.
 
 TypeScript 7 verifica acessos indexados e propriedades opcionais exatas: valide
 a presença antes de consumir e omita campos opcionais ausentes. Um único
-`tsconfig.json` verifica fontes e testes com NodeNext. O lint semântico
+`tsconfig.json` verifica fontes e testes com resolução `Bundler`. O lint semântico
 complementa o `tsc`, que continua separado.
+
+### Imports e entradas públicas
+
+`tsconfig.json` é a única definição dos aliases: `@/` aponta para `src/` e
+`@/testing/` para `tests/support/`. Vite e Vitest ativam `resolve.tsconfigPaths`;
+Wrangler lê os mesmos paths. Os testes e scripts Node usam `node --import tsx`
+pelos comandos npm/mise, pois o Node nativo não resolve esses aliases nem procura
+extensões TypeScript em imports relativos.
+
+- Omita `.ts`/`.tsx` em imports, reexports e imports dinâmicos. Preserve extensões
+  de assets, como `.css` e `.json`, e os caminhos exigidos por pacotes externos.
+- Use `./arquivo` ou `../arquivo` para implementações próximas do mesmo módulo.
+  Use `@/domain/account.entity`, por exemplo, para cruzar módulos e evitar cadeias
+  de `../../`. Imports de dependências mantêm o nome do pacote.
+- `index.ts` define APIs públicas com exports nomeados, inclusive `export type`.
+  Arquivos internos usam imports diretos para evitar ciclos pelo próprio índice.
+  Controllers, Workflows e outros entrypoints que dependem de `composition.ts`
+  permanecem fora dos índices consumidos pela composição.
+- Há entradas públicas para regras, account/auth/finance/sync do Worker e o
+  painel account do frontend. `shared` mantém imports por utilitário para evitar
+  que um índice global carregue logger, HTTP e criptografia juntos no navegador.
+
+O lint nativo bloqueia os aliases antigos `#`, as extensões `.ts`/`.tsx` e
+dependências proibidas entre camadas, com paths relativos ou aliases. Os testes
+em `src/worker/__tests__/architecture.test.ts` exercitam também imports dinâmicos,
+reexports e helpers que não se chamam `service.ts`.
+
+### Camadas dos módulos
+
+Use `entity.ts`, `controller.ts`, `service.ts`, `repository.ts` e `__tests__` como
+estrutura padrão de `account`, `auth`, `finance` e `sync`. As entidades locais
+definem os contratos de dependências; as regras puras compartilhadas continuam
+em `src/domain/*.entity.ts`. Types de linhas podem ser inferidos de Drizzle por
+imports exclusivamente de tipo em `entity.ts`, sem carregar o schema em runtime.
+
+- Controllers validam transporte e chamam casos de uso. Não recebem builders,
+  repositories ou funções que exigem D1.
+- Services coordenam as ações por portas tipadas, sem `Bindings`, cliente HTTP,
+  ORM ou tipos inferidos dos factories concretos. Helpers seguem a mesma regra.
+- Repositories recebem D1 e executam SQL, inclusive batches atômicos. Não chamam
+  services, controllers, composição ou rede. A composição injeta cada porta.
+- Índices públicos exportam services e contratos. Implementações de persistência
+  ficam acessíveis à composição e aos testes de integração por imports diretos.
+- `sync/execution.service.ts` concentra os steps duráveis e
+  `sync/execution.repository.ts` concentra sua persistência atômica. Os repositories
+  especializados de `finance`, os adapters Pluggy/OAuth e os transportes MCP e
+  Workflow são exceções por responsabilidade; não precisam de camadas vazias.
+
+O lint restringe dependências; a revisão ainda precisa confirmar que decisões de
+produto estão em entidades ou casos de uso. Mudar um nome de arquivo não justifica
+misturar rede, regra e persistência em um repository.
+
+```ts
+import { tryCatch } from "@/shared/result";
+import { createAccountService } from "@/worker/account";
+
+import { accountPanel } from "./panel";
+```
 
 Use `if (objeto)` e `if (!lista.length)` para presença de objetos e coleções
 vazias, `!!valor` quando for necessário produzir um booleano e
@@ -91,6 +150,23 @@ Agrupe leituras de I/O independentes; mantenha paginação, publicação e check
 na ordem exigida pelo fluxo. Evite acumular engines de regras com `Promise.all`
 em trabalho que só executa CPU JavaScript, e preserve os batches atômicos.
 
+## Logs
+
+Use `@/shared/logger` para todos os logs da aplicação e dos scripts. O Pino
+filtra níveis antes de serializar: `LOG_LEVEL` aceita `fatal`, `error`, `warn`,
+`info`, `debug`, `trace` ou `silent`; ausência ou valor inválido usa `warn`.
+Requisições com sucesso e redirecionamentos ficam em `debug`, respostas 4xx em
+`warn` e 5xx em `error`. Diagnósticos HTTP incluem apenas correlação, categoria
+da rota, status e duração, sem URLs, corpos, identidades ou texto de exceções.
+
+No Node, a saída JSON usa escrita assíncrona com buffer limitado a 64 KiB;
+sob saturação, novas mensagens que excedem o limite são descartadas. No Worker,
+Wrangler seleciona o build browser do Pino, com objetos estruturados enviados ao
+logger nativo da plataforma. Essa saída não usa transportes Node nem buffer
+assíncrono próprio. O filtro de nível reduz o volume antes da saída; a amostragem
+configurada no Wrangler controla a retenção. Pino não elimina o custo de CPU dos
+logs. O lint impede chamadas diretas de `console` no código mantido pelo projeto.
+
 ## Critério para testes
 
 Teste comportamentos observáveis do produto: resultados financeiros, autorização,
@@ -104,7 +180,8 @@ check. Helpers e fixtures exclusivos de um teste removido devem sair junto dele.
 
 - Descreva o comportamento resultante e a validação obtida.
 - Preserve precisão monetária, validação de Item/conta e campos da Pluggy.
-- Use interfaces e uniões em arquivos `.types.ts` para modelos compartilhados.
+- No domínio, reúna tipos, enums e regras puras por conceito em `*.entity.ts`.
+  Use `.types.ts` para DTOs e modelos técnicos sem comportamento.
   Zod valida dados externos nas fronteiras; schemas devem satisfazer os tipos
   correspondentes. A recuperação assíncrona exige `tryCatch` com desestruturação
   de `{ data, error }` e checagem de `error` antes do uso de `data`. Prefira passar

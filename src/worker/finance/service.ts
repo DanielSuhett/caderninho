@@ -1,68 +1,100 @@
 import {
-  type LiveBalanceInput,
   type PreviewInput,
   type RuleCommand,
   RuleCommandAction,
   RuleImportMode,
   type SubscriptionInput,
-} from "#contracts/finance.types.ts";
-import type { Aggregate, Identity, Query } from "#contracts/queries.types.ts";
-import type { WizardState } from "#contracts/wizard.types.ts";
-import { localDay } from "#domain/exact.ts";
-import type { ProviderRecord } from "#domain/provider.types.ts";
-import { recordChange } from "#domain/record-correction.ts";
+} from "@/contracts/finance.types";
+import type { Identity } from "@/contracts/queries.types";
+import type { WizardState } from "@/contracts/wizard.types";
+import { EntityChange, Resource } from "@/domain/enums";
+import { localDay } from "@/domain/exact";
+import {
+  assertEntityIdentity,
+  type CorrectionInput,
+  entityChange,
+  entityFingerprint,
+  NORMALIZER,
+  projectEntity,
+  type RecordChange,
+  recordChange,
+} from "@/domain/finance.entity";
+import type { ProviderRecord } from "@/domain/provider.entity";
+import { assertReadRevision } from "@/domain/query.entity";
+import { detectSubscriptions } from "@/domain/recurrence.entity";
+import { importRules, txContext } from "@/domain/rules";
+
 import type {
-  CorrectionInput,
-  RecordChange,
-  RecordReference,
-} from "#domain/record-correction.types.ts";
-import { importRules } from "#domain/rules/import-rules.ts";
-import { txContext } from "#domain/rules/rules.ts";
-import type { Rules } from "#domain/rules/rules.types.ts";
-import { detectSubscriptions } from "#domain/subscriptions.ts";
-import type {
-  correctRecord,
-  explainRecord,
-} from "#worker/finance/entities.repository.ts";
-import type {
-  aggregateEntities,
-  previewSelection,
-  queryEntities,
-  readStatus,
-  subscriptionRecords,
-} from "#worker/finance/repository.ts";
-import type {
-  activateRules,
-  listRules,
-  readRules,
-  rulesFor,
-  saveRules,
-} from "#worker/finance/rules.repository.ts";
+  EntityInput,
+  EntityPreparation,
+  FinancialRepository,
+  PreparedEntity,
+  PreviewSelection,
+  RuleActions,
+} from "./entity";
 
 export interface FinancialQueries {
   setupStatus(): Promise<WizardState>;
-  query(input: Query): ReturnType<typeof queryEntities>;
-  aggregate(input: Aggregate): ReturnType<typeof aggregateEntities>;
-  readStatus(): ReturnType<typeof readStatus>;
+  query: FinancialRepository["query"];
+  aggregate: FinancialRepository["aggregate"];
+  readStatus: FinancialRepository["readStatus"];
   manageRules(input: RuleCommand): ReturnType<typeof manageRules>;
   correctRecord(
     input: CorrectionInput,
   ): ReturnType<typeof correctFinancialRecord>;
-  explainRecord(input: RecordReference): ReturnType<typeof explainRecord>;
+  explainRecord: FinancialRepository["explain"];
   previewRules(input: PreviewInput): ReturnType<typeof previewRules>;
   readSubscriptions(
     input: SubscriptionInput,
   ): ReturnType<typeof readSubscriptions>;
-  authorizeAccount(input: LiveBalanceInput): Promise<void>;
   readAccount(accountId: string): Promise<ProviderRecord>;
   now(): string;
+}
+
+export function createFinancialService(deps: {
+  repository: FinancialRepository;
+  actions: RuleActions;
+  setupStatus(): Promise<WizardState>;
+  readAccount(accountId: string): Promise<ProviderRecord>;
+  now(): Date;
+}): FinancialQueries {
+  const { repository } = deps;
+  return {
+    setupStatus: deps.setupStatus,
+    query: repository.query,
+    aggregate: repository.aggregate,
+    readStatus: repository.readStatus,
+    manageRules: (input) => manageRules(deps.actions, input),
+    correctRecord: (input) => correctFinancialRecord(repository.correct, input),
+    explainRecord: repository.explain,
+    previewRules: (input) =>
+      previewRules(
+        {
+          select: (before) => repository.preview(input, before),
+          rules: () => repository.rules(input.revision),
+          revision: repository.revision,
+        },
+        input.revision,
+      ),
+    readSubscriptions: (input) =>
+      readSubscriptions(
+        {
+          select: () => repository.subscriptions(input),
+          revision: repository.revision,
+          now: deps.now,
+        },
+        input,
+      ),
+    readAccount: deps.readAccount,
+    now: () => deps.now().toISOString(),
+  };
 }
 
 export function correctFinancialRecord(
   persist: (
     identity: Identity,
     change: RecordChange,
-  ) => ReturnType<typeof correctRecord>,
+  ) => Promise<{ updated: true }>,
   input: CorrectionInput,
 ) {
   const change = recordChange(input);
@@ -75,13 +107,6 @@ export function correctFinancialRecord(
     },
     change,
   );
-}
-
-export interface RuleActions {
-  read(revision: string): ReturnType<typeof readRules>;
-  list(): ReturnType<typeof listRules>;
-  activate(revision: string): ReturnType<typeof activateRules>;
-  save(document: Rules, activate?: boolean): ReturnType<typeof saveRules>;
 }
 
 export async function manageRules(actions: RuleActions, a: RuleCommand) {
@@ -103,8 +128,8 @@ export async function manageRules(actions: RuleActions, a: RuleCommand) {
 
 export async function previewRules(
   reads: {
-    select(before: number): ReturnType<typeof previewSelection>;
-    rules(): ReturnType<typeof rulesFor>;
+    select(before: number): Promise<PreviewSelection>;
+    rules(): ReturnType<FinancialRepository["rules"]>;
     revision(): Promise<number>;
   },
   rulesRevision: string,
@@ -123,9 +148,7 @@ export async function previewRules(
       derived: await engine.evaluate(txContext(row.normalized)),
     });
   }
-  if (before !== (await reads.revision())) {
-    throw new Error("RESTART_REQUIRED");
-  }
+  assertReadRevision({ expected: before, actual: await reads.revision() });
   return {
     selected: total,
     sampleOnly: true,
@@ -137,16 +160,14 @@ export async function previewRules(
 
 export async function readSubscriptions(
   reads: {
-    select(): ReturnType<typeof subscriptionRecords>;
+    select(): ReturnType<FinancialRepository["subscriptions"]>;
     revision(): Promise<number>;
     now(): Date;
   },
   input: SubscriptionInput,
 ) {
   const { before, records } = await reads.select();
-  if (before !== (await reads.revision())) {
-    throw new Error("RESTART_REQUIRED");
-  }
+  assertReadRevision({ expected: before, actual: await reads.revision() });
   return detectSubscriptions(records, {
     ...input,
     asOfDay: localDay(reads.now()),
@@ -166,4 +187,73 @@ export async function importRuleDocument(
     return report;
   }
   return actions.save(report.document, input.mode === RuleImportMode.activate);
+}
+
+export async function prepareEntity(
+  dependencies: EntityPreparation,
+  input: EntityInput,
+): Promise<PreparedEntity> {
+  const { identity, source, parent, legacyProjection } = input;
+  assertEntityIdentity({ source, expectedId: identity.id });
+  const [digest, previous] = await Promise.all([
+    dependencies.hash(
+      entityFingerprint({
+        resource: identity.resource,
+        raw: source,
+        parent,
+        legacyProjection,
+      }),
+    ),
+    dependencies.repository.read(identity),
+  ]);
+  const observation = {
+    identity,
+    source,
+    operationId: input.operationId,
+    observedAt: input.observedAt,
+  };
+  const seenInOperation = previous?.seen_operation === input.operationId;
+  const change = entityChange({
+    previous: previous && {
+      relevantHash: previous.relevant_hash,
+      deleted: previous.deleted !== 0,
+    },
+    digest,
+    renormalize: input.renormalize,
+  });
+  if (change === EntityChange.unchanged) {
+    return {
+      mutation: { kind: "observe", value: observation },
+      seenInOperation,
+      state: EntityChange.unchanged,
+      classified: 0,
+    };
+  }
+  const projection = projectEntity({
+    resource: identity.resource,
+    raw: source,
+    parent,
+    referenceDay: input.referenceDay,
+    ...(legacyProjection && { legacyProjection }),
+  });
+  const derived =
+    identity.resource === Resource.transactions
+      ? await dependencies.evaluate(txContext(projection.record))
+      : undefined;
+  return {
+    mutation: {
+      kind: "save",
+      value: {
+        ...observation,
+        projection,
+        digest,
+        normalizer: legacyProjection ? "legacy-projection-v1" : NORMALIZER,
+        rulesRevision: input.rulesRevision,
+        derived,
+      },
+    },
+    seenInOperation,
+    state: change,
+    classified: derived ? 1 : 0,
+  };
 }

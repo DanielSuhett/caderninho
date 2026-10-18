@@ -5,7 +5,7 @@ import {
   Classification,
   ProvenanceOrigin,
   Resource,
-} from "#domain/enums.ts";
+} from "./enums";
 
 export const ResourceSchema = z.enum(Resource);
 export const AvailabilitySchema = z.enum(Availability);

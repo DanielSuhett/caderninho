@@ -1,9 +1,8 @@
 import { createRoot } from "react-dom/client";
 
-import { AccountView } from "#web/account/account-view.tsx";
-import { useAccount } from "#web/account/use-account.ts";
+import { AccountView, useAccount } from "./account/index";
 
-import "#web/account.css";
+import "./account.css";
 
 function Account() {
   return <AccountView {...useAccount()} />;

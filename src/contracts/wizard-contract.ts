@@ -1,10 +1,6 @@
 import { z } from "zod/v4";
 
-import {
-  WizardIssue,
-  type WizardState,
-  WizardSyncState,
-} from "#contracts/wizard.types.ts";
+import { WizardIssue, type WizardState, WizardSyncState } from "./wizard.types";
 
 export const WizardIssueSchema = z.enum(WizardIssue);
 export const WizardStateSchema = z.object({

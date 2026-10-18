@@ -1,73 +1,26 @@
 import {
-  type FinishedOperationStatus,
-  MigrationPolicy,
   type MigrationRequest,
-  type OperationInput,
   OperationKind,
   OperationPhase,
   OperationStatus,
   type WebhookEvent,
-  WebhookEventType,
-} from "#contracts/operation.types.ts";
-import type { Resource } from "#domain/enums.ts";
-import type { ProviderRecord } from "#domain/provider.types.ts";
-import { tryCatch } from "#shared/result.ts";
-import type { createSyncRepository } from "#worker/sync/repository.ts";
+} from "@/contracts/operation.types";
+import {
+  assertWebhookEvent,
+  MigrationDecision,
+  migrationDecision,
+  nextSyncSchedule,
+} from "@/domain/operation.entity";
+import { tryCatch } from "@/shared/result";
 
-export interface OperationHandle {
-  id: string;
-  status: OperationStatus;
-}
-
-export interface FinancialSource {
-  page(input: {
-    resource: Resource;
-    item: string;
-    parent: string;
-    cursor: string | null;
-    floor: string | null;
-    connectorId?: string | undefined;
-  }): Promise<{
-    records: ProviderRecord[];
-    next: string | null;
-    total?: number;
-  }>;
-  ids(account: string, ids: string[]): Promise<ProviderRecord[]>;
-}
-// Durable checkpoints carry plain serializable data, independent of the host SDK.
-export type StepValue<T> =
-  | string
-  | number
-  | boolean
-  | null
-  | undefined
-  | ReadonlyArray<T extends ReadonlyArray<infer U> ? StepValue<U> : never>
-  | { [K in keyof T]: K extends string | number ? StepValue<T[K]> : never };
-export interface Steps {
-  do<T extends StepValue<T>>(
-    name: string,
-    callback: () => Promise<T>,
-  ): Promise<T>;
-  sleep(name: string, duration: string): Promise<void>;
-}
-export interface SynchronizationSession {
-  operation: OperationHandle & {
-    kind: OperationInput["kind"];
-  };
-  cancelled(): Promise<boolean>;
-  acquire(): Promise<boolean>;
-  mature(): Promise<{ phase: OperationPhase }>;
-  migrate(step: Steps): Promise<void>;
-  reapply(step: Steps): Promise<boolean>;
-  resolveEvent(source: FinancialSource, step: Steps): Promise<boolean>;
-  synchronize(source: FinancialSource, step: Steps): Promise<boolean>;
-  hasErrors(): Promise<boolean>;
-  finish(status: FinishedOperationStatus, isError?: boolean): Promise<void>;
-}
-export interface SynchronizationDependencies {
-  open(id: string): Promise<SynchronizationSession>;
-  source(): Promise<FinancialSource>;
-}
+import type {
+  FinancialSource,
+  OperationHandle,
+  SchedulingStore,
+  Steps,
+  SynchronizationDependencies,
+  SyncRepository,
+} from "./entity";
 
 export async function runOperation(
   dependencies: SynchronizationDependencies,
@@ -90,8 +43,8 @@ export async function runOperation(
     await step.sleep(`queued-${n}`, "10 seconds");
   }
   const { data, error } = await tryCatch(async () => {
-    let scoped: Promise<FinancialSource> | undefined;
-    const resolveSource = () => (scoped ??= dependencies.source());
+    let sourcePromise: Promise<FinancialSource> | undefined;
+    const resolveSource = () => (sourcePromise ??= dependencies.source());
     const source: FinancialSource = {
       page: async (...args) => (await resolveSource()).page(...args),
       ids: async (...args) => (await resolveSource()).ids(...args),
@@ -127,19 +80,6 @@ export async function runOperation(
   return data;
 }
 
-export interface DueSchedule {
-  next_sync_at: string;
-  reconcile_after: string;
-}
-export interface SchedulingStore {
-  due(now: string): Promise<DueSchedule | null>;
-  enqueue(
-    account: DueSchedule,
-    kind: typeof OperationKind.sync | typeof OperationKind.reconcile,
-    next: string,
-    reconcileAfter: string,
-  ): Promise<OperationHandle | null>;
-}
 export async function scheduleSync(
   store: SchedulingStore,
   dispatch: (operation: OperationHandle) => Promise<void>,
@@ -151,14 +91,15 @@ export async function scheduleSync(
   }
   // A failed dispatch is recoverable through the durable outbox.
   const { data, error } = await tryCatch(async () => {
-    const reconcile = due.reconcile_after <= now.toISOString();
+    const schedule = nextSyncSchedule({
+      now,
+      reconcileAfter: due.reconcile_after,
+    });
     const op = await store.enqueue(
       due,
-      reconcile ? OperationKind.reconcile : OperationKind.sync,
-      new Date(now.getTime() + 86400000).toISOString(),
-      reconcile
-        ? new Date(now.getTime() + 7 * 86400000).toISOString()
-        : due.reconcile_after,
+      schedule.kind,
+      schedule.next,
+      schedule.reconcileAfter,
     );
     if (op) {
       await dispatch(op);
@@ -168,7 +109,7 @@ export async function scheduleSync(
 }
 
 export function createSyncService(
-  repository: ReturnType<typeof createSyncRepository>,
+  repository: SyncRepository,
   workflow: {
     create(id: string): Promise<void>;
     status(id: string): Promise<string>;
@@ -195,6 +136,11 @@ export function createSyncService(
   };
   return {
     dispatch,
+    start: repository.start,
+    read: repository.read,
+    state: repository.state,
+    states: repository.states,
+    compact: repository.compact,
     async recover() {
       for (const op of await repository.operations(false)) {
         // The committed outbox remains pending if dispatch fails.
@@ -229,18 +175,7 @@ export function createSyncService(
     },
     cancel: (id: string) => repository.cancel(id),
     async acceptWebhook(event: WebhookEvent) {
-      if (
-        event.event === WebhookEventType.transactions_created &&
-        !event.transactionsCreatedAtFrom
-      ) {
-        throw new Error("MISSING_CREATION_FLOOR");
-      }
-      if (
-        event.event !== WebhookEventType.transactions_created &&
-        !event.transactionIds?.length
-      ) {
-        throw new Error("MISSING_TRANSACTION_IDS");
-      }
+      assertWebhookEvent(event);
       return repository.acceptWebhook(event, now().toISOString());
     },
     async migrate(input: MigrationRequest) {
@@ -256,7 +191,10 @@ export function createSyncService(
           },
         };
       }
-      if (overlaps && input.policy === MigrationPolicy.refuse_conflicts) {
+      if (
+        migrationDecision({ conflicting: !!overlaps, policy: input.policy }) ===
+        MigrationDecision.refuse
+      ) {
         return {
           status: 409 as const,
           body: { error: "MIGRATION_OVERLAP_REQUIRES_POLICY", overlaps },

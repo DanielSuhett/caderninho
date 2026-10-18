@@ -1,9 +1,8 @@
 import type { PluggyConnect } from "pluggy-connect-sdk";
 
-import { PERSONAL_CONNECTOR_ID } from "#domain/connection-policy.ts";
-import { tryCatch } from "#shared/result.ts";
+import { tryCatch } from "@/shared/result";
 
-import type { ConnectRequest, ConnectWidget } from "./account.types.ts";
+import type { ConnectRequest, ConnectWidget } from "./account.types";
 
 type Widget = Pick<PluggyConnect, "init" | "destroy">;
 type WidgetModule = {
@@ -50,9 +49,7 @@ export function createConnectWidget(
       }
       const instance = new Widget({
         connectToken: request.accessToken,
-        includeSandbox: false,
-        connectorIds: [PERSONAL_CONNECTOR_ID],
-        selectedConnectorId: PERSONAL_CONNECTOR_ID,
+        ...request.configuration,
         language: "pt",
         ...(request.itemId !== undefined && { updateItem: request.itemId }),
         onSuccess: (result) => {

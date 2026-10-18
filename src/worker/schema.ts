@@ -16,26 +16,21 @@ import {
   OperationPhase,
   OperationStatus,
   type WebhookEvent,
-} from "#contracts/operation.types.ts";
-import {
-  type CoverageStatus,
-  type Resource,
-  TagOrigin,
-} from "#domain/enums.ts";
-import type { FinanceRecord } from "#domain/finance.types.ts";
-import type { ProviderRecord } from "#domain/provider.types.ts";
-import { CorrectionField } from "#domain/record-correction.types.ts";
-import type { Derived, LegacyRules, Rules } from "#domain/rules/rules.types.ts";
-import type { JsonValue } from "#shared/json.types.ts";
-import type { PageCommit, Progress } from "#worker/sync/operation-storage.ts";
+} from "@/contracts/operation.types";
+import { type CoverageStatus, type Resource, TagOrigin } from "@/domain/enums";
+import { CorrectionField, type FinanceRecord } from "@/domain/finance.entity";
+import type { ProviderRecord } from "@/domain/provider.entity";
+import type { Derived, LegacyRules, Rules } from "@/domain/rules";
+import type { JsonValue } from "@/shared/json.types";
 
-// Mirrors 0001_personal.sql. Wrangler owns migrations; this schema does not generate DDL.
+import type { PageCommit, Progress } from "./sync";
+
+// Mirrors the applied migrations. Wrangler owns DDL.
 export const settings = sqliteTable(
   "settings",
   {
     id: integer("id").notNull().default(1),
     sync_enabled: integer("sync_enabled").notNull().default(0),
-    client_id_hash: text("client_id_hash"),
     connected_at: text("connected_at")
       .notNull()
       .default(sql`'1970-01-01T00:00:00.000Z'`),
@@ -62,15 +57,8 @@ export const items = sqliteTable(
   "items",
   {
     id: text("id").notNull(),
-    resources: text("resources", { mode: "json" })
-      .$type<Resource[]>()
-      .notNull(),
-    enabled: integer("enabled").notNull().default(sql`1`),
   },
-  (t) => [
-    primaryKey({ columns: [t.id] }),
-    check("items_resources_check", sql`json_valid(resources)`),
-  ],
+  (t) => [primaryKey({ columns: [t.id] })],
 );
 
 export const rule_sets = sqliteTable(

@@ -4,8 +4,8 @@ Uma instalação pessoal usa um Worker, D1, KV, Workflows e assets. O painel Rea
 fica em `/account`; o MCP remoto usa OAuth em `/mcp`.
 
 A [instalação](../README.md#começar) e o [guia de uso](usage.md) concentram as instruções
-para o proprietário. A versão pessoal inicia com banco novo e uma única migração
-inicial. Não aplica conversão nem descarte de bancos da arquitetura anterior.
+para o proprietário. A versão pessoal inicia com banco novo e aplica o histórico
+de migrações do projeto. Não converte bancos da arquitetura anterior.
 
 ## Configuração e acesso
 
@@ -20,13 +20,13 @@ Worker; um novo deploy invalida as sessões anteriores. O OAuth oficial mantém 
 grants em KV, com subject interno `owner`. A ação de desconectar assistentes revoga
 todos esses grants e exige novo consentimento para conexões futuras.
 
-D1 mantém uma configuração da instalação: revisão financeira, regras ativas,
-agenda e hash do Client ID. A primeira conexão vincula a aplicação Pluggy. Mudança
-do Client ID é recusada antes de novos acessos ao provedor; consultas locais
-continuam disponíveis. O segredo da mesma aplicação pode ser renovado na Cloudflare.
+D1 mantém a revisão financeira, as regras ativas e a agenda da instalação. Todos
+os Items, recursos, contas e operações pertencem ao dono da ferramenta, sem
+listas de permissões ou vínculos de Client ID. A migração `0002_owner_data.sql`
+remove os campos antigos de permissões sem alterar o histórico financeiro.
 
 O botão provisiona D1/KV; o deploy aplica migrações por `DB` e declara o Workflow.
-A instalação completa em conta nova, incluindo permissões, precisa de validação
+A instalação completa em conta nova, incluindo provisionamento, precisa de validação
 real separada. Previews ficam desabilitados. Fontes: [botão Cloudflare](https://developers.cloudflare.com/workers/platform/deploy-buttons/)
 e [secrets](https://developers.cloudflare.com/workers/configuration/secrets/).
 `WEBHOOK_SECRET` é opcional e só deve ser configurado ao habilitar webhooks; sem ele,
@@ -58,7 +58,7 @@ Após bootstrap de transações:
   paginação documentada: após bootstrap, são relidos quando o conteúdo do pai muda
   ou em reconciliação explícita. Alterações sem mudança observável no pai não são
   detectáveis por essa estratégia; **exigem reconciliação**. Não existe CDC universal.
-- `caderninho_reconcile` refaz o escopo dos Items indicados e resolve ausências
+- `caderninho_reconcile` refaz os dados dos Items indicados e resolve ausências
   somente depois de concluir o conjunto. Não usa `updatedAtFrom`. Reconciliação
   não remove registros legados cuja única origem seja projeção R2, pois o provedor
   pode já não devolver aquele histórico.
@@ -182,7 +182,7 @@ Envie Content-Type JSON, Accept JSON/SSE, Mcp-Protocol-Version 2026-07-28,
 Mcp-Method e Mcp-Name correspondentes. CreateTaskResult tem resultType=task e campos
 Task no próprio resultado. A operação já é consultável no D1 ao devolver o handle,
 mesmo que o despacho precise de recuperação. `tasks/get` inclui estado/resultado
-terminal; `tasks/update` valida/autoriza e ignora respostas desconhecidas pois estas
+terminal; `tasks/update` valida a Task e ignora respostas desconhecidas pois estas
 operações não pedem entrada intermediária. `tasks/cancel` sinaliza parada entre lotes,
 sem rollback fictício. Falha de execução financeira produz resultado terminal de
 tool com isError, separado de erro JSON-RPC de protocolo/autorização.

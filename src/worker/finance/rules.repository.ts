@@ -1,11 +1,16 @@
 import { and, desc, eq } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 
-import { NORMALIZER } from "#domain/entity.ts";
-import { compileValidatedRules } from "#domain/rules/rules.ts";
-import type { Rules } from "#domain/rules/rules.types.ts";
-import { database, hash, required } from "#worker/database.ts";
-import * as tables from "#worker/schema.ts";
+import { NORMALIZER } from "@/domain/finance.entity";
+import {
+  compileStoredRules,
+  compileValidatedRules,
+  type Rules,
+} from "@/domain/rules";
+import { hash } from "@/shared/crypto";
+
+import { database, required } from "../database";
+import * as tables from "../schema";
 
 export async function saveRules(
   db: D1Database,
@@ -122,14 +127,7 @@ export async function readRules(db: D1Database, revision: string) {
 
 export async function rulesFor(db: D1Database, revision: string) {
   const row = await ruleRevision(db, revision);
-  const document = row.document;
-  if (document.version === 1) {
-    throw new Error("RULES_V1_REQUIRES_EXPLICIT_CONVERSION_AND_ACTIVATION");
-  }
-  if (row.normalizer !== NORMALIZER) {
-    throw new Error("NORMALIZER_VERSION_REQUIRES_EXPLICIT_UPGRADE");
-  }
-  return compileValidatedRules(document);
+  return compileStoredRules(row);
 }
 
 export async function listRules(db: D1Database) {

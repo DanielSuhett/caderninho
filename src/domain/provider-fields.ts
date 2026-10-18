@@ -1,5 +1,5 @@
-import type { Resource } from "#domain/enums.ts";
-import type { ProviderField } from "#domain/provider.types.ts";
+import type { Resource } from "./enums";
+import type { ProviderField } from "./provider.entity";
 
 const providerFields = {
   accounts: {

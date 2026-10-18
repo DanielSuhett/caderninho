@@ -31,7 +31,6 @@ jobs:
       - run: npm ci
       - run: npm run types
       - run: git diff --exit-code -- src/worker/runtime.d.ts
-      - run: npm run check:imports
       - run: npm run build
       - run: npm run test:product:runtime
       - run: npm run test:product

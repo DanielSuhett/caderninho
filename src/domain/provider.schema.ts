@@ -1,6 +1,6 @@
 import { z } from "zod/v4";
 
-import type { ProviderRecord } from "#domain/provider.types.ts";
+import type { Credentials, ProviderRecord } from "./provider.entity";
 
 const MoneyInputSchema = z.union([z.string(), z.number()]).nullish();
 
@@ -64,3 +64,10 @@ export const ProviderRecordSchema = z
       .nullish(),
   })
   .loose() satisfies z.ZodType<ProviderRecord>;
+
+export const PluggyCredentialsSchema = z
+  .object({
+    clientId: z.string().trim().min(1).max(256),
+    clientSecret: z.string().min(1).max(1024),
+  })
+  .strict() satisfies z.ZodType<Credentials>;

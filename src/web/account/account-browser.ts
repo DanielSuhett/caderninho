@@ -1,4 +1,4 @@
-import type { AccountBrowser } from "./account.types.ts";
+import type { AccountBrowser } from "./account.types";
 
 export const accountBrowser: AccountBrowser = {
   step() {

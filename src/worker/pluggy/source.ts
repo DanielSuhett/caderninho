@@ -1,19 +1,21 @@
 import type { PluggyClient } from "pluggy-sdk";
 import { z } from "zod/v4";
 
-import { FaultCode, Resource } from "#domain/enums.ts";
-import { Fault } from "#domain/fault.ts";
-import { DEFINITIONS } from "#domain/finance-model.ts";
-import type { Credentials } from "#domain/pluggy-credentials.types.ts";
-import { ProviderRecordSchema } from "#domain/provider.schema.ts";
-import type { ProviderRecord } from "#domain/provider.types.ts";
-import { tryCatch } from "#shared/result.ts";
-import { PersonalPluggyClient } from "#worker/pluggy/client.adapter.ts";
-import type {
-  FinancialSource,
-  Steps,
-  StepValue,
-} from "#worker/sync/service.ts";
+import { FaultCode, Resource } from "@/domain/enums";
+import { Fault } from "@/domain/fault.entity";
+import {
+  assertSourceIdentity,
+  assertSourceRecords,
+  assertTransactionSelection,
+  type Credentials,
+} from "@/domain/provider.entity";
+import { ProviderRecordSchema } from "@/domain/provider.schema";
+import { httpResponseFailure, rateLimitRetry } from "@/shared/http";
+import { HttpFailureKind } from "@/shared/http.types";
+import { tryCatch } from "@/shared/result";
+import type { FinancialSource, Steps, StepValue } from "@/worker/sync";
+
+import { PersonalPluggyClient } from "./client.adapter";
 
 const transportFaults = new Map<string, FaultCode>([
   [FaultCode.UPSTREAM_REDIRECT, FaultCode.UPSTREAM_REDIRECT],
@@ -21,24 +23,19 @@ const transportFaults = new Map<string, FaultCode>([
   ["ETIMEDOUT", FaultCode.UPSTREAM_TIMEOUT],
   ["ERR_BODY_PARSE_FAILURE", FaultCode.INVALID_RESPONSE],
 ]);
-const httpFaults = new Map<number, FaultCode>([
-  [401, FaultCode.UPSTREAM_AUTH],
-  [403, FaultCode.UPSTREAM_FORBIDDEN],
-  [404, FaultCode.UPSTREAM_NOT_FOUND],
-  [429, FaultCode.UPSTREAM_RATE_LIMIT],
-]);
-
-function httpFaultCode(status: number | undefined): FaultCode {
-  if (!status || status < 400) {
-    return FaultCode.UPSTREAM_UNAVAILABLE;
-  }
-  return (
-    httpFaults.get(status) ??
-    (status >= 500
-      ? FaultCode.UPSTREAM_ERROR
-      : FaultCode.UPSTREAM_INVALID_REQUEST)
-  );
-}
+const httpFaults: Record<HttpFailureKind, FaultCode> = {
+  unauthorized: FaultCode.UPSTREAM_AUTH,
+  forbidden: FaultCode.UPSTREAM_FORBIDDEN,
+  not_found: FaultCode.UPSTREAM_NOT_FOUND,
+  rate_limit: FaultCode.UPSTREAM_RATE_LIMIT,
+  invalid_request: FaultCode.UPSTREAM_INVALID_REQUEST,
+  server: FaultCode.UPSTREAM_ERROR,
+  redirect: FaultCode.UPSTREAM_REDIRECT,
+  timeout: FaultCode.UPSTREAM_TIMEOUT,
+  too_large: FaultCode.UPSTREAM_TOO_LARGE,
+  invalid_response: FaultCode.INVALID_RESPONSE,
+  network: FaultCode.UPSTREAM_UNAVAILABLE,
+};
 
 // Translate only transport metadata into public faults. Upstream bodies, URLs and credentials
 // stay inside the SDK error and never become a Fault cause, message, detail or log.
@@ -62,20 +59,19 @@ async function sdkResult<T>(operation: () => Promise<T>): Promise<T> {
         .optional(),
     })
     .parse(error);
+  const retry = upstream.response?.headers["retry-after"];
+  const failure =
+    upstream.response &&
+    httpResponseFailure({
+      status: upstream.response.statusCode,
+      ...(typeof retry === "string" && { retryAfter: retry }),
+    });
   const fault = new Fault(
     transportFaults.get(upstream.code ?? "") ??
-      httpFaultCode(upstream.response?.statusCode),
+      httpFaults[failure?.kind ?? HttpFailureKind.network],
   );
-  const retry = upstream.response?.headers["retry-after"];
-  if (typeof retry === "string") {
-    const seconds = /^\d+$/.test(retry)
-      ? Number(retry)
-      : Math.ceil((Date.parse(retry) - Date.now()) / 1000);
-    if (Number.isFinite(seconds)) {
-      fault.details = {
-        retryAfterSeconds: Math.max(0, Math.min(seconds, 86400)),
-      };
-    }
+  if (failure?.retryAfterSeconds != null) {
+    fault.details = { retryAfterSeconds: failure.retryAfterSeconds };
   }
   throw fault;
 }
@@ -116,9 +112,7 @@ export async function readItem(credentials: Credentials, itemId: string) {
         new PersonalPluggyClient(credentials).fetchItem(itemId),
       ),
     );
-  if (item.id !== itemId) {
-    throw new Error("SOURCE_SCOPE_MISMATCH");
-  }
+  assertSourceIdentity({ id: item.id, expected: itemId });
   return {
     id: item.id,
     ...(item.connector && { connector: item.connector }),
@@ -129,9 +123,7 @@ export async function readAccount(client: PluggyClient, accountId: string) {
   const record = ProviderRecordSchema.parse(
     await sdkResult(() => client.fetchAccount(accountId)),
   );
-  if (record.id !== accountId) {
-    throw new Error("SOURCE_SCOPE_MISMATCH");
-  }
+  assertSourceIdentity({ id: record.id, expected: accountId });
   return record;
 }
 
@@ -192,14 +184,17 @@ export function financialSource(client: PluggyClient): FinancialSource {
         )
       ) {
         const record = ProviderRecordSchema.parse(raw);
-        assertRecordScope(record, { resource, item, connectorId });
+        assertSourceRecords({
+          records: [record],
+          context: { resource, item, connectorId },
+        });
         return { records: [record], next: null };
       }
       const data = (
         resource === Resource.transactions ? TransactionPageSchema : PageSchema
       ).parse(raw);
       const records = data.results;
-      assertPageScope(records, { resource, item, parent });
+      assertSourceRecords({ records, context: { resource, item, parent } });
       if (resource === Resource.transactions) {
         return {
           records,
@@ -229,21 +224,13 @@ export function financialSource(client: PluggyClient): FinancialSource {
       if (!ids.length || ids.length > 500) {
         throw new Error("IDS_LIMIT");
       }
-      const requestedIds = new Set(ids);
       const data = PageSchema.parse(
         await sdkResult(() => client.fetchTransactionsCursor(account, { ids })),
       );
       if (data.next !== null) {
         throw new Error("IDS_RESPONSE_INCOMPLETE");
       }
-      if (
-        data.results.some(
-          (r) =>
-            r.accountId !== account || !requestedIds.has(String(r.id ?? "")),
-        )
-      ) {
-        throw new Error("IDS_SCOPE_MISMATCH");
-      }
+      assertTransactionSelection({ records: data.results, account, ids });
       return data.results;
     },
   };
@@ -287,7 +274,7 @@ export function providerRetries(steps: Steps): Steps {
       name: string,
       callback: () => Promise<T>,
     ): Promise<T> {
-      for (let attempt = 0; attempt < 7; attempt++) {
+      for (let attempt = 0; attempt < rateLimitRetry.attempts; attempt++) {
         const outcome = await steps.do(
           `${name}-attempt-${attempt}`,
           async () => {
@@ -303,13 +290,12 @@ export function providerRetries(steps: Steps): Steps {
             }
             return {
               kind: "retry" as const,
-              seconds: Math.max(
-                1,
-                Math.min(
-                  86400,
-                  error.details?.retryAfterSeconds ?? 10 * 2 ** attempt,
-                ),
-              ),
+              seconds: rateLimitRetry.delay({
+                attempt,
+                ...(error.details?.retryAfterSeconds != null && {
+                  retryAfterSeconds: error.details.retryAfterSeconds,
+                }),
+              }),
             };
           },
         );
@@ -324,52 +310,4 @@ export function providerRetries(steps: Steps): Steps {
       throw new Error("UPSTREAM_RATE_LIMIT_RETRIES_EXHAUSTED");
     },
   };
-}
-
-function assertPageScope(
-  records: Awaited<ReturnType<FinancialSource["ids"]>>,
-  {
-    resource,
-    item,
-    parent,
-  }: Pick<
-    Parameters<FinancialSource["page"]>[0],
-    "resource" | "item" | "parent"
-  >,
-) {
-  const def = DEFINITIONS[resource];
-  if (
-    records.some(
-      (record) =>
-        (record.itemId !== undefined && record.itemId !== item) ||
-        (def.parent === Resource.accounts &&
-          record.accountId !== undefined &&
-          record.accountId !== parent) ||
-        (def.parent === Resource.investments &&
-          record.investmentId !== undefined &&
-          record.investmentId !== parent),
-    )
-  ) {
-    throw new Error("SOURCE_SCOPE_MISMATCH");
-  }
-}
-
-function assertRecordScope(
-  record: ProviderRecord,
-  {
-    resource,
-    item,
-    connectorId,
-  }: Pick<
-    Parameters<FinancialSource["page"]>[0],
-    "resource" | "item" | "connectorId"
-  >,
-) {
-  if (
-    (resource === Resource.connections && record.id !== item) ||
-    (resource === Resource.connectors && String(record.id) !== connectorId) ||
-    (record.itemId !== undefined && record.itemId !== item)
-  ) {
-    throw new Error("SOURCE_SCOPE_MISMATCH");
-  }
 }

@@ -1,5 +1,5 @@
-import { WizardIssue } from "#contracts/wizard.types.ts";
-import { tryCatch } from "#shared/result.ts";
+import { WizardIssue } from "@/contracts/wizard.types";
+import { tryCatch } from "@/shared/result";
 
 import {
   type AccountActions,
@@ -9,11 +9,11 @@ import {
   type CommandContext,
   type ConnectWidget,
   LoadStatus,
-} from "./account.types.ts";
-import { AccountRequestError, createAccountApi } from "./account-api.ts";
-import { accountBrowser } from "./account-browser.ts";
-import { WIZARD_ISSUES } from "./account-model.ts";
-import { createConnectWidget } from "./connect-widget.ts";
+} from "./account.types";
+import { AccountRequestError, createAccountApi } from "./account-api";
+import { accountBrowser } from "./account-browser";
+import { WIZARD_ISSUES } from "./account-presentation";
+import { createConnectWidget } from "./connect-widget";
 
 interface Session {
   lifetime: AbortController;
@@ -97,7 +97,7 @@ export function createAccountController({
       let step = state.step;
       if (!state.snapshot) {
         if (browser.step() === undefined) {
-          step = data.status.connected ? 2 : 1;
+          step = data.panel.initialStep;
         }
       }
       publish(session, {
@@ -152,7 +152,7 @@ export function createAccountController({
           return;
         }
         await widget.open({
-          accessToken: token.accessToken,
+          ...token,
           itemId,
           onSuccess(connectedId) {
             void act(async (connected) => {
@@ -228,4 +228,17 @@ function requestIssue(error: Error) {
   return error instanceof AccountRequestError
     ? error.issue
     : WizardIssue.unknown;
+}
+
+export function pollingDelay({ snapshot, load }: AccountState) {
+  if (load.kind === LoadStatus.failed && load.session) {
+    return undefined;
+  }
+  const polling = snapshot?.panel.polling;
+  if (!polling) {
+    return undefined;
+  }
+  return load.kind === LoadStatus.failed
+    ? polling.retryIntervalMs
+    : polling.intervalMs;
 }

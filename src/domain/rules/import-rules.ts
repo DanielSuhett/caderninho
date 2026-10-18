@@ -1,32 +1,26 @@
 import { isLosslessNumber, parse } from "lossless-json";
 import { z } from "zod/v4";
 
-import {
-  convertValidatedRules,
-  LegacyRulesSchema,
-} from "#domain/rules/convert-rules.ts";
-import type {
-  SecuroCondition,
-  SecuroPackage,
-  SecuroRule,
-} from "#domain/rules/rule-import.types.ts";
-import { compileValidatedRules } from "#domain/rules/rules.ts";
+import { JsonValueSchema } from "@/shared/json";
+import type { JsonValue } from "@/shared/json.types";
+
+import { convertValidatedRules, LegacyRulesSchema } from "./convert-rules";
 import {
   Comparator,
+  compileValidatedRules,
   RuleAction,
   type Condition as RuleCondition,
   type RuleImportReport,
   RuleOperator,
   RulePhase,
   type Rules,
-} from "#domain/rules/rules.types.ts";
-import {
-  compileRules,
-  RuleSchema,
-  RulesSchema,
-} from "#domain/rules/rules-schema.ts";
-import { JsonValueSchema } from "#shared/json.ts";
-import type { JsonValue } from "#shared/json.types.ts";
+} from "./rule.entity";
+import { compileRules, RuleSchema, RulesSchema } from "./rule.schema";
+import type {
+  SecuroCondition,
+  SecuroPackage,
+  SecuroRule,
+} from "./rule-import.types";
 
 const SecuroConditionSchema: z.ZodType<SecuroCondition> = z
   .object({
