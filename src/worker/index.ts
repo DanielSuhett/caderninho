@@ -8,10 +8,14 @@ import { authService, scheduleSync, syncService } from "./composition";
 import { failureStatus, requestCategory } from "./http";
 import { fetchMcp } from "./mcp";
 import {
+  classifyFailure,
   DiagnosticEvent,
   markFailure,
+  Outcome,
   observeSpan,
+  Recovery,
   reportDiagnostic,
+  type SafeFields,
   SpanName,
   withObservation,
 } from "./observability";
@@ -59,6 +63,10 @@ function createRoutes(ctx: ExecutionContext) {
       receiveWebhook(c.req.raw, c.env),
     );
     if (error) {
+      markFailure(error, {
+        phase: SpanName.admission,
+        recovery: Recovery.none,
+      });
       return new Response("Receipt not confirmed; retry", { status: 503 });
     }
     return data;
@@ -75,10 +83,47 @@ const worker = {
     return createRoutes(ctx).fetch(request, env, ctx);
   },
   async scheduled(event: ScheduledController, env: Bindings) {
-    await syncService(env).recover();
-    await scheduleSync(env, new Date(event.scheduledTime));
-    await syncService(env).compact();
-    await authService(env).compact();
+    return await withObservation({ runId: crypto.randomUUID() }, () =>
+      observeSpan(SpanName.scheduled, async (span) => {
+        let phase: SafeFields["phase"] = SpanName.recovery;
+        let action: SafeFields["action"];
+        const { data, error } = await tryCatch(async () => {
+          await syncService(env).recover();
+          phase = SpanName.scheduled;
+          await scheduleSync(env, new Date(event.scheduledTime));
+          phase = SpanName.maintenance;
+          action = "compact_sync";
+          await observeSpan(
+            SpanName.maintenance,
+            () => syncService(env).compact(),
+            { action },
+          );
+          action = "compact_auth";
+          await observeSpan(
+            SpanName.maintenance,
+            () => authService(env).compact(),
+            { action },
+          );
+        });
+        if (error) {
+          const fields: SafeFields = {
+            ...(action && { action }),
+            failure: classifyFailure(error),
+            outcome: Outcome.failed,
+            phase,
+            recovery: Recovery.none,
+          };
+          span.annotate(fields);
+          reportDiagnostic({ ...fields, event: DiagnosticEvent.scheduled });
+          throw error;
+        }
+        reportDiagnostic({
+          event: DiagnosticEvent.scheduled,
+          outcome: Outcome.completed,
+        });
+        return data;
+      }),
+    );
   },
 };
 

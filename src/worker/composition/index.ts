@@ -1,5 +1,11 @@
+import {
+  CoverageStatus,
+  Fault,
+  FaultCode,
+  type ReapplicationInput,
+} from "../../domain";
 import type { Rules } from "../../domain/rules";
-import { hash } from "../../shared";
+import { hash, tryCatch } from "../../shared";
 import { createAccountService } from "../account";
 import {
   createAccountRepository,
@@ -30,7 +36,19 @@ import {
   saveRules,
   subscriptionRecords,
 } from "../finance/repository";
-import { observeSpan, SpanName } from "../observability";
+import {
+  classifyFailure,
+  DiagnosticEvent,
+  FailureCode,
+  Outcome,
+  observeSpan,
+  Phase,
+  Recovery,
+  reportDiagnostic,
+  type SafeFields,
+  SpanName,
+  withObservation,
+} from "../observability";
 import { createPluggyAdapter } from "../pluggy";
 import {
   createReapplicationService,
@@ -38,7 +56,16 @@ import {
   scheduleSync as runSchedule,
   type SynchronizationDependencies,
 } from "../sync";
-import type { EntityPreparer, OperationState } from "../sync/entity";
+import {
+  observedSyncService,
+  observeRecoveries,
+} from "../sync/dispatch.adapter";
+import type {
+  EntityPreparer,
+  ExecutionOutcome,
+  ExecutionPhaseDetail,
+  OperationState,
+} from "../sync/entity";
 import {
   admissionStates,
   createExecutionRepository,
@@ -49,9 +76,61 @@ import {
 
 export function synchronizationDependencies(
   env: Bindings,
+  attempt?: () => Pick<SafeFields, "attempt" | "retries">,
 ): SynchronizationDependencies {
   const pluggy = pluggyAdapter(env);
+  let sourceUnauthorized = 0;
+  let sourceUnavailable = 0;
   return {
+    observePhase: (phase, callback, detail) =>
+      observeExecutionPhase(phase, callback, { ...detail, ...attempt?.() }),
+    onOutcome(result) {
+      const failure = executionFailure(result, {
+        sourceUnauthorized,
+        sourceUnavailable,
+      });
+      let recovery: Recovery = Recovery.none;
+      if (result.outcome === Outcome.deferred) {
+        recovery = Recovery.scheduled;
+      } else if (
+        result.phase === Phase.acquire &&
+        result.error?.message === "FINANCIAL_EXECUTOR_BUSY_RESUME_DISPATCH"
+      ) {
+        recovery = Recovery.resume;
+      }
+      reportDiagnostic({
+        ...attempt?.(),
+        event: DiagnosticEvent.operation,
+        failed:
+          result.progress?.errors ??
+          sourceUnauthorized + sourceUnavailable + (result.error ? 1 : 0),
+        outcome: result.outcome,
+        recovery,
+        sourceUnauthorized,
+        sourceUnavailable,
+        ...(result.operationKind && { operationKind: result.operationKind }),
+        ...(result.phase && { phase: result.phase }),
+        ...(failure && { failure }),
+        ...(result.progress && {
+          pages: result.progress.pages,
+          processed: result.progress.received,
+        }),
+        ...(result.error instanceof Fault &&
+          result.outcome === Outcome.deferred && {
+            deferred: 1,
+            delayMs: (result.error.details?.retryAfterSeconds ?? 0) * 1000,
+          }),
+      });
+      sourceUnauthorized = 0;
+      sourceUnavailable = 0;
+    },
+    onSourceFailure(status) {
+      if (status === CoverageStatus.not_authorized) {
+        sourceUnauthorized += 1;
+      } else {
+        sourceUnavailable += 1;
+      }
+    },
     prepare: (input) => prepareEntity(env.DB, input),
     repository: createExecutionRepository(env.DB),
     source: () => pluggy.financialSource(),
@@ -177,7 +256,18 @@ export function accountService(env: Bindings) {
     dispatchSync: () => scheduleSync(env),
     installation: async () => ({
       database: !!env.DB,
-      migrations: !!env.DB && (await migrationsReady(env.DB)),
+      migrations:
+        !!env.DB &&
+        (await migrationsReady(env.DB, (error) => {
+          reportDiagnostic({
+            action: "readiness",
+            event: DiagnosticEvent.maintenance,
+            failure: classifyFailure(error),
+            outcome: Outcome.partial,
+            phase: SpanName.maintenance,
+            recovery: Recovery.retry,
+          });
+        })),
       oauth: !!env.OAUTH_KV,
       workflow: !!env.FINANCE,
     }),
@@ -189,12 +279,17 @@ export function accountService(env: Bindings) {
 }
 
 export function scheduleSync(env: Bindings, now = new Date()) {
-  return runSchedule(
-    schedulingStore(env.DB),
-    async (operation) => {
-      await syncService(env).dispatch(operation);
-    },
-    now,
+  return observeRecoveries(SpanName.scheduled, (notice) =>
+    runSchedule(
+      schedulingStore(env.DB),
+      (operation) =>
+        createSyncService(
+          createSyncRepository(env.DB),
+          workflowDispatcher(env),
+        ).dispatch(operation),
+      now,
+      notice,
+    ),
   );
 }
 
@@ -229,18 +324,53 @@ export function ruleActions(env: Bindings) {
 }
 
 export function syncService(env: Bindings) {
-  return createSyncService(createSyncRepository(env.DB), {
-    async create(id) {
+  return observedSyncService(
+    createSyncRepository(env.DB),
+    workflowDispatcher(env),
+  );
+}
+
+function workflowDispatcher(env: Bindings) {
+  return {
+    async create(id: string) {
       await env.FINANCE.create({ id, params: { operationId: id } });
     },
-    async status(id) {
+    async status(id: string) {
       return (await (await env.FINANCE.get(id)).status()).status;
     },
-  });
+  };
 }
 
 export function reapplyRules(env: Bindings) {
-  return createReapplicationService(createReapplicationRepository(env.DB));
+  return (input: ReapplicationInput) => {
+    const repository = createReapplicationRepository(env.DB);
+    let replayed = false;
+    return createReapplicationService(
+      {
+        ...repository,
+        async receipt(id, batch) {
+          const saved = await repository.receipt(id, batch);
+          replayed = !!saved;
+          return saved;
+        },
+      },
+      {
+        batch: (operationId, callback) =>
+          withObservation({ operationId }, () =>
+            observeSpan(SpanName.reapplication, async (span) => {
+              const result = await callback();
+              span.annotate({
+                batches: replayed ? 0 : 1,
+                outcome: replayed ? Outcome.replayed : Outcome.completed,
+                processed: replayed ? 0 : result.processed,
+              });
+              return result;
+            }),
+          ),
+        phase: observeExecutionPhase,
+      },
+    )(input);
+  };
 }
 
 export async function reapplicationTask(
@@ -274,4 +404,70 @@ function pluggyAdapter(env: Bindings) {
     clientId: env.PLUGGY_CLIENT_ID,
     clientSecret: env.PLUGGY_CLIENT_SECRET,
   });
+}
+
+function observeExecutionPhase<T>(
+  phase: Phase,
+  callback: () => Promise<T>,
+  detail?: ExecutionPhaseDetail & Pick<SafeFields, "attempt" | "retries">,
+) {
+  const { outcome, ...fields } = detail ?? {};
+  let name: SpanName = SpanName.phase;
+  if (phase === Phase.collect) {
+    name = SpanName.source;
+  } else if (phase === Phase.publish) {
+    name = SpanName.publication;
+  }
+  return observeSpan(
+    name,
+    async (span) => {
+      const { data, error } = await tryCatch(callback);
+      if (error) {
+        if (
+          phase === Phase.collect &&
+          error instanceof Fault &&
+          [FaultCode.UPSTREAM_RATE_LIMIT, FaultCode.UPSTREAM_TIMEOUT].some(
+            (code) => code === error.code,
+          )
+        ) {
+          span.annotate({
+            delayMs: (error.details?.retryAfterSeconds ?? 0) * 1000,
+            outcome: Outcome.deferred,
+            recovery: Recovery.scheduled,
+          });
+        }
+        throw error;
+      }
+      if (outcome) {
+        span.annotate({ outcome: outcome() });
+      }
+      if (phase === Phase.acquire && data === false) {
+        span.annotate({
+          failure: FailureCode.EXECUTOR_BUSY,
+          outcome: Outcome.failed,
+          recovery: Recovery.resume,
+        });
+      }
+      return data;
+    },
+    { phase, ...fields },
+  );
+}
+
+function executionFailure(
+  result: ExecutionOutcome,
+  counts: { sourceUnauthorized: number; sourceUnavailable: number },
+) {
+  if (result.error) {
+    return classifyFailure(result.error);
+  }
+  if (counts.sourceUnauthorized) {
+    return FaultCode.UPSTREAM_FORBIDDEN;
+  }
+  if (counts.sourceUnavailable) {
+    return FaultCode.UPSTREAM_NOT_FOUND;
+  }
+  if (result.outcome === Outcome.partial) {
+    return FaultCode.UPSTREAM_ERROR;
+  }
 }
