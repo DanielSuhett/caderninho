@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { createAuthService } from "..";
 import type { AuthRepository } from "../entity";
-import { createAuthService } from "../service";
 
 await test("authentication use case checks installation version before exposing a stored session", async () => {
   const reads: number[] = [];

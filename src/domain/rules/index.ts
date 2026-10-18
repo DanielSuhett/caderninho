@@ -1,3 +1,4 @@
+export { convertPredicate } from "./convert-rules";
 export { importRules, parseRuleJson } from "./import-rules";
 export {
   type Catalog,
@@ -11,4 +12,4 @@ export {
   type Rules,
   txContext,
 } from "./rule.entity";
-export { RulesSchema } from "./rule.schema";
+export { compileRules, RuleSchema, RulesSchema } from "./rule.schema";

@@ -1,6 +1,12 @@
 import { Button } from "@cloudflare/kumo/components/button";
 import { Input } from "@cloudflare/kumo/components/input";
-import { type ReactNode, useEffect, useRef } from "react";
+import {
+  type MouseEvent,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useRef,
+} from "react";
 
 import {
   type AccountActions,
@@ -18,10 +24,12 @@ function Action({
   children,
   onClick,
   disabled = false,
+  value,
 }: {
   children: ReactNode;
-  onClick: () => void;
+  onClick: (event: MouseEvent<HTMLButtonElement>) => void;
   disabled?: boolean;
+  value?: string;
 }) {
   return (
     <Button
@@ -29,6 +37,7 @@ function Action({
       onClick={onClick}
       size="lg"
       type="button"
+      value={value}
       variant="secondary"
     >
       {children}
@@ -46,6 +55,34 @@ export function AccountView({
 }: AccountState & { actions: AccountActions }) {
   const heading = useRef<HTMLHeadingElement>(null);
   const previous = useRef(step);
+  const diagnostic = snapshot ? supportPrompt(snapshot.panel.support) : "";
+  const origin = snapshot?.origin;
+  const selectStep = useCallback(
+    (event: MouseEvent<HTMLButtonElement>) => {
+      actions.selectStep(Number(event.currentTarget.value));
+    },
+    [actions],
+  );
+  const connect = useCallback(() => actions.connectItem(), [actions]);
+  const reconnect = useCallback(
+    (event: MouseEvent<HTMLButtonElement>) => {
+      actions.connectItem(event.currentTarget.value);
+    },
+    [actions],
+  );
+  const connectAssistant = useCallback(() => actions.selectStep(2), [actions]);
+  const copyAddress = useCallback(
+    () => actions.copy(`${origin}/mcp`),
+    [actions, origin],
+  );
+  const copyQuestion = useCallback(
+    () => actions.copy(firstQuestion),
+    [actions],
+  );
+  const copyDiagnostic = useCallback(
+    () => actions.copy(diagnostic),
+    [actions, diagnostic],
+  );
   useEffect(() => {
     if (previous.current === step) {
       return;
@@ -71,8 +108,7 @@ export function AccountView({
     );
   }
   const { status: state } = snapshot,
-    sync = SYNC_PRESENTATION[snapshot.panel.sync],
-    diagnostic = supportPrompt(snapshot.panel.support);
+    sync = SYNC_PRESENTATION[snapshot.panel.sync];
   return (
     <>
       <h1>Seu Caderninho.</h1>
@@ -83,8 +119,9 @@ export function AccountView({
             <button
               aria-current={step === index + 1 ? "step" : undefined}
               key={label}
-              onClick={() => actions.selectStep(index + 1)}
+              onClick={selectStep}
               type="button"
+              value={index + 1}
             >
               {index + 1}. {label}
             </button>
@@ -113,7 +150,7 @@ export function AccountView({
               {state.credentials ? (
                 <Action
                   disabled={busy}
-                  onClick={() => actions.connectItem()}
+                  onClick={connect}
                 >
                   Abrir Meu Pluggy
                 </Action>
@@ -131,7 +168,7 @@ export function AccountView({
                     Cobertura: {state.coverage.complete} de{" "}
                     {state.coverage.total} recursos.
                   </p>
-                  <Action onClick={() => actions.selectStep(2)}>
+                  <Action onClick={connectAssistant}>
                     Conectar meu assistente
                   </Action>
                 </>
@@ -149,9 +186,7 @@ export function AccountView({
                 readOnly
                 value={`${snapshot.origin}/mcp`}
               />
-              <Action onClick={() => actions.copy(`${snapshot.origin}/mcp`)}>
-                Copiar endereço
-              </Action>
+              <Action onClick={copyAddress}>Copiar endereço</Action>
               <details>
                 <summary>Conectar no ChatGPT</summary>
                 <p>
@@ -172,9 +207,7 @@ export function AccountView({
                 readOnly
                 value={firstQuestion}
               />
-              <Action onClick={() => actions.copy(firstQuestion)}>
-                Copiar primeira pergunta
-              </Action>
+              <Action onClick={copyQuestion}>Copiar primeira pergunta</Action>
               <p>
                 Confira a resposta no seu assistente para confirmar a conexão e
                 a cobertura dos dados.
@@ -195,7 +228,8 @@ export function AccountView({
             <code>{item.id}</code>
             <Action
               disabled={busy}
-              onClick={() => actions.connectItem(item.id)}
+              onClick={reconnect}
+              value={item.id}
             >
               Reconectar
             </Action>
@@ -252,9 +286,7 @@ export function AccountView({
           readOnly
           value={diagnostic}
         />
-        <Action onClick={() => actions.copy(diagnostic)}>
-          Copiar diagnóstico
-        </Action>
+        <Action onClick={copyDiagnostic}>Copiar diagnóstico</Action>
         <Action onClick={actions.refresh}>Verificar novamente</Action>
       </details>
       <details>

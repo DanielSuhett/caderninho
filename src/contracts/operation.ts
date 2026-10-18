@@ -1,14 +1,13 @@
 import { z } from "zod/v4";
 
-import { ResourceSchema } from "@/domain/enums.schema";
-import { FinanceRecordSchema } from "@/domain/finance.schema";
-
 import {
+  FinanceRecordSchema,
   MigrationPolicy,
   type MigrationRequest,
+  ResourceSchema,
   type WebhookEvent,
   WebhookEventType,
-} from "./operation.types";
+} from "../domain";
 
 export const MigrationRowSchema = z
   .object({

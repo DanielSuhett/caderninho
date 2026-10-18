@@ -20,7 +20,7 @@
     "test:product": "vitest run",
     "test:product:runtime": "node --import tsx tests/integration/run-runtime.ts",
     "typecheck": "tsc --noEmit",
-    "types": "wrangler types src/worker/runtime.d.ts"
+    "types": "wrangler types src/worker/runtime.d.ts --env-file .dev.vars.example"
   },
   "dependencies": {
     "@cfworker/json-schema": "4.1.1",

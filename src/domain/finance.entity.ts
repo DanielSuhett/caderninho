@@ -1,5 +1,4 @@
-import type { JsonValue } from "@/shared/json.types";
-
+import type { JsonValue } from "../shared";
 import {
   type Classification,
   EntityChange,
@@ -16,15 +15,15 @@ export type MoneyInput = string | number | null | undefined;
 export type OptionalText = string | null | undefined;
 export type OptionalScalar = string | number | boolean | null | undefined;
 
-export type Provenance = {
+export interface Provenance extends Record<string, string> {
   origin: ProvenanceOrigin;
   sourceField: string;
-};
+}
 
-export type PrecisionWarning = {
+export interface PrecisionWarning extends Record<string, string> {
   code: string;
   field: string;
-};
+}
 
 export interface FinanceRecord {
   absoluteAmountMinor?: OptionalText;

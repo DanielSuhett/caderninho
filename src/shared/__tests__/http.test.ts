@@ -9,7 +9,7 @@ import {
   httpResponseFailure,
   rateLimitRetry,
   requestJson,
-} from "../http";
+} from "..";
 
 await test("HTTP failures classify authorization, redirects and rate limits without reading bodies or retrying commands", async () => {
   await Promise.all(

@@ -1,5 +1,3 @@
-import assert from "node:assert/strict";
-
 import { z } from "zod/v4";
 
 // MCP transport probes retain unrecognized JSON fields for wire parity checks.
@@ -37,7 +35,9 @@ export async function responseJson(response: Response) {
   return EnvelopeSchema.parse(await response.json());
 }
 export function required<T>(value: T): NonNullable<T> {
-  assert.ok(value !== null && value !== undefined, "expected a present value");
+  if (value === null || value === undefined) {
+    throw new Error("expected a present value");
+  }
   return value;
 }
 export const sourceUrl = (input: Parameters<typeof fetch>[0]) =>

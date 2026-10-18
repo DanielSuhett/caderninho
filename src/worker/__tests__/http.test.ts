@@ -3,8 +3,7 @@ import test from "node:test";
 
 import { z } from "zod/v4";
 
-import { createLogger } from "@/shared/logger";
-
+import { createLogger } from "../../shared/logger";
 import { requestDiagnostic } from "../http";
 
 const entrySchema = z

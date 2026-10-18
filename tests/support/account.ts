@@ -1,8 +1,8 @@
 import type {
   AccountConnectToken,
   AccountResponse,
-} from "@/contracts/portal.types";
-import type { WizardState } from "@/contracts/wizard.types";
+  WizardState,
+} from "../../src/contracts";
 
 export function accountConnectToken(): AccountConnectToken {
   return {

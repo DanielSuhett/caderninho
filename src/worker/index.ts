@@ -1,17 +1,16 @@
 import { Hono } from "hono";
 
-import { FaultCode } from "@/domain/enums";
-import { tryCatch } from "@/shared/result";
-import { authenticatedFetch } from "@/worker/auth/controller";
-import { fetchMcp } from "@/worker/mcp/controller";
-import { receiveWebhook } from "@/worker/sync/controller";
-
+import { FaultCode } from "../domain";
+import { tryCatch } from "../shared";
+import { authenticatedFetch } from "./auth/controller";
 import type { Bindings } from "./bindings";
 import { authService, scheduleSync, syncService } from "./composition";
 import { failureStatus, requestDiagnostic } from "./http";
+import { fetchMcp } from "./mcp";
+import { receiveWebhook } from "./sync/controller";
 
-export { receiveWebhook } from "@/worker/sync/controller";
-export { FinanceWorkflow } from "@/worker/sync/workflow";
+export { receiveWebhook } from "./sync/controller";
+export { FinanceWorkflow } from "./sync/workflow";
 
 function createRoutes(ctx: ExecutionContext) {
   const routes = new Hono<{ Bindings: Bindings }>();

@@ -7,5 +7,5 @@ export type {
   StepValue,
   SynchronizationDependencies,
 } from "./entity";
-export { runOperation } from "./execution.service";
+export { publishPage, runOperation } from "./execution.service";
 export { createSyncService, scheduleSync } from "./service";

@@ -49,19 +49,21 @@
 - Preserve um pacote npm e um deploy: `src/domain`, `contracts`, `worker`, `web`
   e `shared`. Controllers tratam transporte; services recebem dependências
   explícitas, sem SQL/HTTP/Bindings; repositories concentram SQL. Cada módulo de
-  aplicação concentra modelos e portas em `entity.ts`, transporte em
-  `controller.ts`, casos de uso em `service.ts`, SQL em `repository.ts` e testes
+  aplicação concentra modelos e portas em `entity/index.ts`, transporte em
+  `controller/index.ts`, casos de uso em `service.ts`, SQL em `repository/` e testes
   em `__tests__`. Services dependem das portas, nunca dos factories ou
-  `ReturnType` de repositories concretos. `composition.ts` liga implementações.
+  `ReturnType` de repositories concretos. A composição liga implementações em
+  `composition/index.ts`.
   `index.ts` do módulo não exporta repositories. Fluxos duráveis de `sync` e
   persistência de `finance` podem ter arquivos especializados com o mesmo sufixo
   de camada; adapters de provedor, OAuth e Workflow permanecem explícitos.
-  O Biome bloqueia imports entre camadas, inclusive em novos helpers. Defina
-  aliases `@/` no `tsconfig.json`, sem extensões
-  `.ts`/`.tsx` nos imports. Prefira relativos curtos dentro do módulo e aliases
-  entre módulos. `index.ts` expõe apenas APIs públicas com exports explícitos;
-  arquivos internos importam as implementações diretamente, sem usar o próprio
-  índice. Execute scripts e testes Node com o loader `tsx` pelos comandos npm/mise.
+  O Biome bloqueia imports entre camadas, inclusive em novos helpers. Use caminhos
+  relativos sem extensões `.ts`/`.tsx` nem o sufixo `/index`. Consuma outros módulos
+  pelo seu `index.ts`, com exports nomeados explícitos. Dentro do módulo, importe
+  implementações diretamente para evitar ciclos pelo próprio barrel. Persistência,
+  transporte, composição e logger têm entradas separadas; índices de aplicação
+  expõem casos de uso e contratos. Execute scripts e testes Node com o loader `tsx`
+  pelos comandos npm/mise, que resolvem os índices de diretórios em ESM.
 - D1 é a fonte das consultas e do progresso. Preserve precisão monetária, moedas,
   semântica do provedor, nomes dos steps e batches atômicos com checkpoints.
   Dados sintéticos nos testes; secrets e dados financeiros privados fora do Git.

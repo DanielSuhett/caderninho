@@ -120,7 +120,7 @@ export async function requestJson<T>({
           : new HttpRequestError(failure);
         throw translated;
       } finally {
-        void cancelResponse(response);
+        cancelResponse(response);
       }
     }
     const maximum = options?.maxResponseSize;
@@ -129,7 +129,7 @@ export async function requestJson<T>({
       maximum !== undefined &&
       Number(response.headers.get("Content-Length")) > maximum
     ) {
-      void cancelResponse(response);
+      cancelResponse(response);
       throw new HttpRequestError({ kind: HttpFailureKind.tooLarge });
     }
     return schema ? pending.json(schema) : pending.json<T>();
@@ -158,7 +158,9 @@ function transportFailure(error: Error): Error {
 
 // Discard unread bodies best effort without replacing the HTTP failure or waiting
 // indefinitely for a remote stream to acknowledge cancellation.
-async function cancelResponse(response: Response) {
-  const { data, error } = await tryCatch(() => response.body?.cancel());
-  return error ? undefined : data;
+function cancelResponse(response: Response) {
+  tryCatch(() => response.body?.cancel()).then(
+    ({ data, error }) => (error ? undefined : data),
+    () => undefined,
+  );
 }

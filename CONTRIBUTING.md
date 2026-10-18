@@ -39,6 +39,8 @@ Consulte `mise tasks ls` para todas as tasks. Para comandos avulsos, use
 `mise exec -- <comando>`. Os checks executam em sequência e param na primeira
 falha; não instalam dependências, corrigem arquivos ou publicam o projeto.
 `types` regenera os bindings e `migrate:local` aplica migrações apenas no D1 local.
+Para manter a geração igual à CI, `types` lê os nomes de secrets do arquivo
+versionado `.dev.vars.example`, sem consultar o `.dev.vars` local.
 Deploy é um comando explícito separado e inclui migração remota.
 
 Os scripts npm continuam disponíveis sem o mise: selecione Node 24 pela `.nvmrc`
@@ -51,7 +53,9 @@ deploy nem consulta bancos reais. Build dry-run e execução local são provas d
 
 Ultracite 8 usa Biome com os presets `core`, `react` e `vitest`. As regras próprias
 de camadas, imports, promises e layout continuam após os presets em `biome.json`.
-Os extras `type-aware` e `js-plugins` permanecem desativados. Consulte o
+Os extras `type-aware` e `js-plugins` permanecem desativados. A regra que proíbe
+barrels tem uma exceção nos arquivos `index.ts`, que definem as entradas dos
+módulos. Consulte o
 [setup oficial](https://www.ultracite.ai/docs/setup) para atualizar a integração.
 
 Execute `mise exec -- npx ultracite fix` para lint e formatação,
@@ -65,8 +69,8 @@ para correções seguras e organização de imports e `npm run format` para layo
 Revise consolidação de imports separadamente da formatação global; repetir os
 dois comandos depois da consolidação deve produzir zero alterações adicionais.
 Imports com valores e tipos usam `import { value, type Type }`; imports só de
-tipos usam `import type`. Preserve aliases, comentários e a ordem dos imports
-com efeitos colaterais. Reexports declaram a origem com `export { nome } from`;
+tipos usam `import type`. Preserve caminhos relativos, comentários e a ordem
+dos imports com efeitos colaterais. Reexports declaram a origem com `export { nome } from`;
 imports usados localmente permanecem separados.
 
 `biome.json` é a fonte das regras ativas. Use regras nativas, sem plugins próprios
@@ -82,37 +86,39 @@ complementa o `tsc`, que continua separado.
 
 ### Imports e entradas públicas
 
-`tsconfig.json` é a única definição dos aliases: `@/` aponta para `src/` e
-`@/testing/` para `tests/support/`. Vite e Vitest ativam `resolve.tsconfigPaths`;
-Wrangler lê os mesmos paths. Os testes e scripts Node usam `node --import tsx`
-pelos comandos npm/mise, pois o Node nativo não resolve esses aliases nem procura
-extensões TypeScript em imports relativos.
+Imports locais usam caminhos relativos em fontes, testes e configurações. Vite,
+Vitest e Wrangler resolvem esses caminhos sem aliases do projeto. Os testes e
+scripts Node usam `node --import tsx` pelos comandos npm/mise para resolver
+extensões TypeScript e os índices de diretórios em ESM.
 
 - Omita `.ts`/`.tsx` em imports, reexports e imports dinâmicos. Preserve extensões
   de assets, como `.css` e `.json`, e os caminhos exigidos por pacotes externos.
-- Use `./arquivo` ou `../arquivo` para implementações próximas do mesmo módulo.
-  Use `@/domain/account.entity`, por exemplo, para cruzar módulos e evitar cadeias
-  de `../../`. Imports de dependências mantêm o nome do pacote.
+- Consuma outros módulos pelo diretório, como `../../domain`, `../../contracts`
+  ou `../finance`. Omita `/index`; imports de dependências mantêm o nome do pacote.
+- Use `./arquivo` ou `../arquivo` para implementações do mesmo módulo. Um arquivo
+  interno não importa o próprio barrel; testes podem consumir a entrada pública.
 - `index.ts` define APIs públicas com exports nomeados, inclusive `export type`.
-  Arquivos internos usam imports diretos para evitar ciclos pelo próprio índice.
-  Controllers, Workflows e outros entrypoints que dependem de `composition.ts`
-  permanecem fora dos índices consumidos pela composição.
-- Há entradas públicas para regras, account/auth/finance/sync do Worker e o
-  painel account do frontend. `shared` mantém imports por utilitário para evitar
-  que um índice global carregue logger, HTTP e criptografia juntos no navegador.
+  Controllers, Workflows e outros entrypoints que dependem da composição mantêm
+  entradas separadas dos índices consumidos por ela.
+- Domínio, regras, contratos, utilitários e módulos da aplicação expõem índices.
+  Persistência, transporte e modelos do Worker têm índices próprios. O logger,
+  os helpers de processos Node e os mocks de Vitest ficam em módulos separados
+  para preservar seus ambientes de execução. O barrel de `shared` não inicializa
+  o logger; `mount-account.tsx` inicializa o navegador fora do índice de páginas.
 
-O lint nativo bloqueia os aliases antigos `#`, as extensões `.ts`/`.tsx` e
+O lint nativo bloqueia aliases locais `@/` e `#`, as extensões `.ts`/`.tsx` e
 dependências proibidas entre camadas, com paths relativos ou aliases, incluindo
 imports dinâmicos, reexports e helpers que não se chamam `service.ts`.
 O check executa o Biome diretamente.
 
 ### Camadas dos módulos
 
-Use `entity.ts`, `controller.ts`, `service.ts`, `repository.ts` e `__tests__` como
-estrutura padrão de `account`, `auth`, `finance` e `sync`. As entidades locais
+Use `entity/index.ts`, `controller/index.ts`, `service.ts`, `repository/` e
+`__tests__` como estrutura padrão de `account`, `auth`, `finance` e `sync`. As entidades locais
 definem os contratos de dependências; as regras puras compartilhadas continuam
 em `src/domain/*.entity.ts`. Types de linhas podem ser inferidos de Drizzle por
-imports exclusivamente de tipo em `entity.ts`, sem carregar o schema em runtime.
+imports exclusivamente de tipo em `entity/index.ts`, sem carregar o schema
+em runtime.
 
 - Controllers validam transporte e chamam casos de uso. Não recebem builders,
   repositories ou funções que exigem D1.
@@ -121,10 +127,10 @@ imports exclusivamente de tipo em `entity.ts`, sem carregar o schema em runtime.
 - Repositories recebem D1 e executam SQL, inclusive batches atômicos. Não chamam
   services, controllers, composição ou rede. A composição injeta cada porta.
 - Índices públicos exportam services e contratos. Implementações de persistência
-  ficam acessíveis à composição e aos testes de integração por imports diretos.
+  têm um índice próprio, acessível à composição e aos testes de integração.
 - `sync/execution.service.ts` concentra os steps duráveis e
-  `sync/execution.repository.ts` concentra sua persistência atômica. Os repositories
-  especializados de `finance`, os adapters Pluggy/OAuth e os transportes MCP e
+  `sync/repository/execution.repository.ts` concentra sua persistência atômica.
+  Os repositories especializados de `finance`, os adapters Pluggy/OAuth e os transportes MCP e
   Workflow são exceções por responsabilidade; não precisam de camadas vazias.
 
 O lint restringe dependências; a revisão ainda precisa confirmar que decisões de
@@ -132,10 +138,9 @@ produto estão em entidades ou casos de uso. Mudar um nome de arquivo não justi
 misturar rede, regra e persistência em um repository.
 
 ```ts
-import { tryCatch } from "@/shared/result";
-import { createAccountService } from "@/worker/account";
-
-import { accountPanel } from "./panel";
+// A partir de src/worker/composition/index.ts:
+import { hash } from "../../shared";
+import { createAccountService } from "../account";
 ```
 
 Use `if (objeto)` e `if (!lista.length)` para presença de objetos e coleções
@@ -164,7 +169,8 @@ em trabalho que só executa CPU JavaScript, e preserve os batches atômicos.
 
 ## Logs
 
-Use `@/shared/logger` para todos os logs da aplicação e dos scripts. O Pino
+Use o módulo `shared/logger`, por caminho relativo, para os logs da aplicação e
+dos scripts. O Pino
 filtra níveis antes de serializar: `LOG_LEVEL` aceita `fatal`, `error`, `warn`,
 `info`, `debug`, `trace` ou `silent`; ausência ou valor inválido usa `warn`.
 Requisições com sucesso e redirecionamentos ficam em `debug`, respostas 4xx em

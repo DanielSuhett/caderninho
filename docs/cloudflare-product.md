@@ -254,7 +254,7 @@ e [Streamable HTTP](https://modelcontextprotocol.io/specification/2026-07-28/bas
 
 As dependências e versões ficam em `package.json` e `package-lock.json`.
 Hono cuida do transporte; React renderiza as páginas e escapa o conteúdo dinâmico.
-Drizzle define o modelo D1 em `src/worker/schema.ts`; statements e checkpoints
+Drizzle define o modelo D1 em `src/worker/schema/index.ts`; statements e checkpoints
 compartilham batches nativos. As migrações SQL ficam em `migrations`.
 
 Consulte [a arquitetura](adr-modular-monolith.md) para as fronteiras entre módulos,

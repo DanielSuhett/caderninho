@@ -1,14 +1,10 @@
-import type {
-  AccountConnectToken,
-  InstallationChecks,
-} from "@/contracts/portal.types";
-import { accountState } from "@/domain/account.entity";
+import type { AccountConnectToken, InstallationChecks } from "../../contracts";
 import {
+  accountState,
   assertConnectionCapacity,
   assertPersonalConnector,
   PERSONAL_CONNECTOR_ID,
-} from "@/domain/connection.entity";
-
+} from "../../domain";
 import {
   type AccountRepository,
   type AccountSource,

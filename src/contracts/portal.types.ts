@@ -1,8 +1,4 @@
-import type { AccountSyncOutcome } from "@/domain/account.entity";
-
-import type { WizardState } from "./wizard.types";
-
-export { AccountSyncOutcome } from "@/domain/account.entity";
+import type { AccountSyncOutcome, WizardState } from "../domain";
 
 export const AccountStep = { assistant: 2, connect: 1 } as const;
 export type AccountStep = (typeof AccountStep)[keyof typeof AccountStep];

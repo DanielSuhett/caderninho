@@ -1,7 +1,4 @@
-import type {
-  AccountConnectToken,
-  AccountResponse,
-} from "@/contracts/portal.types";
+import type { AccountConnectToken, AccountResponse } from "../../contracts";
 
 export type LoadState =
   | { kind: typeof LoadStatus.loading }

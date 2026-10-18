@@ -12,9 +12,7 @@ export function useAccount() {
     if (delay === undefined) {
       return;
     }
-    const tick = () => {
-      void controller.actions.refresh();
-    };
+    const tick = controller.actions.refresh;
     const timer = setInterval(tick, delay);
     document.addEventListener("visibilitychange", tick);
     return () => {

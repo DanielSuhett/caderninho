@@ -1,34 +1,37 @@
 import assert from "node:assert/strict";
 
-import type { D1Migration } from "@cloudflare/vitest-plugin";
 import { and, count, countDistinct, eq, sql } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 import { afterEach, beforeEach, test, vi } from "vitest";
 import { z } from "zod/v4";
 
-import type { OperationInput } from "@/contracts/operation.types";
-import type { Identity } from "@/contracts/queries.types";
-import { Resource } from "@/domain/enums";
-import type { ProviderRecord } from "@/domain/provider.entity";
-import type { Filter } from "@/domain/query.entity";
-import { EMPTY_RULES, importRules, type Rule, txContext } from "@/domain/rules";
-import { convertPredicate } from "@/domain/rules/convert-rules";
-import type { JsonValue } from "@/shared/json.types";
-import { prepareEntity } from "@/testing/finance";
-import { required, responseJson } from "@/testing/helpers";
-import { mockNetwork } from "@/testing/network";
-import type { Bindings, DurableInstance } from "@/worker/bindings";
+import type { Identity, OperationInput } from "../../src/contracts";
+import type { Filter, ProviderRecord } from "../../src/domain";
+import { Resource } from "../../src/domain";
+import {
+  convertPredicate,
+  EMPTY_RULES,
+  importRules,
+  type Rule,
+  txContext,
+} from "../../src/domain/rules";
+import type { JsonValue } from "../../src/shared";
+import type { Bindings, DurableInstance } from "../../src/worker/bindings";
 import {
   financialQueries,
   synchronizationDependencies,
   syncService,
-} from "@/worker/composition";
-import { database } from "@/worker/database";
-import { override } from "@/worker/finance/entities.repository";
-import { aggregateEntities, queryEntities } from "@/worker/finance/repository";
-import { rulesFor, saveRules } from "@/worker/finance/rules.repository";
-import { fetchMcp } from "@/worker/mcp/controller";
-import { listen, task } from "@/worker/mcp/tasks";
+} from "../../src/worker/composition";
+import { database } from "../../src/worker/database";
+import {
+  aggregateEntities,
+  override,
+  queryEntities,
+  rulesFor,
+  saveRules,
+} from "../../src/worker/finance/repository";
+import { fetchMcp } from "../../src/worker/mcp";
+import { listen, task } from "../../src/worker/mcp/tasks";
 import {
   checkpoints as checkpointsTable,
   coverage as coverageTable,
@@ -45,11 +48,17 @@ import {
   rule_sets as ruleSetsTable,
   settings as settingsTable,
   tags as tagsTable,
-} from "@/worker/schema";
-import { type FinancialSource, runOperation } from "@/worker/sync";
-import { finish, getOperation, startOperation } from "@/worker/sync/repository";
-
-import { settings } from "./personal-fixture";
+} from "../../src/worker/schema";
+import { type FinancialSource, runOperation } from "../../src/worker/sync";
+import {
+  finish,
+  getOperation,
+  startOperation,
+} from "../../src/worker/sync/repository";
+import { required, responseJson } from "../support";
+import { prepareEntity } from "../support/finance";
+import { mockNetwork } from "../support/network";
+import { settings, testMigrations } from "./personal-fixture";
 import { applyD1Migrations, reset } from "cloudflare:test";
 import { env as bindings } from "cloudflare:workers";
 
@@ -73,27 +82,16 @@ const rulesV1RequiresExplicitConversionAndActivationPattern =
 const bodyLimitPattern = /BODY_LIMIT/;
 const syntheticReceiptFailurePattern = /synthetic receipt failure/;
 
-declare global {
-  namespace Cloudflare {
-    interface Env {
-      DB: D1Database;
-      OAUTH_KV: KVNamespace;
-      TEST_MIGRATIONS: D1Migration[];
-    }
-  }
-}
 beforeEach(async () => {
   await reset();
-  await applyD1Migrations(bindings.DB, bindings.TEST_MIGRATIONS);
+  await applyD1Migrations(bindings.DB, testMigrations);
 });
 afterEach(() => vi.unstubAllGlobals());
 
 test("owner-data migration preserves existing financial records and makes the full history readable", async () => {
   await reset();
   const initial = required(
-    bindings.TEST_MIGRATIONS.find(
-      (migration) => migration.name === "0001_personal.sql",
-    ),
+    testMigrations.find((migration) => migration.name === "0001_personal.sql"),
   );
   await applyD1Migrations(bindings.DB, [initial]);
   await bindings.DB.prepare(
@@ -120,7 +118,7 @@ test("owner-data migration preserves existing financial records and makes the fu
       source: { id: "legacy-transaction" },
     })
     .run();
-  await applyD1Migrations(bindings.DB, bindings.TEST_MIGRATIONS);
+  await applyD1Migrations(bindings.DB, testMigrations);
   const result = await queryEntities(bindings.DB, {
     resource: Resource.transactions,
   });
@@ -367,7 +365,7 @@ function steps() {
 }
 
 test("cancelling a waiting subscription closes the reader and releases its lifetime without cancelling the operation", async () => {
-  const { listen: listenTasks } = await import("@/worker/mcp/tasks");
+  const { listen: listenTasks } = await import("../../src/worker/mcp/tasks");
   const { db, op } = await setup();
   const released = Promise.withResolvers<void>();
   const response = await listenTasks(
@@ -377,7 +375,7 @@ test("cancelling a waiting subscription closes the reader and releases its lifet
       id: "synthetic-listener",
       ids: [op.id],
       keepAlive: (lifetime) => {
-        void lifetime.then(released.resolve);
+        lifetime.then(released.resolve);
       },
     },
   );
@@ -552,7 +550,7 @@ for (const flow of ["collection", "event", "pending"] as const) {
       const rejected = !!sample.error;
       const { db, op: seed } = await setup();
       const engine = await rulesFor(db, seed.rules_revision);
-      for (const input of [
+      await [
         {
           identity: {
             id: "account",
@@ -568,13 +566,14 @@ for (const flow of ["collection", "event", "pending"] as const) {
           parent: account,
           source: transaction("duplicate", { status: "PENDING" }),
         },
-      ]) {
+      ].reduce(async (priorCase, input) => {
+        await priorCase;
         await commit(
           db,
           (await prepareEntity(db, { ...input, engine, operation: seed }))
             .statements,
         );
-      }
+      }, Promise.resolve());
       await finish(db, seed, "completed");
       const eventId = "duplicate-event";
       if (flow === "event") {
@@ -878,7 +877,7 @@ test("manual override survives sync, rule version changes and exact SQL aggregat
     source: transaction("huge", { amount: "-9007199254740993.01" }),
   });
   await commit(db, p.statements);
-  const { invoke } = await import("@/worker/mcp/invoke");
+  const { invoke } = await import("../../src/worker/mcp");
   const queries = financialQueries(env(db));
   const manual = "x".repeat(2048);
   await invoke(queries, "caderninho_override", {
@@ -943,10 +942,13 @@ test("manual override survives sync, rule version changes and exact SQL aggregat
 test("filters select exact amounts, composition and revision rejects stale pagination", async () => {
   const { db, op } = await setup(),
     engine = await rulesFor(db, op.rules_revision);
-  for (const [id, amount] of [
-    ["a", "-10.01"],
-    ["b", "-20.02"],
-  ] as const) {
+  await (
+    [
+      ["a", "-10.01"],
+      ["b", "-20.02"],
+    ] as const
+  ).reduce(async (priorCase, [id, amount]) => {
+    await priorCase;
     await commit(
       db,
       (
@@ -959,7 +961,7 @@ test("filters select exact amounts, composition and revision rejects stale pagin
         })
       ).statements,
     );
-  }
+  }, Promise.resolve());
   const filter: Filter = {
     and: [
       { field: "amountMinor", op: "lte", value: "-2000" },
@@ -1065,20 +1067,24 @@ test("modern Tasks wire rejects absent capability, returns flat durable handle a
 test("reapply freezes selection even when its filter changes and preserves manual overrides", async () => {
   const { db, op } = await setup(),
     engine = await rulesFor(db, op.rules_revision);
-  for (let n = 0; n < 43; n += 1) {
-    await commit(
-      db,
-      (
-        await prepareEntity(db, {
-          engine,
-          identity: identity(`r${n}`),
-          operation: op,
-          parent: account,
-          source: transaction(`r${n}`),
-        })
-      ).statements,
-    );
-  }
+  await Array.from({ length: 43 }, (_, index) => index).reduce(
+    async (priorCase, n) => {
+      await priorCase;
+      await commit(
+        db,
+        (
+          await prepareEntity(db, {
+            engine,
+            identity: identity(`r${n}`),
+            operation: op,
+            parent: account,
+            source: transaction(`r${n}`),
+          })
+        ).statements,
+      );
+    },
+    Promise.resolve(),
+  );
   await override(db, identity("r0"), "description", "Manual");
   const rules = structuredClone(EMPTY_RULES);
   rules.rules.push(
@@ -1433,10 +1439,13 @@ test("bootstrap retains every supported resource and both account/investment par
 test("exact metrics retain BANK/CREDIT signs and ignore manual tags without erasing source", async () => {
   const { db, op } = await setup(),
     engine = await rulesFor(db, op.rules_revision);
-  for (const [id, type, amount, parent] of [
-    ["bank", "DEBIT", "-10", account],
-    ["card", "DEBIT", "10", { ...account, type: "CREDIT" }],
-  ] satisfies [string, string, string, typeof account][]) {
+  await (
+    [
+      ["bank", "DEBIT", "-10", account],
+      ["card", "DEBIT", "10", { ...account, type: "CREDIT" }],
+    ] satisfies [string, string, string, typeof account][]
+  ).reduce(async (priorCase, [id, type, amount, parent]) => {
+    await priorCase;
     await commit(
       db,
       (
@@ -1449,7 +1458,7 @@ test("exact metrics retain BANK/CREDIT signs and ignore manual tags without eras
         })
       ).statements,
     );
-  }
+  }, Promise.resolve());
   const gross = await aggregateEntities(db, { metric: "amount" }),
     flow = await aggregateEntities(db, { metric: "cashFlow" });
   await assert.rejects(
@@ -1458,7 +1467,7 @@ test("exact metrics retain BANK/CREDIT signs and ignore manual tags without eras
   );
   assert.equal(required(gross.groups[0]).totalMinor, "2000");
   assert.equal(required(flow.groups[0]).totalMinor, "-1000");
-  const { invoke } = await import("@/worker/mcp/invoke");
+  const { invoke } = await import("../../src/worker/mcp");
   await invoke(financialQueries(env(db)), "caderninho_override", {
     ...identity("bank"),
     field: "tag",
@@ -1589,20 +1598,24 @@ test("migration is replay-safe, preserves useful legacy-only history and reports
 test("preview, SQL filters and reapply select the same selected records; cursor cannot change filter", async () => {
   const { db, op } = await setup(),
     engine = await rulesFor(db, op.rules_revision);
-  for (let n = 0; n < 4; n += 1) {
-    await commit(
-      db,
-      (
-        await prepareEntity(db, {
-          engine,
-          identity: identity(`p${n}`),
-          operation: op,
-          parent: account,
-          source: transaction(`p${n}`, { amount: String(-n - 1) }),
-        })
-      ).statements,
-    );
-  }
+  await Array.from({ length: 4 }, (_, index) => index).reduce(
+    async (priorCase, n) => {
+      await priorCase;
+      await commit(
+        db,
+        (
+          await prepareEntity(db, {
+            engine,
+            identity: identity(`p${n}`),
+            operation: op,
+            parent: account,
+            source: transaction(`p${n}`, { amount: String(-n - 1) }),
+          })
+        ).statements,
+      );
+    },
+    Promise.resolve(),
+  );
   const doc = structuredClone(EMPTY_RULES);
   doc.rules = [
     fixtureRule({
@@ -1621,7 +1634,7 @@ test("preview, SQL filters and reapply select the same selected records; cursor 
       op: "lte",
       value: "-200",
     } satisfies Filter;
-  const { invoke } = await import("@/worker/mcp/invoke");
+  const { invoke } = await import("../../src/worker/mcp");
   const preview = z
     .object({ differences: z.array(z.json()), selected: z.number() })
     .parse(
@@ -1932,7 +1945,9 @@ test("operational retention does not remove financial records, rule provenance o
     op.id,
     steps(),
   );
-  const { compactOperations } = await import("@/worker/sync/repository");
+  const { compactOperations } = await import(
+    "../../src/worker/sync/repository"
+  );
   const { n: financialCount } = required(
     await database(db)
       .select({ n: count() })
@@ -2063,9 +2078,9 @@ function fixtureRule(r: {
 
 test("legacy revisions remain readable; explicit conversion creates a new revision without rewriting frozen operations", async () => {
   const { db } = await setup();
-  const { readRules } = await import("@/worker/finance/rules.repository");
-  const { NORMALIZER } = await import("@/domain/finance.entity");
-  const { invoke } = await import("@/worker/mcp/invoke");
+  const { readRules } = await import("../../src/worker/finance/repository");
+  const { NORMALIZER } = await import("../../src/domain");
+  const { invoke } = await import("../../src/worker/mcp");
   const old = {
     ...EMPTY_RULES,
     rules: [
@@ -2135,7 +2150,7 @@ test("legacy revisions remain readable; explicit conversion creates a new revisi
 });
 
 test("HTTP conversion defaults to dry run and oversized import bodies fail before storage", async () => {
-  const { boundedJson } = await import("@/worker/http");
+  const { boundedJson } = await import("../../src/worker/http");
   assert.deepEqual(
     await boundedJson(
       new Request("https://local/import", {
@@ -2188,9 +2203,9 @@ test("HTTP conversion defaults to dry run and oversized import bodies fail befor
 });
 
 test("page publication rolls back data, progress, checkpoint and receipt together, then replays once", async () => {
-  const { publishPage } = await import("@/worker/sync/execution.service");
+  const { publishPage } = await import("../../src/worker/sync");
   const { createExecutionRepository } = await import(
-    "@/worker/sync/execution.repository"
+    "../../src/worker/sync/repository"
   );
   const { db, op } = await setup();
   const engine = await rulesFor(db, op.rules_revision);
@@ -2365,7 +2380,7 @@ test("Drizzle JSON mapping preserves public strings, default progress and manual
   );
   assert.deepEqual(stored.source, source);
   assert.equal(stored.normalized.description, source.description);
-  const { invoke } = await import("@/worker/mcp/invoke");
+  const { invoke } = await import("../../src/worker/mcp");
   await database(db).insert(tagsTable).values({
     id: "json",
     item_id: "item",
@@ -2410,13 +2425,16 @@ test("Drizzle JSON mapping preserves public strings, default progress and manual
 test("integer limb aggregation cancels huge signed amounts and keeps missing measures separate by currency", async () => {
   const { db, op } = await setup();
   const engine = await rulesFor(db, op.rules_revision);
-  for (const [id, amount, currencyCode] of [
-    ["positive", "9007199254740993.01", "BRL"],
-    ["negative", "-9007199254740993.00", "BRL"],
-    ["missing", null, "BRL"],
-    ["usd-missing", null, "USD"],
-    ["eur-zero", "0", "EUR"],
-  ] as const) {
+  await (
+    [
+      ["positive", "9007199254740993.01", "BRL"],
+      ["negative", "-9007199254740993.00", "BRL"],
+      ["missing", null, "BRL"],
+      ["usd-missing", null, "USD"],
+      ["eur-zero", "0", "EUR"],
+    ] as const
+  ).reduce(async (priorCase, [id, amount, currencyCode]) => {
+    await priorCase;
     await commit(
       db,
       (
@@ -2429,7 +2447,7 @@ test("integer limb aggregation cancels huge signed amounts and keeps missing mea
         })
       ).statements,
     );
-  }
+  }, Promise.resolve());
   const { groups } = await aggregateEntities(db, {});
   assert.deepEqual(
     groups.find((g) => g.currency === "BRL"),

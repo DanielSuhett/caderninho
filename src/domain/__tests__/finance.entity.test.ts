@@ -7,7 +7,7 @@ import {
   entityChange,
   projectEntity,
   recordChange,
-} from "../finance.entity";
+} from "..";
 
 const sourceIdMismatchPattern = /SOURCE_ID_MISMATCH/;
 const ignoredFlagErrorPattern = /ignored requires 0 or 1/;

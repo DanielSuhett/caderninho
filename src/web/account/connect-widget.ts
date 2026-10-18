@@ -1,7 +1,6 @@
 import type { PluggyConnect } from "pluggy-connect-sdk";
 
-import { tryCatch } from "@/shared/result";
-
+import { tryCatch } from "../../shared";
 import type { ConnectRequest, ConnectWidget } from "./account.types";
 
 type Widget = Pick<PluggyConnect, "init" | "destroy">;

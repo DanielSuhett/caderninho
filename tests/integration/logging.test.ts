@@ -3,8 +3,8 @@ import assert from "node:assert/strict";
 import { test } from "vitest";
 import { z } from "zod/v4";
 
-import { createLogger } from "@/shared/logger";
-import { requestDiagnostic } from "@/worker/http";
+import { createLogger } from "../../src/shared/logger";
+import { requestDiagnostic } from "../../src/worker/http";
 
 test("Worker logging filters polling and writes only safe structured HTTP metadata", () => {
   const lines: string[] = [];

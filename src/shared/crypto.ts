@@ -37,7 +37,7 @@ export async function secretsEqual({
   let difference = 0;
   // Both digests have 32 bytes; compare every byte without an early return.
   for (const [index, value] of left.entries()) {
-    difference |= value ^ compared.getUint8(index);
+    difference += (value - compared.getUint8(index)) ** 2;
   }
   return difference === 0;
 }

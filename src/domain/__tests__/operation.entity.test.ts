@@ -17,7 +17,7 @@ import {
   resourceParentAllowed,
   sourceFailureCoverage,
   transactionCreationFloor,
-} from "../operation.entity";
+} from "..";
 
 const syncFilterNotSupportedUseItemScopePattern =
   /SYNC_FILTER_NOT_SUPPORTED_USE_ITEM_SCOPE/;

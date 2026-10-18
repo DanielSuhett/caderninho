@@ -1,9 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import type { WizardState } from "@/contracts/wizard.types";
-import { accountState } from "@/domain/account.entity";
-
+import type { WizardState } from "../../../contracts";
+import { accountState } from "../../../domain";
 import { accountPanel, wizardIssue } from "../entity";
 
 await test("financial failure overrides transport completion and setup never equates partial coverage to complete", () => {

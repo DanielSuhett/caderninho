@@ -1,11 +1,11 @@
 import { z } from "zod/v4";
 
+import { AccountSyncOutcome } from "../domain";
 import {
   type AccountConnectToken,
   type AccountPanel,
   type AccountResponse,
   AccountStep,
-  AccountSyncOutcome,
   type InstallationChecks,
 } from "./portal.types";
 import { WizardStateSchema } from "./wizard-contract";

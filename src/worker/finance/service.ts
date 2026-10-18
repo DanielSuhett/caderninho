@@ -1,29 +1,28 @@
+import type { Identity, WizardState } from "../../contracts";
 import {
   type PreviewInput,
   type RuleCommand,
   RuleCommandAction,
   RuleImportMode,
   type SubscriptionInput,
-} from "@/contracts/finance.types";
-import type { Identity } from "@/contracts/queries.types";
-import type { WizardState } from "@/contracts/wizard.types";
-import { EntityChange, Resource } from "@/domain/enums";
-import { localDay } from "@/domain/exact";
+} from "../../contracts";
+import type { ProviderRecord } from "../../domain";
 import {
   assertEntityIdentity,
+  assertReadRevision,
   type CorrectionInput,
+  detectSubscriptions,
+  EntityChange,
   entityChange,
   entityFingerprint,
+  localDay,
   NORMALIZER,
   projectEntity,
   type RecordChange,
+  Resource,
   recordChange,
-} from "@/domain/finance.entity";
-import type { ProviderRecord } from "@/domain/provider.entity";
-import { assertReadRevision } from "@/domain/query.entity";
-import { detectSubscriptions } from "@/domain/recurrence.entity";
-import { type Derived, importRules, txContext } from "@/domain/rules";
-
+} from "../../domain";
+import { type Derived, importRules, txContext } from "../../domain/rules";
 import type {
   EntityInput,
   EntityPreparation,
@@ -142,7 +141,8 @@ export async function previewRules(
     before: { category: string | null; description: string | null };
     derived: Derived;
   }[] = [];
-  for (const row of sample) {
+  await sample.reduce(async (previous, row) => {
+    await previous;
     differences.push({
       before: {
         category: row.effective_category,
@@ -151,7 +151,7 @@ export async function previewRules(
       derived: await engine.evaluate(txContext(row.normalized)),
       id: row.id,
     });
-  }
+  }, Promise.resolve());
   assertReadRevision({ actual: await reads.revision(), expected: before });
   return {
     differences,

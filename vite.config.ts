@@ -36,7 +36,10 @@ export default defineConfig({
         ),
       },
       output: {
-        assetFileNames: "[name][extname]",
+        assetFileNames: ({ names }) =>
+          names.includes("mount-account.css")
+            ? "account.css"
+            : "[name][extname]",
         chunkFileNames: "chunks/[name]-[hash].js",
         entryFileNames: "[name].js",
         manualChunks: (id) =>
@@ -46,5 +49,4 @@ export default defineConfig({
     target: "es2022",
   },
   plugins: [copyPortalAssets()],
-  resolve: { tsconfigPaths: true },
 });

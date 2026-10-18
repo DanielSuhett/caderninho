@@ -3,13 +3,16 @@ import { z } from "zod/v4";
 import {
   AccountConnectTokenSchema,
   AccountResponseSchema,
-} from "@/contracts/portal-contract";
-import { WizardIssue } from "@/contracts/wizard.types";
-import { WizardIssueSchema } from "@/contracts/wizard-contract";
-import { httpClient, requestJson } from "@/shared/http";
-import { type HttpFailureContext, HttpFailureKind } from "@/shared/http.types";
-import { tryCatch } from "@/shared/result";
-
+  WizardIssue,
+  WizardIssueSchema,
+} from "../../contracts";
+import {
+  type HttpFailureContext,
+  HttpFailureKind,
+  httpClient,
+  requestJson,
+  tryCatch,
+} from "../../shared";
 import type { AccountApi, CommandContext } from "./account.types";
 
 export class AccountRequestError extends Error {

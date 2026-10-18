@@ -3,11 +3,12 @@ import test from "node:test";
 
 import type { PluggyConnect } from "pluggy-connect-sdk";
 
-import { accountConnectToken, accountSnapshot } from "@/testing/account";
-import { required } from "@/testing/helpers";
-
-import { AccountRequestError, createAccountApi } from "../account-api";
-import { createConnectWidget } from "../connect-widget";
+import {
+  accountConnectToken,
+  accountSnapshot,
+  required,
+} from "../../../../tests/support";
+import { AccountRequestError, createAccountApi, createConnectWidget } from "..";
 
 await test("account commands preserve CSRF, validate responses and never retry an uncertain mutation", async () => {
   const requests: Request[] = [];

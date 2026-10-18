@@ -1,6 +1,5 @@
-import { PluggyCredentialsSchema } from "@/domain/provider.schema";
-import type { AccountSource } from "@/worker/account";
-
+import { PluggyCredentialsSchema } from "../../domain";
+import type { AccountSource } from "../account";
 import { PersonalPluggyClient } from "./client.adapter";
 import { connectToken, financialSource, readAccount, readItem } from "./source";
 
@@ -20,19 +19,23 @@ export function createPluggyAdapter(input: {
     return configured.data;
   }
   const account: AccountSource = {
-    async application() {
-      const authenticated = credentials();
-      return {
-        readItem: (itemId) => readItem(authenticated, itemId),
-        token: (itemId) => connectToken(authenticated, itemId),
-      };
+    application() {
+      return Promise.resolve().then(() => {
+        const authenticated = credentials();
+        return {
+          readItem: (itemId: string) => readItem(authenticated, itemId),
+          token: (itemId?: string) => connectToken(authenticated, itemId),
+        };
+      });
     },
     configured: configured.success,
   };
   return {
     account,
-    async financialSource() {
-      return financialSource(new PersonalPluggyClient(credentials()));
+    financialSource() {
+      return Promise.resolve().then(() =>
+        financialSource(new PersonalPluggyClient(credentials())),
+      );
     },
     async readAccount(accountId: string) {
       return await readAccount(

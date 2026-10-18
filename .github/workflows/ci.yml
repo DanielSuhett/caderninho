@@ -28,13 +28,23 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
           cache-dependency-path: package-lock.json
-      - run: npm ci
-      - run: npm run types
-      - run: git diff --exit-code -- src/worker/runtime.d.ts
-      - run: npm run build
-      - run: npm run test:product:runtime
-      - run: npm run test:product
-      - run: npm test
-      - run: npm run lint
-      - run: npm run format:check
-      - run: npm run typecheck
+      - name: Install dependencies
+        run: npm ci
+      - name: Generate Worker types
+        run: npm run types
+      - name: Check generated Worker types
+        run: git diff --exit-code -- src/worker/runtime.d.ts
+      - name: Lint
+        run: npm run lint
+      - name: Check formatting
+        run: npm run format:check
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Build portal and Worker
+        run: npm run build
+      - name: Test native Worker runtime
+        run: npm run test:product:runtime
+      - name: Test Cloudflare integration
+        run: npm run test:product
+      - name: Test domain and application
+        run: npm test

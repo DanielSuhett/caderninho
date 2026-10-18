@@ -1,5 +1,4 @@
-import type { JsonValue } from "@/shared/json.types";
-
+import type { JsonValue } from "../shared";
 import type { Availability, Resource } from "./enums";
 import type { OptionalText } from "./finance.entity";
 import type { ItemInfo } from "./provider.entity";

@@ -1,6 +1,5 @@
-import { ToolName } from "@/contracts/mcp.types";
-import { ToolCallSchema } from "@/contracts/mcp-contract";
-import type { FinancialQueries } from "@/worker/finance";
+import { ToolCallSchema, ToolName } from "../../contracts";
+import type { FinancialQueries } from "../finance";
 
 export async function invoke(
   queries: FinancialQueries,

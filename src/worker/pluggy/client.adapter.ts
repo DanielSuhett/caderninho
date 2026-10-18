@@ -1,11 +1,15 @@
 import { PluggyClient } from "pluggy-sdk";
 import { z } from "zod/v4";
 
-import { FaultCode } from "@/domain/enums";
-import { exactJSON } from "@/domain/exact";
-import { HttpRequestError, httpClient, requestJson } from "@/shared/http";
-import { type HttpFailure, HttpFailureKind } from "@/shared/http.types";
-import { tryCatch } from "@/shared/result";
+import { exactJSON, FaultCode } from "../../domain";
+import {
+  type HttpFailure,
+  HttpFailureKind,
+  HttpRequestError,
+  httpClient,
+  requestJson,
+  tryCatch,
+} from "../../shared";
 
 type QueryParameters = Record<
   string,

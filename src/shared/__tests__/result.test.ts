@@ -1,10 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { FaultCode } from "@/domain/enums";
-import { Fault } from "@/domain/fault.entity";
-
-import { tryCatch } from "../result";
+import { Fault, FaultCode } from "../../domain";
+import { tryCatch } from "..";
 
 await test("tryCatch preserves falsy successes and normalizes rejected or synchronously thrown values", async () => {
   await Promise.all(

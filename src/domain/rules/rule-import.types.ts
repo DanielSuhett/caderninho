@@ -1,4 +1,4 @@
-import type { JsonValue } from "@/shared/json.types";
+import type { JsonValue } from "../../shared";
 
 export interface SecuroCondition {
   conditions?: SecuroCondition[] | undefined;

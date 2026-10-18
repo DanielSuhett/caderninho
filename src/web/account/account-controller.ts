@@ -1,6 +1,5 @@
-import { WizardIssue } from "@/contracts/wizard.types";
-import { tryCatch } from "@/shared/result";
-
+import { WizardIssue } from "../../contracts";
+import { tryCatch } from "../../shared";
 import {
   type AccountActions,
   type AccountApi,
@@ -158,7 +157,7 @@ export function createAccountController({
           onError: () =>
             publish(session, { message: WIZARD_ISSUES.unavailable.title }),
           onSuccess(connectedId) {
-            void act(async (connected) => {
+            return act(async (connected) => {
               await api.connectItem(context(connected), connectedId);
               if (!active(connected)) {
                 return;
@@ -205,7 +204,10 @@ export function createAccountController({
       };
       current = session;
       publish(session, { busy: false });
-      void refresh(session, true);
+      tryCatch(() => refresh(session, true)).then(
+        ({ data, error }) => (error ? undefined : data),
+        () => undefined,
+      );
       return () => {
         if (current !== session) {
           return;
@@ -214,8 +216,9 @@ export function createAccountController({
         session.request?.abort();
         current = undefined;
         // A disposed view has no active command to receive teardown failures.
-        void tryCatch(() => widget.destroy()).then(({ data, error }) =>
-          error ? undefined : data,
+        tryCatch(() => widget.destroy()).then(
+          ({ data, error }) => (error ? undefined : data),
+          () => undefined,
         );
       };
     },

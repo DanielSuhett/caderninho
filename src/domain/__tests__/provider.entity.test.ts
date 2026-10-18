@@ -5,7 +5,7 @@ import {
   assertSourceIdentity,
   assertSourceRecords,
   assertTransactionSelection,
-} from "../provider.entity";
+} from "..";
 
 const sourceIdentityMismatchPattern = /SOURCE_IDENTITY_MISMATCH/;
 const sourceSelectionMismatchPattern = /SOURCE_SELECTION_MISMATCH/;

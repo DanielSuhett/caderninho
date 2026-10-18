@@ -1,12 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import type { JsonValue } from "@/shared/json.types";
-import { required } from "@/testing/helpers";
-
-import type { FinanceRecord } from "../finance.entity";
-import { normalizeResource } from "../finance-model";
-import { detectSubscriptions } from "../recurrence.entity";
+import { required } from "../../../tests/support";
+import type { JsonValue } from "../../shared";
+import type { FinanceRecord } from "..";
+import { detectSubscriptions, normalizeResource } from "..";
 
 const period = { currency: "BRL", from: "2026-07-01", to: "2026-09-30" };
 

@@ -3,17 +3,22 @@
 import { eq, sql } from "drizzle-orm";
 import { sqliteTable, text } from "drizzle-orm/sqlite-core";
 
-import type { ProviderRecord } from "@/domain/provider.entity";
-import { tryCatch } from "@/shared/result";
-import { receiveWebhook } from "@/worker";
-import { authenticatedFetch } from "@/worker/auth/controller";
-import type { Bindings } from "@/worker/bindings";
-import { synchronizationDependencies, syncService } from "@/worker/composition";
-import { database } from "@/worker/database";
-import { fetchMcp } from "@/worker/mcp/controller";
-import { inbox as inboxTable, items as itemsTable } from "@/worker/schema";
-import { type FinancialSource, runOperation } from "@/worker/sync";
-
+import type { ProviderRecord } from "../../src/domain";
+import { tryCatch } from "../../src/shared";
+import { receiveWebhook } from "../../src/worker";
+import { authenticatedFetch } from "../../src/worker/auth/controller";
+import type { Bindings } from "../../src/worker/bindings";
+import {
+  synchronizationDependencies,
+  syncService,
+} from "../../src/worker/composition";
+import { database } from "../../src/worker/database";
+import { fetchMcp } from "../../src/worker/mcp";
+import {
+  inbox as inboxTable,
+  items as itemsTable,
+} from "../../src/worker/schema";
+import { type FinancialSource, runOperation } from "../../src/worker/sync";
 import {
   WorkflowEntrypoint,
   type WorkflowEvent,
@@ -122,10 +127,13 @@ const worker = {
         })
         .onConflictDoNothing()
         .run();
-      for (const [key, id] of [
-        ["first", "33333333-3333-4333-8333-333333333333"],
-        ["second", "44444444-4444-4444-8444-444444444444"],
-      ] as const) {
+      await (
+        [
+          ["first", "33333333-3333-4333-8333-333333333333"],
+          ["second", "44444444-4444-4444-8444-444444444444"],
+        ] as const
+      ).reduce(async (priorCase, [key, id]) => {
+        await priorCase;
         await database(env.DB)
           .insert(fixtureRows)
           .values({
@@ -147,7 +155,7 @@ const worker = {
             target: fixtureRows.id,
           })
           .run();
-      }
+      }, Promise.resolve());
       return Response.json({ synthetic: true });
     }
     if (path === "/inspect-native") {

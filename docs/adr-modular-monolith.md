@@ -24,20 +24,20 @@ Dentro de `src/worker`, o código fica junto do módulo:
 | `sync` | Agenda, webhooks, operações e publicação durável |
 | `mcp` | Transporte, capacidades, Tasks e subscriptions |
 
-Os módulos de aplicação usam `entity.ts`, `controller.ts`, `service.ts`,
-`repository.ts` e testes em `__tests__` como estrutura padrão. Entidades locais
+Os módulos de aplicação usam `entity/index.ts`, `controller/index.ts`, `service.ts`,
+`repository/` e testes em `__tests__` como estrutura padrão. Entidades locais
 concentram modelos e portas; entidades de domínio concentram as regras puras.
 Controllers validam transporte e delegam ações. Services coordenam casos de uso
 com dependências explícitas, sem SQL, Bindings, cliente HTTP ou tipos derivados
 dos factories de repositories. Repositories concretos implementam as portas e
-concentram SQL. `composition.ts` vincula implementações por requisição ou operação,
+concentram SQL. `composition/index.ts` vincula implementações por requisição ou operação,
 sem estado privado global, repository genérico ou container de DI.
 
 Há exceções concretas: `finance` separa consultas, regras e gravações de entidades
 em repositories especializados; `sync` separa despacho e execução durável. MCP
 é transporte, Pluggy é adapter de origem, e OAuth/Workflow mantêm seus adapters.
 Esses módulos não ganham services ou repositories vazios para completar o layout.
-`entity.ts` pode inferir modelos de linhas por imports exclusivamente de tipo do
+`entity/index.ts` pode inferir modelos de linhas por imports exclusivamente de tipo do
 schema Drizzle; builders e dependências D1 permanecem nos repositories.
 
 As entidades do domínio reúnem tipos, enums e regras puras no mesmo arquivo
@@ -74,12 +74,12 @@ em `sync/execution.service.ts`; não executam queries nem montam statements.
 e concentra lock, cancelamento, maturação, escolha da execução e conclusão.
 O Workflow e os testes usam essa mesma entrada, sem uma sessão intermediária
 que exponha a sequência interna.
-`sync/execution.repository.ts` faz leituras e commits atômicos por portas tipadas.
+`sync/repository/execution.repository.ts` faz leituras e commits atômicos por portas tipadas.
 A preparação financeira retorna um plano de observação ou publicação, sem builders;
 o repository traduz esse plano junto com os checkpoints, progresso e recibos no
-mesmo batch. `workflow.ts` é a entrada Cloudflare. O cliente Pluggy, sua configuração
-e o adapter Fetch ficam em `pluggy`; `database.ts`, `schema.ts`,
-`http.ts` e `bindings.ts` são compartilhados entre funcionalidades.
+mesmo batch. `workflow/index.ts` é a entrada Cloudflare. O cliente Pluggy, sua configuração
+e o adapter Fetch ficam em `pluggy`; os índices de `database`, `schema`,
+`http` e `bindings` são compartilhados entre funcionalidades.
 
 A preparação dos registros de páginas, eventos e pendências compartilha identidade,
 detecção de duplicatas e progresso. No mesmo lote, conteúdo idêntico para o mesmo ID
@@ -133,7 +133,7 @@ Não há fallback para saldo persistido na leitura pontual. Uma futura fonte dev
 de origem, preservando precisão, identidade e cobertura; não exige uma camada
 genérica de providers antecipadamente. O payload heterogêneo continua preservado.
 
-`src/worker/sync/entity.ts` concentra modelos, progresso, checkpoints e portas.
+`src/worker/sync/entity/index.ts` concentra modelos, progresso, checkpoints e portas.
 O serviço de despacho recebe apenas identidade/status da operação e consulta a
 elegibilidade na outbox. O repositório entrega o estado de leitura com resultado
 parseado; o adaptador MCP traduz esse estado para Tasks. Flags e JSON de persistência
@@ -175,7 +175,7 @@ define orçamento e backoff de 429; o adaptador de Steps executa as esperas fora
 dos steps duráveis, preservando seus nomes e checkpoints.
 
 O domínio `src/domain/account.entity.ts` decide o estado e o resultado da importação.
-O módulo `src/worker/account/entity.ts` projeta esse resultado, a etapa
+O módulo `src/worker/account/entity/index.ts` projeta esse resultado, a etapa
 inicial, a política de atualização e os dados permitidos no diagnóstico. O serviço de conta
 inclui essa projeção no campo aditivo `panel` do estado e fornece a configuração
 do widget junto ao token. A interface consome essas decisões por contratos tipados;
@@ -214,23 +214,25 @@ do catálogo e as operações MCP; não há snapshot paralelo das declarações 
 ## Ferramentas e testes
 
 Um único `tsconfig.json` verifica fontes e testes com resolução `Bundler` e os
-tipos de Node, navegador e Cloudflare. Ele define os aliases `@/` para `src/` e
-`@/testing/` para `tests/support/`. Imports de código omitem `.ts`/`.tsx`, e
-imports relativos curtos conectam arquivos do mesmo módulo. Vite e Vitest ativam
-`resolve.tsconfigPaths`; Wrangler usa os mesmos paths. Scripts e testes Node usam
-o loader de desenvolvimento `tsx` nos comandos npm, sem alterar o runtime do Worker.
+tipos de Node, navegador e Cloudflare. Imports locais são relativos, omitem
+`.ts`/`.tsx` e consomem outros módulos pelo diretório de seu `index.ts`, sem
+o sufixo `/index`. Vite, Vitest e Wrangler usam os mesmos caminhos, sem aliases.
+Scripts e testes Node usam o loader `tsx` para resolver esses índices em ESM,
+sem alterar o runtime do Worker.
 
-Entradas `index.ts` de regras, account/auth/finance/sync e do painel account
-reexportam services e contratos explicitamente, sem repositories ou adapters.
-Internos usam imports diretos; controllers e Workflows que dependem da composição
-ficam fora desses índices. Não há índice global de domínio, contratos ou shared misturando código do
-navegador com inicialização de logger, persistência ou entrypoints do Worker.
+Entradas `index.ts` de domínio, regras, contratos, utilitários e módulos da aplicação
+reexportam nomes explícitos. Internos usam implementações diretamente para evitar
+ciclos pelo próprio barrel. Persistência e transporte têm índices separados dos
+casos de uso; composição e Workflows mantêm suas próprias entradas. `shared/logger`
+preserva a inicialização do Pino fora do barrel compartilhado. Helpers de processos
+Node e mocks Vitest também permanecem em módulos próprios. `mount-account.tsx`
+inicializa o navegador fora do índice de páginas do Worker.
 
 Helpers novos das funcionalidades são tratados como aplicação, mesmo quando
 não se chamam `service.ts`. Repositórios/adaptadores e os fluxos de publicação
 durável têm papéis explícitos; renomear um serviço não libera SQL ou HTTP.
 Views não importam a API, o hook nem o widget, e aplicação/persistência não importam
-envelopes MCP. As dependências dos services são contratos explícitos em `entity.ts`.
+envelopes MCP. As dependências dos services são contratos explícitos em `entity/index.ts`.
 MCP, Tasks e cron chamam esses services; não acessam repositories diretamente.
 
 Testes unitários ficam em `__tests__` junto ao módulo. `tests/integration` contém
@@ -238,7 +240,7 @@ fixtures e testes de D1, HTTP, OAuth e Workflows; `tests/support` contém helper
 exclusivos de testes. `biome.json` concentra lint, formatação e organização de
 imports com regras nativas. Restrições de imports bloqueiam SQL fora de repositories,
 transporte/composição em services e helpers, services em repositories e imports
-do Worker no frontend, incluindo aliases, imports dinâmicos e reexports de
+do Worker no frontend, incluindo imports relativos, imports dinâmicos e reexports de
 persistência por índices. O check executa o Biome diretamente.
 Os adapters e os imports de tipos de linhas têm exceções explícitas. A localização
 semântica de regras de negócio continua na revisão; o lint não interpreta o produto.

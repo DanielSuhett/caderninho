@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { metricFor } from "../finance-model";
 import {
   assertCursorScope,
   assertReadRevision,
   filterOperand,
-} from "../query.entity";
+  metricFor,
+} from "..";
 
 const invalidAmountFilterPattern = /Invalid amount filter/;
 const canonicalIntegerErrorPattern = /canonical integer/;

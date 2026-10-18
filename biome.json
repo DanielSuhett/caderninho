@@ -46,19 +46,21 @@
           "options": {
             "patterns": [
               {
-                "group": ["#*/**"],
-                "message": "Use aliases @/ definidos no tsconfig.json."
+                "group": ["@/**", "#*/**"],
+                "message": "Use caminhos relativos para os modulos locais."
               },
               {
                 "group": [
                   "./**/*.ts",
                   "./**/*.tsx",
                   "../**/*.ts",
-                  "../**/*.tsx",
-                  "@/**/*.ts",
-                  "@/**/*.tsx"
+                  "../**/*.tsx"
                 ],
                 "message": "Omita .ts e .tsx nos imports de codigo do projeto."
+              },
+              {
+                "group": ["./index", "../index", "./**/index", "../**/index"],
+                "message": "Importe o diretorio do modulo; omita /index."
               }
             ]
           }
@@ -136,10 +138,11 @@
       "includes": [
         "src/worker/**/*.ts",
         "!src/worker/**/*repository.ts",
-        "!src/worker/**/entity.ts",
-        "!src/worker/composition.ts",
-        "!src/worker/database.ts",
-        "!src/worker/schema.ts",
+        "!src/worker/**/repository/**/*.ts",
+        "!src/worker/**/entity/index.ts",
+        "!src/worker/composition/index.ts",
+        "!src/worker/database/index.ts",
+        "!src/worker/schema/index.ts",
         "!src/worker/runtime.d.ts",
         "!src/worker/**/__tests__/**"
       ],
@@ -151,17 +154,15 @@
               "options": {
                 "patterns": [
                   {
-                    "group": ["#*/**"],
-                    "message": "Use aliases @/ definidos no tsconfig.json."
+                    "group": ["@/**", "#*/**"],
+                    "message": "Use caminhos relativos para os modulos locais."
                   },
                   {
                     "group": [
                       "./**/*.ts",
                       "./**/*.tsx",
                       "../**/*.ts",
-                      "../**/*.tsx",
-                      "@/**/*.ts",
-                      "@/**/*.tsx"
+                      "../**/*.tsx"
                     ],
                     "message": "Omita .ts e .tsx nos imports de codigo do projeto."
                   },
@@ -170,11 +171,23 @@
                       "drizzle-orm",
                       "drizzle-orm/**",
                       "**/database",
+                      "**/database/**",
                       "**/schema",
+                      "**/schema/**",
                       "**/repository",
+                      "**/repository/**",
                       "**/*.repository"
                     ],
                     "message": "SQL e D1 pertencem aos repositories; use um service e um contrato de entity."
+                  },
+                  {
+                    "group": [
+                      "./index",
+                      "../index",
+                      "./**/index",
+                      "../**/index"
+                    ],
+                    "message": "Importe o diretorio do modulo; omita /index."
                   }
                 ]
               }
@@ -197,17 +210,15 @@
               "options": {
                 "patterns": [
                   {
-                    "group": ["#*/**"],
-                    "message": "Use aliases @/ definidos no tsconfig.json."
+                    "group": ["@/**", "#*/**"],
+                    "message": "Use caminhos relativos para os modulos locais."
                   },
                   {
                     "group": [
                       "./**/*.ts",
                       "./**/*.tsx",
                       "../**/*.ts",
-                      "../**/*.tsx",
-                      "@/**/*.ts",
-                      "@/**/*.tsx"
+                      "../**/*.tsx"
                     ],
                     "message": "Omita .ts e .tsx nos imports de codigo do projeto."
                   },
@@ -216,8 +227,11 @@
                       "drizzle-orm",
                       "drizzle-orm/**",
                       "**/database",
+                      "**/database/**",
                       "**/schema",
+                      "**/schema/**",
                       "**/repository",
+                      "**/repository/**",
                       "**/*.repository",
                       "hono",
                       "hono/**",
@@ -228,16 +242,27 @@
                       "cloudflare:*",
                       "@cloudflare/**",
                       "**/bindings",
+                      "**/bindings/**",
                       "**/composition",
+                      "**/composition/**",
                       "**/controller",
+                      "**/controller/**",
                       "**/*.adapter",
                       "**/http",
-                      "@/web/**",
+                      "**/http/**",
                       "**/web/**",
-                      "@/worker/pluggy/**",
                       "**/pluggy/**"
                     ],
                     "message": "Services coordenam casos de uso por contratos; persistencia e transporte entram pela composicao."
+                  },
+                  {
+                    "group": [
+                      "./index",
+                      "../index",
+                      "./**/index",
+                      "../**/index"
+                    ],
+                    "message": "Importe o diretorio do modulo; omita /index."
                   }
                 ]
               }
@@ -270,7 +295,7 @@
       }
     },
     {
-      "includes": ["src/worker/**/entity.ts"],
+      "includes": ["src/worker/**/entity/index.ts"],
       "linter": {
         "rules": {
           "style": {
@@ -279,17 +304,15 @@
               "options": {
                 "patterns": [
                   {
-                    "group": ["#*/**"],
-                    "message": "Use aliases @/ definidos no tsconfig.json."
+                    "group": ["@/**", "#*/**"],
+                    "message": "Use caminhos relativos para os modulos locais."
                   },
                   {
                     "group": [
                       "./**/*.ts",
                       "./**/*.tsx",
                       "../**/*.ts",
-                      "../**/*.tsx",
-                      "@/**/*.ts",
-                      "@/**/*.tsx"
+                      "../**/*.tsx"
                     ],
                     "message": "Omita .ts e .tsx nos imports de codigo do projeto."
                   },
@@ -298,7 +321,9 @@
                       "drizzle-orm",
                       "drizzle-orm/**",
                       "**/database",
+                      "**/database/**",
                       "**/repository",
+                      "**/repository/**",
                       "**/*.repository",
                       "hono",
                       "hono/**",
@@ -309,13 +334,15 @@
                       "cloudflare:*",
                       "@cloudflare/**",
                       "**/bindings",
+                      "**/bindings/**",
                       "**/composition",
+                      "**/composition/**",
                       "**/controller",
+                      "**/controller/**",
                       "**/*.adapter",
                       "**/http",
-                      "@/web/**",
+                      "**/http/**",
                       "**/web/**",
-                      "@/worker/pluggy/**",
                       "**/pluggy/**",
                       "**/service",
                       "**/*.service"
@@ -324,13 +351,22 @@
                   },
                   {
                     "group": [
-                      "@/worker/account",
-                      "@/worker/auth",
-                      "@/worker/finance",
-                      "@/worker/sync",
+                      "**/account",
+                      "**/auth",
+                      "**/finance",
+                      "**/sync",
                       "**/index"
                     ],
-                    "message": "Importe portas de entity diretamente; indices publicos expoem services."
+                    "message": "Use o indice de entity para portas; os indices publicos da aplicacao expoem services."
+                  },
+                  {
+                    "group": [
+                      "./index",
+                      "../index",
+                      "./**/index",
+                      "../**/index"
+                    ],
+                    "message": "Importe o diretorio do modulo; omita /index."
                   }
                 ]
               }
@@ -363,7 +399,10 @@
       }
     },
     {
-      "includes": ["src/worker/**/*repository.ts"],
+      "includes": [
+        "src/worker/**/*repository.ts",
+        "src/worker/**/repository/**/*.ts"
+      ],
       "linter": {
         "rules": {
           "style": {
@@ -372,17 +411,15 @@
               "options": {
                 "patterns": [
                   {
-                    "group": ["#*/**"],
-                    "message": "Use aliases @/ definidos no tsconfig.json."
+                    "group": ["@/**", "#*/**"],
+                    "message": "Use caminhos relativos para os modulos locais."
                   },
                   {
                     "group": [
                       "./**/*.ts",
                       "./**/*.tsx",
                       "../**/*.ts",
-                      "../**/*.tsx",
-                      "@/**/*.ts",
-                      "@/**/*.tsx"
+                      "../**/*.tsx"
                     ],
                     "message": "Omita .ts e .tsx nos imports de codigo do projeto."
                   },
@@ -397,13 +434,15 @@
                       "cloudflare:*",
                       "@cloudflare/**",
                       "**/bindings",
+                      "**/bindings/**",
                       "**/composition",
+                      "**/composition/**",
                       "**/controller",
+                      "**/controller/**",
                       "**/*.adapter",
                       "**/http",
-                      "@/web/**",
+                      "**/http/**",
                       "**/web/**",
-                      "@/worker/pluggy/**",
                       "**/pluggy/**",
                       "**/service",
                       "**/*.service"
@@ -412,13 +451,22 @@
                   },
                   {
                     "group": [
-                      "@/worker/account",
-                      "@/worker/auth",
-                      "@/worker/finance",
-                      "@/worker/sync",
+                      "**/account",
+                      "**/auth",
+                      "**/finance",
+                      "**/sync",
                       "**/index"
                     ],
-                    "message": "Importe portas de entity diretamente; indices publicos expoem services."
+                    "message": "Use o indice de entity para portas; os indices publicos da aplicacao expoem services."
+                  },
+                  {
+                    "group": [
+                      "./index",
+                      "../index",
+                      "./**/index",
+                      "../**/index"
+                    ],
+                    "message": "Importe o diretorio do modulo; omita /index."
                   }
                 ]
               }
@@ -442,32 +490,35 @@
               "options": {
                 "patterns": [
                   {
-                    "group": ["#*/**"],
-                    "message": "Use aliases @/ definidos no tsconfig.json."
+                    "group": ["@/**", "#*/**"],
+                    "message": "Use caminhos relativos para os modulos locais."
                   },
                   {
                     "group": [
                       "./**/*.ts",
                       "./**/*.tsx",
                       "../**/*.ts",
-                      "../**/*.tsx",
-                      "@/**/*.ts",
-                      "@/**/*.tsx"
+                      "../**/*.tsx"
                     ],
                     "message": "Omita .ts e .tsx nos imports de codigo do projeto."
                   },
                   {
                     "group": [
-                      "@/worker",
-                      "@/worker/**",
                       "**/worker/**",
-                      "@/web",
-                      "@/web/**",
                       "**/web/**",
                       "drizzle-orm",
                       "drizzle-orm/**"
                     ],
                     "message": "Dominio, contratos e utilitarios nao dependem do Worker, da UI ou do banco."
+                  },
+                  {
+                    "group": [
+                      "./index",
+                      "../index",
+                      "./**/index",
+                      "../**/index"
+                    ],
+                    "message": "Importe o diretorio do modulo; omita /index."
                   }
                 ]
               }
@@ -490,29 +541,30 @@
               "options": {
                 "patterns": [
                   {
-                    "group": ["#*/**"],
-                    "message": "Use aliases @/ definidos no tsconfig.json."
+                    "group": ["@/**", "#*/**"],
+                    "message": "Use caminhos relativos para os modulos locais."
                   },
                   {
                     "group": [
                       "./**/*.ts",
                       "./**/*.tsx",
                       "../**/*.ts",
-                      "../**/*.tsx",
-                      "@/**/*.ts",
-                      "@/**/*.tsx"
+                      "../**/*.tsx"
                     ],
                     "message": "Omita .ts e .tsx nos imports de codigo do projeto."
                   },
                   {
-                    "group": [
-                      "@/worker",
-                      "@/worker/**",
-                      "**/worker/**",
-                      "drizzle-orm",
-                      "drizzle-orm/**"
-                    ],
+                    "group": ["**/worker/**", "drizzle-orm", "drizzle-orm/**"],
                     "message": "Frontend consome contratos e HTTP; nao importa modulos do backend."
+                  },
+                  {
+                    "group": [
+                      "./index",
+                      "../index",
+                      "./**/index",
+                      "../**/index"
+                    ],
+                    "message": "Importe o diretorio do modulo; omita /index."
                   }
                 ]
               }
@@ -525,22 +577,24 @@
       "includes": [
         "src/worker/**/*.ts",
         "!src/worker/**/*repository.ts",
-        "!src/worker/**/entity.ts",
-        "!src/worker/*/controller.ts",
-        "!src/worker/auth/session.ts",
-        "!src/worker/auth/grants.adapter.ts",
+        "!src/worker/**/repository/**/*.ts",
+        "!src/worker/**/entity/index.ts",
+        "!src/worker/*/controller/**/*.ts",
+        "!src/worker/auth/session/index.ts",
+        "!src/worker/auth/grants/index.ts",
         "!src/worker/pluggy/**",
-        "!src/worker/mcp/tasks.ts",
-        "!src/worker/sync/workflow.ts",
+        "!src/worker/mcp/tasks/index.ts",
+        "!src/worker/sync/workflow/index.ts",
         "!src/worker/index.ts",
-        "!src/worker/composition.ts",
-        "!src/worker/bindings.ts",
-        "!src/worker/database.ts",
-        "!src/worker/schema.ts",
-        "!src/worker/http.ts",
+        "!src/worker/composition/index.ts",
+        "!src/worker/bindings/index.ts",
+        "!src/worker/database/index.ts",
+        "!src/worker/schema/index.ts",
+        "!src/worker/http/index.ts",
         "!src/worker/runtime.d.ts",
         "!src/worker/vendor/**",
-        "!src/worker/**/__tests__/**"
+        "!src/worker/**/__tests__/**",
+        "!src/worker/mcp/index.ts"
       ],
       "linter": {
         "rules": {
@@ -550,17 +604,15 @@
               "options": {
                 "patterns": [
                   {
-                    "group": ["#*/**"],
-                    "message": "Use aliases @/ definidos no tsconfig.json."
+                    "group": ["@/**", "#*/**"],
+                    "message": "Use caminhos relativos para os modulos locais."
                   },
                   {
                     "group": [
                       "./**/*.ts",
                       "./**/*.tsx",
                       "../**/*.ts",
-                      "../**/*.tsx",
-                      "@/**/*.ts",
-                      "@/**/*.tsx"
+                      "../**/*.tsx"
                     ],
                     "message": "Omita .ts e .tsx nos imports de codigo do projeto."
                   },
@@ -569,8 +621,11 @@
                       "drizzle-orm",
                       "drizzle-orm/**",
                       "**/database",
+                      "**/database/**",
                       "**/schema",
+                      "**/schema/**",
                       "**/repository",
+                      "**/repository/**",
                       "**/*.repository",
                       "hono",
                       "hono/**",
@@ -581,16 +636,27 @@
                       "cloudflare:*",
                       "@cloudflare/**",
                       "**/bindings",
+                      "**/bindings/**",
                       "**/composition",
+                      "**/composition/**",
                       "**/controller",
+                      "**/controller/**",
                       "**/*.adapter",
                       "**/http",
-                      "@/web/**",
+                      "**/http/**",
                       "**/web/**",
-                      "@/worker/pluggy/**",
                       "**/pluggy/**"
                     ],
                     "message": "Services coordenam casos de uso por contratos; persistencia e transporte entram pela composicao."
+                  },
+                  {
+                    "group": [
+                      "./index",
+                      "../index",
+                      "./**/index",
+                      "../**/index"
+                    ],
+                    "message": "Importe o diretorio do modulo; omita /index."
                   }
                 ]
               }
@@ -618,6 +684,16 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["src/**/index.ts", "tests/support/**/index.ts"],
+      "linter": {
+        "rules": {
+          "performance": {
+            "noBarrelFile": "off"
           }
         }
       }

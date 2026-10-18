@@ -1,5 +1,5 @@
-import type { OperationStatus } from "@/contracts/operation.types";
-import type { JsonValue } from "@/shared/json.types";
+import type { OperationStatus } from "../../contracts";
+import type { JsonValue } from "../../shared";
 
 interface TaskState {
   createdAt: string;

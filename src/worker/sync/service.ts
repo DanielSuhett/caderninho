@@ -3,15 +3,14 @@ import {
   OperationKind,
   OperationStatus,
   type WebhookEvent,
-} from "@/contracts/operation.types";
+} from "../../contracts";
 import {
   assertWebhookEvent,
   MigrationDecision,
   migrationDecision,
   nextSyncSchedule,
-} from "@/domain/operation.entity";
-import { tryCatch } from "@/shared/result";
-
+} from "../../domain";
+import { tryCatch } from "../../shared";
 import type {
   OperationHandle,
   SchedulingStore,
@@ -122,13 +121,18 @@ export function createSyncService(
     },
     read: repository.read,
     async recover() {
-      for (const op of await repository.operations(false)) {
-        // The committed outbox remains pending if dispatch fails.
-        await tryCatch(() => dispatch(op)).then(({ data, error }) =>
-          error ? undefined : data,
-        );
-      }
-      for (const op of await repository.operations(true)) {
+      await (await repository.operations(false)).reduce(
+        async (previous, op) => {
+          await previous;
+          // The committed outbox remains pending if dispatch fails.
+          await tryCatch(() => dispatch(op)).then(({ data, error }) =>
+            error ? undefined : data,
+          );
+        },
+        Promise.resolve(),
+      );
+      await (await repository.operations(true)).reduce(async (previous, op) => {
+        await previous;
         const { data, error } = await tryCatch(() => workflow.status(op.id));
         if (!error && ["errored", "terminated"].includes(data)) {
           await repository.finish(
@@ -139,8 +143,9 @@ export function createSyncService(
             data === "errored",
           );
         }
-      }
-      for (const event of await repository.inbox()) {
+      }, Promise.resolve());
+      await (await repository.inbox()).reduce(async (previous, event) => {
+        await previous;
         const op = await repository.start(`webhook:${event.event_id}`, {
           eventId: event.event_id,
           itemIds: [event.item_id],
@@ -151,7 +156,7 @@ export function createSyncService(
         await tryCatch(() => dispatch(op)).then(({ data, error }) =>
           error ? undefined : data,
         );
-      }
+      }, Promise.resolve());
     },
     start: repository.start,
     state: repository.state,

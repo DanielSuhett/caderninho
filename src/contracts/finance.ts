@@ -1,8 +1,7 @@
 import { z } from "zod/v4";
 
-import { FilterSchema } from "@/domain/filter.schema";
-import { RulesSchema } from "@/domain/rules";
-
+import { FilterSchema } from "../domain";
+import { RulesSchema } from "../domain/rules";
 import {
   type LiveBalanceInput,
   type PreviewInput,

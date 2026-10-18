@@ -1,11 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { Resource } from "@/domain/enums";
-import { compileValidatedRules, EMPTY_RULES } from "@/domain/rules";
-
+import { Resource } from "../../../domain";
+import { compileValidatedRules, EMPTY_RULES } from "../../../domain/rules";
+import { prepareEntity } from "..";
 import type { EntityInput } from "../entity";
-import { prepareEntity } from "../service";
 
 const input: EntityInput = {
   identity: {

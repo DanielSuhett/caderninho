@@ -3,10 +3,6 @@
     "target": "ES2022",
     "module": "Preserve",
     "moduleResolution": "Bundler",
-    "paths": {
-      "@/*": ["./src/*"],
-      "@/testing/*": ["./tests/support/*"]
-    },
     "lib": ["ESNext", "DOM", "DOM.Iterable"],
     "types": [
       "node",

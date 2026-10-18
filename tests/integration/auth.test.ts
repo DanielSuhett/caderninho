@@ -3,12 +3,11 @@ import assert from "node:assert/strict";
 import { beforeEach, test } from "vitest";
 import { z } from "zod/v4";
 
-import { AccountResponseSchema } from "@/contracts/portal-contract";
-import { required } from "@/testing/helpers";
-import { database } from "@/worker/database";
-import { portal_sessions } from "@/worker/schema";
-import { receiveWebhook } from "@/worker/sync/controller";
-
+import { AccountResponseSchema } from "../../src/contracts";
+import { database } from "../../src/worker/database";
+import { portal_sessions } from "../../src/worker/schema";
+import { receiveWebhook } from "../../src/worker/sync/controller";
+import { required } from "../support";
 import {
   command,
   cookies,
@@ -17,6 +16,7 @@ import {
   origin,
   password,
   settings,
+  testMigrations,
 } from "./personal-fixture";
 import { applyD1Migrations, reset } from "cloudflare:test";
 import { env as bindings } from "cloudflare:workers";
@@ -27,89 +27,8 @@ const sessionCookiePattern = /__Host-caderninho=/;
 
 beforeEach(async () => {
   await reset();
-  await applyD1Migrations(bindings.DB, bindings.TEST_MIGRATIONS);
+  await applyD1Migrations(bindings.DB, testMigrations);
 });
-
-async function grant(
-  app: ReturnType<typeof fixture>,
-  ownerCookie: string,
-  name = "Synthetic assistant",
-) {
-  const registered = await app.request("/oauth/register", {
-    body: JSON.stringify({
-      client_name: name,
-      grant_types: ["authorization_code", "refresh_token"],
-      redirect_uris: ["http://localhost:8123/callback"],
-      response_types: ["code"],
-      token_endpoint_auth_method: "none",
-    }),
-    headers: { "Content-Type": "application/json" },
-    method: "POST",
-  });
-  assert.equal(registered.status, 201);
-  const client = z
-    .object({ client_id: z.string() })
-    .parse(await registered.json());
-  const verifier = "a".repeat(64);
-  const digest = await crypto.subtle.digest(
-    "SHA-256",
-    new TextEncoder().encode(verifier),
-  );
-  const challenge = btoa(String.fromCharCode(...new Uint8Array(digest)))
-    .replaceAll("=", "")
-    .replaceAll("+", "-")
-    .replaceAll("/", "_");
-  const authorize =
-    "/authorize?" +
-    new URLSearchParams({
-      client_id: client.client_id,
-      code_challenge: challenge,
-      code_challenge_method: "S256",
-      redirect_uri: "http://localhost:8123/callback",
-      response_type: "code",
-      scope: "offline_access",
-      state: "synthetic-state",
-    });
-  const anonymous = await app.request(authorize);
-  assert.equal(anonymous.status, 302);
-  assert.match(anonymous.headers.get("Location") ?? "", loginPathPattern);
-  const consent = await app.request(authorize, {
-    headers: { Cookie: ownerCookie },
-  });
-  assert.equal(consent.status, 200);
-  const html = await consent.text();
-  assert.ok(!html.includes("<script>synthetic</script>"));
-  const handle = z.string().parse(html.match(consentHandlePattern)?.[1]);
-  const approved = await app.request("/authorize", {
-    body: new URLSearchParams({ decision: "approve", handle }),
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
-      Cookie: `${ownerCookie}; ${cookies(consent)}`,
-      Origin: origin,
-    },
-    method: "POST",
-  });
-  assert.equal(approved.status, 302);
-  const code = required(
-    new URL(required(approved.headers.get("Location"))).searchParams.get(
-      "code",
-    ),
-  );
-  const response = await app.request("/oauth/token", {
-    body: new URLSearchParams({
-      client_id: client.client_id,
-      code,
-      code_verifier: verifier,
-      grant_type: "authorization_code",
-      redirect_uri: "http://localhost:8123/callback",
-    }),
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    method: "POST",
-  });
-  assert.equal(response.status, 200);
-  return z.object({ access_token: z.string() }).parse(await response.json())
-    .access_token;
-}
 
 test("the password opens private routes; missing configuration fails closed", async () => {
   const app = fixture();
@@ -161,9 +80,13 @@ test("login rate limit, CSRF and request origin cannot be bypassed by identity h
     method: "POST",
   });
   assert.equal(missingCsrf.status, 403);
-  for (let i = 0; i < 10; i += 1) {
-    assert.equal((await login(app, "wrong-synthetic-password")).status, 401);
-  }
+  await Array.from({ length: 10 }, (_, index) => index).reduce(
+    async (priorCase) => {
+      await priorCase;
+      assert.equal((await login(app, "wrong-synthetic-password")).status, 401);
+    },
+    Promise.resolve(),
+  );
   const limited = await login(app);
   assert.equal(limited.status, 429);
   assert.equal(limited.headers.get("Retry-After"), "60");
@@ -171,17 +94,21 @@ test("login rate limit, CSRF and request origin cannot be bypassed by identity h
 
 test("webhook authenticates the raw secret before reading its body", async () => {
   const config = { ...settings(), WEBHOOK_SECRET: "synthetic-webhook-secret" };
-  for (const supplied of [null, "wrong-secret", "synthetic-webhook-secreX"]) {
-    const response = await receiveWebhook(
-      new Request(`${origin}/webhook`, {
-        body: "invalid JSON must not be read before authentication",
-        headers: supplied ? { "X-Caderninho-Webhook-Secret": supplied } : {},
-        method: "POST",
-      }),
-      config,
-    );
-    assert.equal(response.status, 401);
-  }
+  await [null, "wrong-secret", "synthetic-webhook-secreX"].reduce(
+    async (priorCase, supplied) => {
+      await priorCase;
+      const response = await receiveWebhook(
+        new Request(`${origin}/webhook`, {
+          body: "invalid JSON must not be read before authentication",
+          headers: supplied ? { "X-Caderninho-Webhook-Secret": supplied } : {},
+          method: "POST",
+        }),
+        config,
+      );
+      assert.equal(response.status, 401);
+    },
+    Promise.resolve(),
+  );
   const event = {
     accountId: "22222222-2222-4222-8222-222222222222",
     event: "transactions/created",
@@ -238,10 +165,87 @@ test("private commands require CSRF; logout, expiry and a new deployment invalid
 });
 
 test("official OAuth authorizes assistants and the owner can revoke every grant", async () => {
+  async function grant(ownerCookie: string, name = "Synthetic assistant") {
+    const registered = await app.request("/oauth/register", {
+      body: JSON.stringify({
+        client_name: name,
+        grant_types: ["authorization_code", "refresh_token"],
+        redirect_uris: ["http://localhost:8123/callback"],
+        response_types: ["code"],
+        token_endpoint_auth_method: "none",
+      }),
+      headers: { "Content-Type": "application/json" },
+      method: "POST",
+    });
+    assert.equal(registered.status, 201);
+    const client = z
+      .object({ client_id: z.string() })
+      .parse(await registered.json());
+    const verifier = "a".repeat(64);
+    const digest = await crypto.subtle.digest(
+      "SHA-256",
+      new TextEncoder().encode(verifier),
+    );
+    const challenge = btoa(String.fromCharCode(...new Uint8Array(digest)))
+      .replaceAll("=", "")
+      .replaceAll("+", "-")
+      .replaceAll("/", "_");
+    const authorize =
+      "/authorize?" +
+      new URLSearchParams({
+        client_id: client.client_id,
+        code_challenge: challenge,
+        code_challenge_method: "S256",
+        redirect_uri: "http://localhost:8123/callback",
+        response_type: "code",
+        scope: "offline_access",
+        state: "synthetic-state",
+      });
+    const anonymous = await app.request(authorize);
+    assert.equal(anonymous.status, 302);
+    assert.match(anonymous.headers.get("Location") ?? "", loginPathPattern);
+    const consent = await app.request(authorize, {
+      headers: { Cookie: ownerCookie },
+    });
+    assert.equal(consent.status, 200);
+    const html = await consent.text();
+    assert.ok(!html.includes("<script>synthetic</script>"));
+    const handle = z.string().parse(html.match(consentHandlePattern)?.[1]);
+    const approved = await app.request("/authorize", {
+      body: new URLSearchParams({ decision: "approve", handle }),
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        Cookie: `${ownerCookie}; ${cookies(consent)}`,
+        Origin: origin,
+      },
+      method: "POST",
+    });
+    assert.equal(approved.status, 302);
+    const code = required(
+      new URL(required(approved.headers.get("Location"))).searchParams.get(
+        "code",
+      ),
+    );
+    const response = await app.request("/oauth/token", {
+      body: new URLSearchParams({
+        client_id: client.client_id,
+        code,
+        code_verifier: verifier,
+        grant_type: "authorization_code",
+        redirect_uri: "http://localhost:8123/callback",
+      }),
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      method: "POST",
+    });
+    assert.equal(response.status, 200);
+    return z.object({ access_token: z.string() }).parse(await response.json())
+      .access_token;
+  }
+
   const app = fixture();
   const cookie = cookies(await login(app));
-  const first = await grant(app, cookie, "<script>synthetic</script>");
-  const second = await grant(app, cookie);
+  const first = await grant(cookie, "<script>synthetic</script>");
+  const second = await grant(cookie);
   const use = (token: string) =>
     app.request("/mcp", { headers: { Authorization: `Bearer ${token}` } });
   assert.equal((await use(first)).status, 200);

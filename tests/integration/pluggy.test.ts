@@ -3,17 +3,17 @@ import assert from "node:assert/strict";
 import { afterEach, beforeEach, test, vi } from "vitest";
 import { z } from "zod/v4";
 
-import { Fault } from "@/domain/fault.entity";
-import { required, sourceUrl } from "@/testing/helpers";
-import { mockNetwork, syntheticJwt } from "@/testing/network";
-import { createPluggyAdapter } from "@/worker/pluggy/adapter";
-import { PersonalPluggyClient } from "@/worker/pluggy/client.adapter";
+import { Fault } from "../../src/domain";
 import {
   connectToken,
+  createPluggyAdapter,
   financialSource,
+  PersonalPluggyClient,
   providerRetries,
   readAccount,
-} from "@/worker/pluggy/source";
+} from "../../src/worker/pluggy";
+import { required, sourceUrl } from "../support";
+import { mockNetwork, syntheticJwt } from "../support/network";
 
 const pluggyAccountNotConfiguredPattern = /PLUGGY_ACCOUNT_NOT_CONFIGURED/;
 const upstreamAuthPattern = /UPSTREAM_AUTH/;
@@ -52,13 +52,14 @@ test("Pluggy adapter stays lazy and reports missing deployment credentials", asy
     clientSecret: undefined,
   });
   assert.equal(missing.account.configured, false);
-  for (const use of [
+  await [
     () => missing.account.application(),
     () => missing.financialSource(),
     () => missing.readAccount("synthetic-account"),
-  ]) {
+  ].reduce(async (priorCase, use) => {
+    await priorCase;
     await assert.rejects(use(), pluggyAccountNotConfiguredPattern);
-  }
+  }, Promise.resolve());
 });
 
 test("SDK/Fetch in workerd preserve numeric lexemes and date strings on auth, reads and mutations", async () => {
@@ -130,14 +131,17 @@ test("tokens are reused only inside a client and invalidated after a 401 without
 
 test("HTTP errors keep original status and headers, map non-JSON safely, and never log private data", async () => {
   const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
-  for (const [status, body, code] of [
-    [400, "private invalid request", "UPSTREAM_INVALID_REQUEST"],
-    [401, "", "UPSTREAM_AUTH"],
-    [403, "private forbidden", "UPSTREAM_FORBIDDEN"],
-    [404, "private missing", "UPSTREAM_NOT_FOUND"],
-    [429, "<html>private rate limit</html>", "UPSTREAM_RATE_LIMIT"],
-    [503, "private unavailable", "UPSTREAM_ERROR"],
-  ] satisfies [number, string, string][]) {
+  await (
+    [
+      [400, "private invalid request", "UPSTREAM_INVALID_REQUEST"],
+      [401, "", "UPSTREAM_AUTH"],
+      [403, "private forbidden", "UPSTREAM_FORBIDDEN"],
+      [404, "private missing", "UPSTREAM_NOT_FOUND"],
+      [429, "<html>private rate limit</html>", "UPSTREAM_RATE_LIMIT"],
+      [503, "private unavailable", "UPSTREAM_ERROR"],
+    ] satisfies [number, string, string][]
+  ).reduce(async (priorCase, [status, body, code]) => {
+    await priorCase;
     let requests = 0;
     mockNetwork((input) => {
       requests += 1;
@@ -177,7 +181,7 @@ test("HTTP errors keep original status and headers, map non-JSON safely, and nev
         !JSON.stringify(error).includes("private"),
     );
     assert.equal(requests, status === 401 ? 4 : 3);
-  }
+  }, Promise.resolve());
   assert.equal(log.mock.calls.length, 0);
   mockNetwork(async (input) =>
     sourceUrl(input).pathname === "/auth"
@@ -191,46 +195,51 @@ test("HTTP errors keep original status and headers, map non-JSON safely, and nev
 });
 
 test("redirects are rejected before reading their body or forwarding API keys", async () => {
-  for (const redirectAt of ["/auth", "/accounts/account", "/connect_token"]) {
-    let calls = 0;
-    mockNetwork((input) => {
-      calls += 1;
-      const { pathname: path } = sourceUrl(input);
-      if (path === "/auth" && redirectAt !== path) {
-        return Promise.resolve(auth());
-      }
-      assert.equal(path, redirectAt);
-      return Promise.resolve(
-        new Response(
-          new ReadableStream({
-            start(controller) {
-              controller.enqueue(new Uint8Array([65]));
+  await ["/auth", "/accounts/account", "/connect_token"].reduce(
+    async (priorCase, redirectAt) => {
+      await priorCase;
+      let calls = 0;
+      mockNetwork((input) => {
+        calls += 1;
+        const { pathname: path } = sourceUrl(input);
+        if (path === "/auth" && redirectAt !== path) {
+          return Promise.resolve(auth());
+        }
+        assert.equal(path, redirectAt);
+        return Promise.resolve(
+          new Response(
+            new ReadableStream({
+              start(controller) {
+                controller.enqueue(new Uint8Array([65]));
+              },
+            }),
+            {
+              headers: { Location: "https://private.invalid/forbidden" },
+              status: 302,
             },
-          }),
-          {
-            headers: { Location: "https://private.invalid/forbidden" },
-            status: 302,
-          },
-        ),
+          ),
+        );
+      });
+      const sdk = client();
+      await assert.rejects(
+        redirectAt === "/connect_token"
+          ? sdk.createConnectToken()
+          : readAccount(sdk, "account"),
+        upstreamRedirectPattern,
       );
-    });
-    const sdk = client();
-    await assert.rejects(
-      redirectAt === "/connect_token"
-        ? sdk.createConnectToken()
-        : readAccount(sdk, "account"),
-      upstreamRedirectPattern,
-    );
-    assert.equal(calls, redirectAt === "/auth" ? 1 : 2);
-  }
+      assert.equal(calls, redirectAt === "/auth" ? 1 : 2);
+    },
+    Promise.resolve(),
+  );
 });
 
 test("byte limits stop streaming reads regardless of missing or dishonest Content-Length", async () => {
-  for (const headers of [
+  await [
     new Headers(),
     new Headers({ "Content-Length": "1" }),
     new Headers({ "Content-Length": "5000000" }),
-  ]) {
+  ].reduce(async (priorCase, headers) => {
+    await priorCase;
     let chunks = 0;
     mockNetwork((input) => {
       if (sourceUrl(input).pathname === "/auth") {
@@ -254,8 +263,9 @@ test("byte limits stop streaming reads regardless of missing or dishonest Conten
       upstreamTooLargePattern,
     );
     assert.ok(chunks < 10, `stream stopped after ${chunks} chunks`);
-  }
-  for (const path of ["/auth", "/connect_token"]) {
+  }, Promise.resolve());
+  await ["/auth", "/connect_token"].reduce(async (priorCase, path) => {
+    await priorCase;
     mockNetwork((input) => {
       if (sourceUrl(input).pathname === "/auth" && path !== "/auth") {
         return Promise.resolve(auth());
@@ -267,7 +277,7 @@ test("byte limits stop streaming reads regardless of missing or dishonest Conten
       upstreamTooLargePattern,
     );
     await assert.rejects(connectToken(credentials), connectTokenFailedPattern);
-  }
+  }, Promise.resolve());
 });
 
 test("Fetch request timeout covers a stalled response body and does not retry", async () => {
@@ -342,17 +352,20 @@ test("SDK pages preserve encoded cursors, creation floor, response scope and exp
   assert.equal(required(paths[1]).searchParams.get("createdAtFrom"), floor);
   assert.equal(required((await source.ids("account", ["tx"]))[0]).id, "tx");
   assert.equal(required(paths[2]).searchParams.get("ids"), "tx");
-  for (const [value, code] of [
-    ["https://evil.invalid", invalidCursorPattern],
-    ["?accountId=other&after=a", cursorScopeMismatchPattern],
-    ["?accountId=account&after=a&after=b", cursorScopeMismatchPattern],
+  await (
     [
-      "?accountId=account&after=a&createdAtFrom=wrong",
-      cursorScopeMismatchPattern,
-    ],
-    ["?accountId=account&after=a&ids=tx", cursorScopeMismatchPattern],
-    ["?accountId=account&after=previous", cursorLoopPattern],
-  ] satisfies [string, RegExp][]) {
+      ["https://evil.invalid", invalidCursorPattern],
+      ["?accountId=other&after=a", cursorScopeMismatchPattern],
+      ["?accountId=account&after=a&after=b", cursorScopeMismatchPattern],
+      [
+        "?accountId=account&after=a&createdAtFrom=wrong",
+        cursorScopeMismatchPattern,
+      ],
+      ["?accountId=account&after=a&ids=tx", cursorScopeMismatchPattern],
+      ["?accountId=account&after=previous", cursorLoopPattern],
+    ] satisfies [string, RegExp][]
+  ).reduce(async (priorCase, [value, code]) => {
+    await priorCase;
     mockNetwork(async (input) =>
       sourceUrl(input).pathname === "/auth"
         ? auth()
@@ -368,7 +381,7 @@ test("SDK pages preserve encoded cursors, creation floor, response scope and exp
       }),
       code,
     );
-  }
+  }, Promise.resolve());
   mockNetwork(async (input) =>
     sourceUrl(input).pathname === "/auth"
       ? auth()
@@ -540,7 +553,8 @@ test("every financial resource uses the public SDK operation with one-page check
     ["categories", "/categories"],
     ["statements", "/accounts/parent/statements"],
   ] satisfies [Parameters<typeof source.page>[0]["resource"], string][];
-  for (const [resource, path] of operations) {
+  await operations.reduce(async (priorCase, [resource, path]) => {
+    await priorCase;
     const { length: before } = paths;
     const page = await source.page({
       connectorId: "200",
@@ -570,5 +584,5 @@ test("every financial resource uses the public SDK operation with one-page check
         "100",
       );
     }
-  }
+  }, Promise.resolve());
 });

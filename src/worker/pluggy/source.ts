@@ -1,20 +1,23 @@
 import type { PluggyClient } from "pluggy-sdk";
 import { z } from "zod/v4";
 
-import { FaultCode, Resource } from "@/domain/enums";
-import { Fault } from "@/domain/fault.entity";
 import {
   assertSourceIdentity,
   assertSourceRecords,
   assertTransactionSelection,
   type Credentials,
-} from "@/domain/provider.entity";
-import { ProviderRecordSchema } from "@/domain/provider.schema";
-import { httpResponseFailure, rateLimitRetry } from "@/shared/http";
-import { HttpFailureKind } from "@/shared/http.types";
-import { tryCatch } from "@/shared/result";
-import type { FinancialSource, Steps, StepValue } from "@/worker/sync";
-
+  Fault,
+  FaultCode,
+  ProviderRecordSchema,
+  Resource,
+} from "../../domain";
+import {
+  HttpFailureKind,
+  httpResponseFailure,
+  rateLimitRetry,
+  tryCatch,
+} from "../../shared";
+import type { FinancialSource, Steps, StepValue } from "../sync";
 import { PersonalPluggyClient } from "./client.adapter";
 
 const transportFaults = new Map<string, FaultCode>([
@@ -269,11 +272,16 @@ function validateCursor(
 // A 429 acknowledgement is a durable step result; wait outside the billed step.
 export function providerRetries(steps: Steps): Steps {
   return {
-    async do<T extends StepValue<T>>(
+    do<T extends StepValue<T>>(
       name: string,
       callback: () => Promise<T>,
     ): Promise<T> {
-      for (let attempt = 0; attempt < rateLimitRetry.attempts; attempt += 1) {
+      return request(0);
+
+      async function request(attempt: number): Promise<T> {
+        if (attempt === rateLimitRetry.attempts) {
+          throw new Error("UPSTREAM_RATE_LIMIT_RETRIES_EXHAUSTED");
+        }
         const outcome = await steps.do(
           `${name}-attempt-${attempt}`,
           async () => {
@@ -305,8 +313,8 @@ export function providerRetries(steps: Steps): Steps {
           `${name}-rate-limit-${attempt}`,
           `${Math.ceil(outcome.seconds)} seconds`,
         );
+        return request(attempt + 1);
       }
-      throw new Error("UPSTREAM_RATE_LIMIT_RETRIES_EXHAUSTED");
     },
     sleep: (name, duration) => steps.sleep(name, duration),
   };

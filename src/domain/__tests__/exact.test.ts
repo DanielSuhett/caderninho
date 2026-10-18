@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { assertMinor, compareDecimal, decimal, minor } from "../exact";
+import { assertMinor, compareDecimal, decimal, minor } from "..";
 
 const canonicalMinorErrorPattern = /canonical integer, at most 30 digits/;
 const invalidDecimalPattern = /INVALID_DECIMAL/;

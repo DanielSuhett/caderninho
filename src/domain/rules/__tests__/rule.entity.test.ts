@@ -1,14 +1,17 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { exactJSON } from "@/domain/exact";
-import { NORMALIZER } from "@/domain/finance.entity";
-import { FinanceRecordSchema } from "@/domain/finance.schema";
-import { required } from "@/testing/helpers";
-
-import { importRules, parseRuleJson } from "../import-rules";
-import { compileStoredRules, EMPTY_RULES, txContext } from "../rule.entity";
-import { compileRules, RuleSchema } from "../rule.schema";
+import { required } from "../../../../tests/support";
+import { exactJSON, FinanceRecordSchema, NORMALIZER } from "../..";
+import {
+  compileRules,
+  compileStoredRules,
+  EMPTY_RULES,
+  importRules,
+  parseRuleJson,
+  RuleSchema,
+  txContext,
+} from "..";
 
 const rulesV1RequiresExplicitConversionAndActivationPattern =
   /RULES_V1_REQUIRES_EXPLICIT_CONVERSION_AND_ACTIVATION/;

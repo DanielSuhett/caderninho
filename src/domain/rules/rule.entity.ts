@@ -1,8 +1,7 @@
 import { Engine } from "json-rules-engine";
 import { RE2JS } from "re2js";
 
-import type { JsonValue } from "@/shared/json.types";
-
+import type { JsonValue } from "../../shared";
 import { FaultCode } from "../enums";
 import { compareDecimal, day } from "../exact";
 import { fail } from "../fault.entity";
@@ -136,7 +135,7 @@ export type RuleImportReport =
   | { compatible: true; document: Rules; issues: ConversionIssue[] }
   | { compatible: false; document: null; issues: ConversionIssue[] };
 
-export type Derived = {
+export interface Derived {
   category: string;
   category_group: string;
   category_group_id: string;
@@ -145,9 +144,9 @@ export type Derived = {
   evidence: { ruleId: string; action: Action }[];
   ignored: boolean;
   tags: Record<string, string>;
-};
+}
 
-export type TransactionContext = {
+export interface TransactionContext {
   account_id: string;
   account_name: string;
   account_type: string;
@@ -164,7 +163,7 @@ export type TransactionContext = {
   original_category: string;
   payment_method: string;
   total_installments: string;
-};
+}
 
 export interface RuleEngine {
   document: Rules;
@@ -231,13 +230,20 @@ export function compileStoredRules({
   return compileValidatedRules(document);
 }
 
+function hasField<T extends object>(
+  value: T,
+  key: string,
+): key is string & keyof T {
+  return Object.hasOwn(value, key);
+}
+
 function lookup(c: Context, p: string): JsonValue {
   if (!allowed(p)) {
     throw new Error(`Unknown field: ${p}`);
   }
   if (p.startsWith("tx.")) {
-    const { tx: transaction }: { tx: Record<string, string> } = c;
-    return transaction[p.slice(3)] ?? null;
+    const field = p.slice(3);
+    return hasField(c.tx, field) ? c.tx[field] : null;
   }
 
   if (p.startsWith("result.tags.")) {
@@ -247,8 +253,8 @@ function lookup(c: Context, p: string): JsonValue {
       : null;
   }
 
-  const { result }: { result: Record<string, JsonValue> } = c;
-  return result[p.slice(7)] ?? null;
+  const field = p.slice(7);
+  return hasField(c.result, field) ? c.result[field] : null;
 }
 
 function compare(n: number, op: string) {
@@ -500,9 +506,10 @@ export function compileValidatedRules(doc: Rules) {
 
     const applied = { category: false, description: false };
 
-    for (const stage of phases) {
+    await phases.reduce(async (previous, stage) => {
+      await previous;
       if (!stage.rules.length) {
-        continue;
+        return;
       }
       const engine = new Engine();
       operators(engine, expressions);
@@ -533,7 +540,7 @@ export function compileValidatedRules(doc: Rules) {
       }
 
       await engine.run();
-    }
+    }, Promise.resolve());
 
     return result;
   }

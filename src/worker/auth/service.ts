@@ -1,5 +1,4 @@
-import { secretsEqual } from "@/shared/crypto";
-
+import { secretsEqual } from "../../shared";
 import type { AuthRepository } from "./entity";
 
 export function adminConfigured(password: string | undefined) {

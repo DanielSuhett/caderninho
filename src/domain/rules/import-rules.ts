@@ -1,9 +1,8 @@
 import { isLosslessNumber, parse } from "lossless-json";
 import { z } from "zod/v4";
 
-import { JsonValueSchema } from "@/shared/json";
-import type { JsonValue } from "@/shared/json.types";
-
+import type { JsonValue } from "../../shared";
+import { JsonValueSchema } from "../../shared";
 import { convertValidatedRules, LegacyRulesSchema } from "./convert-rules";
 import {
   Comparator,

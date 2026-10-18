@@ -1,8 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { accountingDay, localDay } from "../exact";
-import { normalizeResource } from "../finance-model";
+import { accountingDay, localDay, normalizeResource } from "..";
 
 const invalidDatePattern = /INVALID_DATE/;
 const fieldTooLargePattern = /FIELD_TOO_LARGE/;
@@ -89,7 +88,7 @@ await test("card signs, uncertainty and nulls remain explicit; no ticker dedupli
 });
 
 await test("provider capabilities distinguish missing products, revoked consent and unsupported resources", async () => {
-  const { itemInfo, productState } = await import("../provider.entity");
+  const { itemInfo, productState } = await import("..");
 
   const item = itemInfo({
     connector: { id: 1, isOpenFinance: false, products: ["INVESTMENTS"] },

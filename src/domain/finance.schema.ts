@@ -1,7 +1,6 @@
 import { z } from "zod/v4";
 
-import { JsonValueSchema } from "@/shared/json";
-
+import { JsonValueSchema } from "../shared";
 import {
   ClassificationSchema,
   ProvenanceOriginSchema,

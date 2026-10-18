@@ -1,12 +1,14 @@
-import type { CorrectionInput, RecordReference } from "@/domain/finance.entity";
-
+import type {
+  CorrectionInput,
+  OperationSelection,
+  RecordReference,
+} from "../domain";
 import type {
   LiveBalanceInput,
   PreviewInput,
   RuleCommand,
   SubscriptionInput,
 } from "./finance.types";
-import type { OperationSelection } from "./operation.types";
 import type { Aggregate, Query } from "./queries.types";
 
 interface LongInput extends OperationSelection {

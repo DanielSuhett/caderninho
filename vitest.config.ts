@@ -11,7 +11,6 @@ export default defineConfig({
       wrangler: { configPath: "./tests/integration/wrangler.jsonc" },
     }),
   ],
-  resolve: { tsconfigPaths: true },
   // Vitest 5 defaults to reading host filesystem caches inside the isolate.
   // Workers has a virtual filesystem; use the plugin module transport instead.
   test: {

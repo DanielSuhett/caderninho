@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { hash, secretsEqual } from "../crypto";
+import { hash, secretsEqual } from "..";
 
 await test("hash preserves persisted fingerprints, exact amounts and falsy values", async () => {
   // Captured from the original database helper before moving it to shared.

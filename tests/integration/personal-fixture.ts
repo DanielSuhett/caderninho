@@ -1,12 +1,19 @@
 import { getOAuthApi } from "@cloudflare/workers-oauth-provider";
 import { z } from "zod/v4";
 
-import { AccountResponseSchema } from "@/contracts/portal-contract";
-import { oauth } from "@/worker/auth/controller";
-import type { Bindings } from "@/worker/bindings";
-
+import { AccountResponseSchema } from "../../src/contracts";
+import { oauth } from "../../src/worker/auth/controller";
+import type { Bindings } from "../../src/worker/bindings";
 import { createExecutionContext } from "cloudflare:test";
 import { env as bindings } from "cloudflare:workers";
+
+export const { TEST_MIGRATIONS: testMigrations } = z
+  .object({
+    TEST_MIGRATIONS: z.array(
+      z.object({ name: z.string(), queries: z.array(z.string()) }),
+    ),
+  })
+  .parse(bindings);
 
 const csrfInputPattern = /name="csrf" value="([^"]+)"/;
 

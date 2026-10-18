@@ -1,11 +1,10 @@
 import { z } from "zod/v4";
 
-import { FilterSchema } from "@/domain/filter.schema";
 import {
   CorrectionInputSchema,
+  FilterSchema,
   RecordReferenceSchema,
-} from "@/domain/finance.schema";
-
+} from "../domain";
 import {
   LiveBalanceInputSchema,
   PreviewInputSchema,

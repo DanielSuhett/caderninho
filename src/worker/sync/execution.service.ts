@@ -2,29 +2,30 @@ import {
   OperationKind,
   OperationPhase,
   OperationStatus,
-} from "@/contracts/operation.types";
-import { CoverageStatus, FaultCode, Resource } from "@/domain/enums";
-import type { FinanceRecord } from "@/domain/finance.entity";
-import { DEFINITIONS } from "@/domain/finance-model";
+} from "../../contracts";
+import type { FinanceRecord } from "../../domain";
 import {
   assertCollectionComplete,
   assertSourceTotal,
+  CoverageStatus,
+  DEFINITIONS,
   deleteMissingAfterPage,
+  FaultCode,
+  itemInfo,
   latestCreatedAt,
   MigrationDecision,
   migrationDecision,
   pageCoverage,
+  productState,
+  Resource,
   resourceParentAllowed,
   sourceFailureCoverage,
   transactionCreationFloor,
-} from "@/domain/operation.entity";
-import { itemInfo, productState } from "@/domain/provider.entity";
-import type { RuleEngine } from "@/domain/rules";
-import { txContext } from "@/domain/rules";
-import { hash } from "@/shared/crypto";
-import { tryCatch } from "@/shared/result";
-import type { PreparedEntity } from "@/worker/finance/entity";
-
+} from "../../domain";
+import type { RuleEngine } from "../../domain/rules";
+import { txContext } from "../../domain/rules";
+import { hash, tryCatch } from "../../shared";
+import type { PreparedEntity } from "../finance/entity";
 import type {
   CollectionIdentity,
   ExecutionDependencies,
@@ -59,15 +60,19 @@ export async function runOperation(
   }
   const engine = await repository.rules(op.rules_revision);
   const execution = { ...dependencies, engine, op, step };
-  for (let n = 0; ; n += 1) {
+  async function acquire(attempt: number): Promise<boolean> {
     if ((await repository.read(id)).cancel_requested) {
       await repository.finish(op, OperationStatus.cancelled);
-      return;
+      return false;
     }
-    if (await step.do(`acquire-${n}`, () => repository.acquire(id))) {
-      break;
+    if (await step.do(`acquire-${attempt}`, () => repository.acquire(id))) {
+      return true;
     }
-    await step.sleep(`queued-${n}`, "10 seconds");
+    await step.sleep(`queued-${attempt}`, "10 seconds");
+    return acquire(attempt + 1);
+  }
+  if (!(await acquire(0))) {
+    return;
   }
   const { data, error } = await tryCatch(async () => {
     let sourcePromise: Promise<FinancialSource> | undefined;
@@ -130,7 +135,9 @@ async function reapplyRules({ repository, op, engine, step }: Execution) {
     await repository.selectReapplication(op);
     return { phase: OperationPhase.selected };
   });
-  for (let batch = 0; ; batch += 1) {
+  return applyBatch(0);
+
+  async function applyBatch(batch: number): Promise<boolean> {
     const key = `reapply-${batch}`;
     const result = await step.do(key, async () => {
       const saved = await repository.receipt(op.id, key);
@@ -144,7 +151,8 @@ async function reapplyRules({ repository, op, engine, step }: Execution) {
       const changes: Parameters<
         ExecutionRepository["commitReapplication"]
       >[0]["changes"] = [];
-      for (const entity of selected) {
+      await selected.reduce(async (previous, entity) => {
+        await previous;
         changes.push({
           derived: await engine.evaluate(txContext(entity.normalized)),
           identity: {
@@ -154,7 +162,7 @@ async function reapplyRules({ repository, op, engine, step }: Execution) {
             resource: entity.resource,
           },
         });
-      }
+      }, Promise.resolve());
       const progress = progressWithDefaults(
         (await repository.read(op.id)).progress,
       );
@@ -174,10 +182,10 @@ async function reapplyRules({ repository, op, engine, step }: Execution) {
       return true;
     }
     if (result.done) {
-      break;
+      return false;
     }
+    return applyBatch(batch + 1);
   }
-  return false;
 }
 
 async function migrateLegacy({
@@ -200,7 +208,8 @@ async function migrateLegacy({
       throw new Error(FaultCode.INVALID_ITEM_ID);
     }
     const rows: Parameters<ExecutionRepository["commitMigration"]>[0] = [];
-    for (const row of input.migration) {
+    await input.migration.reduce(async (previous, row) => {
+      await previous;
       const identity = {
         id: row.record.id,
         itemId,
@@ -209,7 +218,7 @@ async function migrateLegacy({
       };
       const digest = await hash(row);
       if (await repository.imported(row.sourceKey, digest)) {
-        continue;
+        return;
       }
       const existing = await repository.current(identity);
       const conflicting =
@@ -222,7 +231,7 @@ async function migrateLegacy({
         throw new Error("MIGRATION_OVERLAP_REQUIRES_POLICY");
       }
       if (decision === MigrationDecision.keep) {
-        continue;
+        return;
       }
       const prepared = await prepare({
         engine,
@@ -238,7 +247,7 @@ async function migrateLegacy({
         },
       });
       rows.push({ digest, prepared, sourceKey: row.sourceKey });
-    }
+    }, Promise.resolve());
     await repository.commitMigration(rows);
     return { imported: input.migration.length };
   });
@@ -266,12 +275,22 @@ async function synchronizeResources(
   source: FinancialSource,
 ) {
   const items = await execution.repository.items(execution.op.input.itemIds);
-  for (const item of items) {
-    for (const resource of resourceOrder) {
-      if (await synchronizeItemResource(execution, source, item.id, resource)) {
-        return true;
-      }
+  const collections = items.flatMap((item) =>
+    resourceOrder.map((resource) => ({ itemId: item.id, resource })),
+  );
+  const cancelled = await collections.reduce(async (previous, collection) => {
+    if (await previous) {
+      return true;
     }
+    return synchronizeItemResource(
+      execution,
+      source,
+      collection.itemId,
+      collection.resource,
+    );
+  }, Promise.resolve(false));
+  if (cancelled) {
+    return true;
   }
   return resolvePendingTransactions(
     execution,
@@ -294,12 +313,15 @@ async function synchronizeItemResource(
   const parents = def.parent
     ? await repository.parents(itemId, def.parent)
     : [null];
-  for (const parent of parents) {
+  return parents.reduce(async (previous, parent) => {
+    if (await previous) {
+      return true;
+    }
     if (
       parent &&
       !resourceParentAllowed({ parentType: parent.normalized.type, resource })
     ) {
-      continue;
+      return false;
     }
     const parentId = parent?.id ?? "";
     const identity = { itemId, operationId: op.id, parentId, resource };
@@ -307,19 +329,16 @@ async function synchronizeItemResource(
       resource === Resource.investment_transactions &&
       op.input.kind === OperationKind.sync
     ) {
-      const previous = await repository.coverage(itemId, resource, parentId);
+      const coverage = await repository.coverage(itemId, resource, parentId);
       if (
-        previous?.bootstrap_complete === 1 &&
-        previous.parent_signature === (parent?.relevant_hash ?? null)
+        coverage?.bootstrap_complete === 1 &&
+        coverage.parent_signature === (parent?.relevant_hash ?? null)
       ) {
-        continue;
+        return false;
       }
     }
-    if (await synchronizeCollection(execution, source, { identity, parent })) {
-      return true;
-    }
-  }
-  return false;
+    return synchronizeCollection(execution, source, { identity, parent });
+  }, Promise.resolve(false));
 }
 
 async function synchronizeCollection(
@@ -342,7 +361,9 @@ async function synchronizeCollection(
     await repository.createCheckpoint(identity, floor);
     return { phase: OperationPhase.checkpoint };
   });
-  for (let pageIndex = 0; ; pageIndex += 1) {
+  return nextPage(0);
+
+  async function nextPage(pageIndex: number): Promise<boolean> {
     const name = `page-${itemId}-${resource}-${parentId}-${pageIndex}`;
     const result = await step.do(name, () =>
       publishPage(execution, source, { identity, name, parent }),
@@ -351,11 +372,11 @@ async function synchronizeCollection(
       return true;
     }
     if (result.done) {
-      break;
+      return false;
     }
     await step.sleep(`pause-${name}`, "1 second");
+    return nextPage(pageIndex + 1);
   }
-  return false;
 }
 
 async function recordUnavailableResource(
@@ -397,7 +418,9 @@ async function resolvePendingTransactions(
     await repository.selectPending(op.id, itemIds);
     return { phase: OperationPhase.pending_selected };
   });
-  for (let batch = 0; ; batch += 1) {
+  return nextBatch(0);
+
+  async function nextBatch(batch: number): Promise<boolean> {
     const key = `pending-${batch}`;
     const outcome = await step.do(key, async () => {
       const committed = await repository.receipt(op.id, key);
@@ -433,11 +456,11 @@ async function resolvePendingTransactions(
       return true;
     }
     if (outcome.done) {
-      break;
+      return false;
     }
     await step.sleep(`pending-pause-${batch}`, "1 second");
+    return nextBatch(batch + 1);
   }
-  return false;
 }
 
 async function publishResolved(
@@ -486,10 +509,20 @@ async function resolveEvent(
 ) {
   const { repository, op, step } = execution;
   const event = await repository.event(eventId);
-  let cursor: string | null = null;
-  for (let batch = 0; ; batch += 1) {
-    const key = `event-${batch}`,
-      previous = cursor;
+  if (await nextBatch(0, null)) {
+    return true;
+  }
+  await step.do("event-receipt-complete", async () => {
+    await repository.completeEvent(eventId);
+    return { phase: OperationPhase.event_resolved };
+  });
+  return false;
+
+  async function nextBatch(
+    batch: number,
+    cursor: string | null,
+  ): Promise<boolean> {
+    const key = `event-${batch}`;
     const result: { done: boolean; cancelled: boolean; next: string | null } =
       await step.do(key, async () => {
         const saved = await repository.receipt(op.id, key);
@@ -501,7 +534,7 @@ async function resolveEvent(
         }
         const { ids, page, done } = await readEventPage(source, event, {
           batch,
-          cursor: previous,
+          cursor,
         });
         if (page.next && (await repository.eventCursorUsed(op.id, page.next))) {
           throw new Error(FaultCode.CURSOR_LOOP);
@@ -524,16 +557,11 @@ async function resolveEvent(
       return true;
     }
     if (result.done) {
-      break;
+      return false;
     }
-    cursor = result.next;
     await step.sleep(`event-pause-${batch}`, "1 second");
+    return nextBatch(batch + 1, result.next);
   }
-  await step.do("event-receipt-complete", async () => {
-    await repository.completeEvent(eventId);
-    return { phase: OperationPhase.event_resolved };
-  });
-  return false;
 }
 
 async function readEventPage(
@@ -713,7 +741,8 @@ async function prepareRecords(
   progress.pages += 1;
   progress.received += records.length;
   const identities = new Map<string, string>();
-  for (const record of records) {
+  await records.reduce(async (previous, record) => {
+    await previous;
     const id =
       identity.resource === Resource.resources ? record.resourceId : record.id;
     if (id === null || id === undefined) {
@@ -727,7 +756,7 @@ async function prepareRecords(
         throw new Error("DUPLICATE_SOURCE_ID_CHANGED_IN_PAGE");
       }
       progress.duplicates += 1;
-      continue;
+      return;
     }
     identities.set(recordId, contentHash);
     const entry = await prepare({
@@ -745,6 +774,6 @@ async function prepareRecords(
     prepared.push(entry);
     progress[entry.state] += 1;
     progress.classified += entry.classified;
-  }
+  }, Promise.resolve());
   return prepared;
 }

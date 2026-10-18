@@ -1,7 +1,6 @@
 import { z } from "zod/v4";
 
-import type { JsonValue } from "@/shared/json.types";
-
+import type { JsonValue } from "../shared";
 import {
   AccountType,
   Classification,
@@ -17,13 +16,12 @@ import {
   accountingDay,
   assertMinor,
   decimal,
-  fail,
   id,
   isMatureDate,
   localDay,
   minor,
 } from "./exact";
-import { Fault } from "./fault.entity";
+import { Fault, fail } from "./fault.entity";
 import type {
   FinanceRecord,
   MetricDefinition,

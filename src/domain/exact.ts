@@ -2,8 +2,7 @@ import Big from "big.js";
 import { parse } from "lossless-json";
 import { z } from "zod/v4";
 
-import { JsonValueSchema } from "@/shared/json";
-
+import { JsonValueSchema } from "../shared";
 import { FaultCode } from "./enums";
 import { fail } from "./fault.entity";
 import type { MoneyInput } from "./finance.entity";
@@ -13,8 +12,6 @@ const canonicalMinorPattern = /^-?(0|[1-9]\d{0,29})$/;
 const decimalPattern = /^[-+]?\d+(?:\.\d+)?(?:e[-+]?\d+)?$/i;
 const dayPattern = /^\d{4}-\d{2}-\d{2}$/;
 const identifierPattern = /^[a-zA-Z0-9_-]{1,128}$/;
-
-export { fail } from "./fault.entity";
 
 export function assertMinor(value: string) {
   if (!canonicalMinorPattern.test(value)) {

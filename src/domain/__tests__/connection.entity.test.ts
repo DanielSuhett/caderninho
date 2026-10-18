@@ -1,10 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import {
-  assertConnectionCapacity,
-  assertPersonalConnector,
-} from "../connection.entity";
+import { assertConnectionCapacity, assertPersonalConnector } from "..";
 
 const meuPluggyRequiredPattern = /MEU_PLUGGY_REQUIRED/;
 const itemLimitPattern = /ITEM_LIMIT/;

@@ -1,8 +1,8 @@
 import type {
   AccountPanel,
   AccountSyncOutcome,
-} from "@/contracts/portal.types";
-import type { WizardIssue } from "@/contracts/wizard.types";
+  WizardIssue,
+} from "../../contracts";
 
 export const WIZARD_ISSUES: Record<
   WizardIssue,

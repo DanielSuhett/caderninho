@@ -1,18 +1,19 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import type { AccountResponse } from "@/contracts/portal.types";
-import { accountConnectToken, accountSnapshot } from "@/testing/account";
-import { required } from "@/testing/helpers";
-
+import {
+  accountConnectToken,
+  accountSnapshot,
+  required,
+} from "../../../../tests/support";
+import type { AccountResponse } from "../../../contracts";
 import type {
   AccountApi,
   AccountBrowser,
   ConnectRequest,
   ConnectWidget,
-} from "../account.types";
-import { AccountRequestError } from "../account-api";
-import { createAccountController, pollingDelay } from "../account-controller";
+} from "..";
+import { AccountRequestError, createAccountController, pollingDelay } from "..";
 
 function controllerFixture({
   api = {},
@@ -263,45 +264,49 @@ await test("a disposed command cannot unlock a command in the next account lifet
 });
 
 await test("disposing pending token, maintenance and logout work prevents later browser effects", async () => {
-  for (const command of ["connectItem", "pauseSync", "logout"] as const) {
-    const pending = Promise.withResolvers<void>();
-    let effects = 0;
-    let reads = 0;
-    const controller = controllerFixture({
-      api: {
-        async connectToken() {
-          await pending.promise;
-          return accountConnectToken();
+  await (["connectItem", "pauseSync", "logout"] as const).reduce(
+    async (priorCase, command) => {
+      await priorCase;
+      const pending = Promise.withResolvers<void>();
+      let effects = 0;
+      let reads = 0;
+      const controller = controllerFixture({
+        api: {
+          async connectToken() {
+            await pending.promise;
+            return accountConnectToken();
+          },
+          logout: () => pending.promise,
+          pauseSync: () => pending.promise,
+          read() {
+            reads += 1;
+            return Promise.resolve(accountSnapshot());
+          },
         },
-        logout: () => pending.promise,
-        pauseSync: () => pending.promise,
-        read() {
-          reads += 1;
-          return Promise.resolve(accountSnapshot());
+        browser: {
+          login() {
+            effects += 1;
+          },
         },
-      },
-      browser: {
-        login() {
-          effects += 1;
-        },
-      },
-      widget: {
-        open() {
-          effects += 1;
+        widget: {
+          open() {
+            effects += 1;
 
-          return Promise.resolve();
+            return Promise.resolve();
+          },
         },
-      },
-    });
-    const dispose = controller.start(() => undefined);
-    await controller.actions.refresh();
-    const work = controller.actions[command]();
-    dispose();
-    const stopped = controller.getSnapshot();
-    pending.resolve();
-    await work;
-    assert.deepEqual(controller.getSnapshot(), stopped);
-    assert.equal(effects, 0);
-    assert.equal(reads, 1);
-  }
+      });
+      const dispose = controller.start(() => undefined);
+      await controller.actions.refresh();
+      const work = controller.actions[command]();
+      dispose();
+      const stopped = controller.getSnapshot();
+      pending.resolve();
+      await work;
+      assert.deepEqual(controller.getSnapshot(), stopped);
+      assert.equal(effects, 0);
+      assert.equal(reads, 1);
+    },
+    Promise.resolve(),
+  );
 });

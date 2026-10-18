@@ -3,4 +3,4 @@ export type {
   Cursor,
   Identity,
   Query,
-} from "@/domain/query.entity";
+} from "../domain";

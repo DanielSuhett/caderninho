@@ -1,6 +1,6 @@
-import type { Filter } from "@/domain/query.entity";
-import type { Catalog } from "@/domain/rules";
-import type { JsonValue } from "@/shared/json.types";
+import type { Filter } from "../domain";
+import type { Catalog } from "../domain/rules";
+import type { JsonValue } from "../shared";
 
 export const RuleCommandAction = {
   activate: "activate",

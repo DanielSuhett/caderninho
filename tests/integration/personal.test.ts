@@ -7,23 +7,29 @@ import { z } from "zod/v4";
 import {
   AccountConnectTokenSchema,
   AccountResponseSchema,
-} from "@/contracts/portal-contract";
-import { sourceUrl } from "@/testing/helpers";
-import { mockNetwork, syntheticJwt } from "@/testing/network";
+} from "../../src/contracts";
 import {
   accountService,
   financialQueries,
   scheduleSync,
-} from "@/worker/composition";
-import { database } from "@/worker/database";
-import { invoke } from "@/worker/mcp/invoke";
+} from "../../src/worker/composition";
+import { database } from "../../src/worker/database";
+import { invoke } from "../../src/worker/mcp";
 import {
   items as itemsTable,
   operations as operationsTable,
   settings as settingsTable,
-} from "@/worker/schema";
-
-import { command, cookies, fixture, login, settings } from "./personal-fixture";
+} from "../../src/worker/schema";
+import { sourceUrl } from "../support";
+import { mockNetwork, syntheticJwt } from "../support/network";
+import {
+  command,
+  cookies,
+  fixture,
+  login,
+  settings,
+  testMigrations,
+} from "./personal-fixture";
 import { applyD1Migrations, reset } from "cloudflare:test";
 import { env as bindings } from "cloudflare:workers";
 
@@ -34,7 +40,7 @@ const pluggyAccountNotConfiguredPattern = /PLUGGY_ACCOUNT_NOT_CONFIGURED/;
 const item = "11111111-1111-4111-8111-111111111111";
 beforeEach(async () => {
   await reset();
-  await applyD1Migrations(bindings.DB, bindings.TEST_MIGRATIONS);
+  await applyD1Migrations(bindings.DB, testMigrations);
 });
 afterEach(() => vi.unstubAllGlobals());
 function source(connector = 200) {
