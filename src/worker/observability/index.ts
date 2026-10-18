@@ -242,6 +242,7 @@ export interface SafeFields {
     | "subscribe"
     | "unknown";
   attempt?: number;
+  batch?: number;
   batches?: number;
   deferred?: number;
   delayMs?: number;
@@ -286,6 +287,7 @@ function safeMeasurements(input: SafeFields): SafeFields {
     }),
     ...(input.failed !== undefined && { failed: input.failed }),
     ...(input.pages !== undefined && { pages: input.pages }),
+    ...(input.batch !== undefined && { batch: input.batch }),
     ...(input.batches !== undefined && { batches: input.batches }),
     ...(input.retries !== undefined && { retries: input.retries }),
     ...(input.deferred !== undefined && { deferred: input.deferred }),

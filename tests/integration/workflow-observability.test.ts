@@ -252,39 +252,49 @@ test("an unexpected source failure emits one safe terminal error and preserves t
   assert.ok(!JSON.stringify(captured).includes("private-"));
 });
 
-test("an invalid provider schema remains the original validation error and emits one upstream failure", async () => {
-  const op = await startOperation(env.DB, "invalid-provider", {
-    itemIds: ["private-item-marker"],
-    kind: "sync",
-  });
-  mockNetwork((input) =>
-    Promise.resolve(
-      sourceUrl(input).pathname === "/auth"
-        ? Response.json({ apiKey: syntheticJwt() })
-        : Response.json(["private-provider-marker"]),
-    ),
-  );
-  const captured = capture();
-  await assert.rejects(
-    withObservation({ ...captured.context, operationId: op.id }, () =>
-      runOperation(
-        synchronizationDependencies(settings()),
-        op.id,
-        immediateSteps(),
+for (const invalid of ["schema", "identity"] as const) {
+  test(`an invalid provider ${invalid} preserves the original error and emits one upstream failure`, async () => {
+    const op = await startOperation(env.DB, "invalid-provider", {
+      itemIds: ["private-item-marker"],
+      kind: "sync",
+    });
+    mockNetwork((input) =>
+      Promise.resolve(
+        sourceUrl(input).pathname === "/auth"
+          ? Response.json({ apiKey: syntheticJwt() })
+          : Response.json(
+              invalid === "schema"
+                ? ["private-provider-marker"]
+                : { id: "private-wrong-item" },
+            ),
       ),
-    ),
-    (error) => error instanceof z.ZodError,
-  );
-  assert.equal((await getOperation(env.DB, op.id)).result?.isError, true);
-  assert.equal(captured.lines.length, 1);
-  assert.ok(captured.lines[0]?.includes('"level":50'));
-  assert.ok(captured.lines[0]?.includes('"failure":"INVALID_RESPONSE"'));
-  assert.equal(
-    captured.spans.find((span) => span.name === "pluggy.read")?.outcome,
-    "failed",
-  );
-  assert.ok(!JSON.stringify(captured).includes("private-"));
-});
+    );
+    const captured = capture();
+    await assert.rejects(
+      withObservation({ ...captured.context, operationId: op.id }, () =>
+        runOperation(
+          synchronizationDependencies(settings()),
+          op.id,
+          immediateSteps(),
+        ),
+      ),
+      (error) =>
+        invalid === "schema"
+          ? error instanceof z.ZodError
+          : error instanceof Error &&
+            error.message === "SOURCE_IDENTITY_MISMATCH",
+    );
+    assert.equal((await getOperation(env.DB, op.id)).result?.isError, true);
+    assert.equal(captured.lines.length, 1);
+    assert.ok(captured.lines[0]?.includes('"level":50'));
+    assert.ok(captured.lines[0]?.includes('"failure":"INVALID_RESPONSE"'));
+    assert.equal(
+      captured.spans.find((span) => span.name === "pluggy.read")?.outcome,
+      "failed",
+    );
+    assert.ok(!JSON.stringify(captured).includes("private-"));
+  });
+}
 
 test("pre-acquisition failure and cancellation each report their true outcome without opening the source", async () => {
   const op = await startOperation(env.DB, "cancelled-request", {
@@ -348,6 +358,7 @@ test("a local reapplication receipt has a replay span and performs no fresh publ
   assert.equal(captured.spans[0]?.name, "finance.reapply");
   assert.equal(captured.spans[0]?.outcome, "replayed");
   assert.equal(captured.spans[0]?.operationId, first.operationId);
+  assert.equal(captured.spans[0]?.batch, 0);
   assert.equal(captured.lines.length, 0);
   assert.ok(!JSON.stringify(captured).includes("private-"));
 });
@@ -419,6 +430,7 @@ function capture() {
     outcome?: string;
     operationId?: string;
     phase?: string;
+    batch?: number;
   }[] = [];
   return {
     context: {
@@ -427,6 +439,7 @@ function capture() {
         outcome?: string;
         operationId?: string;
         phase?: string;
+        batch?: number;
       }) => spans.push(span),
       output: createLogger({
         destination: { write: (line) => lines.push(line) },

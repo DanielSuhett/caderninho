@@ -12,7 +12,7 @@ export function createReapplicationService(
   repository: ReapplicationRepository,
   observation?: {
     batch: (
-      operationId: string,
+      run: { operationId: string; batch: number },
       callback: () => Promise<ReapplicationResult>,
     ) => Promise<ReapplicationResult>;
     phase: NonNullable<ExecutionDependencies["observePhase"]>;
@@ -26,7 +26,10 @@ export function createReapplicationService(
     }
     const run = await repository.begin(input);
     return observation
-      ? observation.batch(run.operation.id, () => applyBatch(run, input))
+      ? observation.batch(
+          { batch: run.batch, operationId: run.operation.id },
+          () => applyBatch(run, input),
+        )
       : applyBatch(run, input);
   };
 

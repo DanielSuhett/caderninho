@@ -74,7 +74,12 @@ export function createPluggyAdapter(input: {
 async function providerResult<T>(callback: () => Promise<T>): Promise<T> {
   const { data, error } = await tryCatch(callback);
   if (error) {
-    if (error instanceof z.ZodError) {
+    if (
+      error instanceof z.ZodError ||
+      ["SOURCE_IDENTITY_MISMATCH", "SOURCE_SELECTION_MISMATCH"].includes(
+        error.message,
+      )
+    ) {
       markFailure(error, {
         failure: FaultCode.INVALID_RESPONSE,
         phase: SpanName.providerRead,
