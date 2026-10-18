@@ -1,6 +1,10 @@
-import { PluggyCredentialsSchema, Resource } from "../../domain";
+import { z } from "zod/v4";
+
+import { FaultCode, PluggyCredentialsSchema, Resource } from "../../domain";
+import { tryCatch } from "../../shared";
 import type { AccountSource } from "../account";
-import { observeSpan, Phase, SpanName } from "../observability";
+import { markFailure, observeSpan, Phase, SpanName } from "../observability";
+import type { FinancialSource } from "../sync";
 import { PersonalPluggyClient } from "./client.adapter";
 import { connectToken, financialSource, readAccount, readItem } from "./source";
 
@@ -27,13 +31,13 @@ export function createPluggyAdapter(input: {
           readItem: (itemId: string) =>
             observeSpan(
               SpanName.source,
-              () => readItem(authenticated, itemId),
+              () => providerResult(() => readItem(authenticated, itemId)),
               { phase: Phase.collect, resource: Resource.connections },
             ),
           token: (itemId?: string) =>
             observeSpan(
               SpanName.source,
-              () => connectToken(authenticated, itemId),
+              () => providerResult(() => connectToken(authenticated, itemId)),
               { action: "connect", phase: Phase.collect },
             ),
         };
@@ -44,16 +48,39 @@ export function createPluggyAdapter(input: {
   return {
     account,
     financialSource() {
-      return Promise.resolve().then(() =>
-        financialSource(new PersonalPluggyClient(credentials())),
-      );
+      return Promise.resolve().then(() => {
+        const source = financialSource(new PersonalPluggyClient(credentials()));
+        const observed: FinancialSource = {
+          ids: (accountId, ids) =>
+            providerResult(() => source.ids(accountId, ids)),
+          page: (selection) => providerResult(() => source.page(selection)),
+        };
+        return observed;
+      });
     },
     async readAccount(accountId: string) {
       return await observeSpan(
         SpanName.source,
-        () => readAccount(new PersonalPluggyClient(credentials()), accountId),
+        () =>
+          providerResult(() =>
+            readAccount(new PersonalPluggyClient(credentials()), accountId),
+          ),
         { phase: Phase.collect, resource: Resource.accounts },
       );
     },
   };
+}
+
+async function providerResult<T>(callback: () => Promise<T>): Promise<T> {
+  const { data, error } = await tryCatch(callback);
+  if (error) {
+    if (error instanceof z.ZodError) {
+      markFailure(error, {
+        failure: FaultCode.INVALID_RESPONSE,
+        phase: SpanName.providerRead,
+      });
+    }
+    throw error;
+  }
+  return data;
 }

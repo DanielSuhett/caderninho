@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 
-import { beforeEach, test } from "vitest";
+import { afterEach, beforeEach, test, vi } from "vitest";
+import { z } from "zod/v4";
 
 import { Fault, FaultCode, Resource } from "../../src/domain";
 import { createLogger } from "../../src/shared/logger";
@@ -14,6 +15,8 @@ import { items } from "../../src/worker/schema";
 import { type FinancialSource, runOperation } from "../../src/worker/sync";
 import type { ExecutionOutcome, Steps } from "../../src/worker/sync/entity";
 import { getOperation, startOperation } from "../../src/worker/sync/repository";
+import { sourceUrl } from "../support";
+import { mockNetwork, syntheticJwt } from "../support/network";
 import { settings, testMigrations } from "./personal-fixture";
 import { applyD1Migrations, reset } from "cloudflare:test";
 import { env } from "cloudflare:workers";
@@ -23,6 +26,7 @@ beforeEach(async () => {
   await applyD1Migrations(env.DB, testMigrations);
   await database(env.DB).insert(items).values({ id: "private-item-marker" });
 });
+afterEach(() => vi.unstubAllGlobals());
 
 test("receipt replay reports work only for the original collection and atomic publication", async () => {
   const op = await startOperation(env.DB, "private-request-marker", {
@@ -219,6 +223,40 @@ test("an unexpected source failure emits one safe terminal error and preserves t
   assert.ok(captured.lines[0]?.includes('"level":50'));
   assert.ok(captured.lines[0]?.includes('"failure":"INTERNAL_ERROR"'));
   assert.ok(captured.lines[0]?.includes('"outcome":"failed"'));
+  assert.ok(!JSON.stringify(captured).includes("private-"));
+});
+
+test("an invalid provider schema remains the original validation error and emits one upstream failure", async () => {
+  const op = await startOperation(env.DB, "invalid-provider", {
+    itemIds: ["private-item-marker"],
+    kind: "sync",
+  });
+  mockNetwork((input) =>
+    Promise.resolve(
+      sourceUrl(input).pathname === "/auth"
+        ? Response.json({ apiKey: syntheticJwt() })
+        : Response.json(["private-provider-marker"]),
+    ),
+  );
+  const captured = capture();
+  await assert.rejects(
+    withObservation({ ...captured.context, operationId: op.id }, () =>
+      runOperation(
+        synchronizationDependencies(settings()),
+        op.id,
+        immediateSteps(),
+      ),
+    ),
+    (error) => error instanceof z.ZodError,
+  );
+  assert.equal((await getOperation(env.DB, op.id)).result?.isError, true);
+  assert.equal(captured.lines.length, 1);
+  assert.ok(captured.lines[0]?.includes('"level":50'));
+  assert.ok(captured.lines[0]?.includes('"failure":"INVALID_RESPONSE"'));
+  assert.equal(
+    captured.spans.find((span) => span.name === "pluggy.read")?.outcome,
+    "failed",
+  );
   assert.ok(!JSON.stringify(captured).includes("private-"));
 });
 
