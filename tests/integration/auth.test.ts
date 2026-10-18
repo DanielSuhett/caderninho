@@ -4,6 +4,7 @@ import { beforeEach, test } from "vitest";
 import { z } from "zod/v4";
 
 import { AccountResponseSchema } from "../../src/contracts";
+import { compactAccess } from "../../src/worker/auth/repository";
 import { database } from "../../src/worker/database";
 import { portal_sessions } from "../../src/worker/schema";
 import { receiveWebhook } from "../../src/worker/sync/controller";
@@ -28,6 +29,17 @@ const sessionCookiePattern = /__Host-caderninho=/;
 beforeEach(async () => {
   await reset();
   await applyD1Migrations(bindings.DB, testMigrations);
+});
+
+test("daily session retention removes at most 200 expired sessions per call", async () => {
+  await bindings.DB.prepare(
+    "WITH RECURSIVE n(x) AS (VALUES(1) UNION ALL SELECT x+1 FROM n WHERE x<201) INSERT INTO portal_sessions(id,csrf,expires,auth_version) SELECT CAST(x AS TEXT),'synthetic',0,'synthetic' FROM n",
+  ).run();
+  await compactAccess(bindings.DB);
+  assert.equal(
+    (await database(bindings.DB).select().from(portal_sessions)).length,
+    1,
+  );
 });
 
 test("the password opens private routes; missing configuration fails closed", async () => {

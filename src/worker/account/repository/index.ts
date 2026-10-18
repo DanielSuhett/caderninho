@@ -1,12 +1,24 @@
-import { and, count, desc, eq, gt, gte, inArray, lte, sql } from "drizzle-orm";
+import {
+  and,
+  count,
+  desc,
+  eq,
+  gte,
+  inArray,
+  isNull,
+  lte,
+  notExists,
+  or,
+  sql,
+} from "drizzle-orm";
 
 import { OperationKind } from "../../../contracts";
-import { SYNC_POLICY } from "../../../domain";
 import { tryCatch } from "../../../shared";
 import { database } from "../../database";
 import {
   coverage,
   items,
+  local_runs,
   login_attempts,
   operations,
   portal_sessions,
@@ -19,15 +31,15 @@ function connectionStore(binding: D1Database) {
   return {
     async connect(itemId: string, now: string) {
       await db.batch([
+        db.insert(items).values({ id: itemId }).onConflictDoNothing(),
         db
           .update(settings)
           .set({
-            connected_at: now,
+            connected_at: sql`CASE WHEN ${settings.connected_at}='1970-01-01T00:00:00.000Z' THEN ${now} ELSE ${settings.connected_at} END`,
             next_sync_at: now,
-            sync_enabled: 1,
+            sync_enabled: sql`CASE WHEN ${settings.connected_at}='1970-01-01T00:00:00.000Z' THEN 1 ELSE ${settings.sync_enabled} END`,
           })
-          .where(eq(settings.id, 1)),
-        db.insert(items).values({ id: itemId }).onConflictDoNothing(),
+          .where(and(eq(settings.id, 1), sql`changes()>0`)),
       ]);
     },
     async connectionCount(itemId: string) {
@@ -61,6 +73,7 @@ export async function readPortalStatus(binding: D1Database) {
   const latest =
     (await db
       .select({
+        dispatched: operations.dispatched,
         phase: operations.phase,
         status: operations.status,
         updated_at: operations.updated_at,
@@ -78,10 +91,7 @@ export async function readPortalStatus(binding: D1Database) {
       .orderBy(desc(operations.created_at))
       .limit(1)
       .get()) ?? null;
-  const connected = await db
-    .select({ id: items.id })
-    .from(items)
-    .orderBy(items.id);
+  const connected = await db.select().from(items).orderBy(items.id);
   const totals = await db
     .select({
       complete: sql<
@@ -96,6 +106,22 @@ export async function readPortalStatus(binding: D1Database) {
     coverage: totals ?? { complete: null, total: 0 },
     items: connected,
     latest,
+    localApplications: await db
+      .select({
+        batch: local_runs.next_batch,
+        operationId: operations.id,
+        totalProcessed: sql<number>`COALESCE(json_extract(${operations.progress},'$.classified'),0)`,
+      })
+      .from(operations)
+      .innerJoin(local_runs, eq(local_runs.operation_id, operations.id))
+      .where(
+        and(
+          eq(operations.status, "working"),
+          eq(operations.execution_mode, "local"),
+          eq(operations.phase, "reapply"),
+        ),
+      )
+      .limit(10),
   };
 }
 export async function migrationsReady(binding: D1Database) {
@@ -126,25 +152,40 @@ export function createAccountRepository(
       await db
         .update(settings)
         .set({ sync_enabled: 0 })
-        .where(eq(settings.id, 1));
+        .where(and(eq(settings.id, 1), eq(settings.sync_enabled, 1)));
     },
     async requestSync(now: Date) {
-      const result = await db
-        .update(settings)
-        .set({
-          manual_sync_after: new Date(
-            now.getTime() + SYNC_POLICY.manualIntervalMs,
-          ).toISOString(),
-          next_sync_at: now.toISOString(),
-        })
+      const eligible = await db
+        .select({ id: items.id })
+        .from(items)
         .where(
           and(
-            eq(settings.id, 1),
-            eq(settings.sync_enabled, 1),
-            lte(settings.manual_sync_after, now.toISOString()),
-            gt(settings.next_sync_at, now.toISOString()),
+            or(
+              isNull(items.next_import_at),
+              lte(items.next_import_at, now.toISOString()),
+            ),
+            notExists(
+              db
+                .select({ id: operations.id })
+                .from(operations)
+                .where(
+                  and(
+                    eq(operations.id, items.cycle_id),
+                    eq(operations.status, "working"),
+                  ),
+                ),
+            ),
           ),
         )
+        .limit(1)
+        .get();
+      if (!eligible) {
+        return false;
+      }
+      const result = await db
+        .update(settings)
+        .set({ next_sync_at: now.toISOString() })
+        .where(and(eq(settings.id, 1), eq(settings.sync_enabled, 1)))
         .run();
       return result.meta.changes === 1;
     },

@@ -1,4 +1,4 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, getViewSelectedFields, sql } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 
 import type { Identity } from "../../../contracts";
@@ -20,7 +20,11 @@ import type {
   EntityPublication,
   EntityReader,
 } from "../entity";
-import { moneyKey, serializedEntity } from "./queries.repository";
+import {
+  moneyKey,
+  serializedEntity,
+  temporalEligibility,
+} from "./queries.repository";
 
 export function derivedStatements(
   db: D1Database,
@@ -285,6 +289,7 @@ export async function override(
               updated_at: sql`excluded.updated_at`,
               value: sql`excluded.value`,
             },
+            setWhere: sql`${overridesTable.value} IS NOT excluded.value`,
             target: [
               overridesTable.item_id,
               overridesTable.resource,
@@ -298,7 +303,7 @@ export async function override(
     database(db)
       .update(settingsTable)
       .set({ revision: sql`${settingsTable.revision} + 1` })
-      .where(eq(settingsTable.id, 1)),
+      .where(and(eq(settingsTable.id, 1), sql`changes()>0`)),
   ]);
 }
 
@@ -337,6 +342,7 @@ export async function correctRecord(
             })
             .onConflictDoUpdate({
               set: { value: sql`excluded.value` },
+              setWhere: sql`${tagsTable.value} IS NOT excluded.value`,
               target: [
                 tagsTable.item_id,
                 tagsTable.resource,
@@ -351,7 +357,7 @@ export async function correctRecord(
       database(db)
         .update(settingsTable)
         .set({ revision: sql`${settingsTable.revision} + 1` })
-        .where(eq(settingsTable.id, 1)),
+        .where(and(eq(settingsTable.id, 1), sql`changes()>0`)),
     ]);
   } else {
     await override(db, a, a.field, a.value);
@@ -377,7 +383,10 @@ export async function explainRecord(db: D1Database, a: Identity) {
       )
       .all(),
     record: await database(db)
-      .select()
+      .select({
+        ...getViewSelectedFields(effectiveEntitiesTable),
+        eligible: temporalEligibility(),
+      })
       .from(effectiveEntitiesTable)
       .where(
         and(

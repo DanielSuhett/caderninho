@@ -61,13 +61,39 @@ await test("native Workflow, MCP subscriptions and authenticated webhooks", asyn
     await rpc("tools/call", {
       arguments: {
         itemIds: ["11111111-1111-4111-8111-111111111111"],
-        requestKey: crypto.randomUUID(),
+        requestKey: process.env.PRODUCT_TEST_REQUEST_KEY ?? crypto.randomUUID(),
       },
       name: "caderninho_sync",
     }),
   );
   assert.ok(result.result?.taskId, JSON.stringify(result));
   const { taskId } = result.result;
+  const blocked = await responseJson(
+    await rpc("tools/call", {
+      arguments: {
+        itemIds: ["11111111-1111-4111-8111-111111111111"],
+        requestKey: crypto.randomUUID(),
+      },
+      name: "caderninho_sync",
+    }),
+  );
+  assert.equal(required(blocked.result).resultType, "complete");
+  const admission = z
+    .object({
+      items: z.array(
+        z.object({
+          operationId: z.string(),
+          status: z.enum(["working", "cooldown"]),
+        }),
+      ),
+      operation: z.null(),
+    })
+    .parse(
+      JSON.parse(
+        required(required(required(required(blocked.result).content)[0]).text),
+      ),
+    );
+  assert.equal(admission.items[0]?.operationId, taskId);
   logger.info({ taskId }, "Durable handle created");
   async function subscriber() {
     const response = await rpc("subscriptions/listen", {
@@ -196,30 +222,20 @@ await test("native Workflow, MCP subscriptions and authenticated webhooks", asyn
   }, Promise.resolve());
   await fetch(`${base}/recover`, { method: "POST" });
   logger.info(
-    "PASS: maintained OAuth rejects forged headers; authenticated webhook duplicate receipt and outbox recovery",
+    "PASS: maintained OAuth rejects forged headers; authenticated webhooks consolidate notices without dispatching another Workflow",
   );
 
-  const status = await poll({
-    attempts: 30,
-    intervalMs: 500,
-    async read() {
-      const value = z
-        .object({
-          operations: z.number(),
-          processed: z.boolean(),
-          receipts: z.number(),
-        })
-        .parse(
-          await (
-            await fetch(`${base}/inspect-event?id=${event.eventId}`)
-          ).json(),
-        );
-      assert.equal(value.receipts, 1);
-      return value;
-    },
-    until: (value) => value.processed,
-  });
-  assert.equal(status.operations, 1);
+  const notice = z
+    .object({
+      generation: z.number(),
+      operations: z.number(),
+      pending: z.boolean(),
+    })
+    .parse(await (await fetch(`${base}/inspect-event`)).json());
+  assert.equal(notice.operations, 1);
+  assert.equal(notice.pending, true);
+  assert.equal(notice.generation, 1);
+  await fetch(`${base}/fail-notice`, { method: "POST" });
   assert.equal(
     (
       await fetch(`${base}/webhook`, {

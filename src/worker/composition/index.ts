@@ -32,13 +32,16 @@ import {
 } from "../finance/repository";
 import { createPluggyAdapter } from "../pluggy";
 import {
+  createReapplicationService,
   createSyncService,
   scheduleSync as runSchedule,
   type SynchronizationDependencies,
 } from "../sync";
-import type { EntityPreparer } from "../sync/entity";
+import type { EntityPreparer, OperationState } from "../sync/entity";
 import {
+  admissionStates,
   createExecutionRepository,
+  createReapplicationRepository,
   createSyncRepository,
   schedulingStore,
 } from "../sync/repository";
@@ -92,7 +95,17 @@ export function financialQueries(env: Bindings): FinancialQueries {
       explain: (input) => explainRecord(env.DB, input),
       preview: (input, before) => previewSelection(env.DB, input, before),
       query: (input) => queryEntities(env.DB, input),
-      readStatus: () => readStatus(env.DB),
+      readStatus: async () => {
+        const status = await readStatus(env.DB);
+        return {
+          ...status,
+          freshness: await admissionStates(
+            env.DB,
+            status.items.map((item) => item.id),
+            new Date(),
+          ),
+        };
+      },
       revision: () => revision(env.DB),
       rules: (id) => rulesFor(env.DB, id),
       subscriptions: (input) => subscriptionRecords(env.DB, input),
@@ -103,7 +116,9 @@ export function financialQueries(env: Bindings): FinancialQueries {
 
 export function accountService(env: Bindings) {
   return createAccountService({
+    admissions: (ids, now) => admissionStates(env.DB, ids, now),
     disconnectAssistants: () => revokeAssistantGrants(env.OAUTH_PROVIDER),
+    dispatchSync: () => scheduleSync(env),
     installation: async () => ({
       database: !!env.DB,
       migrations: !!env.DB && (await migrationsReady(env.DB)),
@@ -111,6 +126,7 @@ export function accountService(env: Bindings) {
       workflow: !!env.FINANCE,
     }),
     now: () => new Date(),
+    recover: () => syncService(env).recover(),
     repository: createAccountRepository(env.DB),
     source: pluggyAdapter(env).account,
   });
@@ -152,6 +168,36 @@ export function syncService(env: Bindings) {
       return (await (await env.FINANCE.get(id)).status()).status;
     },
   });
+}
+
+export function reapplyRules(env: Bindings) {
+  return createReapplicationService(createReapplicationRepository(env.DB));
+}
+
+export async function reapplicationTask(
+  env: Bindings,
+  operationId: string,
+  batch: number,
+): Promise<OperationState> {
+  const result = await createReapplicationRepository(env.DB).receipt(
+    operationId,
+    batch,
+  );
+  if (!result) {
+    throw new Error("LOCAL_RECEIPT_NOT_FOUND");
+  }
+  const op = await syncService(env).read(operationId);
+  return {
+    createdAt: op.created_at,
+    id: `${operationId}/batch/${batch}`,
+    result: {
+      content: [{ text: JSON.stringify(result), type: "text" }],
+      isError: false,
+    },
+    status: "completed",
+    summary: result.status,
+    updatedAt: op.created_at,
+  };
 }
 
 function pluggyAdapter(env: Bindings) {

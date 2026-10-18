@@ -1,6 +1,7 @@
 import type {
   CorrectionInput,
   OperationSelection,
+  ReapplicationInput,
   RecordReference,
 } from "../domain";
 import type {
@@ -35,7 +36,7 @@ interface ToolInputs {
   [ToolName.setup_status]: Record<string, never>;
   [ToolName.sync]: LongInput;
   [ToolName.reconcile]: LongInput;
-  [ToolName.reapply]: LongInput;
+  [ToolName.reapply]: ReapplicationInput;
   [ToolName.status]: Record<string, never>;
   [ToolName.query]: Query;
   [ToolName.aggregate]: Aggregate;

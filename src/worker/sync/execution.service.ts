@@ -10,6 +10,7 @@ import {
   CoverageStatus,
   DEFINITIONS,
   deleteMissingAfterPage,
+  Fault,
   FaultCode,
   itemInfo,
   latestCreatedAt,
@@ -68,8 +69,7 @@ export async function runOperation(
     if (await step.do(`acquire-${attempt}`, () => repository.acquire(id))) {
       return true;
     }
-    await step.sleep(`queued-${attempt}`, "10 seconds");
-    return acquire(attempt + 1);
+    throw new Error("FINANCIAL_EXECUTOR_BUSY_RESUME_DISPATCH");
   }
   if (!(await acquire(0))) {
     return;
@@ -105,6 +105,14 @@ export async function runOperation(
     });
   });
   if (error) {
+    if (
+      error instanceof Fault &&
+      [FaultCode.UPSTREAM_RATE_LIMIT, FaultCode.UPSTREAM_TIMEOUT].some(
+        (code) => code === error.code,
+      )
+    ) {
+      await repository.defer(op.id, error.details?.retryAfterSeconds ?? 0);
+    }
     await repository.finish(op, OperationStatus.completed, true);
     throw error;
   }

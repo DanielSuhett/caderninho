@@ -3,6 +3,8 @@ import {
   accountState,
   assertConnectionCapacity,
   assertPersonalConnector,
+  type ItemAdmission,
+  nextAutomaticAttempt,
   PERSONAL_CONNECTOR_ID,
 } from "../../domain";
 import {
@@ -12,9 +14,12 @@ import {
 } from "./entity";
 
 interface AccountDependencies {
+  admissions: (ids: string[], now: Date) => Promise<ItemAdmission[]>;
   disconnectAssistants: () => Promise<void>;
+  dispatchSync: () => Promise<void>;
   installation: () => Promise<InstallationChecks>;
   now: () => Date;
+  recover: () => Promise<void>;
   repository: AccountRepository;
   source: AccountSource;
 }
@@ -43,25 +48,57 @@ export function createAccountService(deps: AccountDependencies) {
         itemId,
         deps.now().toISOString(),
       );
+      await deps.dispatchSync();
     },
     disconnectAssistants: () => deps.disconnectAssistants(),
     pause: () => deps.repository.pause(),
-    requestSync: () => deps.repository.requestSync(deps.now()),
+    async requestSync() {
+      const eligible = await deps.repository.requestSync(deps.now());
+      await deps.recover();
+      if (eligible) {
+        await deps.dispatchSync();
+      }
+      return eligible;
+    },
     async resume() {
       await deps.source.application();
       await deps.repository.resume(deps.now().toISOString());
+      await deps.dispatchSync();
     },
     async state() {
       const [{ evidence, status }, checks] = await Promise.all([
         readState(),
         deps.installation(),
       ]);
+      const admissions = new Map(
+        (
+          await deps.admissions(
+            evidence.items.map((item) => item.id),
+            deps.now(),
+          )
+        ).map((item) => [item.itemId, item]),
+      );
       return {
         checkedAt: deps.now().toISOString(),
         checks,
+        freshness: {
+          items: evidence.items.map((item) => {
+            const admission = admissions.get(item.id);
+            return {
+              id: item.id,
+              lastAdmissionAt: item.last_admitted_at,
+              lastImportAt: item.last_import_at,
+              nextEligibleAt: item.next_import_at,
+              operationId: item.cycle_id,
+              ...(admission && { status: admission.status }),
+            };
+          }),
+          nextAutomaticAt: nextAutomaticAttempt(deps.now()),
+        },
         items: evidence.items,
         latest: evidence.latest,
-        panel: accountPanel(status),
+        localApplications: evidence.localApplications,
+        panel: accountPanel(status, evidence.latest?.dispatched === 1),
         status,
       };
     },

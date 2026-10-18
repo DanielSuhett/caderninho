@@ -10,7 +10,10 @@ import type {
 import type {
   CoverageStatus,
   FinanceRecord,
+  ItemAdmission,
   ProviderRecord,
+  ReapplicationInput,
+  ReapplicationResult,
   Resource,
 } from "../../../domain";
 import type { Derived, RuleEngine } from "../../../domain/rules";
@@ -63,6 +66,31 @@ export function progressWithDefaults(saved: Partial<Progress>): Progress {
 export interface OperationHandle {
   id: string;
   status: OperationStatus;
+}
+export interface AdmissionResult {
+  items: ItemAdmission[];
+  operation: Operation | null;
+}
+export interface LocalReapplication {
+  activeRules: string | null;
+  after: string[];
+  batch: number;
+  expectedRevision: number;
+  operation: Operation;
+}
+export interface ReapplicationRepository {
+  acquire: (id: string) => Promise<boolean>;
+  begin: (input: ReapplicationInput) => Promise<LocalReapplication>;
+  commit: (
+    run: LocalReapplication,
+    changes: { identity: Identity; derived: Derived }[],
+    result: ReapplicationResult,
+    after: string[],
+  ) => Promise<void>;
+  receipt: (id: string, batch: number) => Promise<ReapplicationResult | null>;
+  release: (id: string) => Promise<void>;
+  rules: (revision: string) => Promise<RuleEngine>;
+  select: (run: LocalReapplication) => Promise<StoredEntity[]>;
 }
 
 export interface FinancialSource {
@@ -125,7 +153,13 @@ export interface OperationState {
 }
 export interface SyncRepository {
   acceptWebhook: (event: WebhookEvent, receivedAt: string) => Promise<boolean>;
+  admit: (
+    key: string,
+    input: OperationInput,
+    now: Date,
+  ) => Promise<AdmissionResult>;
   cancel: (id: string) => Promise<void>;
+  claim: (id: string) => Promise<boolean>;
   compact: () => Promise<void>;
   fingerprint: (value: unknown) => Promise<string>;
   finish: (
@@ -133,8 +167,6 @@ export interface SyncRepository {
     status: FinishedOperationStatus,
     error: boolean,
   ) => Promise<void>;
-  inbox: () => Promise<{ event_id: string; item_id: string }[]>;
-  linkEvent: (eventId: string, id: string) => Promise<void>;
   markDispatched: (id: string) => Promise<void>;
   migrationOverlaps: (input: MigrationRequest) => Promise<number>;
   needsDispatch: (id: string) => Promise<boolean>;
@@ -226,6 +258,7 @@ export interface ExecutionRepository {
     floor: string | null,
   ) => Promise<void>;
   current: (identity: Identity) => Promise<FinanceRecord | null>;
+  defer: (id: string, retryAfterSeconds: number) => Promise<void>;
   event: (id: string) => Promise<StoredEvent>;
   eventCursorUsed: (operationId: string, next: string) => Promise<boolean>;
   finish: (

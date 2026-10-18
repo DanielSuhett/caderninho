@@ -80,7 +80,7 @@ await test("the backend decides sync outcome and polling without turning partial
     ["completed", false, 2, 2, "complete", null],
     ["working", true, 2, 1, "preparing", null],
     ["working", false, 2, 1, "preparing", 5000],
-    ["waiting", false, 2, 1, "preparing", 5000],
+    ["waiting", false, 2, 1, "preparing", null],
   ] as const) {
     const panel = accountPanel({
       ...state,

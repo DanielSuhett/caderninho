@@ -8,6 +8,7 @@ import {
   useRef,
 } from "react";
 
+import type { AdmissionStatus } from "../../domain";
 import {
   type AccountActions,
   type AccountState,
@@ -17,6 +18,13 @@ import {
 import { SYNC_PRESENTATION, supportPrompt } from "./account-presentation";
 
 const labels = ["Conectar bancos", "Conectar assistente"];
+const admissionLabels: Record<AdmissionStatus, string> = {
+  cooldown: "Intervalo de 24 horas",
+  eligible: "Disponível",
+  paused: "Pausada",
+  started: "Iniciada",
+  working: "Em andamento",
+};
 const firstQuestion =
   "Use caderninho_setup_status e caderninho_status. Explique a cobertura, a atualização e eventuais falhas, sem apresentar saldos ou transações.";
 
@@ -241,6 +249,25 @@ export function AccountView({
         >
           Sincronizar agora
         </Action>
+        <p>
+          Próxima tentativa automática:{" "}
+          {snapshot.freshness?.nextAutomaticAt ?? "09:00 UTC diariamente"}.
+        </p>
+        {snapshot.freshness?.items.map((item) => (
+          <p key={item.id}>
+            <code>{item.id}</code>:{" "}
+            {item.status ? admissionLabels[item.status] : "Estado indisponível"}
+            . Última importação {item.lastImportAt ?? "ainda não concluída"}.
+            próxima elegibilidade {item.nextEligibleAt ?? "imediata"}.
+          </p>
+        ))}
+        {snapshot.localApplications?.map((application) => (
+          <p key={application.operationId}>
+            Reaplicação parcial: {application.totalProcessed} transações
+            confirmadas. Solicite a continuação pelo assistente; fechar este
+            painel mantém os lotes já aplicados.
+          </p>
+        ))}
         <Action
           disabled={busy}
           onClick={state.paused ? actions.resumeSync : actions.pauseSync}
@@ -250,7 +277,10 @@ export function AccountView({
         <p>
           A cópia é atualizada diariamente, com reconciliação semanal. Pausar
           preserva o histórico e deixa operações iniciadas terminarem. Pedidos
-          manuais têm intervalo mínimo de 15 minutos.
+          manuais compartilham o intervalo mínimo de 24 horas por conexão. A
+          agenda roda às 09:00 UTC. Uma importação manual pode fazer o próximo
+          horário automático pular um dia. Sincronizar agora também retoma
+          despachos pendentes.
         </p>
         <Action
           disabled={busy}

@@ -11,12 +11,7 @@ import {
   ProviderRecordSchema,
   Resource,
 } from "../../domain";
-import {
-  HttpFailureKind,
-  httpResponseFailure,
-  rateLimitRetry,
-  tryCatch,
-} from "../../shared";
+import { HttpFailureKind, httpResponseFailure, tryCatch } from "../../shared";
 import type { FinancialSource, Steps, StepValue } from "../sync";
 import { PersonalPluggyClient } from "./client.adapter";
 
@@ -269,52 +264,41 @@ function validateCursor(
   return next;
 }
 
-// A 429 acknowledgement is a durable step result; wait outside the billed step.
+// Persist a provider cooldown/timeout as a successful step envelope. Throw outside
+// step.do so Workflow retry does not repeat the source request in this cycle.
 export function providerRetries(steps: Steps): Steps {
   return {
-    do<T extends StepValue<T>>(
+    async do<T extends StepValue<T>>(
       name: string,
       callback: () => Promise<T>,
     ): Promise<T> {
-      return request(0);
-
-      async function request(attempt: number): Promise<T> {
-        if (attempt === rateLimitRetry.attempts) {
-          throw new Error("UPSTREAM_RATE_LIMIT_RETRIES_EXHAUSTED");
+      const outcome = await steps.do(`${name}-attempt-0`, async () => {
+        const { data, error } = await tryCatch(callback);
+        if (!error) {
+          return { kind: "success" as const, value: data };
         }
-        const outcome = await steps.do(
-          `${name}-attempt-${attempt}`,
-          async () => {
-            const { data, error } = await tryCatch(callback);
-            if (!error) {
-              return { kind: "success" as const, value: data };
-            }
-            if (
-              !(error instanceof Fault) ||
-              error.code !== FaultCode.UPSTREAM_RATE_LIMIT
-            ) {
-              throw error;
-            }
-            return {
-              kind: "retry" as const,
-              seconds: rateLimitRetry.delay({
-                attempt,
-                ...(error.details?.retryAfterSeconds !== undefined && {
-                  retryAfterSeconds: error.details.retryAfterSeconds,
-                }),
-              }),
-            };
-          },
-        );
-        if (outcome.kind === "success") {
-          return outcome.value;
+        if (
+          !(
+            error instanceof Fault &&
+            [FaultCode.UPSTREAM_RATE_LIMIT, FaultCode.UPSTREAM_TIMEOUT].some(
+              (code) => code === error.code,
+            )
+          )
+        ) {
+          throw error;
         }
-        await steps.sleep(
-          `${name}-rate-limit-${attempt}`,
-          `${Math.ceil(outcome.seconds)} seconds`,
-        );
-        return request(attempt + 1);
+        return {
+          code: error.code,
+          kind: "stopped" as const,
+          retryAfterSeconds: error.details?.retryAfterSeconds ?? 0,
+        };
+      });
+      if (outcome.kind === "success") {
+        return outcome.value;
       }
+      const fault = new Fault(outcome.code);
+      fault.details = { retryAfterSeconds: outcome.retryAfterSeconds };
+      throw fault;
     },
     sleep: (name, duration) => steps.sleep(name, duration),
   };

@@ -2,12 +2,14 @@ import {
   and,
   asc,
   eq,
+  exists,
   inArray,
   isNull,
   lt,
   lte,
   ne,
   notExists,
+  or,
   sql,
 } from "drizzle-orm";
 
@@ -40,11 +42,14 @@ import {
   settings as settingsTable,
 } from "../../schema";
 import type { Operation, SchedulingStore, SyncRepository } from "../entity";
+import { admitOperation } from "./admission.repository";
+import { createExecutionRepository } from "./execution.repository";
 
 export async function startOperation(
   db: D1Database,
   requestKey: string,
   input: OperationInput,
+  executionMode: "durable" | "local" = "durable",
 ) {
   assertOperationInput(input);
   const fingerprint = await hash(input);
@@ -58,6 +63,37 @@ export async function startOperation(
     assertIdempotency({ actual: fingerprint, expected: op.input_hash });
     return op;
   }
+  const revision = await activeRules(db);
+  const id = crypto.randomUUID(),
+    now = new Date().toISOString();
+  await database(db)
+    .insert(operationsTable)
+    .values({
+      created_at: now,
+      execution_mode: executionMode,
+      id,
+      input,
+      input_hash: fingerprint,
+      kind: input.kind,
+      reference_day: localDay(new Date(now)),
+      request_key: requestKey,
+      rules_revision: required(revision ?? undefined),
+      updated_at: now,
+    })
+    .onConflictDoNothing()
+    .run();
+  const op = required(
+    await database(db)
+      .select()
+      .from(operationsTable)
+      .where(eq(operationsTable.request_key, requestKey))
+      .get(),
+  );
+  assertIdempotency({ actual: fingerprint, expected: op.input_hash });
+  return op;
+}
+
+export async function activeRules(db: D1Database) {
   let revision = await database(db)
     .select({ active_rules: settingsTable.active_rules })
     .from(settingsTable)
@@ -80,32 +116,7 @@ export async function startOperation(
       .get()
       .then((row) => row?.active_rules ?? null);
   }
-  const id = crypto.randomUUID(),
-    now = new Date().toISOString();
-  await database(db)
-    .insert(operationsTable)
-    .values({
-      created_at: now,
-      id,
-      input,
-      input_hash: fingerprint,
-      kind: input.kind,
-      reference_day: localDay(new Date(now)),
-      request_key: requestKey,
-      rules_revision: required(revision ?? undefined),
-      updated_at: now,
-    })
-    .onConflictDoNothing()
-    .run();
-  const op = required(
-    await database(db)
-      .select()
-      .from(operationsTable)
-      .where(eq(operationsTable.request_key, requestKey))
-      .get(),
-  );
-  assertIdempotency({ actual: fingerprint, expected: op.input_hash });
-  return op;
+  return required(revision ?? undefined);
 }
 
 export async function operationState(db: D1Database, id: string) {
@@ -165,6 +176,29 @@ export async function finish(
 ) {
   await database(db).batch([
     database(db)
+      .update(itemsTable)
+      .set({
+        last_import_at: new Date().toISOString(),
+        notice_consumed: itemsTable.notice_claimed,
+      })
+      .where(
+        and(
+          eq(itemsTable.cycle_id, op.id),
+          sql`${!isError && status === OperationStatus.completed}`,
+          exists(
+            database(db)
+              .select({ id: operationsTable.id })
+              .from(operationsTable)
+              .where(
+                and(
+                  eq(operationsTable.id, op.id),
+                  eq(operationsTable.status, OperationStatus.working),
+                ),
+              ),
+          ),
+        ),
+      ),
+    database(db)
       .update(operationsTable)
       .set({
         phase: isError ? OperationPhase.error : status,
@@ -209,12 +243,6 @@ export function schedulingStore(db: D1Database): SchedulingStore {
               eq(settingsTable.id, 1),
               eq(settingsTable.sync_enabled, 1),
               lte(settingsTable.next_sync_at, now),
-              notExists(
-                database(db)
-                  .select({ one: sql`1` })
-                  .from(operationsTable)
-                  .where(eq(operationsTable.status, OperationStatus.working)),
-              ),
             ),
           )
           .get()) ?? null
@@ -225,19 +253,15 @@ export function schedulingStore(db: D1Database): SchedulingStore {
       if (!items.length) {
         return null;
       }
-      const active = await database(db)
-        .select({ id: operationsTable.id })
-        .from(operationsTable)
-        .where(eq(operationsTable.status, OperationStatus.working))
-        .limit(1)
-        .get();
-      if (active) {
-        return null;
-      }
-      const op = await startOperation(db, `scheduled:${account.next_sync_at}`, {
-        itemIds: items.map((item) => item.id),
-        kind,
-      });
+      const admitted = await admitOperation(
+        db,
+        `scheduled:${account.next_sync_at}`,
+        {
+          itemIds: items.map((item) => item.id),
+          kind,
+        },
+        new Date(Date.parse(next) - 86_400_000),
+      );
       // The durable operation and outbox exist before the next schedule advances.
       await database(db)
         .update(settingsTable)
@@ -249,7 +273,7 @@ export function schedulingStore(db: D1Database): SchedulingStore {
           ),
         )
         .run();
-      return op;
+      return admitted.operation;
     },
   };
 }
@@ -258,99 +282,105 @@ export function schedulingStore(db: D1Database): SchedulingStore {
 // status/idempotency keys remain. Never delete an active executor checkpoint.
 export async function compactOperations(db: D1Database, now = new Date()) {
   const before = new Date(now.getTime() - 30 * 86_400_000).toISOString();
-  await database(db).batch([
-    database(db)
-      .delete(checkpointsTable)
-      .where(
+  const orm = database(db);
+  const candidate = await orm
+    .select({ id: operationsTable.id })
+    .from(operationsTable)
+    .where(
+      and(
+        ne(operationsTable.status, OperationStatus.working),
+        eq(operationsTable.compacted, 0),
+        lt(operationsTable.updated_at, before),
+      ),
+    )
+    .orderBy(operationsTable.updated_at, operationsTable.id)
+    .limit(1)
+    .get();
+  if (candidate) {
+    await orm.batch([
+      orm.delete(checkpointsTable).where(
         inArray(
           sql`rowid`,
-          database(db)
+          orm
             .select({ rowid: sql<number>`${checkpointsTable}.rowid` })
             .from(checkpointsTable)
-            .innerJoin(
-              operationsTable,
-              eq(operationsTable.id, checkpointsTable.operation_id),
-            )
-            .where(
-              and(
-                ne(operationsTable.status, OperationStatus.working),
-                lt(operationsTable.updated_at, before),
-              ),
-            )
+            .where(eq(checkpointsTable.operation_id, candidate.id))
             .limit(200),
         ),
       ),
-    database(db)
-      .select({ id: operationsTable.id })
-      .from(operationsTable)
-      .where(eq(operationsTable.status, OperationStatus.working))
-      .limit(1),
-    database(db)
-      .delete(pageCommitsTable)
-      .where(
+      orm.delete(pageCommitsTable).where(
         inArray(
           sql`rowid`,
-          database(db)
+          orm
             .select({ rowid: sql<number>`${pageCommitsTable}.rowid` })
             .from(pageCommitsTable)
-            .innerJoin(
-              operationsTable,
-              eq(operationsTable.id, pageCommitsTable.operation_id),
-            )
-            .where(
-              and(
-                ne(operationsTable.status, OperationStatus.working),
-                lt(operationsTable.updated_at, before),
-              ),
-            )
+            .where(eq(pageCommitsTable.operation_id, candidate.id))
             .limit(200),
         ),
       ),
-    database(db)
-      .delete(operationTargetsTable)
-      .where(
+      orm.delete(operationTargetsTable).where(
         inArray(
           sql`rowid`,
-          database(db)
+          orm
             .select({ rowid: sql<number>`${operationTargetsTable}.rowid` })
             .from(operationTargetsTable)
-            .innerJoin(
-              operationsTable,
-              eq(operationsTable.id, operationTargetsTable.operation_id),
-            )
-            .where(
-              and(
-                ne(operationsTable.status, OperationStatus.working),
-                lt(operationsTable.updated_at, before),
-              ),
-            )
+            .where(eq(operationTargetsTable.operation_id, candidate.id))
             .limit(200),
         ),
       ),
-    database(db)
-      .update(inboxTable)
-      .set({ payload: {} })
-      .where(
-        inArray(
-          inboxTable.event_id,
-          database(db)
-            .select({ event_id: inboxTable.event_id })
-            .from(inboxTable)
-            .where(
-              and(
-                lt(inboxTable.processed_at, before),
-                ne(sql`${inboxTable.payload}`, "{}"),
-              ),
-            )
-            .limit(200),
+      orm
+        .update(operationsTable)
+        .set({ compacted: 1 })
+        .where(
+          and(
+            eq(operationsTable.id, candidate.id),
+            notExists(
+              orm
+                .select({ id: checkpointsTable.operation_id })
+                .from(checkpointsTable)
+                .where(eq(checkpointsTable.operation_id, candidate.id)),
+            ),
+            notExists(
+              orm
+                .select({ id: pageCommitsTable.operation_id })
+                .from(pageCommitsTable)
+                .where(eq(pageCommitsTable.operation_id, candidate.id)),
+            ),
+            notExists(
+              orm
+                .select({ id: operationTargetsTable.operation_id })
+                .from(operationTargetsTable)
+                .where(eq(operationTargetsTable.operation_id, candidate.id)),
+            ),
+          ),
         ),
+    ]);
+  }
+  await orm
+    .update(inboxTable)
+    .set({ payload: {} })
+    .where(
+      inArray(
+        inboxTable.event_id,
+        orm
+          .select({ event_id: inboxTable.event_id })
+          .from(inboxTable)
+          .where(
+            and(
+              sql`${inboxTable.processed_at} IS NOT NULL`,
+              lt(inboxTable.processed_at, before),
+              ne(sql`${inboxTable.payload}`, "{}"),
+            ),
+          )
+          .orderBy(inboxTable.processed_at, inboxTable.event_id)
+          .limit(200),
       ),
-  ]);
+    );
 }
 
 export function createSyncRepository(db: D1Database): SyncRepository {
   return {
-    async acceptWebhook(event: WebhookEvent, receivedAt: string) {
+    async acceptWebhook(event: WebhookEvent, _receivedAt: string) {
       const item = await database(db)
         .select({ id: itemsTable.id })
         .from(itemsTable)
@@ -359,26 +389,42 @@ export function createSyncRepository(db: D1Database): SyncRepository {
       if (!item) {
         return false;
       }
-      // Commit the receipt before ACK; cron recovers every undispatched receipt.
+      // One bounded intention per Item. Repetitions do not grow the inbox.
       await database(db)
-        .insert(inboxTable)
-        .values({
-          account_id: event.accountId,
-          event: event.event,
-          event_id: event.eventId,
-          item_id: event.itemId,
-          payload: event,
-          received_at: receivedAt,
+        .update(itemsTable)
+        .set({
+          last_notice_id: event.eventId,
+          notice_generation: sql`${itemsTable.notice_generation}+1`,
         })
-        .onConflictDoNothing()
+        .where(
+          and(
+            eq(itemsTable.id, event.itemId),
+            lte(itemsTable.notice_generation, itemsTable.notice_claimed),
+            or(
+              isNull(itemsTable.last_notice_id),
+              ne(itemsTable.last_notice_id, event.eventId),
+            ),
+            notExists(
+              database(db)
+                .select({ id: inboxTable.event_id })
+                .from(inboxTable)
+                .where(eq(inboxTable.event_id, event.eventId)),
+            ),
+          ),
+        )
         .run();
       return true;
     },
+    admit: (key, input, now) => admitOperation(db, key, input, now),
     async cancel(id: string) {
       await getOperation(db, id);
       await database(db)
         .update(operationsTable)
-        .set({ cancel_requested: 1 })
+        .set({
+          cancel_requested: 1,
+          phase: sql`CASE WHEN ${operationsTable.execution_mode}='local' THEN 'cancelled' ELSE ${operationsTable.phase} END`,
+          status: sql`CASE WHEN ${operationsTable.execution_mode}='local' THEN 'cancelled' ELSE ${operationsTable.status} END`,
+        })
         .where(
           and(
             eq(operationsTable.id, id),
@@ -387,33 +433,11 @@ export function createSyncRepository(db: D1Database): SyncRepository {
         )
         .run();
     },
+    claim: (id) => createExecutionRepository(db).acquire(id),
     compact: () => compactOperations(db),
     fingerprint: hash,
     async finish(id: string, status: FinishedOperationStatus, error: boolean) {
       await finish(db, await stillWorking(db, id), status, error);
-    },
-    async inbox() {
-      return await database(db)
-        .select({
-          event_id: inboxTable.event_id,
-          item_id: inboxTable.item_id,
-        })
-        .from(inboxTable)
-        .where(isNull(inboxTable.operation_id))
-        .limit(100)
-        .all();
-    },
-    async linkEvent(eventId: string, id: string) {
-      await database(db)
-        .update(inboxTable)
-        .set({ operation_id: id })
-        .where(
-          and(
-            eq(inboxTable.event_id, eventId),
-            isNull(inboxTable.operation_id),
-          ),
-        )
-        .run();
     },
     async markDispatched(id: string) {
       await database(db)
@@ -455,6 +479,7 @@ export function createSyncRepository(db: D1Database): SyncRepository {
               eq(operationsTable.id, id),
               eq(operationsTable.status, OperationStatus.working),
               eq(operationsTable.dispatched, 0),
+              eq(operationsTable.execution_mode, "durable"),
             ),
           )
           .get(),
@@ -471,6 +496,7 @@ export function createSyncRepository(db: D1Database): SyncRepository {
           and(
             eq(operationsTable.dispatched, Number(dispatched)),
             eq(operationsTable.status, OperationStatus.working),
+            eq(operationsTable.execution_mode, "durable"),
           ),
         )
         .orderBy(

@@ -23,6 +23,7 @@ export { ToolName } from "./mcp.types";
 export {
   LongInput,
   PRODUCT_INSTRUCTIONS,
+  ReapplicationInputSchema,
   ToolCallSchema,
   tools,
 } from "./mcp-contract";

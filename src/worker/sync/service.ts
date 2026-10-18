@@ -56,7 +56,8 @@ export function createSyncService(
   const dispatch = async (op: OperationHandle) => {
     if (
       op.status !== OperationStatus.working ||
-      !(await repository.needsDispatch(op.id))
+      !(await repository.needsDispatch(op.id)) ||
+      !(await repository.claim(op.id))
     ) {
       return;
     }
@@ -121,16 +122,6 @@ export function createSyncService(
     },
     read: repository.read,
     async recover() {
-      await (await repository.operations(false)).reduce(
-        async (previous, op) => {
-          await previous;
-          // The committed outbox remains pending if dispatch fails.
-          await tryCatch(() => dispatch(op)).then(({ data, error }) =>
-            error ? undefined : data,
-          );
-        },
-        Promise.resolve(),
-      );
       await (await repository.operations(true)).reduce(async (previous, op) => {
         await previous;
         const { data, error } = await tryCatch(() => workflow.status(op.id));
@@ -144,21 +135,19 @@ export function createSyncService(
           );
         }
       }, Promise.resolve());
-      await (await repository.inbox()).reduce(async (previous, event) => {
-        await previous;
-        const op = await repository.start(`webhook:${event.event_id}`, {
-          eventId: event.event_id,
-          itemIds: [event.item_id],
-          kind: OperationKind.webhook,
-        });
-        await repository.linkEvent(event.event_id, op.id);
-        // The committed outbox remains pending if dispatch fails.
-        await tryCatch(() => dispatch(op)).then(({ data, error }) =>
-          error ? undefined : data,
-        );
-      }, Promise.resolve());
+      await (await repository.operations(false)).reduce(
+        async (previous, op) => {
+          await previous;
+          // The committed outbox remains pending if dispatch fails.
+          await tryCatch(() => dispatch(op)).then(({ data, error }) =>
+            error ? undefined : data,
+          );
+        },
+        Promise.resolve(),
+      );
     },
-    start: repository.start,
+    start: (key: string, input: Parameters<SyncRepository["start"]>[1]) =>
+      repository.admit(key, input, now()),
     state: repository.state,
     states: repository.states,
   };

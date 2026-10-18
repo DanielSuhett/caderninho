@@ -24,7 +24,7 @@ O suporte aos recursos MCP depende do cliente e da versão utilizada.
 
 ## Manutenção
 
-- **Sincronização:** a agenda importa diariamente e reconcilia semanalmente. O painel permite solicitar uma cópia manual, com intervalo mínimo de 15 minutos.
+- **Sincronização:** a agenda importa diariamente e reconcilia semanalmente. O painel permite solicitar uma cópia manual, compartilhando a janela de 24 horas por conexão. O cron roda às 09:00 UTC; o botão também recupera despachos pendentes.
 - **Pausar:** interrompe próximos agendamentos. Preserva o histórico, as consultas locais e operações já iniciadas.
 - **Reconectar bancos:** use Reconectar na manutenção do painel para renovar uma conexão existente.
 - **Desconectar assistentes:** revoga todas as autorizações desta instalação. Para voltar a usar um cliente, autorize novamente. Isso não apaga mensagens já enviadas ao serviço de IA.

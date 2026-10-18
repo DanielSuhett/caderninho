@@ -1,4 +1,8 @@
-import type { AccountSyncOutcome, WizardState } from "../domain";
+import type {
+  AccountSyncOutcome,
+  AdmissionStatus,
+  WizardState,
+} from "../domain";
 
 export const AccountStep = { assistant: 2, connect: 1 } as const;
 export type AccountStep = (typeof AccountStep)[keyof typeof AccountStep];
@@ -36,8 +40,24 @@ export interface AccountResponse {
   checkedAt: string;
   checks: InstallationChecks;
   csrf: string;
+  freshness?:
+    | {
+        nextAutomaticAt: string;
+        items: {
+          id: string;
+          lastImportAt: string | null;
+          lastAdmissionAt: string | null;
+          nextEligibleAt: string | null;
+          operationId: string | null;
+          status?: AdmissionStatus | undefined;
+        }[];
+      }
+    | undefined;
   items: { id: string }[];
   latest: { status: string; phase: string; updated_at: string } | null;
+  localApplications?:
+    | { operationId: string; batch: number; totalProcessed: number }[]
+    | undefined;
   origin: string;
   panel: AccountPanel;
   status: WizardState;

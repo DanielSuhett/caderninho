@@ -2,6 +2,7 @@ import {
   and,
   asc,
   eq,
+  exists,
   getTableColumns,
   inArray,
   isNull,
@@ -28,6 +29,7 @@ import {
   effective_entities as effectiveEntitiesTable,
   entities as entitiesTable,
   inbox as inboxTable,
+  items as itemsTable,
   locks as locksTable,
   migration_imports as migrationImportsTable,
   operations as operationsTable,
@@ -145,6 +147,32 @@ export function createExecutionRepository(db: D1Database): ExecutionRepository {
       if (deleteMissing) {
         edits.push(
           orm
+            .update(settingsTable)
+            .set({ revision: sql`${settingsTable.revision}+1` })
+            .where(
+              and(
+                eq(settingsTable.id, 1),
+                exists(
+                  orm
+                    .select({ id: entitiesTable.id })
+                    .from(entitiesTable)
+                    .where(
+                      and(
+                        eq(entitiesTable.item_id, identity.itemId),
+                        eq(entitiesTable.resource, identity.resource),
+                        eq(entitiesTable.parent_id, identity.parentId),
+                        eq(entitiesTable.deleted, 0),
+                        ne(entitiesTable.normalizer, "legacy-projection-v1"),
+                        sql`COALESCE(${entitiesTable.seen_operation},'') != ${identity.operationId}`,
+                      ),
+                    )
+                    .limit(1),
+                ),
+              ),
+            ),
+        );
+        edits.push(
+          orm
             .update(entitiesTable)
             .set({ deleted: 1 })
             .where(
@@ -152,6 +180,7 @@ export function createExecutionRepository(db: D1Database): ExecutionRepository {
                 eq(entitiesTable.item_id, identity.itemId),
                 eq(entitiesTable.resource, identity.resource),
                 eq(entitiesTable.parent_id, identity.parentId),
+                eq(entitiesTable.deleted, 0),
                 ne(entitiesTable.normalizer, "legacy-projection-v1"),
                 sql`COALESCE(${entitiesTable.seen_operation}, '') != ${identity.operationId}`,
               ),
@@ -196,7 +225,12 @@ export function createExecutionRepository(db: D1Database): ExecutionRepository {
         orm
           .update(settingsTable)
           .set({ revision: sql`${settingsTable.revision} + 1` })
-          .where(eq(settingsTable.id, 1)),
+          .where(
+            and(
+              eq(settingsTable.id, 1),
+              sql`${prepared.some((entry) => entry.mutation.kind === "save")}`,
+            ),
+          ),
         orm.insert(pageCommitsTable).values({
           operation_id: identity.operationId,
           progress: {
@@ -323,7 +357,12 @@ export function createExecutionRepository(db: D1Database): ExecutionRepository {
         orm
           .update(settingsTable)
           .set({ revision: sql`${settingsTable.revision} + 1` })
-          .where(eq(settingsTable.id, 1)),
+          .where(
+            and(
+              eq(settingsTable.id, 1),
+              sql`${prepared.some((entry) => entry.mutation.kind === "save") || !!missingIds.length}`,
+            ),
+          ),
       ];
       await orm.batch([first, ...rest]);
     },
@@ -439,6 +478,17 @@ export function createExecutionRepository(db: D1Database): ExecutionRepository {
         .get();
       return row?.normalized ?? null;
     },
+    async defer(id, retryAfterSeconds) {
+      const until = new Date(
+        Date.now() + retryAfterSeconds * 1000,
+      ).toISOString();
+      await orm
+        .update(itemsTable)
+        .set({
+          next_import_at: sql`max(COALESCE(${itemsTable.next_import_at},${until}),${until})`,
+        })
+        .where(eq(itemsTable.cycle_id, id));
+    },
     async event(id) {
       return required(
         await orm
@@ -480,15 +530,22 @@ export function createExecutionRepository(db: D1Database): ExecutionRepository {
           .update(entitiesTable)
           .set({ eligible: 1 })
           .where(
-            and(
-              inArray(entitiesTable.item_id, op.input.itemIds),
-              eq(entitiesTable.eligible, 0),
-              eq(entitiesTable.deleted, 0),
-              lte(entitiesTable.transaction_date, op.reference_day),
-              or(
-                isNull(entitiesTable.status),
-                ne(entitiesTable.status, TransactionStatus.PENDING),
-              ),
+            inArray(
+              sql`rowid`,
+              orm
+                .select({ rowid: sql<number>`${entitiesTable}.rowid` })
+                .from(sql`${entitiesTable} INDEXED BY entity_future`)
+                .where(
+                  and(
+                    inArray(entitiesTable.item_id, op.input.itemIds),
+                    sql`${entitiesTable.eligible}=0 AND ${entitiesTable.deleted}=0`,
+                    lte(entitiesTable.transaction_date, op.reference_day),
+                    or(
+                      isNull(entitiesTable.status),
+                      ne(entitiesTable.status, TransactionStatus.PENDING),
+                    ),
+                  ),
+                ),
             ),
           ),
         orm
@@ -603,7 +660,7 @@ export function createExecutionRepository(db: D1Database): ExecutionRepository {
     },
     async selectReapplication(op) {
       const filter = op.input.filter
-        ? compileFilter(db, op.input.filter)
+        ? compileFilter(db, op.input.filter, op.reference_day)
         : undefined;
       await orm
         .insert(operationTargetsTable)

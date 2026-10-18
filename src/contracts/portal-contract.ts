@@ -1,6 +1,6 @@
 import { z } from "zod/v4";
 
-import { AccountSyncOutcome } from "../domain";
+import { AccountSyncOutcome, AdmissionStatus } from "../domain";
 import {
   type AccountConnectToken,
   type AccountPanel,
@@ -47,10 +47,34 @@ export const AccountResponseSchema = z.object({
   checkedAt: z.string(),
   checks: InstallationChecksSchema,
   csrf: z.string(),
+  freshness: z
+    .object({
+      items: z.array(
+        z.object({
+          id: z.string(),
+          lastAdmissionAt: z.string().nullable(),
+          lastImportAt: z.string().nullable(),
+          nextEligibleAt: z.string().nullable(),
+          operationId: z.string().nullable(),
+          status: z.enum(AdmissionStatus).optional(),
+        }),
+      ),
+      nextAutomaticAt: z.string(),
+    })
+    .optional(),
   items: z.array(z.object({ id: z.string() })),
   latest: z
     .object({ phase: z.string(), status: z.string(), updated_at: z.string() })
     .nullable(),
+  localApplications: z
+    .array(
+      z.object({
+        batch: z.number().int().nonnegative(),
+        operationId: z.string(),
+        totalProcessed: z.number().int().nonnegative(),
+      }),
+    )
+    .optional(),
   origin: z.string(),
   panel: AccountPanelSchema,
   status: WizardStateSchema,

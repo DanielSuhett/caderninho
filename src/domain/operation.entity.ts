@@ -166,9 +166,45 @@ export function assertWebhookEvent(event: WebhookEvent) {
 
 export const SYNC_POLICY = {
   intervalMs: 86_400_000,
-  manualIntervalMs: 900_000,
   reconciliationIntervalMs: 7 * 86_400_000,
 } as const;
+
+export const AdmissionStatus = {
+  cooldown: "cooldown",
+  eligible: "eligible",
+  paused: "paused",
+  started: "started",
+  working: "working",
+} as const;
+export type AdmissionStatus =
+  (typeof AdmissionStatus)[keyof typeof AdmissionStatus];
+export interface ItemAdmission {
+  itemId: string;
+  nextEligibleAt: string | null;
+  operationId: string | null;
+  status: AdmissionStatus;
+}
+export interface ReapplicationInput extends OperationSelection {
+  batches?: boolean | undefined;
+  continuation?: { operationId: string; batch: number } | undefined;
+  requestKey: string;
+}
+export interface ReapplicationResult {
+  continuation: { operationId: string; batch: number } | null;
+  operationId: string;
+  processed: number;
+  status: "completed" | "partial";
+  totalProcessed: number;
+}
+
+export function nextAutomaticAttempt(now: Date) {
+  const next = new Date(now);
+  next.setUTCHours(9, 0, 0, 0);
+  if (next <= now) {
+    next.setUTCDate(next.getUTCDate() + 1);
+  }
+  return next.toISOString();
+}
 
 export function nextSyncSchedule({
   now,

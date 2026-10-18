@@ -26,7 +26,7 @@ export class FinanceWorkflow extends WorkflowEntrypoint<
               retries: {
                 backoff: "exponential",
                 delay: "10 seconds",
-                limit: 6,
+                limit: 2,
               },
               timeout: "5 minutes",
             },
