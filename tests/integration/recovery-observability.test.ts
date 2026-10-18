@@ -8,7 +8,7 @@ import worker from "../../src/worker";
 import { syncService } from "../../src/worker/composition";
 import { database } from "../../src/worker/database";
 import { withObservation } from "../../src/worker/observability";
-import { operations } from "../../src/worker/schema";
+import { items, operations } from "../../src/worker/schema";
 import { startOperation } from "../../src/worker/sync/repository";
 import {
   cookies,
@@ -29,6 +29,52 @@ import { env } from "cloudflare:workers";
 beforeEach(async () => {
   await reset();
   await applyD1Migrations(env.DB, testMigrations);
+});
+
+test("webhook receipt distinguishes a recorded notice from a duplicate without warning", async () => {
+  const config = { ...settings(), WEBHOOK_SECRET: "synthetic-webhook-secret" };
+  const itemId = "11111111-1111-4111-8111-111111111111";
+  await database(env.DB).insert(items).values({ id: itemId });
+  const event = {
+    accountId: "22222222-2222-4222-8222-222222222222",
+    event: "transactions/created",
+    eventId: "synthetic-private-event",
+    itemId,
+    transactionsCreatedAtFrom: "2026-10-01T00:00:00.000Z",
+  };
+  const output: string[] = [];
+  const spans: { name: string; outcome?: string }[] = [];
+  const logger = createLogger({
+    destination: { write: (line) => output.push(line) },
+    level: "warn",
+    name: "synthetic-webhook",
+  });
+  const deliver = () =>
+    worker.fetch(
+      new Request(`${origin}/webhook`, {
+        body: JSON.stringify(event),
+        headers: { "X-Caderninho-Webhook-Secret": config.WEBHOOK_SECRET },
+        method: "POST",
+      }),
+      config,
+      createExecutionContext(),
+    );
+  await withObservation(
+    { onSpan: (span) => spans.push(span), output: logger },
+    async () => {
+      assert.equal((await deliver()).status, 204);
+      assert.equal((await deliver()).status, 204);
+    },
+  );
+  assert.deepEqual(
+    spans
+      .filter((span) => span.name === "sync.admission")
+      .map((span) => span.outcome),
+    ["success", "noop"],
+  );
+  assert.equal(output.length, 0);
+  assert.ok(!JSON.stringify(spans).includes("synthetic-private"));
+  assert.ok(!JSON.stringify(spans).includes(itemId));
 });
 
 test("100 unavailable Workflow statuses produce one safe recovery summary", async () => {
@@ -67,6 +113,7 @@ test("100 unavailable Workflow statuses produce one safe recovery summary", asyn
       failed: z.number(),
       level: z.number(),
       outcome: z.string(),
+      runId: z.string(),
       statusUnavailable: z.number(),
     })
     .parse(JSON.parse(output.join("")));
@@ -75,6 +122,7 @@ test("100 unavailable Workflow statuses produce one safe recovery summary", asyn
   assert.equal(entry.statusUnavailable, 100);
   assert.equal(entry.failed, 100);
   assert.equal(entry.level, 40);
+  assert.equal(entry.runId, "synthetic-cron");
   assert.ok(!output.join("").includes("synthetic-private"));
   assert.ok(!output.join("").includes("synthetic-key"));
 });
@@ -121,9 +169,21 @@ test("uncertain creation keeps the outbox pending and is recoverable by the cron
 });
 
 test("cron identifies failed auth maintenance and preserves the thrown failure", async () => {
+  const config = settings();
+  await startOperation(env.DB, "synthetic-unavailable-status", {
+    itemIds: [],
+    kind: "sync",
+  });
+  await database(env.DB).update(operations).set({ dispatched: 1 });
   await env.DB.exec("DROP TABLE login_attempts");
   const output: string[] = [];
-  const spans: { action?: string; name: string; outcome?: string }[] = [];
+  const spans: {
+    action?: string;
+    name: string;
+    outcome?: string;
+    parent?: string;
+    runId?: string;
+  }[] = [];
   const logger = createLogger({
     destination: { write: (line) => output.push(line) },
     level: "warn",
@@ -133,29 +193,56 @@ test("cron identifies failed auth maintenance and preserves the thrown failure",
     { onSpan: (span) => spans.push(span), output: logger },
     async () => {
       await assert.rejects(
-        worker.scheduled(createScheduledController(), settings()),
+        worker.scheduled(createScheduledController(), {
+          ...config,
+          FINANCE: {
+            create: config.FINANCE.create,
+            get: () => Promise.reject(new Error("synthetic-private-status")),
+          },
+        }),
       );
     },
   );
-  assert.equal(output.length, 1);
-  const entry = z
-    .object({
-      action: z.string(),
-      event: z.string(),
-      level: z.number(),
-      outcome: z.string(),
-      phase: z.string(),
-      recovery: z.string(),
-    })
-    .parse(JSON.parse(output.join("")));
-  assert.deepEqual(entry, {
-    action: "compact_auth",
-    event: "SYNC_SCHEDULED",
-    level: 50,
-    outcome: "failed",
-    phase: "sync.maintenance",
-    recovery: "none",
-  });
+  assert.equal(output.length, 2);
+  const entries = z
+    .array(
+      z.object({
+        action: z.string().optional(),
+        event: z.string(),
+        level: z.number(),
+        outcome: z.string(),
+        phase: z.string(),
+        recovery: z.string(),
+        runId: z.string(),
+      }),
+    )
+    .parse(output.map((line) => JSON.parse(line)));
+  const entry = entries.find((item) => item.level === 50);
+  assert.ok(entry);
+  assert.deepEqual(
+    {
+      action: entry.action,
+      event: entry.event,
+      level: entry.level,
+      outcome: entry.outcome,
+      phase: entry.phase,
+      recovery: entry.recovery,
+    },
+    {
+      action: "compact_auth",
+      event: "SYNC_SCHEDULED",
+      level: 50,
+      outcome: "failed",
+      phase: "sync.maintenance",
+      recovery: "none",
+    },
+  );
+  const scheduled = spans.find(
+    (span) => span.name === "sync.scheduled" && !span.parent,
+  );
+  assert.ok(scheduled?.runId);
+  assert.ok(entries.every((item) => item.runId === scheduled.runId));
+  assert.ok(spans.every((span) => span.runId === scheduled.runId));
   assert.ok(
     spans.some(
       (span) =>
@@ -187,7 +274,7 @@ test("unexpected readiness failure remains a usable account response with a safe
   });
   const response = await withObservation({ output: logger }, () =>
     worker.fetch(
-      new Request(origin + "/api/account", {
+      new Request(`${origin}/api/account`, {
         headers: { Cookie: cookies(session) },
       }),
       { ...config, DB: faulty },

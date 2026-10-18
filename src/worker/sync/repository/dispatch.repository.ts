@@ -41,7 +41,12 @@ import {
   page_commits as pageCommitsTable,
   settings as settingsTable,
 } from "../../schema";
-import type { Operation, SchedulingStore, SyncRepository } from "../entity";
+import {
+  type Operation,
+  type SchedulingStore,
+  type SyncRepository,
+  WebhookReceipt,
+} from "../entity";
 import { admitOperation } from "./admission.repository";
 import { createExecutionRepository } from "./execution.repository";
 
@@ -387,10 +392,10 @@ export function createSyncRepository(db: D1Database): SyncRepository {
         .where(eq(itemsTable.id, event.itemId))
         .get();
       if (!item) {
-        return false;
+        return WebhookReceipt.unknown;
       }
       // One bounded intention per Item. Repetitions do not grow the inbox.
-      await database(db)
+      const result = await database(db)
         .update(itemsTable)
         .set({
           last_notice_id: event.eventId,
@@ -413,7 +418,7 @@ export function createSyncRepository(db: D1Database): SyncRepository {
           ),
         )
         .run();
-      return true;
+      return result.meta.changes ? WebhookReceipt.changed : WebhookReceipt.noop;
     },
     admit: (key, input, now) => admitOperation(db, key, input, now),
     async cancel(id: string) {

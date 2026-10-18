@@ -11,12 +11,13 @@ import {
   nextSyncSchedule,
 } from "../../domain";
 import { tryCatch } from "../../shared";
-import type {
-  OperationHandle,
-  SchedulingStore,
-  SyncRecoveryNotice,
-  SyncRepository,
-  WorkflowDispatcher,
+import {
+  type OperationHandle,
+  type SchedulingStore,
+  type SyncRecoveryNotice,
+  type SyncRepository,
+  WebhookReceipt,
+  type WorkflowDispatcher,
 } from "./entity";
 
 export async function scheduleSync(
@@ -78,9 +79,17 @@ export function createSyncService(
     await repository.markDispatched(op.id);
   };
   return {
-    async acceptWebhook(event: WebhookEvent) {
+    async acceptWebhook(
+      event: WebhookEvent,
+      onReceipt?: (receipt: WebhookReceipt) => void,
+    ) {
       assertWebhookEvent(event);
-      return await repository.acceptWebhook(event, now().toISOString());
+      const receipt = await repository.acceptWebhook(
+        event,
+        now().toISOString(),
+      );
+      onReceipt?.(receipt);
+      return receipt !== WebhookReceipt.unknown;
     },
     cancel: (id: string) => repository.cancel(id),
     compact: repository.compact,

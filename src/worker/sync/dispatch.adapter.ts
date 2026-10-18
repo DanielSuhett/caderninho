@@ -14,9 +14,16 @@ import {
 import type {
   SyncRecoveryNotice,
   SyncRepository,
+  WebhookReceipt,
   WorkflowDispatcher,
 } from "./entity";
 import { createSyncService } from "./service";
+
+const receiptOutcomes: Record<WebhookReceipt, Outcome> = {
+  changed: Outcome.success,
+  noop: Outcome.noop,
+  unknown: Outcome.rejected,
+};
 
 export function observeRecoveries<T>(
   phase:
@@ -25,7 +32,7 @@ export function observeRecoveries<T>(
     | typeof SpanName.admission,
   work: (notice: (notice: SyncRecoveryNotice) => void) => Promise<T>,
 ) {
-  return withObservation({ runId: crypto.randomUUID() }, () =>
+  return withObservation({ independent: true }, () =>
     observeSpan(phase, async (span) => {
       let failure: FailureCode | undefined;
       let failed = 0;
@@ -84,13 +91,11 @@ export function observedSyncService(
   return {
     ...service,
     acceptWebhook: (event: Parameters<typeof service.acceptWebhook>[0]) =>
-      observeSpan(SpanName.admission, async (span) => {
-        const accepted = await service.acceptWebhook(event);
-        span.annotate({
-          outcome: accepted ? Outcome.success : Outcome.rejected,
-        });
-        return accepted;
-      }),
+      observeSpan(SpanName.admission, (span) =>
+        service.acceptWebhook(event, (receipt) => {
+          span.annotate({ outcome: receiptOutcomes[receipt] });
+        }),
+      ),
     dispatch: (operation: Parameters<typeof service.dispatch>[0]) =>
       withObservation({ operationId: operation.id }, () =>
         observeSpan(SpanName.dispatch, async (span) => {
