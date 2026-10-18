@@ -5,18 +5,13 @@ import {
   type ExecutionDependencies,
   ExecutionPhase,
   type LocalReapplication,
+  type ReapplicationObservation,
   type ReapplicationRepository,
 } from "./entity";
 
 export function createReapplicationService(
   repository: ReapplicationRepository,
-  observation?: {
-    batch: (
-      run: { operationId: string; batch: number },
-      callback: () => Promise<ReapplicationResult>,
-    ) => Promise<ReapplicationResult>;
-    phase: NonNullable<ExecutionDependencies["observePhase"]>;
-  },
+  observation?: ReapplicationObservation,
 ) {
   const phase: NonNullable<ExecutionDependencies["observePhase"]> =
     observation?.phase ?? ((_phase, callback) => callback());

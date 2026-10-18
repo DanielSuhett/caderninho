@@ -4,8 +4,11 @@ import { beforeEach, test } from "vitest";
 import { z } from "zod/v4";
 
 import { AccountResponseSchema } from "../../src/contracts";
+import { createLogger } from "../../src/shared/logger";
+import worker from "../../src/worker";
 import { compactAccess } from "../../src/worker/auth/repository";
 import { database } from "../../src/worker/database";
+import { withObservation } from "../../src/worker/observability";
 import { portal_sessions } from "../../src/worker/schema";
 import { receiveWebhook } from "../../src/worker/sync/controller";
 import { required } from "../support";
@@ -19,7 +22,11 @@ import {
   settings,
   testMigrations,
 } from "./personal-fixture";
-import { applyD1Migrations, reset } from "cloudflare:test";
+import {
+  applyD1Migrations,
+  createExecutionContext,
+  reset,
+} from "cloudflare:test";
 import { env as bindings } from "cloudflare:workers";
 
 const loginPathPattern = /account\/login/;
@@ -262,6 +269,50 @@ test("official OAuth authorizes assistants and the owner can revoke every grant"
     app.request("/mcp", { headers: { Authorization: `Bearer ${token}` } });
   assert.equal((await use(first)).status, 200);
   assert.equal((await use(second)).status, 200);
+  const lines: string[] = [];
+  const spans: object[] = [];
+  const rejectedImport = await withObservation(
+    {
+      onSpan: (span) => spans.push(span),
+      output: createLogger({
+        destination: { write: (line) => lines.push(line) },
+        level: "warn",
+        name: "synthetic-import",
+      }),
+    },
+    () =>
+      worker.fetch(
+        new Request(`${origin}/mcp/rules/import`, {
+          body: '{"document":{"version":9007199254740993}}',
+          headers: {
+            Authorization: `Bearer ${first}`,
+            "Content-Type": "application/json",
+          },
+          method: "POST",
+        }),
+        app.config,
+        createExecutionContext(),
+      ),
+  );
+  assert.equal(rejectedImport.status, 500);
+  assert.deepEqual(await rejectedImport.json(), {
+    error: "AUTHENTICATION_OR_REQUEST_FAILED",
+  });
+  assert.deepEqual(lines, []);
+  const requestSpan = z
+    .array(
+      z.object({
+        failure: z.string().optional(),
+        name: z.string(),
+        outcome: z.string(),
+        status: z.number().optional(),
+      }),
+    )
+    .parse(spans)
+    .find(({ name }) => name === "http.request");
+  assert.equal(requestSpan?.outcome, "rejected");
+  assert.equal(requestSpan?.failure, "INVALID_REQUEST");
+  assert.equal(requestSpan?.status, 500);
   assert.equal(
     (
       await app.request("/mcp", {

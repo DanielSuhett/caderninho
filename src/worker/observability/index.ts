@@ -5,6 +5,7 @@ import { z } from "zod/v4";
 
 import type { ToolName } from "../../contracts";
 import {
+  ExecutionPhase,
   Fault,
   FaultCode,
   type OperationKind,
@@ -18,20 +19,16 @@ export const SpanName = {
   accountAction: "account.action",
   admission: "sync.admission",
   authentication: "auth.request",
-  batchPublish: "finance.publish",
   dispatch: "sync.dispatch",
   financeAction: "finance.action",
   httpRequest: "http.request",
   maintenance: "sync.maintenance",
   mcpCall: "mcp.call",
   mcpStream: "mcp.stream",
-  operation: "sync.operation",
-  operationPhase: "sync.phase",
   phase: "sync.phase",
   providerRead: "pluggy.read",
   publication: "finance.publish",
   reapplication: "finance.reapply",
-  reapply: "finance.reapply",
   recovery: "sync.recovery",
   scheduled: "sync.scheduled",
   source: "pluggy.read",
@@ -50,16 +47,9 @@ export const Outcome = {
   success: "success",
 } as const;
 export type Outcome = (typeof Outcome)[keyof typeof Outcome];
-export const Phase = {
-  acquire: "acquire",
-  collect: "collect",
-  complete: "complete",
-  mature: "mature",
-  process: "process",
-  publish: "publish",
-  select: "select",
-} as const;
-export type Phase = (typeof Phase)[keyof typeof Phase];
+export const Phase = ExecutionPhase;
+export type Phase = ExecutionPhase;
+
 export const Recovery = {
   none: "none",
   resume: "resume",
@@ -128,6 +118,11 @@ for (const code of [
   "CURSOR_SCOPE_MISMATCH",
   "ANALYSIS_LIMIT_NARROW_PERIOD",
   "EXACT_AGGREGATE_LIMIT",
+  "Invalid amount filter",
+  "contains only supports description",
+  "Minor amount must be canonical integer, at most 30 digits",
+  "Filter complexity limit",
+  "UNSAFE_RULE_NUMBER",
 ]) {
   failures.set(code, localFailures.INVALID_REQUEST);
 }
@@ -326,10 +321,11 @@ interface Observation extends ObservationInput {
   activeSpan?: SpanName;
   primary: {
     error?: Error;
+    generation: number;
     reported: boolean;
     severity?: number;
     failure?: FailureCode;
-    phase?: SpanName | Phase;
+    phase?: SpanName | Phase | undefined;
     recovery?: Recovery;
   };
 }
@@ -351,7 +347,7 @@ export function withObservation<T>(
         !input.runId && { runId: crypto.randomUUID() }),
       primary:
         independent || input.correlation || input.runId || !parent
-          ? { reported: false }
+          ? { generation: 0, reported: false }
           : parent.primary,
     },
     operation,
@@ -367,17 +363,21 @@ export function markFailure(
   fields: Pick<SafeFields, "failure" | "phase" | "recovery"> = {},
 ) {
   const context = observation.getStore();
-  if (!context || (context.primary.failure && !fields.failure)) {
+  if (!context) {
+    return;
+  }
+  context.primary.generation += 1;
+  if (
+    context.primary.error === error &&
+    context.primary.failure &&
+    !fields.failure
+  ) {
     return;
   }
   context.primary.failure = fields.failure ?? classifyFailure(error);
   context.primary.error = error;
-  if (fields.phase) {
-    context.primary.phase = fields.phase;
-  }
-  if (fields.recovery) {
-    context.primary.recovery = fields.recovery;
-  }
+  context.primary.phase = fields.phase;
+  context.primary.recovery = fields.recovery ?? Recovery.none;
 }
 function correlationFields(context = observation.getStore()) {
   return {
@@ -428,9 +428,17 @@ export function reportDiagnostic(
   input: SafeFields & { event: DiagnosticEvent; additional?: boolean },
 ) {
   const context = observation.getStore();
+  const completed = [
+    Outcome.success,
+    Outcome.completed,
+    Outcome.noop,
+    Outcome.replayed,
+    Outcome.cancelled,
+  ].some((candidate) => candidate === input.outcome);
+  const primary = completed ? undefined : context?.primary;
   const failure =
     input.failure ??
-    context?.primary.failure ??
+    primary?.failure ??
     (input.status && input.status >= 500
       ? FaultCode.INTERNAL_ERROR
       : undefined);
@@ -438,10 +446,8 @@ export function reportDiagnostic(
     recovery: Recovery.none,
     ...safeFields(input),
     ...(failure && { failure }),
-    ...(context?.primary.phase &&
-      !input.phase && { phase: context.primary.phase }),
-    ...(context?.primary.recovery &&
-      !input.recovery && { recovery: context.primary.recovery }),
+    ...(primary?.phase && !input.phase && { phase: primary.phase }),
+    ...(primary?.recovery && !input.recovery && { recovery: primary.recovery }),
   };
   const outcome = diagnosticOutcome(input, failure);
   const diagnostic = {
@@ -548,6 +554,7 @@ export async function observeSpan<T>(
   let operationResult: Result<T> | undefined;
   const run = async (native?: Span) => {
     entered = true;
+    const generation = parent?.primary.generation;
     const span = spanHandle(name, native, fields);
     const invoke = () => operation(span);
     const { data, error } = await tryCatch(() =>
@@ -561,7 +568,10 @@ export async function observeSpan<T>(
       span.end({ failure });
       throw error;
     }
-    const failure = parent?.primary.failure;
+    const failure =
+      parent?.primary.generation === generation
+        ? undefined
+        : parent?.primary.failure;
     span.end(failure ? { failure } : {});
     return data;
   };

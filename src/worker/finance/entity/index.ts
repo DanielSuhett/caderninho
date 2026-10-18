@@ -121,6 +121,7 @@ export interface RuleActions {
   list: () => Promise<
     Pick<typeof rule_sets.$inferSelect, "id" | "created_at" | "normalizer">[]
   >;
+  onValidationFailure?: (error: Error) => void;
   read: (
     revision: string,
   ) => Promise<(typeof rule_sets.$inferSelect)["document"]>;
