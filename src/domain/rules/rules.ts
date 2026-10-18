@@ -226,25 +226,7 @@ export function compileValidatedRules(doc: Rules) {
       }
       ids.add(r.id);
 
-      for (const a of r.event.params.actions) {
-        if ((a.op === "set_category") !== (r.event.type === "classify")) {
-          throw new Error(`Invalid phase: ${r.id}`);
-        }
-
-        if (a.op === "set_category" && !cats.has(a.value)) {
-          throw new Error(`Unknown category: ${r.id}`);
-        }
-
-        if (a.op === "set_description") {
-          for (const m of a.value.matchAll(/\{\{\s*([^}]+?)\s*\}\}/g)) {
-            const field = m[1];
-
-            if (!field || !fields.has(field) || !field.startsWith("tx.")) {
-              throw new Error(`Invalid template: ${r.id}`);
-            }
-          }
-        }
-      }
+      validateRuleActions(r, cats);
 
       checkDepth(r.conditions);
 
@@ -292,8 +274,7 @@ export function compileValidatedRules(doc: Rules) {
       setCategory(initial);
     }
 
-    let categorySet = false,
-      descriptionSet = false;
+    const applied = { category: false, description: false };
 
     for (const phase of ["classify", "enrich"]) {
       const engine = new Engine();
@@ -310,86 +291,19 @@ export function compileValidatedRules(doc: Rules) {
       );
 
       for (const [index, rule] of ordered.entries()) {
-        function tagFacts(c: Condition): void {
-          if ("fact" in c && !fields.has(c.fact)) {
-            engine.addFact(c.fact, () => lookup({ tx, result }, c.fact), {
-              cache: false,
-            });
-          }
-
-          if ("all" in c) {
-            c.all.forEach(tagFacts);
-          }
-
-          if ("any" in c) {
-            c.any.forEach(tagFacts);
-          }
-
-          if ("not" in c) {
-            tagFacts(c.not);
-          }
-        }
-
-        tagFacts(rule.conditions);
+        tagFacts(engine, rule.conditions, { tx, result });
         engine.addRule({
           conditions: { all: [engineCondition(rule.conditions)] },
           event: rule.event,
           priority: ordered.length - index,
           onSuccess: () => {
             for (const action of rule.event.params.actions) {
-              if (action.op === "set_category") {
-                if (categorySet) {
-                  continue;
-                }
-                setCategory(action.value);
-                categorySet = true;
+              if (applyAction(action, { tx, result }, applied, setCategory)) {
+                result.evidence.push({ ruleId: rule.id, action });
               }
-
-              if (action.op === "set_description") {
-                if (descriptionSet) {
-                  continue;
-                }
-                const missing: string[] = [];
-
-                const text = action.value.replace(
-                  /\{\{\s*([^}]+?)\s*\}\}/g,
-                  (_, p: string) => {
-                    const x = lookup({ tx, result }, p);
-
-                    if (typeof x !== "string" || !x.trim()) {
-                      missing.push(p);
-                    }
-
-                    return typeof x === "string" ? x : "";
-                  },
-                );
-
-                if (missing.length) {
-                  continue;
-                }
-                result.description = text;
-                descriptionSet = true;
-              }
-
-              if (action.op === "set_tag") {
-                if (Object.hasOwn(result.tags, action.key)) {
-                  continue;
-                }
-                Object.defineProperty(result.tags, action.key, {
-                  value: action.value,
-                  enumerable: true,
-                  writable: true,
-                  configurable: true,
-                });
-              }
-
-              if (action.op === "ignore") {
-                result.ignored = true;
-              }
-              result.evidence.push({ ruleId: rule.id, action });
             }
 
-            if (phase === "classify" && categorySet) {
+            if (phase === "classify" && applied.category) {
               engine.stop();
             }
           },
@@ -403,6 +317,116 @@ export function compileValidatedRules(doc: Rules) {
   }
 
   return { document: doc, evaluate };
+}
+
+function applyAction(
+  action: z.infer<typeof ActionSchema>,
+  context: Context,
+  applied: { category: boolean; description: boolean },
+  setCategory: (id: string) => void,
+): boolean {
+  if (action.op === "set_category") {
+    if (applied.category) {
+      return false;
+    }
+    setCategory(action.value);
+    applied.category = true;
+  }
+
+  if (action.op === "set_description") {
+    if (applied.description) {
+      return false;
+    }
+    const text = renderDescription(action.value, context);
+    if (text === undefined) {
+      return false;
+    }
+    context.result.description = text;
+    applied.description = true;
+  }
+
+  if (action.op === "set_tag") {
+    if (Object.hasOwn(context.result.tags, action.key)) {
+      return false;
+    }
+    Object.defineProperty(context.result.tags, action.key, {
+      value: action.value,
+      enumerable: true,
+      writable: true,
+      configurable: true,
+    });
+  }
+
+  if (action.op === "ignore") {
+    context.result.ignored = true;
+  }
+  return true;
+}
+
+function renderDescription(template: string, context: Context) {
+  const missing: string[] = [];
+
+  const text = template.replace(/\{\{\s*([^}]+?)\s*\}\}/g, (_, p: string) => {
+    const x = lookup(context, p);
+
+    if (typeof x !== "string" || !x.trim()) {
+      missing.push(p);
+    }
+
+    return typeof x === "string" ? x : "";
+  });
+
+  return missing.length ? undefined : text;
+}
+
+function validateRuleActions(
+  r: Rule,
+  cats: Map<string, Rules["categories"][number]>,
+) {
+  for (const a of r.event.params.actions) {
+    if ((a.op === "set_category") !== (r.event.type === "classify")) {
+      throw new Error(`Invalid phase: ${r.id}`);
+    }
+
+    if (a.op === "set_category" && !cats.has(a.value)) {
+      throw new Error(`Unknown category: ${r.id}`);
+    }
+
+    if (a.op === "set_description") {
+      for (const m of a.value.matchAll(/\{\{\s*([^}]+?)\s*\}\}/g)) {
+        const field = m[1];
+
+        if (!field || !fields.has(field) || !field.startsWith("tx.")) {
+          throw new Error(`Invalid template: ${r.id}`);
+        }
+      }
+    }
+  }
+}
+
+function tagFacts(
+  engine: Engine,
+  condition: Condition,
+  context: Context,
+): void {
+  if ("fact" in condition && !fields.has(condition.fact)) {
+    engine.addFact(condition.fact, () => lookup(context, condition.fact), {
+      cache: false,
+    });
+  }
+  if ("all" in condition) {
+    for (const child of condition.all) {
+      tagFacts(engine, child, context);
+    }
+  }
+  if ("any" in condition) {
+    for (const child of condition.any) {
+      tagFacts(engine, child, context);
+    }
+  }
+  if ("not" in condition) {
+    tagFacts(engine, condition.not, context);
+  }
 }
 
 export const EMPTY_RULES: Rules = {

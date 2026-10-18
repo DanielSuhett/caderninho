@@ -142,7 +142,8 @@ const worker = {
           .onConflictDoUpdate({
             target: fixtureRows.id,
             set: { payload: sql`excluded.payload` },
-          });
+          })
+          .run();
       }
       return Response.json({ synthetic: true });
     }

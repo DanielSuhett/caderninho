@@ -104,64 +104,7 @@ export class PersonalPluggyClient extends PluggyClient {
         redirect: "manual",
         throwHttpErrors: false,
         parseJson: exactJSON,
-        fetch: async (input, init) => {
-          const response = await fetch(input, init);
-          if (response.status === 401) {
-            this.cachedKey = "";
-          }
-          if (!response.ok) {
-            void tryCatch(response.body?.cancel() ?? Promise.resolve());
-            throw transportError(
-              response.status >= 300 && response.status < 400
-                ? "UPSTREAM_REDIRECT"
-                : "UPSTREAM_HTTP_ERROR",
-              response,
-            );
-          }
-          if (Number(response.headers.get("Content-Length")) > this.maximum) {
-            void tryCatch(response.body?.cancel() ?? Promise.resolve());
-            throw transportError("UPSTREAM_TOO_LARGE");
-          }
-          const reader = response.body?.getReader();
-          const chunks: Uint8Array[] = [];
-          let size = 0;
-          if (reader) {
-            const abort = () => {
-              void tryCatch(reader.cancel());
-            };
-            deadline.addEventListener("abort", abort, { once: true });
-            if (deadline.aborted) {
-              abort();
-            }
-            try {
-              for (;;) {
-                const chunk = await reader.read();
-                if (chunk.done) {
-                  break;
-                }
-                size += chunk.value.byteLength;
-                if (size > this.maximum) {
-                  void tryCatch(reader.cancel());
-                  throw transportError("UPSTREAM_TOO_LARGE");
-                }
-                chunks.push(chunk.value);
-              }
-            } finally {
-              deadline.removeEventListener("abort", abort);
-              reader.releaseLock();
-            }
-          }
-          const bytes = new Uint8Array(size);
-          let offset = 0;
-          for (const chunk of chunks) {
-            bytes.set(chunk, offset);
-            offset += chunk.byteLength;
-          }
-          const headers = new Headers(response.headers);
-          headers.delete("Content-Encoding");
-          headers.delete("Content-Length");
-          return new Response(bytes, { status: response.status, headers });
-        },
+        fetch: (input, init) => this.fetchResponse(input, init, deadline),
       }).json<T>(),
     );
     if (result.error) {
@@ -175,4 +118,75 @@ export class PersonalPluggyClient extends PluggyClient {
     }
     return result.data;
   }
+  private async fetchResponse(
+    input: Parameters<typeof fetch>[0],
+    init: Parameters<typeof fetch>[1],
+    deadline: AbortSignal,
+  ) {
+    const response = await fetch(input, init);
+    if (response.status === 401) {
+      this.cachedKey = "";
+    }
+    if (!response.ok) {
+      void tryCatch(response.body?.cancel() ?? Promise.resolve());
+      throw transportError(
+        response.status >= 300 && response.status < 400
+          ? "UPSTREAM_REDIRECT"
+          : "UPSTREAM_HTTP_ERROR",
+        response,
+      );
+    }
+    if (Number(response.headers.get("Content-Length")) > this.maximum) {
+      void tryCatch(response.body?.cancel() ?? Promise.resolve());
+      throw transportError("UPSTREAM_TOO_LARGE");
+    }
+    const bytes = await readLimitedBody(response.body, deadline, this.maximum);
+    const headers = new Headers(response.headers);
+    headers.delete("Content-Encoding");
+    headers.delete("Content-Length");
+    return new Response(bytes, { status: response.status, headers });
+  }
+}
+
+async function readLimitedBody(
+  body: ReadableStream<Uint8Array> | null,
+  deadline: AbortSignal,
+  maximum: number,
+) {
+  const reader = body?.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  if (reader) {
+    const abort = () => {
+      void tryCatch(reader.cancel());
+    };
+    deadline.addEventListener("abort", abort, { once: true });
+    if (deadline.aborted) {
+      abort();
+    }
+    try {
+      for (;;) {
+        const chunk = await reader.read();
+        if (chunk.done) {
+          break;
+        }
+        size += chunk.value.byteLength;
+        if (size > maximum) {
+          void tryCatch(reader.cancel());
+          throw transportError("UPSTREAM_TOO_LARGE");
+        }
+        chunks.push(chunk.value);
+      }
+    } finally {
+      deadline.removeEventListener("abort", abort);
+      reader.releaseLock();
+    }
+  }
+  const bytes = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return bytes;
 }

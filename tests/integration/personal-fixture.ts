@@ -60,7 +60,7 @@ export function settings() {
   };
 }
 export function fixture(config = settings()) {
-  const provider = oauth(config, async () => new Response("verified"), origin);
+  const provider = oauth(async () => new Response("verified"), origin);
   return {
     config,
     request: (path: string, init?: RequestInit) =>
