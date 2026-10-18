@@ -3,6 +3,12 @@ import test from "node:test";
 
 import { assertMinor, compareDecimal, decimal, minor } from "../exact";
 
+const canonicalMinorErrorPattern = /canonical integer, at most 30 digits/;
+const invalidDecimalPattern = /INVALID_DECIMAL/;
+const decimalRangePattern = /DECIMAL_RANGE/;
+const currencyScaleUnsupportedPattern = /CURRENCY_SCALE_UNSUPPORTED/;
+const moneyPrecisionUnsupportedPattern = /MONEY_PRECISION_UNSUPPORTED/;
+
 await test("stored minor units preserve the shared integer and 30-digit precision boundary", () => {
   for (const value of [
     "0",
@@ -25,10 +31,7 @@ await test("stored minor units preserve the shared integer and 30-digit precisio
     "9".repeat(31),
     `-${"9".repeat(31)}`,
   ]) {
-    assert.throws(
-      () => assertMinor(value),
-      /canonical integer, at most 30 digits/,
-    );
+    assert.throws(() => assertMinor(value), canonicalMinorErrorPattern);
   }
 });
 
@@ -65,16 +68,16 @@ await test("decimal rejection and comparison preserve left-to-right error preced
     "1e+",
     "1".repeat(101),
   ] as const) {
-    assert.throws(() => decimal(input), /INVALID_DECIMAL/);
+    assert.throws(() => decimal(input), invalidDecimalPattern);
   }
 
   for (const input of ["1e31", "1e-31", "1e99999999999999999"]) {
-    assert.throws(() => decimal(input), /DECIMAL_RANGE/);
+    assert.throws(() => decimal(input), decimalRangePattern);
   }
 
-  assert.throws(() => compareDecimal(null, "1e31"), /INVALID_DECIMAL/);
-  assert.throws(() => compareDecimal("1e31", null), /DECIMAL_RANGE/);
-  assert.throws(() => compareDecimal("1", undefined), /INVALID_DECIMAL/);
+  assert.throws(() => compareDecimal(null, "1e31"), invalidDecimalPattern);
+  assert.throws(() => compareDecimal("1e31", null), decimalRangePattern);
+  assert.throws(() => compareDecimal("1", undefined), invalidDecimalPattern);
 
   for (const [a, b, expected] of [
     ["9007199254740993.29", "9007199254740993.28", 1],
@@ -96,13 +99,16 @@ await test("currency scales retain exact integers and reject excess precision wi
   assert.equal(minor("1.2340", "KWD"), "1234");
   assert.equal(minor("0.001", "BHD"), "1");
   assert.equal(minor(null, "XYZ"), null);
-  assert.throws(() => minor("invalid", "XYZ"), /CURRENCY_SCALE_UNSUPPORTED/);
+  assert.throws(() => minor("invalid", "XYZ"), currencyScaleUnsupportedPattern);
 
   for (const [value, currency] of [
     ["1.001", "BRL"],
     ["1.1", "JPY"],
     ["1.2345", "KWD"],
   ] as const) {
-    assert.throws(() => minor(value, currency), /MONEY_PRECISION_UNSUPPORTED/);
+    assert.throws(
+      () => minor(value, currency),
+      moneyPrecisionUnsupportedPattern,
+    );
   }
 });

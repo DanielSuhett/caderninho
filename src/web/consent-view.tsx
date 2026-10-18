@@ -16,9 +16,9 @@ export function Consent({
         Cliente: {details.clientDomain ?? "nome não verificado"}. Destino:{" "}
         {details.redirectHost}.
       </p>
-      {details.redirectIsLoopback && (
+      {details.redirectIsLoopback ? (
         <p>O destino é um aplicativo neste computador.</p>
-      )}
+      ) : null}
       <p>
         O assistente poderá consultar seus dados financeiros, solicitar
         sincronizações e alterar regras e correções locais. Os resultados
@@ -26,8 +26,8 @@ export function Consent({
       </p>
       <form method="post">
         <input
-          type="hidden"
           name="handle"
+          type="hidden"
           value={handle}
         />
         <UiButton

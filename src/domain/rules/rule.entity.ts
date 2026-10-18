@@ -8,11 +8,16 @@ import { compareDecimal, day } from "../exact";
 import { fail } from "../fault.entity";
 import { type FinanceRecord, NORMALIZER } from "../finance.entity";
 
+const tagFieldPattern = /^result\.tags\.[a-zA-Z0-9_-]{1,80}$/;
+const diacriticsPattern = /\p{Mn}/gu;
+const templateVariablePattern = /\{\{\s*([^}]+?)\s*\}\}/g;
+const signPattern = /^[-+]/;
+
 export const RuleAction = {
+  ignore: "ignore",
   set_category: "set_category",
   set_description: "set_description",
   set_tag: "set_tag",
-  ignore: "ignore",
 } as const;
 
 export type Action =
@@ -23,22 +28,22 @@ export type Action =
 
 export const Comparator = {
   eq: "eq",
-  ne: "ne",
   gt: "gt",
   gte: "gte",
   lt: "lt",
   lte: "lte",
+  ne: "ne",
 } as const;
 export type Comparator = (typeof Comparator)[keyof typeof Comparator];
 
 export const RuleOperator = {
-  equal: "equal",
-  notEqual: "notEqual",
   contains: "contains",
-  regex: "regex",
-  decimalCompare: "decimalCompare",
   dateCompare: "dateCompare",
   decimalBetween: "decimalBetween",
+  decimalCompare: "decimalCompare",
+  equal: "equal",
+  notEqual: "notEqual",
+  regex: "regex",
 } as const;
 
 export const RulePhase = {
@@ -85,31 +90,30 @@ export type Condition =
 export type RuleConditions = Exclude<Condition, Predicate>;
 
 export interface Rule {
-  id: string;
-  name: string;
-  priority: number;
-  is_active: boolean;
   conditions: RuleConditions;
   event: { type: RulePhase; params: { actions: Action[] } };
+  id: string;
+  is_active: boolean;
+  name: string;
+  priority: number;
 }
 
 export interface Catalog {
-  groups: { id: string; name: string }[];
   categories: {
     id: string;
     name: string;
     group_id: string;
     aliases: string[];
   }[];
+  groups: { id: string; name: string }[];
 }
 
 export interface Rules extends Catalog {
-  version: 2;
   rules: Rule[];
+  version: 2;
 }
 
 export interface LegacyRules extends Catalog {
-  version: 1;
   rules: {
     id: string;
     name: string;
@@ -119,12 +123,13 @@ export interface LegacyRules extends Catalog {
     when: JsonValue;
     actions: Action[];
   }[];
+  version: 1;
 }
 
 export interface ConversionIssue {
-  path: string;
   code: string;
   message: string;
+  path: string;
 }
 
 export type RuleImportReport =
@@ -132,67 +137,67 @@ export type RuleImportReport =
   | { compatible: false; document: null; issues: ConversionIssue[] };
 
 export type Derived = {
-  category_id: string;
   category: string;
-  category_group_id: string;
   category_group: string;
+  category_group_id: string;
+  category_id: string;
   description: string;
-  tags: Record<string, string>;
-  ignored: boolean;
   evidence: { ruleId: string; action: Action }[];
+  ignored: boolean;
+  tags: Record<string, string>;
 };
 
 export type TransactionContext = {
-  id: string;
   account_id: string;
   account_name: string;
-  description: string;
-  counterparty_name: string;
-  direction: string;
-  operation: string;
-  payment_method: string;
-  currency: string;
   account_type: string;
-  original_category: string;
   amount: string;
   amount_abs: string;
+  counterparty_name: string;
+  currency: string;
   date: string;
+  description: string;
+  direction: string;
+  id: string;
   installment_number: string;
+  operation: string;
+  original_category: string;
+  payment_method: string;
   total_installments: string;
 };
 
 export interface RuleEngine {
   document: Rules;
-  evaluate(transaction: TransactionContext): Promise<Derived>;
+  evaluate: (transaction: TransactionContext) => Promise<Derived>;
 }
 
 const transactionFields = {
-  id: true,
   account_id: true,
   account_name: true,
-  description: true,
-  counterparty_name: true,
-  direction: true,
-  operation: true,
-  payment_method: true,
-  currency: true,
   account_type: true,
-  original_category: true,
   amount: true,
   amount_abs: true,
+  counterparty_name: true,
+  currency: true,
   date: true,
+  description: true,
+  direction: true,
+  id: true,
   installment_number: true,
+  operation: true,
+  original_category: true,
+  payment_method: true,
   total_installments: true,
 } satisfies Record<keyof TransactionContext, true>;
 
 const resultFields = {
-  category_id: true,
   category: true,
-  category_group_id: true,
   category_group: true,
+  category_group_id: true,
+  category_id: true,
   description: true,
-  tags: true,
   ignored: true,
+  tags: true,
 } satisfies Record<Exclude<keyof Derived, "evidence">, true>;
 
 export const fields = new Set([
@@ -201,11 +206,14 @@ export const fields = new Set([
 ]);
 
 export const allowed = (path: string) =>
-  fields.has(path) || /^result\.tags\.[a-zA-Z0-9_-]{1,80}$/.test(path);
+  fields.has(path) || tagFieldPattern.test(path);
 export const accents = (text: string) =>
-  text.normalize("NFD").replace(/\p{Mn}/gu, "");
+  text.normalize("NFD").replace(diacriticsPattern, "");
 
-type Context = { tx: TransactionContext; result: Derived };
+interface Context {
+  result: Derived;
+  tx: TransactionContext;
+}
 
 export function compileStoredRules({
   document,
@@ -228,7 +236,7 @@ function lookup(c: Context, p: string): JsonValue {
     throw new Error(`Unknown field: ${p}`);
   }
   if (p.startsWith("tx.")) {
-    const transaction: Record<string, string> = c.tx;
+    const { tx: transaction }: { tx: Record<string, string> } = c;
     return transaction[p.slice(3)] ?? null;
   }
 
@@ -239,7 +247,7 @@ function lookup(c: Context, p: string): JsonValue {
       : null;
   }
 
-  const result: Record<string, JsonValue> = c.result;
+  const { result }: { result: Record<string, JsonValue> } = c;
   return result[p.slice(7)] ?? null;
 }
 
@@ -369,7 +377,7 @@ function operators(engine: Engine, expressions: Map<string, RE2JS>) {
 }
 
 export function compileValidatedRules(doc: Rules) {
-  if (JSON.stringify(doc).length > 1048576) {
+  if (JSON.stringify(doc).length > 1_048_576) {
     throw new Error("Rules exceed 1 MiB");
   }
 
@@ -380,7 +388,7 @@ export function compileValidatedRules(doc: Rules) {
   const othersFound = doc.groups.find((g) => g.name === "Outros"),
     uncategorizedFound = doc.categories.find((c) => c.name === "Sem categoria");
 
-  if (!othersFound || !uncategorizedFound) {
+  if (!(othersFound && uncategorizedFound)) {
     throw new Error("Catalog requires Outros and Sem categoria");
   }
 
@@ -434,14 +442,14 @@ export function compileValidatedRules(doc: Rules) {
     );
     const facts = new Set(fields);
     return {
-      phase,
       facts,
+      phase,
       rules: active.map((rule, index) => {
         collectFacts(rule.conditions, facts);
         return {
-          id: rule.id,
           conditions: { all: [engineCondition(rule.conditions)] },
           event: rule.event,
+          id: rule.id,
           priority: active.length - index,
         };
       }),
@@ -452,16 +460,16 @@ export function compileValidatedRules(doc: Rules) {
 
   async function evaluate(tx: TransactionContext): Promise<Derived> {
     const result: Derived = {
-      category_id: "",
       category: tx.original_category,
-      category_group_id: others.id,
       category_group: others.name,
+      category_group_id: others.id,
+      category_id: "",
       description: tx.description,
-      tags: {},
-      ignored: false,
       evidence: [],
+      ignored: false,
+      tags: {},
     };
-    const context = { tx, result };
+    const context = { result, tx };
 
     function setCategory(id: string) {
       const cat = cats.get(id);
@@ -475,10 +483,10 @@ export function compileValidatedRules(doc: Rules) {
         throw new Error("Unknown group");
       }
       Object.assign(result, {
-        category_id: id,
         category: cat.name,
-        category_group_id: group.id,
         category_group: group.name,
+        category_group_id: group.id,
+        category_id: id,
       });
     }
 
@@ -509,11 +517,10 @@ export function compileValidatedRules(doc: Rules) {
         engine.addRule({
           conditions: rule.conditions,
           event: rule.event,
-          priority: rule.priority,
           onSuccess: () => {
             for (const action of rule.event.params.actions) {
               if (applyAction(action, context, applied, setCategory)) {
-                result.evidence.push({ ruleId: rule.id, action });
+                result.evidence.push({ action, ruleId: rule.id });
               }
             }
 
@@ -521,6 +528,7 @@ export function compileValidatedRules(doc: Rules) {
               engine.stop();
             }
           },
+          priority: rule.priority,
         });
       }
 
@@ -564,10 +572,10 @@ function applyAction(
       return false;
     }
     Object.defineProperty(context.result.tags, action.key, {
-      value: action.value,
-      enumerable: true,
-      writable: true,
       configurable: true,
+      enumerable: true,
+      value: action.value,
+      writable: true,
     });
   }
 
@@ -580,7 +588,7 @@ function applyAction(
 function renderDescription(template: string, context: Context) {
   const missing: string[] = [];
 
-  const text = template.replace(/\{\{\s*([^}]+?)\s*\}\}/g, (_, p: string) => {
+  const text = template.replace(templateVariablePattern, (_, p: string) => {
     const x = lookup(context, p);
 
     if (typeof x !== "string" || !x.trim()) {
@@ -610,10 +618,10 @@ function validateRuleActions(
     }
 
     if (a.op === RuleAction.set_description) {
-      for (const m of a.value.matchAll(/\{\{\s*([^}]+?)\s*\}\}/g)) {
-        const field = m[1];
+      for (const m of a.value.matchAll(templateVariablePattern)) {
+        const [, field] = m;
 
-        if (!field || !fields.has(field) || !field.startsWith("tx.")) {
+        if (!(field && fields.has(field) && field.startsWith("tx."))) {
           throw new Error(`Invalid template: ${r.id}`);
         }
       }
@@ -641,38 +649,38 @@ function collectFacts(condition: Condition, facts: Set<string>): void {
 }
 
 export const EMPTY_RULES: Rules = {
-  version: 2,
-  groups: [{ id: "other", name: "Outros" }],
   categories: [
     {
+      aliases: [],
+      group_id: "other",
       id: "uncategorized",
       name: "Sem categoria",
-      group_id: "other",
-      aliases: [],
     },
   ],
+  groups: [{ id: "other", name: "Outros" }],
   rules: [],
+  version: 2,
 };
 
 export function txContext(r: FinanceRecord): TransactionContext {
   const amount = String(r.amount ?? "");
 
   return {
-    id: r.id,
     account_id: r.accountId ?? "",
     account_name: r.accountName ?? "",
-    description: r.description ?? "",
-    counterparty_name: r.counterparty ?? "",
-    direction: r.type ?? "",
-    operation: r.operationType ?? "",
-    payment_method: r.paymentMethod ?? "",
-    currency: r.currencyCode ?? "",
     account_type: r.accountType ?? "",
-    original_category: r.category ?? "",
     amount,
-    amount_abs: amount.replace(/^[-+]/, ""),
+    amount_abs: amount.replace(signPattern, ""),
+    counterparty_name: r.counterparty ?? "",
+    currency: r.currencyCode ?? "",
     date: r.accountingDate ?? "",
+    description: r.description ?? "",
+    direction: r.type ?? "",
+    id: r.id,
     installment_number: String(r["creditCardMetadata.installmentNumber"] ?? ""),
+    operation: r.operationType ?? "",
+    original_category: r.category ?? "",
+    payment_method: r.paymentMethod ?? "",
     total_installments: String(r["creditCardMetadata.totalInstallments"] ?? ""),
   };
 }

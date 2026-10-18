@@ -30,9 +30,9 @@ export function requestDiagnostic(
   // Deliberately omit URL, query strings, bodies, identities and exception text.
   const diagnostic = {
     correlation: input.correlation,
-    status: input.status,
     durationMs: input.durationMs,
     route: input.route,
+    status: input.status,
   };
   if (input.status >= 500) {
     output.error({ code: "REQUEST_FAILED", ...diagnostic });
@@ -47,7 +47,7 @@ export function requestDiagnostic(
 
 export async function boundedJson(
   request: Request,
-  maximum = 1048576,
+  maximum = 1_048_576,
   losslessRules = false,
 ) {
   if (!request.body) {

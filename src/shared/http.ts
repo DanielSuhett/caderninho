@@ -14,7 +14,9 @@ import {
 } from "./http.types";
 import { tryCatch } from "./result";
 
-const maximumRetryAfterSeconds = 86400;
+const digitsPattern = /^\d+$/;
+
+const maximumRetryAfterSeconds = 86_400;
 
 export const rateLimitRetry = {
   attempts: 7,
@@ -69,20 +71,20 @@ export function httpResponseFailure({
   return {
     kind,
     status,
-    ...(retryAfter != null && { retryAfter }),
+    ...(retryAfter !== null && retryAfter !== undefined && { retryAfter }),
     ...(retryAfterSeconds !== undefined && { retryAfterSeconds }),
   };
 }
 
 function parseRetryAfter(value: string | null | undefined) {
   if (!value) {
-    return undefined;
+    return;
   }
-  const seconds = /^\d+$/.test(value)
+  const seconds = digitsPattern.test(value)
     ? Number(value)
     : Math.ceil((Date.parse(value) - Date.now()) / 1000);
   if (!Number.isFinite(seconds)) {
-    return undefined;
+    return;
   }
   return Math.max(0, Math.min(seconds, maximumRetryAfterSeconds));
 }
@@ -90,8 +92,8 @@ function parseRetryAfter(value: string | null | undefined) {
 // A lost response does not prove that a mutation was rejected.
 export const httpClient = ky.create({
   headers: { Accept: "application/json" },
-  retry: 0,
   redirect: "manual",
+  retry: 0,
   throwHttpErrors: false,
   timeout: false,
 });
@@ -107,9 +109,9 @@ export async function requestJson<T>({
     const pending = client(input, options);
     const response = await pending;
     const failure = httpResponseFailure({
+      retryAfter: response.headers.get("Retry-After"),
       status: response.status,
       type: response.type,
-      retryAfter: response.headers.get("Retry-After"),
     });
     if (failure) {
       try {
@@ -121,9 +123,11 @@ export async function requestJson<T>({
         void cancelResponse(response);
       }
     }
+    const maximum = options?.maxResponseSize;
     if (
-      options?.maxResponseSize != null &&
-      Number(response.headers.get("Content-Length")) > options.maxResponseSize
+      maximum !== null &&
+      maximum !== undefined &&
+      Number(response.headers.get("Content-Length")) > maximum
     ) {
       void cancelResponse(response);
       throw new HttpRequestError({ kind: HttpFailureKind.tooLarge });

@@ -17,7 +17,7 @@ import type { JsonValue } from "@/shared/json.types";
 import { prepareEntity } from "@/testing/finance";
 import { required, responseJson } from "@/testing/helpers";
 import { mockNetwork } from "@/testing/network";
-import type { DurableInstance } from "@/worker/bindings";
+import type { Bindings, DurableInstance } from "@/worker/bindings";
 import {
   financialQueries,
   synchronizationDependencies,
@@ -29,7 +29,23 @@ import { aggregateEntities, queryEntities } from "@/worker/finance/repository";
 import { rulesFor, saveRules } from "@/worker/finance/rules.repository";
 import { fetchMcp } from "@/worker/mcp/controller";
 import { listen, task } from "@/worker/mcp/tasks";
-import * as tables from "@/worker/schema";
+import {
+  checkpoints as checkpointsTable,
+  coverage as coverageTable,
+  derived as derivedTable,
+  effective_entities as effectiveEntitiesTable,
+  entities as entitiesTable,
+  inbox as inboxTable,
+  items as itemsTable,
+  locks as locksTable,
+  migration_imports as migrationImportsTable,
+  operations as operationsTable,
+  operation_targets as operationTargetsTable,
+  page_commits as pageCommitsTable,
+  rule_sets as ruleSetsTable,
+  settings as settingsTable,
+  tags as tagsTable,
+} from "@/worker/schema";
 import { type FinancialSource, runOperation } from "@/worker/sync";
 import { finish, getOperation, startOperation } from "@/worker/sync/repository";
 
@@ -37,11 +53,31 @@ import { settings } from "./personal-fixture";
 import { applyD1Migrations, reset } from "cloudflare:test";
 import { env as bindings } from "cloudflare:workers";
 
+const notFoundPattern = /NOT_FOUND/;
+const subscriptionAcknowledgementPattern =
+  /notifications\/subscriptions\/acknowledged/;
+const taskNotificationPattern = /notifications\/tasks/;
+const syncFilterNotSupportedUseItemScopePattern =
+  /SYNC_FILTER_NOT_SUPPORTED_USE_ITEM_SCOPE/;
+const renormalizeRequiresReconciliationPattern =
+  /RENORMALIZE_REQUIRES_RECONCILIATION/;
+const restartRequiredPattern = /RESTART_REQUIRED/;
+const unknownMetricPattern = /UNKNOWN_METRIC/;
+const cursorScopePattern = /CURSOR_SCOPE/;
+const unavailablePattern = /unavailable/;
+const sourceIdMismatchPattern = /SOURCE_ID_MISMATCH/;
+const canonicalMinorErrorPattern = /canonical integer, at most 30 digits/;
+const sourceTotalChangedPattern = /SOURCE_TOTAL_CHANGED/;
+const rulesV1RequiresExplicitConversionAndActivationPattern =
+  /RULES_V1_REQUIRES_EXPLICIT_CONVERSION_AND_ACTIVATION/;
+const bodyLimitPattern = /BODY_LIMIT/;
+const syntheticReceiptFailurePattern = /synthetic receipt failure/;
+
 declare global {
   namespace Cloudflare {
     interface Env {
-      OAUTH_KV: KVNamespace;
       DB: D1Database;
+      OAUTH_KV: KVNamespace;
       TEST_MIGRATIONS: D1Migration[];
     }
   }
@@ -66,22 +102,22 @@ test("owner-data migration preserves existing financial records and makes the fu
     .bind("legacy-item", JSON.stringify([]), 0)
     .run();
   await database(bindings.DB)
-    .insert(tables.entities)
+    .insert(entitiesTable)
     .values({
-      item_id: "legacy-item",
-      resource: Resource.transactions,
-      parent_id: "legacy-account",
+      first_seen_at: "2026-10-01T00:00:00.000Z",
       id: "legacy-transaction",
-      source: { id: "legacy-transaction" },
+      item_id: "legacy-item",
       normalized: {
-        id: "legacy-transaction",
         amountMinor: "-900719925474099329",
         currency: "BRL",
+        id: "legacy-transaction",
       },
-      relevant_hash: "synthetic",
       normalizer: "synthetic",
-      first_seen_at: "2026-10-01T00:00:00.000Z",
       observed_at: "2026-10-01T00:00:00.000Z",
+      parent_id: "legacy-account",
+      relevant_hash: "synthetic",
+      resource: Resource.transactions,
+      source: { id: "legacy-transaction" },
     })
     .run();
   await applyD1Migrations(bindings.DB, bindings.TEST_MIGRATIONS);
@@ -104,35 +140,35 @@ test("D1 queries, local corrections and task progress remain available without P
     db,
     (
       await prepareEntity(db, {
+        engine,
         identity: identity("offline"),
-        source: transaction("offline"),
-        parent: account,
         operation: op,
-        engine: engine,
+        parent: account,
+        source: transaction("offline"),
       })
     ).statements,
   );
   let upstream = 0;
-  mockNetwork(async () => {
-    upstream++;
-    throw new Error("Pluggy unavailable");
+  mockNetwork(() => {
+    upstream += 1;
+    return Promise.reject(new Error("Pluggy unavailable"));
   });
   const queries = financialQueries(env(db));
   assert.equal(
-    (await queries.query({ resource: "transactions", limit: 50 })).records
+    (await queries.query({ limit: 50, resource: "transactions" })).records
       .length,
     1,
   );
   assert.equal(
-    (await queries.aggregate({ resource: "transactions", metric: "amount" }))
+    (await queries.aggregate({ metric: "amount", resource: "transactions" }))
       .groups[0]?.totalMinor,
     "1001",
   );
   const reference = identity("offline");
   const before = await database(db)
-    .select({ revision: tables.settings.revision })
-    .from(tables.settings)
-    .where(and(eq(tables.settings.id, 1)))
+    .select({ revision: settingsTable.revision })
+    .from(settingsTable)
+    .where(and(eq(settingsTable.id, 1)))
     .get()
     .then((row) => row?.revision ?? null);
   await queries.correctRecord({
@@ -151,9 +187,9 @@ test("D1 queries, local corrections and task progress remain available without P
   assert.equal(explanation.tags[0]?.origin, "manual");
   assert.equal(
     await database(db)
-      .select({ revision: tables.settings.revision })
-      .from(tables.settings)
-      .where(and(eq(tables.settings.id, 1)))
+      .select({ revision: settingsTable.revision })
+      .from(settingsTable)
+      .where(and(eq(settingsTable.id, 1)))
       .get()
       .then((row) => row?.revision ?? null),
     Number(before) + 2,
@@ -171,8 +207,8 @@ test("D1 queries, local corrections and task progress remain available without P
   await assert.rejects(
     financialQueries(env(db)).correctRecord({
       ...reference,
-      itemId: "unknown-item",
       field: "description",
+      itemId: "unknown-item",
       value: "forged",
     }),
   );
@@ -188,97 +224,97 @@ test("D1 queries, local corrections and task progress remain available without P
   assert.equal(upstream, 0);
 });
 const account = {
+  balance: "100.00",
+  currencyCode: "BRL",
   id: "account",
   itemId: "item",
-  type: "BANK",
   name: "Synthetic",
-  currencyCode: "BRL",
-  balance: "100.00",
+  type: "BANK",
 };
 const connection = {
-  id: "item",
   connector: { id: 200, isOpenFinance: false },
+  id: "item",
 };
 const transaction = (id: string, extra: Partial<ProviderRecord> = {}) => ({
-  id,
   accountId: "account",
-  type: "DEBIT",
   amount: "-10.01",
+  createdAt: "2026-10-01T00:00:00.000Z",
   currencyCode: "BRL",
   date: "2026-01-01T00:00:00.000Z",
-  status: "POSTED",
   description: "Café",
-  createdAt: "2026-10-01T00:00:00.000Z",
+  id,
+  status: "POSTED",
+  type: "DEBIT",
   ...extra,
 });
 async function setup() {
-  const db = bindings.DB;
-  await database(db).insert(tables.items).values({
+  const { DB: db } = bindings;
+  await database(db).insert(itemsTable).values({
     id: "item",
   });
   const op = await startOperation(db, "first", {
-    kind: "sync",
     itemIds: ["item"],
+    kind: "sync",
   });
   return { db, op };
 }
 const identity = (id: string): Identity => ({
-  itemId: "item",
-  resource: "transactions",
-  parentId: "account",
   id,
+  itemId: "item",
+  parentId: "account",
+  resource: "transactions",
 });
 
 test("coverage groups connected Items and retains not-synced entries", async () => {
   const { db } = await setup();
-  await database(db).insert(tables.items).values({ id: "other" });
+  await database(db).insert(itemsTable).values({ id: "other" });
   await database(db)
-    .insert(tables.coverage)
+    .insert(coverageTable)
     .values(
       ["item"].map((item_id) => ({
-        item_id,
-        resource: Resource.transactions,
-        parent_id: "account",
-        status: "available" as const,
         bootstrap_complete: 1,
+        item_id,
         observed_at: "2026-10-01T00:00:00.000Z",
+        parent_id: "account",
+        resource: Resource.transactions,
+        status: "available" as const,
       })),
     );
   const result = await queryEntities(db, { resource: "transactions" });
   assert.deepEqual(result.coverage, [
     {
-      itemId: "item",
       coverage: [
         {
-          resource: "transactions",
-          parent_id: "account",
-          status: "available",
           bootstrap_complete: 1,
           observed_at: "2026-10-01T00:00:00.000Z",
+          parent_id: "account",
+          resource: "transactions",
+          status: "available",
         },
       ],
+      itemId: "item",
     },
     {
-      itemId: "other",
       coverage: [
         {
+          bootstrap_complete: 0,
           resource: "transactions",
           status: "not_synced",
-          bootstrap_complete: 0,
         },
       ],
+      itemId: "other",
     },
   ]);
 });
 
 test("bulk Task subscriptions preserve requested order and reject missing Tasks", async () => {
   const { db, op } = await setup();
-  await database(db).insert(tables.items).values({
+  await database(db).insert(itemsTable).values({
     id: "other",
   });
   const other = await startOperation(db, "other-task", {
-    kind: "sync",
     itemIds: ["other"],
+    kind: "sync",
   });
   await finish(db, op, "completed");
   await finish(db, other, "cancelled");
@@ -290,7 +326,7 @@ test("bulk Task subscriptions preserve requested order and reject missing Tasks"
   const message = z.object({
     method: z.string().optional(),
     params: z
-      .object({ taskId: z.string().optional(), status: z.string().optional() })
+      .object({ status: z.string().optional(), taskId: z.string().optional() })
       .optional(),
   });
   const events = (await response.text())
@@ -311,42 +347,48 @@ test("bulk Task subscriptions preserve requested order and reject missing Tasks"
   );
   await assert.rejects(
     listen(request, env(db), { id: 0, ids: [op.id, "missing-task"] }),
-    /NOT_FOUND/,
+    notFoundPattern,
   );
 });
 
 function steps() {
   // Exercise replay through the D1 receipts, without an untyped checkpoint cache.
   return {
-    async do<T extends Rpc.Serializable<T>>(
+    do<T extends Rpc.Serializable<T>>(
       _name: string,
       callback: () => Promise<T>,
     ): Promise<T> {
-      return callback();
+      return Promise.resolve(callback());
     },
-    async sleep() {},
+    sleep() {
+      return Promise.resolve();
+    },
   };
 }
 
 test("cancelling a waiting subscription closes the reader and releases its lifetime without cancelling the operation", async () => {
-  const { listen } = await import("@/worker/mcp/tasks");
+  const { listen: listenTasks } = await import("@/worker/mcp/tasks");
   const { db, op } = await setup();
   const released = Promise.withResolvers<void>();
-  const response = await listen(new Request("https://local/mcp"), env(db), {
-    id: "synthetic-listener",
-    ids: [op.id],
-    keepAlive: (lifetime) => {
-      void lifetime.then(released.resolve);
+  const response = await listenTasks(
+    new Request("https://local/mcp"),
+    env(db),
+    {
+      id: "synthetic-listener",
+      ids: [op.id],
+      keepAlive: (lifetime) => {
+        void lifetime.then(released.resolve);
+      },
     },
-  });
+  );
   const reader = required(response.body).getReader();
   assert.match(
     new TextDecoder().decode((await reader.read()).value),
-    /notifications\/subscriptions\/acknowledged/,
+    subscriptionAcknowledgementPattern,
   );
   assert.match(
     new TextDecoder().decode((await reader.read()).value),
-    /notifications\/tasks/,
+    taskNotificationPattern,
   );
   const pending = reader.read();
   await Promise.resolve();
@@ -356,77 +398,81 @@ test("cancelling a waiting subscription closes the reader and releases its lifet
   assert.equal((await getOperation(db, op.id)).status, "working");
 });
 
-function providerFixture() {
-  let count = 0;
-  const calls: {
-    resource: Parameters<FinancialSource["page"]>[0]["resource"];
-    parent: string | null;
-    cursor: string | null;
-    floor: string | null;
-  }[] = [];
+interface ProviderFixture extends FinancialSource {
+  calls: Pick<
+    Parameters<FinancialSource["page"]>[0],
+    "resource" | "parent" | "cursor" | "floor"
+  >[];
+  readonly count: number;
+}
+function providerFixture(): ProviderFixture {
+  let pages = 0;
+  const calls: ProviderFixture["calls"] = [];
   return {
     calls,
-    async page({
+    get count() {
+      return pages;
+    },
+    ids() {
+      return Promise.resolve([]);
+    },
+    page({
       resource,
       parent,
       cursor,
       floor,
-    }: Parameters<FinancialSource["page"]>[0]) {
-      calls.push({ resource, parent, cursor, floor });
+    }: Parameters<FinancialSource["page"]>[0]): ReturnType<
+      FinancialSource["page"]
+    > {
+      calls.push({ cursor, floor, parent, resource });
       if (resource === "connections") {
-        return { records: [connection], next: null };
+        return Promise.resolve({ next: null, records: [connection] });
       }
       if (resource === "accounts") {
-        return { records: [account], next: null };
+        return Promise.resolve({ next: null, records: [account] });
       }
       if (resource !== "transactions") {
-        return { records: [], next: null };
+        return Promise.resolve({ next: null, records: [] });
       }
-      count++;
+      pages += 1;
       if (!floor && cursor === null) {
-        return { records: [transaction("old")], next: "two" };
+        return Promise.resolve({ next: "two", records: [transaction("old")] });
       }
       if (!floor) {
-        return {
+        return Promise.resolve({
+          next: null,
           records: [
             transaction("backdated", { createdAt: "2026-10-02T00:00:00.000Z" }),
           ],
-          next: null,
-        };
+        });
       }
-      return {
+      return Promise.resolve({
+        next: null,
         records: [
           transaction("backdated", { createdAt: "2026-10-02T00:00:00.000Z" }),
         ],
-        next: null,
-      };
-    },
-    async ids() {
-      return [];
-    },
-    get count() {
-      return count;
+      });
     },
   };
 }
 function instance(id: string): DurableInstance {
   return {
     id,
-    async status() {
-      return { status: "running" };
+    status() {
+      return Promise.resolve({ status: "running" });
     },
   };
 }
 // Synthetic binding boundary: these unit tests exercise DB and FINANCE; runtime tests separately verify rejection of forged OAuth identity headers.
-const env = (db: D1Database) => ({
+const env = (db: D1Database): Bindings => ({
   ...settings(),
   DB: db,
   FINANCE: {
-    async create({ id }: { id: string }) {
-      return instance(id);
+    create({ id }: { id: string }) {
+      return Promise.resolve(instance(id));
     },
-    async get(id: string) {
-      return instance(id);
+    get(id: string) {
+      return Promise.resolve(instance(id));
     },
   },
 });
@@ -443,8 +489,8 @@ test("bootstrap all pages, incremental floor excludes old history and classifies
     required(
       await database(db)
         .select({ n: count() })
-        .from(tables.entities)
-        .where(and(eq(tables.entities.resource, "transactions")))
+        .from(entitiesTable)
+        .where(and(eq(entitiesTable.resource, "transactions")))
         .get()
         .then((row) => row ?? null),
     ).n,
@@ -454,8 +500,8 @@ test("bootstrap all pages, incremental floor excludes old history and classifies
   assert.equal(first.status, "completed");
   assert.equal(first.progress.classified, 2);
   const next = await startOperation(db, "second", {
-    kind: "sync",
     itemIds: ["item"],
+    kind: "sync",
   });
   source.calls.length = 0;
   await runOperation(
@@ -473,8 +519,8 @@ test("bootstrap all pages, incremental floor excludes old history and classifies
     required(
       await database(db)
         .select({ n: count() })
-        .from(tables.entities)
-        .where(and(eq(tables.entities.resource, "transactions")))
+        .from(entitiesTable)
+        .where(and(eq(entitiesTable.resource, "transactions")))
         .get()
         .then((row) => row ?? null),
     ).n,
@@ -484,22 +530,22 @@ test("bootstrap all pages, incremental floor excludes old history and classifies
 for (const flow of ["collection", "event", "pending"] as const) {
   for (const sample of [
     {
-      name: "counts identical IDs once and replays without preparing again",
       conflict: false,
-      missingId: false,
       error: null,
-    },
-    {
-      name: "rejects conflicting IDs atomically",
-      conflict: true,
       missingId: false,
-      error: /DUPLICATE_SOURCE_ID_CHANGED_IN_PAGE/,
+      name: "counts identical IDs once and replays without preparing again",
     },
     {
-      name: "rejects missing IDs atomically",
+      conflict: true,
+      error: /DUPLICATE_SOURCE_ID_CHANGED_IN_PAGE/,
+      missingId: false,
+      name: "rejects conflicting IDs atomically",
+    },
+    {
       conflict: false,
-      missingId: true,
       error: /SOURCE_ID_MISSING/,
+      missingId: true,
+      name: "rejects missing IDs atomically",
     },
   ]) {
     test(`${flow} publication ${sample.name}`, async () => {
@@ -509,23 +555,23 @@ for (const flow of ["collection", "event", "pending"] as const) {
       for (const input of [
         {
           identity: {
-            itemId: "item",
-            resource: Resource.accounts,
-            parentId: "",
             id: "account",
+            itemId: "item",
+            parentId: "",
+            resource: Resource.accounts,
           },
-          source: account,
           parent: undefined,
+          source: account,
         },
         {
           identity: identity("duplicate"),
-          source: transaction("duplicate", { status: "PENDING" }),
           parent: account,
+          source: transaction("duplicate", { status: "PENDING" }),
         },
       ]) {
         await commit(
           db,
-          (await prepareEntity(db, { ...input, operation: seed, engine }))
+          (await prepareEntity(db, { ...input, engine, operation: seed }))
             .statements,
         );
       }
@@ -533,12 +579,12 @@ for (const flow of ["collection", "event", "pending"] as const) {
       const eventId = "duplicate-event";
       if (flow === "event") {
         await database(db)
-          .insert(tables.inbox)
+          .insert(inboxTable)
           .values({
-            event_id: eventId,
-            item_id: "item",
             account_id: "account",
             event: "transactions/updated",
+            event_id: eventId,
+            item_id: "item",
             payload: { transactionIds: ["duplicate"] },
             received_at: new Date().toISOString(),
           });
@@ -547,12 +593,12 @@ for (const flow of ["collection", "event", "pending"] as const) {
         db,
         "duplicate-batch",
         flow === "event"
-          ? { kind: "webhook", itemIds: ["item"], eventId }
-          : { kind: "sync", itemIds: ["item"] },
+          ? { eventId, itemIds: ["item"], kind: "webhook" }
+          : { itemIds: ["item"], kind: "sync" },
       );
       const record = transaction("duplicate", {
-        description: "Confirmed",
         amount: "-9007199254740993.29",
+        description: "Confirmed",
       });
       const records = [
         record,
@@ -564,22 +610,22 @@ for (const flow of ["collection", "event", "pending"] as const) {
       ];
       let fetched = 0;
       const source: FinancialSource = {
-        async page({ resource }) {
+        ids() {
+          fetched += 1;
+          return Promise.resolve(records);
+        },
+        page({ resource }) {
           if (resource === Resource.connections) {
-            return { records: [connection], next: null };
+            return Promise.resolve({ next: null, records: [connection] });
           }
           if (resource === Resource.accounts) {
-            return { records: [account], next: null };
+            return Promise.resolve({ next: null, records: [account] });
           }
           if (resource === Resource.transactions && flow === "collection") {
-            fetched++;
-            return { records, next: null, total: 1 };
+            fetched += 1;
+            return Promise.resolve({ next: null, records, total: 1 });
           }
-          return { records: [], next: null };
-        },
-        async ids() {
-          fetched++;
-          return records;
+          return Promise.resolve({ next: null, records: [] });
         },
       };
       const dependencies = synchronizationDependencies(env(db));
@@ -592,17 +638,16 @@ for (const flow of ["collection", "event", "pending"] as const) {
       const execution = runOperation(
         {
           ...dependencies,
-          source: async () => source,
           prepare(input) {
             if (input.identity.resource === Resource.transactions) {
-              preparations++;
+              preparations += 1;
             }
             return dependencies.prepare(input);
           },
+          source: async () => source,
         },
         op.id,
         {
-          sleep: durable.sleep,
           async do(name, callback) {
             const result = await callback();
             if (name === key) {
@@ -610,6 +655,7 @@ for (const flow of ["collection", "event", "pending"] as const) {
             }
             return result;
           },
+          sleep: durable.sleep,
         },
       );
       if (sample.error) {
@@ -621,11 +667,11 @@ for (const flow of ["collection", "event", "pending"] as const) {
       const stored = required(
         await database(db)
           .select()
-          .from(tables.entities)
+          .from(entitiesTable)
           .where(
             and(
-              eq(tables.entities.resource, Resource.transactions),
-              eq(tables.entities.id, "duplicate"),
+              eq(entitiesTable.resource, Resource.transactions),
+              eq(entitiesTable.id, "duplicate"),
             ),
           )
           .get(),
@@ -649,8 +695,8 @@ for (const flow of ["collection", "event", "pending"] as const) {
         assert.equal(
           (
             await aggregateEntities(db, {
-              resource: Resource.transactions,
               metric: "amount",
+              resource: Resource.transactions,
             })
           ).groups[0]?.totalMinor,
           "900719925474099329",
@@ -658,11 +704,11 @@ for (const flow of ["collection", "event", "pending"] as const) {
       }
       const receipt = await database(db)
         .select()
-        .from(tables.page_commits)
+        .from(pageCommitsTable)
         .where(
           and(
-            eq(tables.page_commits.operation_id, op.id),
-            eq(tables.page_commits.step_key, key),
+            eq(pageCommitsTable.operation_id, op.id),
+            eq(pageCommitsTable.step_key, key),
           ),
         )
         .get();
@@ -671,8 +717,8 @@ for (const flow of ["collection", "event", "pending"] as const) {
         const event = required(
           await database(db)
             .select()
-            .from(tables.inbox)
-            .where(eq(tables.inbox.event_id, eventId))
+            .from(inboxTable)
+            .where(eq(inboxTable.event_id, eventId))
             .get(),
         );
         assert.equal(!!event.processed_at, !rejected);
@@ -681,11 +727,11 @@ for (const flow of ["collection", "event", "pending"] as const) {
         const target = required(
           await database(db)
             .select()
-            .from(tables.operation_targets)
+            .from(operationTargetsTable)
             .where(
               and(
-                eq(tables.operation_targets.operation_id, op.id),
-                eq(tables.operation_targets.id, "duplicate"),
+                eq(operationTargetsTable.operation_id, op.id),
+                eq(operationTargetsTable.id, "duplicate"),
               ),
             )
             .get(),
@@ -700,36 +746,34 @@ test("cancellation inside the migration step remains cancelled and releases the 
   const { db, op: seed } = await setup();
   await finish(db, seed, "completed");
   const op = await startOperation(db, "cancel-migration", {
-    kind: "migration",
     itemIds: ["item"],
+    kind: "migration",
     migration: [],
   });
   await runOperation(
     {
       ...synchronizationDependencies(env(db)),
-      source: async () => {
-        throw new Error("SOURCE_MUST_STAY_CLOSED");
-      },
+      source: () => Promise.reject(new Error("SOURCE_MUST_STAY_CLOSED")),
     },
     op.id,
     {
-      sleep: steps().sleep,
       async do(name, callback) {
         if (name === "import-legacy") {
           await database(db)
-            .update(tables.operations)
+            .update(operationsTable)
             .set({ cancel_requested: 1 })
-            .where(eq(tables.operations.id, op.id));
+            .where(eq(operationsTable.id, op.id));
         }
         return callback();
       },
+      sleep: steps().sleep,
     },
   );
   const result = await getOperation(db, op.id);
   assert.equal(result.status, "cancelled");
   assert.equal(result.phase, "cancelled");
   assert.equal(result.result?.isError, false);
-  assert.equal(await database(db).select().from(tables.locks).get(), undefined);
+  assert.equal(await database(db).select().from(locksTable).get(), undefined);
 });
 
 test("failure to open the source is persisted and propagated; a terminal operation does not reopen dependencies", async () => {
@@ -738,9 +782,9 @@ test("failure to open the source is persisted and propagated; a terminal operati
   let opened = 0;
   const dependencies = {
     ...synchronizationDependencies(env(db)),
-    source: async () => {
-      opened++;
-      throw failure;
+    source: () => {
+      opened += 1;
+      return Promise.reject(failure);
     },
   };
   await assert.rejects(
@@ -751,15 +795,13 @@ test("failure to open the source is persisted and propagated; a terminal operati
   assert.equal(result.status, "completed");
   assert.equal(result.phase, "error");
   assert.equal(result.result?.isError, true);
-  assert.equal(await database(db).select().from(tables.locks).get(), undefined);
+  assert.equal(await database(db).select().from(locksTable).get(), undefined);
   await runOperation(
     {
       ...dependencies,
       repository: {
         ...dependencies.repository,
-        rules: async () => {
-          throw new Error("TERMINAL_MUST_NOT_LOAD_RULES");
-        },
+        rules: () => Promise.reject(new Error("TERMINAL_MUST_NOT_LOAD_RULES")),
       },
     },
     op.id,
@@ -773,25 +815,25 @@ test("idempotent operation and dispatch response loss recovery", async () => {
   const { db, op } = await setup();
   await assert.rejects(
     startOperation(db, "invalid-filter", {
-      kind: "sync",
-      itemIds: ["item"],
       filter: { tag: "project", value: "personal" },
+      itemIds: ["item"],
+      kind: "sync",
     }),
-    /SYNC_FILTER_NOT_SUPPORTED_USE_ITEM_SCOPE/,
+    syncFilterNotSupportedUseItemScopePattern,
   );
   await assert.rejects(
     startOperation(db, "invalid-renormalization", {
-      kind: "sync",
       itemIds: ["item"],
+      kind: "sync",
       renormalize: true,
     }),
-    /RENORMALIZE_REQUIRES_RECONCILIATION/,
+    renormalizeRequiresReconciliationPattern,
   );
   assert.equal(
     (
       await startOperation(db, "first", {
-        kind: "sync",
         itemIds: ["item"],
+        kind: "sync",
       })
     ).id,
     op.id,
@@ -801,12 +843,12 @@ test("idempotent operation and dispatch response loss recovery", async () => {
   await syncService({
     ...env(db),
     FINANCE: {
-      async create() {
-        creates++;
-        throw new Error("response lost");
+      create() {
+        creates += 1;
+        return Promise.reject(new Error("response lost"));
       },
-      async get(id) {
-        return instance(id);
+      get(id) {
+        return Promise.resolve(instance(id));
       },
     },
   }).dispatch(op);
@@ -814,9 +856,9 @@ test("idempotent operation and dispatch response loss recovery", async () => {
   assert.equal(
     required(
       await database(db)
-        .select({ dispatched: tables.operations.dispatched })
-        .from(tables.operations)
-        .where(and(eq(tables.operations.id, op.id)))
+        .select({ dispatched: operationsTable.dispatched })
+        .from(operationsTable)
+        .where(and(eq(operationsTable.id, op.id)))
         .get()
         .then((row) => row ?? null),
     ).dispatched,
@@ -829,11 +871,11 @@ test("manual override survives sync, rule version changes and exact SQL aggregat
     engine = await rulesFor(db, op.rules_revision),
     i = identity("huge");
   let p = await prepareEntity(db, {
+    engine,
     identity: i,
-    source: transaction("huge", { amount: "-9007199254740993.01" }),
-    parent: account,
     operation: op,
-    engine: engine,
+    parent: account,
+    source: transaction("huge", { amount: "-9007199254740993.01" }),
   });
   await commit(db, p.statements);
   const { invoke } = await import("@/worker/mcp/invoke");
@@ -852,14 +894,14 @@ test("manual override survives sync, rule version changes and exact SQL aggregat
     }),
   );
   p = await prepareEntity(db, {
+    engine,
     identity: i,
-    source: transaction("huge", {
-      description: "Changed",
-      amount: "-9007199254740993.02",
-    }),
-    parent: account,
     operation: op,
-    engine: engine,
+    parent: account,
+    source: transaction("huge", {
+      amount: "-9007199254740993.02",
+      description: "Changed",
+    }),
   });
   await commit(db, p.statements);
   const query = await queryEntities(db, {});
@@ -871,25 +913,25 @@ test("manual override survives sync, rule version changes and exact SQL aggregat
   const rules = structuredClone(EMPTY_RULES);
   rules.rules.push(
     fixtureRule({
-      id: "new",
-      name: "new",
-      stage: "enrich",
-      priority: 1,
-      is_active: true,
-      when: true,
       actions: [{ op: "set_description", value: "New rules" }],
+      id: "new",
+      is_active: true,
+      name: "new",
+      priority: 1,
+      stage: "enrich",
+      when: true,
     }),
   );
   await saveRules(db, rules, true);
   const unchanged = await prepareEntity(db, {
+    engine,
     identity: i,
-    source: transaction("huge", {
-      description: "Changed",
-      amount: "-9007199254740993.02",
-    }),
-    parent: account,
     operation: op,
-    engine: engine,
+    parent: account,
+    source: transaction("huge", {
+      amount: "-9007199254740993.02",
+      description: "Changed",
+    }),
   });
   assert.equal(unchanged.classified, 0);
   await override(db, i, "description", null);
@@ -909,11 +951,11 @@ test("filters select exact amounts, composition and revision rejects stale pagin
       db,
       (
         await prepareEntity(db, {
+          engine,
           identity: identity(id),
-          source: transaction(id, { amount }),
-          parent: account,
           operation: op,
-          engine: engine,
+          parent: account,
+          source: transaction(id, { amount }),
         })
       ).statements,
     );
@@ -933,15 +975,15 @@ test("filters select exact amounts, composition and revision rejects stale pagin
   await override(db, identity("a"), "description", "edited");
   await assert.rejects(
     queryEntities(db, { cursor: first.cursor }),
-    /RESTART_REQUIRED/,
+    restartRequiredPattern,
   );
 });
 
 const meta = {
-  "io.modelcontextprotocol/protocolVersion": "2026-07-28",
   "io.modelcontextprotocol/clientCapabilities": {
     extensions: { "io.modelcontextprotocol/tasks": {} },
   },
+  "io.modelcontextprotocol/protocolVersion": "2026-07-28",
 };
 const rpc = (
   method: string,
@@ -954,22 +996,22 @@ const rpc = (
   },
 ) =>
   new Request("https://example.com/mcp", {
-    method: "POST",
+    body: JSON.stringify({ id: 1, jsonrpc: "2.0", method, params }),
     headers: {
-      "Content-Type": "application/json",
       Accept: "application/json, text/event-stream",
-      "Mcp-Protocol-Version": "2026-07-28",
+      "Content-Type": "application/json",
       "Mcp-Method": method,
       "Mcp-Name": params.name ?? params.taskId ?? "",
+      "Mcp-Protocol-Version": "2026-07-28",
     },
-    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
+    method: "POST",
   });
 test("modern Tasks wire rejects absent capability, returns flat durable handle and validates get/update/cancel", async () => {
   const { db } = await setup(),
     e = env(db),
     args = {
+      arguments: { itemIds: ["item"], requestKey: "wire" },
       name: "caderninho_sync",
-      arguments: { requestKey: "wire", itemIds: ["item"] },
     };
   const catalogue = await responseJson(
     await fetchMcp(rpc("tools/list", { _meta: meta }), e),
@@ -986,7 +1028,7 @@ test("modern Tasks wire rejects absent capability, returns flat durable handle a
   const missing = await responseJson(
     await fetchMcp(rpc("tools/call", args), e),
   );
-  assert.equal(required(missing.error).code, -32021);
+  assert.equal(required(missing.error).code, -32_021);
   const created = await responseJson(
     await fetchMcp(rpc("tools/call", { ...args, _meta: meta }), e),
   );
@@ -994,12 +1036,12 @@ test("modern Tasks wire rejects absent capability, returns flat durable handle a
   assert.equal(required(created.result).task, undefined);
   const taskId = required(required(created.result).taskId);
   const get = await responseJson(
-    await fetchMcp(rpc("tasks/get", { taskId, _meta: meta }), e),
+    await fetchMcp(rpc("tasks/get", { _meta: meta, taskId }), e),
   );
   assert.equal(required(get.result).taskId, taskId);
   const forbidden = await responseJson(
     await fetchMcp(
-      rpc("tasks/get", { taskId: "unknown-task", _meta: meta }),
+      rpc("tasks/get", { _meta: meta, taskId: "unknown-task" }),
       e,
     ),
   );
@@ -1007,32 +1049,32 @@ test("modern Tasks wire rejects absent capability, returns flat durable handle a
   const update = await responseJson(
     await fetchMcp(
       rpc("tasks/update", {
-        taskId,
-        inputResponses: { unknown: { resultType: "complete", roots: [] } },
         _meta: meta,
+        inputResponses: { unknown: { resultType: "complete", roots: [] } },
+        taskId,
       }),
       e,
     ),
   );
   assert.deepEqual(update.result, { resultType: "complete" });
   const cancel = await responseJson(
-    await fetchMcp(rpc("tasks/cancel", { taskId, _meta: meta }), e),
+    await fetchMcp(rpc("tasks/cancel", { _meta: meta, taskId }), e),
   );
   assert.deepEqual(cancel.result, { resultType: "complete" });
 });
 test("reapply freezes selection even when its filter changes and preserves manual overrides", async () => {
   const { db, op } = await setup(),
     engine = await rulesFor(db, op.rules_revision);
-  for (let n = 0; n < 43; n++) {
+  for (let n = 0; n < 43; n += 1) {
     await commit(
       db,
       (
         await prepareEntity(db, {
+          engine,
           identity: identity(`r${n}`),
-          source: transaction(`r${n}`),
-          parent: account,
           operation: op,
-          engine: engine,
+          parent: account,
+          source: transaction(`r${n}`),
         })
       ).statements,
     );
@@ -1041,27 +1083,25 @@ test("reapply freezes selection even when its filter changes and preserves manua
   const rules = structuredClone(EMPTY_RULES);
   rules.rules.push(
     fixtureRule({
-      id: "rename",
-      name: "rename",
-      stage: "enrich",
-      priority: 1,
-      is_active: true,
-      when: true,
       actions: [{ op: "set_description", value: "Changed" }],
+      id: "rename",
+      is_active: true,
+      name: "rename",
+      priority: 1,
+      stage: "enrich",
+      when: true,
     }),
   );
   await saveRules(db, rules, true);
   const run = await startOperation(db, "reapply", {
-    kind: "reapply",
-    itemIds: ["item"],
     filter: { field: "original.description", op: "eq", value: "Café" },
+    itemIds: ["item"],
+    kind: "reapply",
   });
   await runOperation(
     {
       ...synchronizationDependencies(env(db)),
-      source: async () => {
-        throw new Error("SOURCE_MUST_STAY_CLOSED");
-      },
+      source: () => Promise.reject(new Error("SOURCE_MUST_STAY_CLOSED")),
     },
     run.id,
     steps(),
@@ -1070,8 +1110,8 @@ test("reapply freezes selection even when its filter changes and preserves manua
     required(
       await database(db)
         .select({ n: count() })
-        .from(tables.derived)
-        .where(and(eq(tables.derived.description, "Changed")))
+        .from(derivedTable)
+        .where(and(eq(derivedTable.description, "Changed")))
         .get()
         .then((row) => row ?? null),
     ).n,
@@ -1081,11 +1121,10 @@ test("reapply freezes selection even when its filter changes and preserves manua
     required(
       await database(db)
         .select({
-          effective_description:
-            tables.effective_entities.effective_description,
+          effective_description: effectiveEntitiesTable.effective_description,
         })
-        .from(tables.effective_entities)
-        .where(and(eq(tables.effective_entities.id, "r0")))
+        .from(effectiveEntitiesTable)
+        .where(and(eq(effectiveEntitiesTable.id, "r0")))
         .get()
         .then((row) => row ?? null),
     ).effective_description,
@@ -1100,16 +1139,16 @@ test("updated/deleted webhooks resolve current state, delayed deletion does not 
     db,
     (
       await prepareEntity(db, {
+        engine,
         identity: {
-          itemId: "item",
-          resource: "accounts",
-          parentId: "",
           id: "account",
+          itemId: "item",
+          parentId: "",
+          resource: "accounts",
         },
-        source: account,
-        parent: undefined,
         operation: op,
-        engine: engine,
+        parent: undefined,
+        source: account,
       })
     ).statements,
   );
@@ -1117,38 +1156,38 @@ test("updated/deleted webhooks resolve current state, delayed deletion does not 
     db,
     (
       await prepareEntity(db, {
+        engine,
         identity: identity("t"),
-        source: transaction("t", { status: "PENDING" }),
-        parent: account,
         operation: op,
-        engine: engine,
+        parent: account,
+        source: transaction("t", { status: "PENDING" }),
       })
     ).statements,
   );
   async function event(key: string, records: ProviderRecord[]) {
     await database(db)
-      .insert(tables.inbox)
+      .insert(inboxTable)
       .values({
-        event_id: key,
-        item_id: "item",
         account_id: "account",
         event: "transactions/deleted",
+        event_id: key,
+        item_id: "item",
         payload: { transactionIds: ["t"] },
         received_at: new Date().toISOString(),
       })
       .run();
     const o = await startOperation(db, key, {
-      kind: "webhook",
-      itemIds: ["item"],
       eventId: key,
+      itemIds: ["item"],
+      kind: "webhook",
     });
     await runOperation(
       {
         ...synchronizationDependencies(env(db)),
         source: async () => ({
           ...providerFixture(),
-          async ids() {
-            return records;
+          ids() {
+            return Promise.resolve(records);
           },
         }),
       },
@@ -1157,14 +1196,14 @@ test("updated/deleted webhooks resolve current state, delayed deletion does not 
     );
   }
   await event("updated", [
-    transaction("t", { status: "POSTED", description: "Updated" }),
+    transaction("t", { description: "Updated", status: "POSTED" }),
   ]);
   assert.equal(
     required(
       await database(db)
-        .select({ status: tables.entities.status })
-        .from(tables.entities)
-        .where(and(eq(tables.entities.id, "t")))
+        .select({ status: entitiesTable.status })
+        .from(entitiesTable)
+        .where(and(eq(entitiesTable.id, "t")))
         .get()
         .then((row) => row ?? null),
     ).status,
@@ -1174,9 +1213,9 @@ test("updated/deleted webhooks resolve current state, delayed deletion does not 
   assert.equal(
     required(
       await database(db)
-        .select({ deleted: tables.entities.deleted })
-        .from(tables.entities)
-        .where(and(eq(tables.entities.id, "t")))
+        .select({ deleted: entitiesTable.deleted })
+        .from(entitiesTable)
+        .where(and(eq(entitiesTable.id, "t")))
         .get()
         .then((row) => row ?? null),
     ).deleted,
@@ -1185,11 +1224,11 @@ test("updated/deleted webhooks resolve current state, delayed deletion does not 
   await event("late-delete", [transaction("t", { description: "Reappeared" })]);
   const current = await database(db)
     .select({
-      deleted: tables.entities.deleted,
-      original_description: tables.entities.original_description,
+      deleted: entitiesTable.deleted,
+      original_description: entitiesTable.original_description,
     })
-    .from(tables.entities)
-    .where(and(eq(tables.entities.id, "t")))
+    .from(entitiesTable)
+    .where(and(eq(entitiesTable.id, "t")))
     .get()
     .then((row) => row ?? null);
   assert.equal(required(current).deleted, 0);
@@ -1203,23 +1242,23 @@ test("future matures once without rule evaluation; cancellation preserves prior 
     db,
     (
       await prepareEntity(db, {
+        engine,
         identity: identity("future"),
-        source: future,
-        parent: account,
         operation: op,
-        engine: engine,
+        parent: account,
+        source: future,
       })
     ).statements,
   );
   const run = await startOperation(db, "mature", {
-    kind: "reapply",
-    itemIds: ["item"],
     filter: { field: "account", op: "eq", value: "nonexistent" },
+    itemIds: ["item"],
+    kind: "reapply",
   });
   await database(db)
-    .update(tables.operations)
+    .update(operationsTable)
     .set({ reference_day: "2099-01-02" })
-    .where(eq(tables.operations.id, run.id))
+    .where(eq(operationsTable.id, run.id))
     .run();
   await runOperation(
     {
@@ -1232,9 +1271,9 @@ test("future matures once without rule evaluation; cancellation preserves prior 
   assert.equal(
     required(
       await database(db)
-        .select({ eligible: tables.entities.eligible })
-        .from(tables.entities)
-        .where(and(eq(tables.entities.id, "future")))
+        .select({ eligible: entitiesTable.eligible })
+        .from(entitiesTable)
+        .where(and(eq(entitiesTable.id, "future")))
         .get()
         .then((row) => row ?? null),
     ).eligible,
@@ -1242,13 +1281,13 @@ test("future matures once without rule evaluation; cancellation preserves prior 
   );
   assert.equal((await getOperation(db, run.id)).progress.classified, 0);
   const cancelled = await startOperation(db, "cancelled", {
-    kind: "sync",
     itemIds: ["item"],
+    kind: "sync",
   });
   await database(db)
-    .update(tables.operations)
+    .update(operationsTable)
     .set({ cancel_requested: 1 })
-    .where(eq(tables.operations.id, cancelled.id))
+    .where(eq(operationsTable.id, cancelled.id))
     .run();
   await runOperation(
     {
@@ -1263,8 +1302,8 @@ test("future matures once without rule evaluation; cancellation preserves prior 
     required(
       await database(db)
         .select({ n: count() })
-        .from(tables.entities)
-        .where(and(eq(tables.entities.id, "future")))
+        .from(entitiesTable)
+        .where(and(eq(entitiesTable.id, "future")))
         .get()
         .then((row) => row ?? null),
     ).n,
@@ -1277,7 +1316,6 @@ test("page commit is replay-safe when Workflow loses the step acknowledgement", 
     base = steps();
   let replayed = false;
   const durable = {
-    sleep: base.sleep,
     async do<T extends Rpc.Serializable<T>>(
       name: string,
       fn: () => Promise<T>,
@@ -1290,6 +1328,7 @@ test("page commit is replay-safe when Workflow loses the step acknowledgement", 
       }
       return r;
     },
+    sleep: base.sleep,
   };
   await runOperation(
     { ...synchronizationDependencies(env(db)), source: async () => source },
@@ -1301,8 +1340,8 @@ test("page commit is replay-safe when Workflow loses the step acknowledgement", 
     required(
       await database(db)
         .select({ n: count() })
-        .from(tables.entities)
-        .where(and(eq(tables.entities.resource, "transactions")))
+        .from(entitiesTable)
+        .where(and(eq(entitiesTable.resource, "transactions")))
         .get()
         .then((row) => row ?? null),
     ).n,
@@ -1319,15 +1358,20 @@ test("bootstrap retains every supported resource and both account/investment par
     string | null,
   ][] = [];
   const provider = {
-    async page({
+    ids() {
+      return Promise.resolve([]);
+    },
+    page({
       resource,
       parent,
       cursor,
-    }: Parameters<FinancialSource["page"]>[0]) {
+    }: Parameters<FinancialSource["page"]>[0]): ReturnType<
+      FinancialSource["page"]
+    > {
       calls.push([resource, parent, cursor]);
       let records: ProviderRecord[];
       if (resource === "connections") {
-        records = [{ id: "item", connector: { id: 1, isOpenFinance: true } }];
+        records = [{ connector: { id: 1, isOpenFinance: true }, id: "item" }];
       } else if (resource === "accounts") {
         records = [account, { ...account, id: "card", type: "CREDIT" }];
       } else if (resource === "transactions") {
@@ -1335,7 +1379,7 @@ test("bootstrap retains every supported resource and both account/investment par
           transaction(`${parent}-${cursor ?? "one"}`, { accountId: parent }),
         ];
       } else if (resource === "investments") {
-        records = [{ id: "investment", currencyCode: "BRL", balance: "12" }];
+        records = [{ balance: "12", currencyCode: "BRL", id: "investment" }];
       } else if (resource === "consents") {
         records = [];
       } else if (resource === "resources") {
@@ -1343,15 +1387,12 @@ test("bootstrap retains every supported resource and both account/investment par
       } else if (resource === "connectors") {
         records = [{ id: "1" }];
       } else {
-        records = [{ id: resource, currencyCode: "BRL" }];
+        records = [{ currencyCode: "BRL", id: resource }];
       }
-      return {
-        records,
+      return Promise.resolve({
         next: resource === "transactions" && !cursor ? "two" : null,
-      };
-    },
-    async ids() {
-      return [];
+        records,
+      });
     },
   };
   await runOperation(
@@ -1362,9 +1403,9 @@ test("bootstrap retains every supported resource and both account/investment par
   assert.equal(
     required(
       await database(db)
-        .select({ n: countDistinct(tables.coverage.resource) })
-        .from(tables.coverage)
-        .where(and(eq(tables.coverage.bootstrap_complete, 1)))
+        .select({ n: countDistinct(coverageTable.resource) })
+        .from(coverageTable)
+        .where(and(eq(coverageTable.bootstrap_complete, 1)))
         .get()
         .then((row) => row ?? null),
     ).n,
@@ -1380,8 +1421,8 @@ test("bootstrap retains every supported resource and both account/investment par
     required(
       await database(db)
         .select({ n: count() })
-        .from(tables.entities)
-        .where(and(eq(tables.entities.resource, "transactions")))
+        .from(entitiesTable)
+        .where(and(eq(entitiesTable.resource, "transactions")))
         .get()
         .then((row) => row ?? null),
     ).n,
@@ -1400,11 +1441,11 @@ test("exact metrics retain BANK/CREDIT signs and ignore manual tags without eras
       db,
       (
         await prepareEntity(db, {
+          engine,
           identity: identity(id),
-          source: transaction(id, { type, amount }),
-          parent: parent,
           operation: op,
-          engine: engine,
+          parent,
+          source: transaction(id, { amount, type }),
         })
       ).statements,
     );
@@ -1413,7 +1454,7 @@ test("exact metrics retain BANK/CREDIT signs and ignore manual tags without eras
     flow = await aggregateEntities(db, { metric: "cashFlow" });
   await assert.rejects(
     aggregateEntities(db, { metric: "toString" }),
-    /UNKNOWN_METRIC/,
+    unknownMetricPattern,
   );
   assert.equal(required(gross.groups[0]).totalMinor, "2000");
   assert.equal(required(flow.groups[0]).totalMinor, "-1000");
@@ -1451,44 +1492,42 @@ test("exact metrics retain BANK/CREDIT signs and ignore manual tags without eras
 test("migration is replay-safe, preserves useful legacy-only history and reports overlaps", async () => {
   const { db, op } = await setup();
   await database(db)
-    .update(tables.operations)
+    .update(operationsTable)
     .set({ status: "completed" })
-    .where(eq(tables.operations.id, op.id))
+    .where(eq(operationsTable.id, op.id))
     .run();
   const migration: NonNullable<
     Extract<OperationInput, { kind: "migration" }>["migration"]
   > = [
     {
-      sourceKey: "collections/a.json#legacy",
-      readAt: "2026-01-01T00:00:00.000Z",
-      resource: "transactions",
       parentId: "account",
+      readAt: "2026-01-01T00:00:00.000Z",
       record: {
-        id: "legacy",
         accountId: "account",
+        accountingDate: "2020-01-01",
         accountType: "BANK",
-        type: "DEBIT",
-        currencyCode: "BRL",
         amount: "-25",
         amountMinor: "-2500",
-        accountingDate: "2020-01-01",
-        status: "POSTED",
+        currencyCode: "BRL",
         description: "Synthetic historic projection",
+        id: "legacy",
+        status: "POSTED",
+        type: "DEBIT",
       },
+      resource: "transactions",
+      sourceKey: "collections/a.json#legacy",
     },
   ];
   const m = await startOperation(db, "migration-one", {
-    kind: "migration",
     itemIds: ["item"],
+    kind: "migration",
     migration,
     migrationPolicy: "refuse-conflicts",
   });
   await runOperation(
     {
       ...synchronizationDependencies(env(db)),
-      source: async () => {
-        throw new Error("SOURCE_MUST_STAY_CLOSED");
-      },
+      source: () => Promise.reject(new Error("SOURCE_MUST_STAY_CLOSED")),
     },
     m.id,
     steps(),
@@ -1496,9 +1535,7 @@ test("migration is replay-safe, preserves useful legacy-only history and reports
   await runOperation(
     {
       ...synchronizationDependencies(env(db)),
-      source: async () => {
-        throw new Error("SOURCE_MUST_STAY_CLOSED");
-      },
+      source: () => Promise.reject(new Error("SOURCE_MUST_STAY_CLOSED")),
     },
     m.id,
     steps(),
@@ -1507,7 +1544,7 @@ test("migration is replay-safe, preserves useful legacy-only history and reports
     required(
       await database(db)
         .select({ n: count() })
-        .from(tables.migration_imports)
+        .from(migrationImportsTable)
         .get()
         .then((row) => row ?? null),
     ).n,
@@ -1516,17 +1553,17 @@ test("migration is replay-safe, preserves useful legacy-only history and reports
   assert.equal(
     required(
       await database(db)
-        .select({ normalizer: tables.entities.normalizer })
-        .from(tables.entities)
-        .where(and(eq(tables.entities.id, "legacy")))
+        .select({ normalizer: entitiesTable.normalizer })
+        .from(entitiesTable)
+        .where(and(eq(entitiesTable.id, "legacy")))
         .get()
         .then((row) => row ?? null),
     ).normalizer,
     "legacy-projection-v1",
   );
   const reconcile = await startOperation(db, "reconcile-after-migration", {
-    kind: "reconcile",
     itemIds: ["item"],
+    kind: "reconcile",
   });
   await runOperation(
     {
@@ -1539,9 +1576,9 @@ test("migration is replay-safe, preserves useful legacy-only history and reports
   assert.equal(
     required(
       await database(db)
-        .select({ deleted: tables.entities.deleted })
-        .from(tables.entities)
-        .where(and(eq(tables.entities.id, "legacy")))
+        .select({ deleted: entitiesTable.deleted })
+        .from(entitiesTable)
+        .where(and(eq(entitiesTable.id, "legacy")))
         .get()
         .then((row) => row ?? null),
     ).deleted,
@@ -1552,16 +1589,16 @@ test("migration is replay-safe, preserves useful legacy-only history and reports
 test("preview, SQL filters and reapply select the same selected records; cursor cannot change filter", async () => {
   const { db, op } = await setup(),
     engine = await rulesFor(db, op.rules_revision);
-  for (let n = 0; n < 4; n++) {
+  for (let n = 0; n < 4; n += 1) {
     await commit(
       db,
       (
         await prepareEntity(db, {
+          engine,
           identity: identity(`p${n}`),
-          source: transaction(`p${n}`, { amount: String(-n - 1) }),
-          parent: account,
           operation: op,
-          engine: engine,
+          parent: account,
+          source: transaction(`p${n}`, { amount: String(-n - 1) }),
         })
       ).statements,
     );
@@ -1569,16 +1606,16 @@ test("preview, SQL filters and reapply select the same selected records; cursor 
   const doc = structuredClone(EMPTY_RULES);
   doc.rules = [
     fixtureRule({
-      id: "description",
-      name: "description",
-      stage: "enrich",
-      priority: 1,
-      is_active: true,
-      when: true,
       actions: [{ op: "set_description", value: "Changed" }],
+      id: "description",
+      is_active: true,
+      name: "description",
+      priority: 1,
+      stage: "enrich",
+      when: true,
     }),
   ];
-  const revision = (await saveRules(db, doc, true)).id,
+  const { id: revision } = await saveRules(db, doc, true),
     filter = {
       field: "amountMinor",
       op: "lte",
@@ -1586,12 +1623,12 @@ test("preview, SQL filters and reapply select the same selected records; cursor 
     } satisfies Filter;
   const { invoke } = await import("@/worker/mcp/invoke");
   const preview = z
-    .object({ selected: z.number(), differences: z.array(z.json()) })
+    .object({ differences: z.array(z.json()), selected: z.number() })
     .parse(
       await invoke(financialQueries(env(db)), "caderninho_preview", {
+        filter,
         itemIds: ["item"],
         revision,
-        filter,
       }),
     );
   const query = await queryEntities(db, { filter, limit: 1 });
@@ -1599,15 +1636,15 @@ test("preview, SQL filters and reapply select the same selected records; cursor 
   assert.equal(preview.differences.length, 3);
   await assert.rejects(
     queryEntities(db, {
-      filter: { field: "amountMinor", op: "lte", value: "-100" },
       cursor: query.cursor,
+      filter: { field: "amountMinor", op: "lte", value: "-100" },
     }),
-    /CURSOR_SCOPE/,
+    cursorScopePattern,
   );
   const apply = await startOperation(db, "preview-apply", {
-    kind: "reapply",
-    itemIds: ["item"],
     filter,
+    itemIds: ["item"],
+    kind: "reapply",
   });
   await runOperation(
     {
@@ -1621,8 +1658,8 @@ test("preview, SQL filters and reapply select the same selected records; cursor 
     required(
       await database(db)
         .select({ n: count() })
-        .from(tables.derived)
-        .where(and(eq(tables.derived.description, "Changed")))
+        .from(derivedTable)
+        .where(and(eq(derivedTable.description, "Changed")))
         .get()
         .then((row) => row ?? null),
     ).n,
@@ -1635,11 +1672,14 @@ test("transient page failure retries the same checkpoint; failed incomplete page
     provider = providerFixture(),
     original = provider.page.bind(provider);
   let attempts = 0;
-  provider.page = async (...args) => {
-    if (args[0].cursor === "two" && attempts++ === 0) {
-      throw new Error("transient");
+  provider.page = (...args) => {
+    if (args[0].cursor === "two") {
+      attempts += 1;
+      if (attempts === 1) {
+        return Promise.reject(new Error("transient"));
+      }
     }
-    return original(...args);
+    return Promise.resolve(original(...args));
   };
   const durable = steps(),
     base = durable.do.bind(durable);
@@ -1665,25 +1705,25 @@ test("transient page failure retries the same checkpoint; failed incomplete page
   assert.equal(
     required(
       await database(db)
-        .select({ bootstrap_complete: tables.coverage.bootstrap_complete })
-        .from(tables.coverage)
-        .where(and(eq(tables.coverage.resource, "transactions")))
+        .select({ bootstrap_complete: coverageTable.bootstrap_complete })
+        .from(coverageTable)
+        .where(and(eq(coverageTable.resource, "transactions")))
         .get()
         .then((row) => row ?? null),
     ).bootstrap_complete,
     1,
   );
   const failed = await startOperation(db, "incomplete", {
-    kind: "reconcile",
     itemIds: ["item"],
+    kind: "reconcile",
   });
   const source = {
     ...provider,
-    async page(input: Parameters<FinancialSource["page"]>[0]) {
+    page(input: Parameters<FinancialSource["page"]>[0]) {
       if (input.resource === "transactions") {
-        throw new Error("unavailable");
+        return Promise.reject(new Error("unavailable"));
       }
-      return original(input);
+      return Promise.resolve(original(input));
     },
   };
   await assert.rejects(
@@ -1692,14 +1732,14 @@ test("transient page failure retries the same checkpoint; failed incomplete page
       failed.id,
       steps(),
     ),
-    /unavailable/,
+    unavailablePattern,
   );
   assert.equal(
     required(
       await database(db)
-        .select({ status: tables.coverage.status })
-        .from(tables.coverage)
-        .where(and(eq(tables.coverage.resource, "transactions")))
+        .select({ status: coverageTable.status })
+        .from(coverageTable)
+        .where(and(eq(coverageTable.resource, "transactions")))
         .get()
         .then((row) => row ?? null),
     ).status,
@@ -1710,11 +1750,11 @@ test("transient page failure retries the same checkpoint; failed incomplete page
     required(
       await database(db)
         .select({ n: count() })
-        .from(tables.entities)
+        .from(entitiesTable)
         .where(
           and(
-            eq(tables.entities.resource, "transactions"),
-            eq(tables.entities.deleted, 0),
+            eq(entitiesTable.resource, "transactions"),
+            eq(entitiesTable.deleted, 0),
           ),
         )
         .get()
@@ -1732,45 +1772,45 @@ test("irrelevant provider fields do not trigger rules; explicit normalization ba
     db,
     (
       await prepareEntity(db, {
+        engine,
         identity: identity("stable"),
-        source: raw,
-        parent: account,
         operation: op,
-        engine: engine,
+        parent: account,
+        source: raw,
       })
     ).statements,
   );
   const next = await startOperation(db, "stable", {
-    kind: "sync",
     itemIds: ["item"],
+    kind: "sync",
   });
   const unchanged = await prepareEntity(db, {
+    engine,
     identity: identity("stable"),
+    operation: next,
+    parent: account,
     source: {
       ...raw,
-      updatedAt: "2026-10-12T12:00:00.000Z",
       balance: "999",
       irrelevantDebugField: "different",
+      updatedAt: "2026-10-12T12:00:00.000Z",
     },
-    parent: account,
-    operation: next,
-    engine: engine,
   });
   assert.equal(unchanged.classified, 0);
   assert.equal(unchanged.state, "unchanged");
   const forced = await startOperation(db, "backfill", {
-    kind: "reconcile",
     itemIds: ["item"],
+    kind: "reconcile",
     renormalize: true,
   });
   assert.equal(
     (
       await prepareEntity(db, {
+        engine,
         identity: identity("stable"),
-        source: raw,
-        parent: account,
         operation: forced,
-        engine: engine,
+        parent: account,
+        source: raw,
       })
     ).classified,
     1,
@@ -1782,11 +1822,11 @@ test("observation, resurrection and parent changes preserve identity, first-seen
   const engine = await rulesFor(db, op.rules_revision);
   const source = transaction("lifecycle");
   const input = {
-    identity: identity("lifecycle"),
-    source,
-    parent: account,
-    operation: op,
     engine,
+    identity: identity("lifecycle"),
+    operation: op,
+    parent: account,
+    source,
   };
   const firstSeen = "2026-10-01T10:00:00.000Z";
   const observedAt = "2026-10-02T10:00:00.000Z";
@@ -1795,17 +1835,17 @@ test("observation, resurrection and parent changes preserve identity, first-seen
   await commit(db, created.statements);
   const observed = await prepareEntity(db, {
     ...input,
+    engine: {
+      ...engine,
+      evaluate() {
+        return Promise.reject(new Error("Unchanged entities must skip rules"));
+      },
+    },
     observedAt,
     source: {
       ...source,
-      updatedAt: observedAt,
       irrelevantDebugField: "preserved",
-    },
-    engine: {
-      ...engine,
-      async evaluate() {
-        throw new Error("Unchanged entities must skip rules");
-      },
+      updatedAt: observedAt,
     },
   });
   assert.equal(observed.state, "unchanged");
@@ -1815,17 +1855,17 @@ test("observation, resurrection and parent changes preserve identity, first-seen
   const stored = required(
     await database(db)
       .select()
-      .from(tables.entities)
-      .where(eq(tables.entities.id, "lifecycle"))
+      .from(entitiesTable)
+      .where(eq(entitiesTable.id, "lifecycle"))
       .get(),
   );
   assert.equal(stored.first_seen_at, firstSeen);
   assert.equal(stored.observed_at, observedAt);
   assert.equal(stored.source.irrelevantDebugField, "preserved");
   await database(db)
-    .update(tables.entities)
+    .update(entitiesTable)
     .set({ deleted: 1 })
-    .where(eq(tables.entities.id, "lifecycle"))
+    .where(eq(entitiesTable.id, "lifecycle"))
     .run();
   const resurrected = await prepareEntity(db, { ...input, observedAt });
   assert.equal(resurrected.state, "changed");
@@ -1841,8 +1881,8 @@ test("observation, resurrection and parent changes preserve identity, first-seen
   const active = required(
     await database(db)
       .select()
-      .from(tables.entities)
-      .where(eq(tables.entities.id, "lifecycle"))
+      .from(entitiesTable)
+      .where(eq(entitiesTable.id, "lifecycle"))
       .get(),
   );
   assert.equal(active.first_seen_at, firstSeen);
@@ -1850,7 +1890,7 @@ test("observation, resurrection and parent changes preserve identity, first-seen
   assert.equal(active.normalized.accountName, "Renamed synthetic account");
   await assert.rejects(
     prepareEntity(db, { ...input, source: { ...source, id: "different" } }),
-    /SOURCE_ID_MISMATCH/,
+    sourceIdMismatchPattern,
   );
 });
 
@@ -1859,24 +1899,24 @@ test("legacy entry rejects noncanonical secondary money without publishing an en
   const engine = await rulesFor(db, op.rules_revision);
   await assert.rejects(
     prepareEntity(db, {
-      identity: identity("invalid-legacy"),
-      source: { id: "invalid-legacy" },
-      parent: undefined,
-      operation: op,
       engine,
+      identity: identity("invalid-legacy"),
       legacyProjection: {
-        id: "invalid-legacy",
         amountMinor: "1000",
+        id: "invalid-legacy",
         legacyFeeMinor: "001",
       },
+      operation: op,
+      parent: undefined,
+      source: { id: "invalid-legacy" },
     }),
-    /canonical integer, at most 30 digits/,
+    canonicalMinorErrorPattern,
   );
   assert.equal(
     await database(db)
       .select()
-      .from(tables.entities)
-      .where(eq(tables.entities.id, "invalid-legacy"))
+      .from(entitiesTable)
+      .where(eq(entitiesTable.id, "invalid-legacy"))
       .get(),
     undefined,
   );
@@ -1893,19 +1933,19 @@ test("operational retention does not remove financial records, rule provenance o
     steps(),
   );
   const { compactOperations } = await import("@/worker/sync/repository");
-  const financialCount = required(
+  const { n: financialCount } = required(
     await database(db)
       .select({ n: count() })
-      .from(tables.entities)
+      .from(entitiesTable)
       .get()
       .then((row) => row ?? null),
-  ).n;
+  );
   await compactOperations(db, new Date("2030-01-01T00:00:00Z"));
   assert.equal(
     required(
       await database(db)
         .select({ n: count() })
-        .from(tables.entities)
+        .from(entitiesTable)
         .get()
         .then((row) => row ?? null),
     ).n,
@@ -1915,7 +1955,7 @@ test("operational retention does not remove financial records, rule provenance o
     required(
       await database(db)
         .select({ n: count() })
-        .from(tables.page_commits)
+        .from(pageCommitsTable)
         .get()
         .then((row) => row ?? null),
     ).n,
@@ -1924,8 +1964,8 @@ test("operational retention does not remove financial records, rule provenance o
   assert.equal(
     (
       await startOperation(db, "first", {
-        kind: "sync",
         itemIds: ["item"],
+        kind: "sync",
       })
     ).id,
     op.id,
@@ -1936,19 +1976,26 @@ test("operational retention does not remove financial records, rule provenance o
 test("changed totals during pagination retain partial coverage and never advance complete checkpoint", async () => {
   const { db, op } = await setup();
   const source = {
-    async ids() {
-      return [];
+    ids() {
+      return Promise.resolve([]);
     },
-    async page({ resource, cursor }: Parameters<FinancialSource["page"]>[0]) {
+    page({
+      resource,
+      cursor,
+    }: Parameters<FinancialSource["page"]>[0]): ReturnType<
+      FinancialSource["page"]
+    > {
       if (resource === "connections") {
-        return { records: [connection], next: null };
+        return Promise.resolve({ next: null, records: [connection] });
       }
       if (resource !== "accounts") {
-        return { records: [], next: null };
+        return Promise.resolve({ next: null, records: [] });
       }
-      return cursor
-        ? { records: [{ ...account, id: "second" }], next: null, total: 3 }
-        : { records: [account], next: "2", total: 2 };
+      return Promise.resolve(
+        cursor
+          ? { next: null, records: [{ ...account, id: "second" }], total: 3 }
+          : { next: "2", records: [account], total: 2 },
+      );
     },
   };
   await assert.rejects(
@@ -1957,14 +2004,14 @@ test("changed totals during pagination retain partial coverage and never advance
       op.id,
       steps(),
     ),
-    /SOURCE_TOTAL_CHANGED/,
+    sourceTotalChangedPattern,
   );
   assert.equal(
     required(
       await database(db)
-        .select({ bootstrap_complete: tables.coverage.bootstrap_complete })
-        .from(tables.coverage)
-        .where(eq(tables.coverage.resource, Resource.accounts))
+        .select({ bootstrap_complete: coverageTable.bootstrap_complete })
+        .from(coverageTable)
+        .where(eq(coverageTable.resource, Resource.accounts))
         .get()
         .then((row) => row ?? null),
     ).bootstrap_complete,
@@ -1973,9 +2020,9 @@ test("changed totals during pagination retain partial coverage and never advance
   assert.equal(
     required(
       await database(db)
-        .select({ status: tables.coverage.status })
-        .from(tables.coverage)
-        .where(eq(tables.coverage.resource, Resource.accounts))
+        .select({ status: coverageTable.status })
+        .from(coverageTable)
+        .where(eq(coverageTable.resource, Resource.accounts))
         .get()
         .then((row) => row ?? null),
     ).status,
@@ -1985,8 +2032,8 @@ test("changed totals during pagination retain partial coverage and never advance
     required(
       await database(db)
         .select({ n: count() })
-        .from(tables.entities)
-        .where(eq(tables.entities.resource, Resource.accounts))
+        .from(entitiesTable)
+        .where(eq(entitiesTable.resource, Resource.accounts))
         .get()
         .then((row) => row ?? null),
     ).n,
@@ -2005,12 +2052,12 @@ function fixtureRule(r: {
 }): Rule {
   const condition = convertPredicate(r.when, "fixture");
   return {
+    conditions: "fact" in condition ? { all: [condition] } : condition,
+    event: { params: { actions: r.actions }, type: r.stage },
     id: r.id,
+    is_active: r.is_active,
     name: r.name,
     priority: r.priority,
-    is_active: r.is_active,
-    conditions: "fact" in condition ? { all: [condition] } : condition,
-    event: { type: r.stage, params: { actions: r.actions } },
   };
 }
 
@@ -2021,38 +2068,38 @@ test("legacy revisions remain readable; explicit conversion creates a new revisi
   const { invoke } = await import("@/worker/mcp/invoke");
   const old = {
     ...EMPTY_RULES,
-    version: 1,
     rules: [
       {
+        actions: [{ op: "set_description", value: "Legacy" }],
         id: "old",
+        is_active: true,
         name: "Old",
         priority: 1,
-        is_active: true,
         stage: "enrich",
         when: true,
-        actions: [{ op: "set_description", value: "Legacy" }],
       },
     ],
+    version: 1,
   };
   const serialized = JSON.stringify(old);
   await database(db)
-    .insert(tables.rule_sets)
+    .insert(ruleSetsTable)
     .values({
-      id: "legacy",
-      document: sql`${serialized}`,
-      normalizer: NORMALIZER,
       created_at: new Date().toISOString(),
+      document: sql`${serialized}`,
+      id: "legacy",
+      normalizer: NORMALIZER,
       ready: 1,
     })
     .run();
   await database(db)
-    .update(tables.settings)
+    .update(settingsTable)
     .set({ active_rules: "legacy" })
-    .where(eq(tables.settings.id, 1))
+    .where(eq(settingsTable.id, 1))
     .run();
   const frozen = await startOperation(db, "legacy-operation", {
-    kind: "sync",
     itemIds: ["item"],
+    kind: "sync",
   });
   assert.deepEqual(await readRules(db, "legacy"), old);
   assert.deepEqual(
@@ -2064,7 +2111,7 @@ test("legacy revisions remain readable; explicit conversion creates a new revisi
   );
   await assert.rejects(
     rulesFor(db, "legacy"),
-    /RULES_V1_REQUIRES_EXPLICIT_CONVERSION_AND_ACTIVATION/,
+    rulesV1RequiresExplicitConversionAndActivationPattern,
   );
   const report = importRules(old);
   assert.ok(report.document);
@@ -2073,9 +2120,9 @@ test("legacy revisions remain readable; explicit conversion creates a new revisi
   assert.equal((await getOperation(db, frozen.id)).rules_revision, "legacy");
   assert.equal(
     await database(db)
-      .select({ document: sql<string>`${tables.rule_sets.document}` })
-      .from(tables.rule_sets)
-      .where(and(eq(tables.rule_sets.id, "legacy")))
+      .select({ document: sql<string>`${ruleSetsTable.document}` })
+      .from(ruleSetsTable)
+      .where(and(eq(ruleSetsTable.id, "legacy")))
       .get()
       .then((row) => row?.document ?? null),
     serialized,
@@ -2092,8 +2139,8 @@ test("HTTP conversion defaults to dry run and oversized import bodies fail befor
   assert.deepEqual(
     await boundedJson(
       new Request("https://local/import", {
-        method: "POST",
         body: '{"amount":9007199254740993.01}',
+        method: "POST",
       }),
     ),
     { amount: "9007199254740993.01" },
@@ -2101,14 +2148,14 @@ test("HTTP conversion defaults to dry run and oversized import bodies fail befor
   const { db } = await setup();
   const before = await database(db)
     .select({ n: count() })
-    .from(tables.rule_sets)
+    .from(ruleSetsTable)
     .get()
     .then((row) => row?.n ?? null);
   const old = { ...EMPTY_RULES, version: 1 };
   const response = await fetchMcp(
     new Request("https://local/mcp/rules/import", {
-      method: "POST",
       body: JSON.stringify({ document: old }),
+      method: "POST",
     }),
     env(db),
   );
@@ -2123,7 +2170,7 @@ test("HTTP conversion defaults to dry run and oversized import bodies fail befor
   assert.equal(
     await database(db)
       .select({ n: count() })
-      .from(tables.rule_sets)
+      .from(ruleSetsTable)
       .get()
       .then((row) => row?.n ?? null),
     before,
@@ -2131,12 +2178,12 @@ test("HTTP conversion defaults to dry run and oversized import bodies fail befor
   await assert.rejects(
     fetchMcp(
       new Request("https://local/mcp/rules/import", {
+        body: " ".repeat(1_048_577),
         method: "POST",
-        body: " ".repeat(1048577),
       }),
       env(db),
     ),
-    /BODY_LIMIT/,
+    bodyLimitPattern,
   );
 });
 
@@ -2148,18 +2195,18 @@ test("page publication rolls back data, progress, checkpoint and receipt togethe
   const { db, op } = await setup();
   const engine = await rulesFor(db, op.rules_revision);
   await database(db)
-    .insert(tables.checkpoints)
+    .insert(checkpointsTable)
     .values({
-      operation_id: op.id,
       item_id: "item",
-      resource: "transactions",
+      operation_id: op.id,
       parent_id: "account",
+      resource: "transactions",
     })
     .run();
   const before = await database(db)
-    .select({ progress: sql<string>`${tables.operations.progress}` })
-    .from(tables.operations)
-    .where(and(eq(tables.operations.id, op.id)))
+    .select({ progress: sql<string>`${operationsTable.progress}` })
+    .from(operationsTable)
+    .where(and(eq(operationsTable.id, op.id)))
     .get()
     .then((row) => row?.progress ?? null);
   await db.exec(
@@ -2167,43 +2214,47 @@ test("page publication rolls back data, progress, checkpoint and receipt togethe
   );
   let fetched = 0;
   const execution = {
-    repository: createExecutionRepository(db),
+    engine,
     op,
     prepare: (input: Parameters<typeof prepareEntity>[1]) =>
       prepareEntity(db, input),
-    engine,
+    repository: createExecutionRepository(db),
     step: {
       do: async <T>(_name: string, fn: () => Promise<T>) => fn(),
-      sleep: async () => {},
+      sleep: () => Promise.resolve(),
     },
   };
   const provider = {
-    async page() {
-      fetched++;
-      return { records: [transaction("atomic-page")], next: null, total: 1 };
+    ids() {
+      return Promise.resolve([]);
     },
-    async ids() {
-      return [];
+    page() {
+      fetched += 1;
+      return Promise.resolve({
+        next: null,
+        records: [transaction("atomic-page")],
+        total: 1,
+      });
     },
   };
   const publication = {
-    name: "atomic-page",
     identity: {
-      operationId: op.id,
       itemId: "item",
-      resource: Resource.transactions,
+      operationId: op.id,
       parentId: "account",
+      resource: Resource.transactions,
     },
+    name: "atomic-page",
     parent: { normalized: account, relevant_hash: "synthetic-parent" },
   };
   await assert.rejects(
     publishPage(execution, provider, publication),
-    /synthetic receipt failure/,
+    syntheticReceiptFailurePattern,
   );
   assert.equal(
     await database(db)
       .select({ n: count() })
-      .from(tables.entities)
+      .from(entitiesTable)
       .get()
       .then((row) => row?.n ?? null),
     0,
@@ -2211,7 +2262,7 @@ test("page publication rolls back data, progress, checkpoint and receipt togethe
   assert.equal(
     await database(db)
       .select({ n: count() })
-      .from(tables.derived)
+      .from(derivedTable)
       .get()
       .then((row) => row?.n ?? null),
     0,
@@ -2219,25 +2270,25 @@ test("page publication rolls back data, progress, checkpoint and receipt togethe
   assert.equal(
     await database(db)
       .select({ n: count() })
-      .from(tables.page_commits)
+      .from(pageCommitsTable)
       .get()
       .then((row) => row?.n ?? null),
     0,
   );
   assert.equal(
     await database(db)
-      .select({ page: tables.checkpoints.page })
-      .from(tables.checkpoints)
-      .where(and(eq(tables.checkpoints.operation_id, op.id)))
+      .select({ page: checkpointsTable.page })
+      .from(checkpointsTable)
+      .where(and(eq(checkpointsTable.operation_id, op.id)))
       .get()
       .then((row) => row?.page ?? null),
     0,
   );
   assert.equal(
     await database(db)
-      .select({ progress: sql<string>`${tables.operations.progress}` })
-      .from(tables.operations)
-      .where(and(eq(tables.operations.id, op.id)))
+      .select({ progress: sql<string>`${operationsTable.progress}` })
+      .from(operationsTable)
+      .where(and(eq(operationsTable.id, op.id)))
       .get()
       .then((row) => row?.progress ?? null),
     before,
@@ -2245,9 +2296,9 @@ test("page publication rolls back data, progress, checkpoint and receipt togethe
   await db.exec("DROP TRIGGER fail_page_receipt");
   await publishPage(execution, provider, publication);
   const progress = await database(db)
-    .select({ progress: sql<string>`${tables.operations.progress}` })
-    .from(tables.operations)
-    .where(and(eq(tables.operations.id, op.id)))
+    .select({ progress: sql<string>`${operationsTable.progress}` })
+    .from(operationsTable)
+    .where(and(eq(operationsTable.id, op.id)))
     .get()
     .then((row) => row?.progress ?? null);
   await publishPage(execution, provider, publication);
@@ -2255,7 +2306,7 @@ test("page publication rolls back data, progress, checkpoint and receipt togethe
   assert.equal(
     await database(db)
       .select({ n: count() })
-      .from(tables.entities)
+      .from(entitiesTable)
       .get()
       .then((row) => row?.n ?? null),
     1,
@@ -2263,33 +2314,33 @@ test("page publication rolls back data, progress, checkpoint and receipt togethe
   assert.equal(
     await database(db)
       .select({ n: count() })
-      .from(tables.page_commits)
+      .from(pageCommitsTable)
       .get()
       .then((row) => row?.n ?? null),
     1,
   );
   assert.equal(
     await database(db)
-      .select({ progress: sql<string>`${tables.operations.progress}` })
-      .from(tables.operations)
-      .where(and(eq(tables.operations.id, op.id)))
+      .select({ progress: sql<string>`${operationsTable.progress}` })
+      .from(operationsTable)
+      .where(and(eq(operationsTable.id, op.id)))
       .get()
       .then((row) => row?.progress ?? null),
     progress,
   );
 });
 
-async function commit(db: D1Database, queries: BatchItem<"sqlite">[]) {
+function commit(db: D1Database, queries: BatchItem<"sqlite">[]) {
   const [first, ...rest] = queries;
   if (!first) {
-    throw new Error("Empty fixture batch");
+    return Promise.reject(new Error("Empty fixture batch"));
   }
-  return database(db).batch([first, ...rest]);
+  return Promise.resolve(database(db).batch([first, ...rest]));
 }
 
 test("Drizzle JSON mapping preserves public strings, default progress and manual tag precedence", async () => {
   const { db, op } = await setup();
-  assert.deepEqual(op.input, { kind: "sync", itemIds: ["item"] });
+  assert.deepEqual(op.input, { itemIds: ["item"], kind: "sync" });
   assert.deepEqual(op.progress, {});
   const engine = await rulesFor(db, op.rules_revision);
   const source = transaction("json", { description: 'Café "especial" ☕' });
@@ -2297,32 +2348,32 @@ test("Drizzle JSON mapping preserves public strings, default progress and manual
     db,
     (
       await prepareEntity(db, {
+        engine,
         identity: identity("json"),
-        source: source,
-        parent: account,
         operation: op,
-        engine: engine,
+        parent: account,
+        source,
       })
     ).statements,
   );
   const stored = required(
     await database(db)
       .select()
-      .from(tables.entities)
-      .where(eq(tables.entities.id, "json"))
+      .from(entitiesTable)
+      .where(eq(entitiesTable.id, "json"))
       .get(),
   );
   assert.deepEqual(stored.source, source);
   assert.equal(stored.normalized.description, source.description);
   const { invoke } = await import("@/worker/mcp/invoke");
-  await database(db).insert(tables.tags).values({
-    item_id: "item",
-    resource: "transactions",
-    parent_id: "account",
+  await database(db).insert(tagsTable).values({
     id: "json",
+    item_id: "item",
     key: "project",
-    value: "derived",
     origin: "derived",
+    parent_id: "account",
+    resource: "transactions",
+    value: "derived",
   });
   await invoke(financialQueries(env(db)), "caderninho_override", {
     ...identity("json"),
@@ -2370,38 +2421,38 @@ test("integer limb aggregation cancels huge signed amounts and keeps missing mea
       db,
       (
         await prepareEntity(db, {
+          engine,
           identity: identity(id),
-          source: transaction(id, { amount, currencyCode }),
-          parent: account,
           operation: op,
-          engine: engine,
+          parent: account,
+          source: transaction(id, { amount, currencyCode }),
         })
       ).statements,
     );
   }
-  const groups = (await aggregateEntities(db, {})).groups;
+  const { groups } = await aggregateEntities(db, {});
   assert.deepEqual(
     groups.find((g) => g.currency === "BRL"),
-    { currency: "BRL", count: "3", known: "2", totalMinor: "1", partial: true },
+    { count: "3", currency: "BRL", known: "2", partial: true, totalMinor: "1" },
   );
   assert.deepEqual(
     groups.find((g) => g.currency === "USD"),
     {
-      currency: "USD",
       count: "1",
+      currency: "USD",
       known: "0",
-      totalMinor: null,
       partial: true,
+      totalMinor: null,
     },
   );
   assert.deepEqual(
     groups.find((g) => g.currency === "EUR"),
     {
-      currency: "EUR",
       count: "1",
+      currency: "EUR",
       known: "1",
-      totalMinor: "0",
       partial: false,
+      totalMinor: "0",
     },
   );
 });

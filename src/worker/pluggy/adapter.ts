@@ -20,7 +20,6 @@ export function createPluggyAdapter(input: {
     return configured.data;
   }
   const account: AccountSource = {
-    configured: configured.success,
     async application() {
       const authenticated = credentials();
       return {
@@ -28,6 +27,7 @@ export function createPluggyAdapter(input: {
         token: (itemId) => connectToken(authenticated, itemId),
       };
     },
+    configured: configured.success,
   };
   return {
     account,
@@ -35,7 +35,10 @@ export function createPluggyAdapter(input: {
       return financialSource(new PersonalPluggyClient(credentials()));
     },
     async readAccount(accountId: string) {
-      return readAccount(new PersonalPluggyClient(credentials()), accountId);
+      return await readAccount(
+        new PersonalPluggyClient(credentials()),
+        accountId,
+      );
     },
   };
 }

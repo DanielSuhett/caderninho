@@ -2,7 +2,9 @@ import { Button, LinkButton } from "@cloudflare/kumo/components/button";
 import { Input } from "@cloudflare/kumo/components/input";
 import { type ComponentProps, useId } from "react";
 
-type DataAttributes = { [key: `data-${string}`]: string };
+interface DataAttributes {
+  [key: `data-${string}`]: string;
+}
 
 export function UiButton({
   variant = "primary",
@@ -14,8 +16,8 @@ export function UiButton({
       size="lg"
       type="submit"
       {...props}
-      variant={variant === "primary" ? "secondary" : variant}
       className={`${variant === "primary" ? "caderninho-primary" : ""} ${className}`}
+      variant={variant === "primary" ? "secondary" : variant}
     />
   );
 }
@@ -29,8 +31,8 @@ export function UiLink({
     <LinkButton
       size="lg"
       {...props}
-      variant={variant === "primary" ? "secondary" : variant}
       className={`${variant === "primary" ? "caderninho-primary" : ""} ${className}`}
+      variant={variant === "primary" ? "secondary" : variant}
     />
   );
 }
@@ -45,16 +47,16 @@ export function UiField({
   return (
     <div className="field">
       <label
-        id={`${id}-label`}
         htmlFor={id}
+        id={`${id}-label`}
       >
         {label}
       </label>
       <Input
         size="lg"
         {...props}
-        id={id}
         aria-labelledby={`${id}-label`}
+        id={id}
       />
     </div>
   );

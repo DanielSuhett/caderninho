@@ -7,32 +7,32 @@ import type {
 } from "ky";
 
 export const HttpFailureKind = {
-  unauthorized: "unauthorized",
   forbidden: "forbidden",
-  notFound: "not_found",
-  rateLimit: "rate_limit",
   invalidRequest: "invalid_request",
-  server: "server",
-  redirect: "redirect",
-  timeout: "timeout",
-  tooLarge: "too_large",
   invalidResponse: "invalid_response",
   network: "network",
+  notFound: "not_found",
+  rateLimit: "rate_limit",
+  redirect: "redirect",
+  server: "server",
+  timeout: "timeout",
+  tooLarge: "too_large",
+  unauthorized: "unauthorized",
 } as const;
 export type HttpFailureKind =
   (typeof HttpFailureKind)[keyof typeof HttpFailureKind];
 
 export interface HttpFailure {
   kind: HttpFailureKind;
-  status?: number;
   retryAfter?: string;
   retryAfterSeconds?: number;
+  status?: number;
 }
 
 export interface HttpResponseMetadata {
+  retryAfter?: string | null;
   status: number;
   type?: ResponseType;
-  retryAfter?: string | null;
 }
 
 export interface HttpFailureContext {
@@ -43,9 +43,9 @@ export interface HttpFailureContext {
 export interface JsonRequest<T> {
   client: KyInstance;
   input: Input;
+  onHttpFailure?: (context: HttpFailureContext) => Error | Promise<Error>;
   options?: Options;
   schema?: StandardSchemaV1<unknown, T>;
-  onHttpFailure?(context: HttpFailureContext): Error | Promise<Error>;
 }
 
 export interface RetryDelayInput {

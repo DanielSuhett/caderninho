@@ -10,10 +10,10 @@ export async function verifyPassword(
   expected: string | undefined,
   supplied: string,
 ) {
-  if (!adminConfigured(expected) || !adminConfigured(supplied)) {
+  if (!(adminConfigured(expected) && adminConfigured(supplied))) {
     return false;
   }
-  return secretsEqual({ expected: expected ?? "", supplied });
+  return await secretsEqual({ expected: expected ?? "", supplied });
 }
 
 export function returnPath(value: string | undefined) {
@@ -34,7 +34,19 @@ export function createAuthService(
   now: () => number = Date.now,
 ) {
   return {
+    allowLoginAttempt: () => repository.allowLoginAttempt(now()),
     compact: repository.compact,
+    async createSession(prior?: string) {
+      const id = token();
+      await repository.saveSession({
+        csrf: token(),
+        expires: now() + 28_800_000,
+        id,
+        version,
+        ...(prior !== undefined && { prior }),
+      });
+      return id;
+    },
     async readSession(id: string) {
       if (id.length > 100) {
         return null;
@@ -42,18 +54,6 @@ export function createAuthService(
       const session = await repository.session(id, now());
       return session?.auth_version === version ? session : null;
     },
-    async createSession(prior?: string) {
-      const id = token();
-      await repository.saveSession({
-        id,
-        csrf: token(),
-        expires: now() + 28800000,
-        version,
-        ...(prior !== undefined && { prior }),
-      });
-      return id;
-    },
-    allowLoginAttempt: () => repository.allowLoginAttempt(now()),
     revokeSession: (id: string) => repository.revokeSession(id),
   };
 }

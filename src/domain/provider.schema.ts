@@ -9,59 +9,59 @@ const scalar = z.union([z.string(), z.number(), z.boolean()]).nullish();
 // Provider payloads enter here before any field is trusted. Unknown keys are
 // retained for the allowlisted provider-field projection, never cast to a model.
 const participant = z
-  .object({ name: text, documentNumber: z.object({ value: text }).nullish() })
+  .object({ documentNumber: z.object({ value: text }).nullish(), name: text })
   .loose();
 
 export const ProviderRecordSchema = z
   .object({
-    id: z.union([z.string(), z.number()]).nullish(),
-    resourceId: text,
-    itemId: text,
     accountId: text,
-    investmentId: text,
-    type: text,
-    status: text,
-    executionStatus: text,
-    lastUpdatedAt: text,
-    consentExpiresAt: text,
-    products: z.array(z.string()).nullish(),
-    resourcesCollectedAt: z.json().nullish(),
+    amount: MoneyInputSchema,
+    automaticallyInvestedBalance: MoneyInputSchema,
+    availableBalance: MoneyInputSchema,
+    balance: MoneyInputSchema,
+    category: text,
+    categoryId: text,
     connector: z
       .object({
         id: scalar,
-        name: text,
-        products: z.array(z.string()).nullish(),
         isOpenFinance: z.boolean().nullish(),
         isSandbox: z.boolean().nullish(),
+        name: text,
+        products: z.array(z.string()).nullish(),
       })
       .loose()
       .nullish(),
-    name: text,
+    consentExpiresAt: text,
+    createdAt: text,
+    creditCardMetadata: z.object({ billId: text }).loose().nullish(),
     currencyCode: text,
     date: text,
-    amount: MoneyInputSchema,
     description: text,
-    operationType: text,
-    category: text,
-    categoryId: text,
-    taxNumber: text,
-    url: text,
-    updatedAt: text,
-    createdAt: text,
-    updateDateTime: text,
-    balance: MoneyInputSchema,
-    availableBalance: MoneyInputSchema,
-    automaticallyInvestedBalance: MoneyInputSchema,
+    executionStatus: text,
+    id: z.union([z.string(), z.number()]).nullish(),
+    investmentId: text,
+    itemId: text,
+    lastUpdatedAt: text,
     merchant: z.object({ name: text }).loose().nullish(),
-    creditCardMetadata: z.object({ billId: text }).loose().nullish(),
+    name: text,
+    operationType: text,
     paymentData: z
       .object({
-        paymentMethod: text,
         payer: participant.nullish(),
+        paymentMethod: text,
         receiver: participant.nullish(),
       })
       .loose()
       .nullish(),
+    products: z.array(z.string()).nullish(),
+    resourceId: text,
+    resourcesCollectedAt: z.json().nullish(),
+    status: text,
+    taxNumber: text,
+    type: text,
+    updateDateTime: text,
+    updatedAt: text,
+    url: text,
   })
   .loose() satisfies z.ZodType<ProviderRecord>;
 

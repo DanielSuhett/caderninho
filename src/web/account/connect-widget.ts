@@ -5,11 +5,11 @@ import { tryCatch } from "@/shared/result";
 import type { ConnectRequest, ConnectWidget } from "./account.types";
 
 type Widget = Pick<PluggyConnect, "init" | "destroy">;
-type WidgetModule = {
+interface WidgetModule {
   PluggyConnect: new (
     options: ConstructorParameters<typeof PluggyConnect>[0],
   ) => Widget;
-};
+}
 
 // All vendor lifecycle and events stop at this adapter. Generation checks also
 // cover an SDK import or initialization that resolves after disposal.
@@ -20,7 +20,7 @@ export function createConnectWidget(
   let generation = 0;
   let cleanup: Promise<void> = Promise.resolve();
   const destroy = async () => {
-    generation++;
+    generation += 1;
     const previous = current;
     current = undefined;
     const pending = cleanup.then(async () => {
@@ -52,9 +52,9 @@ export function createConnectWidget(
         ...request.configuration,
         language: "pt",
         ...(request.itemId !== undefined && { updateItem: request.itemId }),
-        onSuccess: (result) => {
+        onClose: () => {
           if (version === generation) {
-            request.onSuccess(result.item.id);
+            request.onClose();
           }
         },
         onError: () => {
@@ -62,9 +62,9 @@ export function createConnectWidget(
             request.onError();
           }
         },
-        onClose: () => {
+        onSuccess: (result) => {
           if (version === generation) {
-            request.onClose();
+            request.onSuccess(result.item.id);
           }
         },
       });

@@ -22,7 +22,7 @@ import {
 import type { ProviderRecord } from "@/domain/provider.entity";
 import { assertReadRevision } from "@/domain/query.entity";
 import { detectSubscriptions } from "@/domain/recurrence.entity";
-import { importRules, txContext } from "@/domain/rules";
+import { type Derived, importRules, txContext } from "@/domain/rules";
 
 import type {
   EntityInput,
@@ -34,59 +34,59 @@ import type {
 } from "./entity";
 
 export interface FinancialQueries {
-  setupStatus(): Promise<WizardState>;
-  query: FinancialRepository["query"];
   aggregate: FinancialRepository["aggregate"];
-  readStatus: FinancialRepository["readStatus"];
-  manageRules(input: RuleCommand): ReturnType<typeof manageRules>;
-  correctRecord(
+  correctRecord: (
     input: CorrectionInput,
-  ): ReturnType<typeof correctFinancialRecord>;
+  ) => ReturnType<typeof correctFinancialRecord>;
   explainRecord: FinancialRepository["explain"];
-  previewRules(input: PreviewInput): ReturnType<typeof previewRules>;
-  readSubscriptions(
+  manageRules: (input: RuleCommand) => ReturnType<typeof manageRules>;
+  now: () => string;
+  previewRules: (input: PreviewInput) => ReturnType<typeof previewRules>;
+  query: FinancialRepository["query"];
+  readAccount: (accountId: string) => Promise<ProviderRecord>;
+  readStatus: FinancialRepository["readStatus"];
+  readSubscriptions: (
     input: SubscriptionInput,
-  ): ReturnType<typeof readSubscriptions>;
-  readAccount(accountId: string): Promise<ProviderRecord>;
-  now(): string;
+  ) => ReturnType<typeof readSubscriptions>;
+  setupStatus: () => Promise<WizardState>;
 }
 
 export function createFinancialService(deps: {
   repository: FinancialRepository;
   actions: RuleActions;
-  setupStatus(): Promise<WizardState>;
-  readAccount(accountId: string): Promise<ProviderRecord>;
-  now(): Date;
+  setupStatus: () => Promise<WizardState>;
+  readAccount: (accountId: string) => Promise<ProviderRecord>;
+  now: () => Date;
 }): FinancialQueries {
   const { repository } = deps;
   return {
-    setupStatus: deps.setupStatus,
-    query: repository.query,
     aggregate: repository.aggregate,
-    readStatus: repository.readStatus,
-    manageRules: (input) => manageRules(deps.actions, input),
     correctRecord: (input) => correctFinancialRecord(repository.correct, input),
     explainRecord: repository.explain,
+    manageRules: (input) => manageRules(deps.actions, input),
+    now: () => deps.now().toISOString(),
     previewRules: (input) =>
       previewRules(
         {
-          select: (before) => repository.preview(input, before),
-          rules: () => repository.rules(input.revision),
           revision: repository.revision,
+          rules: () => repository.rules(input.revision),
+          select: (before) => repository.preview(input, before),
         },
         input.revision,
       ),
+    query: repository.query,
+    readAccount: deps.readAccount,
+    readStatus: repository.readStatus,
     readSubscriptions: (input) =>
       readSubscriptions(
         {
-          select: () => repository.subscriptions(input),
-          revision: repository.revision,
           now: deps.now,
+          revision: repository.revision,
+          select: () => repository.subscriptions(input),
         },
         input,
       ),
-    readAccount: deps.readAccount,
-    now: () => deps.now().toISOString(),
+    setupStatus: deps.setupStatus,
   };
 }
 
@@ -100,10 +100,10 @@ export function correctFinancialRecord(
   const change = recordChange(input);
   return persist(
     {
-      itemId: input.itemId,
-      resource: input.resource,
-      parentId: input.parentId,
       id: input.id,
+      itemId: input.itemId,
+      parentId: input.parentId,
+      resource: input.resource,
     },
     change,
   );
@@ -111,63 +111,67 @@ export function correctFinancialRecord(
 
 export async function manageRules(actions: RuleActions, a: RuleCommand) {
   if (a.action === RuleCommandAction.read) {
-    return a.revision ? actions.read(a.revision) : actions.list();
+    return await (a.revision ? actions.read(a.revision) : actions.list());
   }
   if (a.action === RuleCommandAction.activate) {
     if (a.revision === undefined) {
       throw new Error("RULES_REVISION_REQUIRED");
     }
-    return actions.activate(a.revision);
+    return await actions.activate(a.revision);
   }
   const report = importRules(a.document, a.catalog);
   if (a.action === RuleCommandAction.validate || !report.compatible) {
     return report;
   }
-  return actions.save(report.document, false);
+  return await actions.save(report.document, false);
 }
 
 export async function previewRules(
   reads: {
-    select(before: number): Promise<PreviewSelection>;
-    rules(): ReturnType<FinancialRepository["rules"]>;
-    revision(): Promise<number>;
+    select: (before: number) => Promise<PreviewSelection>;
+    rules: () => ReturnType<FinancialRepository["rules"]>;
+    revision: () => Promise<number>;
   },
   rulesRevision: string,
 ) {
   const before = await reads.revision();
   const engine = await reads.rules();
   const { total, sample } = await reads.select(before);
-  const differences = [];
+  const differences: {
+    id: string;
+    before: { category: string | null; description: string | null };
+    derived: Derived;
+  }[] = [];
   for (const row of sample) {
     differences.push({
-      id: row.id,
       before: {
         category: row.effective_category,
         description: row.effective_description,
       },
       derived: await engine.evaluate(txContext(row.normalized)),
+      id: row.id,
     });
   }
-  assertReadRevision({ expected: before, actual: await reads.revision() });
+  assertReadRevision({ actual: await reads.revision(), expected: before });
   return {
-    selected: total,
-    sampleOnly: true,
     differences,
     revision: before,
     rulesRevision,
+    sampleOnly: true,
+    selected: total,
   };
 }
 
 export async function readSubscriptions(
   reads: {
-    select(): ReturnType<FinancialRepository["subscriptions"]>;
-    revision(): Promise<number>;
-    now(): Date;
+    select: () => ReturnType<FinancialRepository["subscriptions"]>;
+    revision: () => Promise<number>;
+    now: () => Date;
   },
   input: SubscriptionInput,
 ) {
   const { before, records } = await reads.select();
-  assertReadRevision({ expected: before, actual: await reads.revision() });
+  assertReadRevision({ actual: await reads.revision(), expected: before });
   return detectSubscriptions(records, {
     ...input,
     asOfDay: localDay(reads.now()),
@@ -186,7 +190,10 @@ export async function importRuleDocument(
   if (!report.compatible || input.mode === RuleImportMode.dry_run) {
     return report;
   }
-  return actions.save(report.document, input.mode === RuleImportMode.activate);
+  return await actions.save(
+    report.document,
+    input.mode === RuleImportMode.activate,
+  );
 }
 
 export async function prepareEntity(
@@ -194,46 +201,46 @@ export async function prepareEntity(
   input: EntityInput,
 ): Promise<PreparedEntity> {
   const { identity, source, parent, legacyProjection } = input;
-  assertEntityIdentity({ source, expectedId: identity.id });
+  assertEntityIdentity({ expectedId: identity.id, source });
   const [digest, previous] = await Promise.all([
     dependencies.hash(
       entityFingerprint({
-        resource: identity.resource,
-        raw: source,
-        parent,
         legacyProjection,
+        parent,
+        raw: source,
+        resource: identity.resource,
       }),
     ),
     dependencies.repository.read(identity),
   ]);
   const observation = {
     identity,
-    source,
-    operationId: input.operationId,
     observedAt: input.observedAt,
+    operationId: input.operationId,
+    source,
   };
   const seenInOperation = previous?.seen_operation === input.operationId;
   const change = entityChange({
-    previous: previous && {
-      relevantHash: previous.relevant_hash,
-      deleted: previous.deleted !== 0,
-    },
     digest,
+    previous: previous && {
+      deleted: previous.deleted !== 0,
+      relevantHash: previous.relevant_hash,
+    },
     renormalize: input.renormalize,
   });
   if (change === EntityChange.unchanged) {
     return {
+      classified: 0,
       mutation: { kind: "observe", value: observation },
       seenInOperation,
       state: EntityChange.unchanged,
-      classified: 0,
     };
   }
   const projection = projectEntity({
-    resource: identity.resource,
-    raw: source,
     parent,
+    raw: source,
     referenceDay: input.referenceDay,
+    resource: identity.resource,
     ...(legacyProjection && { legacyProjection }),
   });
   const derived =
@@ -241,19 +248,19 @@ export async function prepareEntity(
       ? await dependencies.evaluate(txContext(projection.record))
       : undefined;
   return {
+    classified: derived ? 1 : 0,
     mutation: {
       kind: "save",
       value: {
         ...observation,
-        projection,
+        derived,
         digest,
         normalizer: legacyProjection ? "legacy-projection-v1" : NORMALIZER,
+        projection,
         rulesRevision: input.rulesRevision,
-        derived,
       },
     },
     seenInOperation,
     state: change,
-    classified: derived ? 1 : 0,
   };
 }

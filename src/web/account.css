@@ -20,16 +20,16 @@ main {
   gap: 8px;
 }
 .setup-layout nav button {
-  text-align: left;
-  padding: 12px;
   min-height: 48px;
-  border-left: 3px solid transparent;
-  background: transparent;
+  padding: 12px;
   color: var(--text);
+  text-align: left;
+  background: transparent;
+  border-left: 3px solid transparent;
 }
 .setup-layout nav button[aria-current] {
-  border-color: var(--accent);
   background: var(--surface);
+  border-color: var(--accent);
 }
 
 .setup-layout section {

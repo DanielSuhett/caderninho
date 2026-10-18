@@ -7,18 +7,18 @@ import { createAuthService } from "../service";
 await test("authentication use case checks installation version before exposing a stored session", async () => {
   const reads: number[] = [];
   const repository: AuthRepository = {
-    compact: async () => {},
-    session: async (_id, now) => {
-      reads.push(now);
-      return {
-        csrf: "synthetic-csrf",
-        expires: 10000,
-        auth_version: "current",
-      };
-    },
-    saveSession: async () => {},
     allowLoginAttempt: async () => true,
-    revokeSession: async () => {},
+    compact: () => Promise.resolve(),
+    revokeSession: () => Promise.resolve(),
+    saveSession: () => Promise.resolve(),
+    session: (_id, now) => {
+      reads.push(now);
+      return Promise.resolve({
+        auth_version: "current",
+        csrf: "synthetic-csrf",
+        expires: 10_000,
+      });
+    },
   };
   assert.equal(
     await createAuthService(repository, "previous", () => 100).readSession(

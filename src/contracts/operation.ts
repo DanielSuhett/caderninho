@@ -12,29 +12,29 @@ import {
 
 export const MigrationRowSchema = z
   .object({
-    sourceKey: z.string().min(1).max(2048),
-    readAt: z.iso.datetime(),
-    resource: ResourceSchema,
     parentId: z.string(),
+    readAt: z.iso.datetime(),
     record: FinanceRecordSchema,
+    resource: ResourceSchema,
+    sourceKey: z.string().min(1).max(2048),
   })
   .strict();
 export const WebhookSchema = z
   .object({
-    eventId: z.string().min(1).max(200),
-    event: z.enum(WebhookEventType),
-    itemId: z.string().uuid(),
     accountId: z.string().uuid(),
-    transactionIds: z.array(z.string().uuid()).max(10000).optional(),
+    event: z.enum(WebhookEventType),
+    eventId: z.string().min(1).max(200),
+    itemId: z.string().uuid(),
+    transactionIds: z.array(z.string().uuid()).max(10_000).optional(),
     transactionsCreatedAtFrom: z.iso.datetime().optional(),
   })
   .loose() satisfies z.ZodType<WebhookEvent>;
 
 export const MigrationRequestSchema = z
   .object({
-    itemId: z.string(),
-    rows: z.array(MigrationRowSchema).min(1).max(20),
-    policy: z.enum(MigrationPolicy).default(MigrationPolicy.refuse_conflicts),
     apply: z.boolean().default(false),
+    itemId: z.string(),
+    policy: z.enum(MigrationPolicy).default(MigrationPolicy.refuse_conflicts),
+    rows: z.array(MigrationRowSchema).min(1).max(20),
   })
   .strict() satisfies z.ZodType<MigrationRequest>;

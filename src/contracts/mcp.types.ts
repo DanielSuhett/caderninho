@@ -14,19 +14,19 @@ interface LongInput extends OperationSelection {
 }
 
 export const ToolName = {
-  setup_status: "caderninho_setup_status",
-  sync: "caderninho_sync",
-  reconcile: "caderninho_reconcile",
-  reapply: "caderninho_reapply",
-  status: "caderninho_status",
-  query: "caderninho_query",
   aggregate: "caderninho_aggregate",
-  rules: "caderninho_rules",
-  preview: "caderninho_preview",
-  override: "caderninho_override",
   explain: "caderninho_explain",
   get_subscriptions: "caderninho_get_subscriptions",
   live_balance: "caderninho_live_balance",
+  override: "caderninho_override",
+  preview: "caderninho_preview",
+  query: "caderninho_query",
+  reapply: "caderninho_reapply",
+  reconcile: "caderninho_reconcile",
+  rules: "caderninho_rules",
+  setup_status: "caderninho_setup_status",
+  status: "caderninho_status",
+  sync: "caderninho_sync",
 } as const;
 
 interface ToolInputs {

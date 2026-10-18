@@ -3,29 +3,29 @@ import { assertMinor } from "./exact";
 import type { RecordReference } from "./finance.entity";
 
 export const Field = {
-  date: "date",
   account: "account",
-  item: "item",
-  currency: "currency",
-  direction: "direction",
-  original_category: "original.category",
-  effective_category: "effective.category",
-  effective_group: "effective.group",
-  original_description: "original.description",
-  effective_description: "effective.description",
   amountMinor: "amountMinor",
-  status: "status",
+  currency: "currency",
+  date: "date",
+  direction: "direction",
+  effective_category: "effective.category",
+  effective_description: "effective.description",
+  effective_group: "effective.group",
   eligible: "eligible",
   ignored: "ignored",
+  item: "item",
+  original_category: "original.category",
+  original_description: "original.description",
+  status: "status",
 } as const;
 export type Field = (typeof Field)[keyof typeof Field];
 
 export const FilterOperator = {
+  contains: "contains",
   eq: "eq",
-  ne: "ne",
   gte: "gte",
   lte: "lte",
-  contains: "contains",
+  ne: "ne",
 } as const;
 export type FilterOperator =
   (typeof FilterOperator)[keyof typeof FilterOperator];
@@ -53,22 +53,22 @@ export type Filter =
 export type Identity = RecordReference;
 
 export interface Cursor {
-  revision: number;
   offset: number;
+  revision: number;
   scope: string;
 }
 
 export interface Query {
-  resource: Resource;
+  cursor?: Cursor | undefined;
   filter?: Filter | undefined;
   limit: number;
-  cursor?: Cursor | undefined;
+  resource: Resource;
 }
 
 export interface Aggregate {
-  resource: Resource;
   filter?: Filter | undefined;
   metric?: string | undefined;
+  resource: Resource;
 }
 
 export function assertReadRevision({

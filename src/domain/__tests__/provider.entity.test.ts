@@ -7,25 +7,28 @@ import {
   assertTransactionSelection,
 } from "../provider.entity";
 
+const sourceIdentityMismatchPattern = /SOURCE_IDENTITY_MISMATCH/;
+const sourceSelectionMismatchPattern = /SOURCE_SELECTION_MISMATCH/;
+
 await test("source identity and context match requested Items, parent accounts and investments", () => {
   assert.doesNotThrow(() =>
-    assertSourceIdentity({ id: "expected", expected: "expected" }),
+    assertSourceIdentity({ expected: "expected", id: "expected" }),
   );
   assert.throws(
-    () => assertSourceIdentity({ id: 200, expected: "200" }),
-    /SOURCE_IDENTITY_MISMATCH/,
+    () => assertSourceIdentity({ expected: "200", id: 200 }),
+    sourceIdentityMismatchPattern,
   );
   const context = {
-    resource: "transactions" as const,
     item: "synthetic-item",
     parent: "synthetic-account",
+    resource: "transactions" as const,
   };
   assert.doesNotThrow(() =>
     assertSourceRecords({
-      records: [
-        { id: "synthetic-tx", itemId: context.item, accountId: context.parent },
-      ],
       context,
+      records: [
+        { accountId: context.parent, id: "synthetic-tx", itemId: context.item },
+      ],
     }),
   );
   for (const record of [
@@ -34,39 +37,39 @@ await test("source identity and context match requested Items, parent accounts a
     { itemId: null },
   ]) {
     assert.throws(
-      () => assertSourceRecords({ records: [record], context }),
-      /SOURCE_IDENTITY_MISMATCH/,
+      () => assertSourceRecords({ context, records: [record] }),
+      sourceIdentityMismatchPattern,
     );
   }
   // Some provider resources omit context fields; absence is not an identity mismatch.
   assert.doesNotThrow(() =>
-    assertSourceRecords({ records: [{ id: "synthetic-tx" }], context }),
+    assertSourceRecords({ context, records: [{ id: "synthetic-tx" }] }),
   );
   assert.throws(
     () =>
       assertSourceRecords({
-        records: [{ investmentId: "foreign" }],
         context: { ...context, resource: "investment_transactions" },
+        records: [{ investmentId: "foreign" }],
       }),
-    /SOURCE_IDENTITY_MISMATCH/,
+    sourceIdentityMismatchPattern,
   );
   assert.doesNotThrow(() =>
     assertSourceRecords({
-      records: [{ id: 200 }],
       context: {
-        resource: "connectors",
-        item: context.item,
         connectorId: "200",
+        item: context.item,
+        resource: "connectors",
       },
+      records: [{ id: 200 }],
     }),
   );
   assert.throws(
     () =>
       assertSourceRecords({
+        context: { item: context.item, resource: "connections" },
         records: [{ id: "foreign" }],
-        context: { resource: "connections", item: context.item },
       }),
-    /SOURCE_IDENTITY_MISMATCH/,
+    sourceIdentityMismatchPattern,
   );
 });
 
@@ -75,23 +78,23 @@ await test("transaction selection rejects unrequested IDs and another account ev
   assert.doesNotThrow(() =>
     assertTransactionSelection({
       ...input,
-      records: [{ id: "second", accountId: input.account }],
+      records: [{ accountId: input.account, id: "second" }],
     }),
   );
   assert.throws(
     () =>
       assertTransactionSelection({
         ...input,
-        records: [{ id: "foreign", accountId: input.account }],
+        records: [{ accountId: input.account, id: "foreign" }],
       }),
-    /SOURCE_SELECTION_MISMATCH/,
+    sourceSelectionMismatchPattern,
   );
   assert.throws(
     () =>
       assertTransactionSelection({
         ...input,
-        records: [{ id: "first", accountId: "foreign" }],
+        records: [{ accountId: "foreign", id: "first" }],
       }),
-    /SOURCE_SELECTION_MISMATCH/,
+    sourceSelectionMismatchPattern,
   );
 });

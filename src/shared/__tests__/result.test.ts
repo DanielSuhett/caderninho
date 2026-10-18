@@ -7,30 +7,38 @@ import { Fault } from "@/domain/fault.entity";
 import { tryCatch } from "../result";
 
 await test("tryCatch preserves falsy successes and normalizes rejected or synchronously thrown values", async () => {
-  for (const value of [null, 0, false, ""] as const) {
-    const { data, error } = await tryCatch(() => Promise.resolve(value));
-    assert.equal(data, value);
-    assert.equal(error, null);
-  }
+  await Promise.all(
+    ([null, 0, false, ""] as const).map(async (value) => {
+      const { data, error } = await tryCatch(() => Promise.resolve(value));
+      assert.equal(data, value);
+      assert.equal(error, null);
+    }),
+  );
 
-  for (const [caught, expected] of [
-    ["failure", "failure"],
-    [null, "null"],
-    [7, "7"],
-    [{ reason: "synthetic" }, "[object Object]"],
-  ] as const) {
-    for (const operation of [
-      () => Promise.reject(caught),
-      () => {
-        throw caught;
-      },
-    ]) {
-      const { data, error } = await tryCatch(operation);
-      assert.equal(data, null);
-      assert.ok(error instanceof Error);
-      assert.equal(error.message, expected);
-    }
-  }
+  await Promise.all(
+    (
+      [
+        ["failure", "failure"],
+        [null, "null"],
+        [7, "7"],
+        [{ reason: "synthetic" }, "[object Object]"],
+      ] as const
+    ).map(async ([caught, expected]) => {
+      await Promise.all(
+        [
+          () => Promise.reject(caught),
+          () => {
+            throw caught;
+          },
+        ].map(async (operation) => {
+          const { data, error } = await tryCatch(operation);
+          assert.equal(data, null);
+          assert.ok(error instanceof Error);
+          assert.equal(error.message, expected);
+        }),
+      );
+    }),
+  );
 
   const fault = new Fault(FaultCode.UPSTREAM_RATE_LIMIT);
   fault.details = { retryAfterSeconds: 42 };

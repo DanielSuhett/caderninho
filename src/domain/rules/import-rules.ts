@@ -22,53 +22,55 @@ import type {
   SecuroRule,
 } from "./rule-import.types";
 
+const regexSpecialCharactersPattern = /[.*+?^${}()|[\]\\]/g;
+
 const SecuroConditionSchema: z.ZodType<SecuroCondition> = z
   .object({
-    op: z.string(),
-    field: z.string().optional(),
-    value: JsonValueSchema.optional(),
     get conditions() {
       return z.array(SecuroConditionSchema).optional();
     },
+    field: z.string().optional(),
+    op: z.string(),
+    value: JsonValueSchema.optional(),
   })
   .strict();
 
 const Package = z
   .object({
     format: z.literal("securo-categorization-rules"),
-    version: z.literal(1),
     rules: z.array(
       z
         .object({
-          id: z.string().optional(),
-          name: z.string(),
-          conditions_op: z.enum(["and", "or"]),
-          conditions: z.array(SecuroConditionSchema).min(1),
           actions: z.array(
             z
               .object({
+                key: z.string().optional(),
                 op: z.string(),
                 value: z.string().optional(),
-                key: z.string().optional(),
               })
               .strict(),
           ),
-          priority: z.number().int(),
+          conditions: z.array(SecuroConditionSchema).min(1),
+          conditions_op: z.enum(["and", "or"]),
+          id: z.string().optional(),
           is_active: z.boolean(),
+          name: z.string(),
+          priority: z.number().int(),
         })
         .strict(),
     ),
+    version: z.literal(1),
   })
   .strict() satisfies z.ZodType<SecuroPackage>;
 
 const fieldMap: Record<string, string> = {
-  description: "tx.description",
   account_id: "tx.account_id",
-  type: "tx.direction",
   amount: "tx.amount",
-  date: "tx.date",
-  currency: "tx.currency",
   category: "tx.original_category",
+  currency: "tx.currency",
+  date: "tx.date",
+  description: "tx.description",
+  type: "tx.direction",
 };
 
 export function importRules(
@@ -94,9 +96,9 @@ export function importRules(
       compatible: false,
       document: null,
       issues: parsed.error.issues.map((i) => ({
-        path: i.path.join("."),
         code: "INVALID_PACKAGE",
         message: i.message,
+        path: i.path.join("."),
       })),
     };
   }
@@ -106,10 +108,10 @@ export function importRules(
 
   if (!catalog) {
     issues.push({
-      path: "categories",
       code: "CATALOG_REQUIRED",
       message:
         "Securo export has no catalog; supply explicit groups, category IDs and aliases. No categories are invented.",
+      path: "categories",
     });
   }
 
@@ -127,10 +129,10 @@ export function importRules(
       document: null,
       issues: [
         {
-          path: "rules",
           code: "INVALID_CONVERSION",
           message:
             error instanceof Error ? error.message : "Invalid conversion",
+          path: "rules",
         },
       ],
     };
@@ -157,7 +159,11 @@ export function parseRuleJson(text: string): unknown {
   });
 }
 
-type ConversionIssue = { path: string; code: string; message: string };
+interface ConversionIssue {
+  code: string;
+  message: string;
+  path: string;
+}
 function literal(
   value: JsonValue | undefined,
   path: string,
@@ -171,9 +177,9 @@ function literal(
     return String(value);
   }
   issues.push({
-    path,
     code: "INVALID_LITERAL",
     message: "Text or safe decimal literal required",
+    path,
   });
 
   return "0";
@@ -192,9 +198,9 @@ function condition(
 
   if (!field) {
     issues.push({
-      path,
       code: "FIELD_MAPPING_REQUIRED",
       message: `Unsupported source field: ${c.field}`,
+      path,
     });
 
     return { not: { all: [] } };
@@ -227,7 +233,7 @@ function condition(
     const text = z
       .string()
       .parse(c.value)
-      .replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      .replace(regexSpecialCharactersPattern, "\\$&");
 
     return {
       fact: field,
@@ -236,7 +242,7 @@ function condition(
     };
   }
 
-  issues.push({ path, code: "UNSUPPORTED_OPERATOR", message: c.op });
+  issues.push({ code: "UNSUPPORTED_OPERATOR", message: c.op, path });
 
   return { not: { all: [] } };
 }
@@ -263,9 +269,9 @@ function equality(
     return { fact: field, operator: RuleOperator.equal, value: value.data };
   }
   issues.push({
-    path,
     code: "INVALID_LITERAL",
     message: "Equality requires a scalar literal",
+    path,
   });
 
   return { not: { all: [] } };
@@ -278,9 +284,9 @@ function groupCondition(
 ): RuleCondition {
   if (!c.conditions?.length || c.field || c.value !== undefined) {
     issues.push({
-      path,
       code: "INVALID_GROUP",
       message: "Group requires conditions only",
+      path,
     });
 
     return { not: { all: [] } };
@@ -315,19 +321,19 @@ function convertPackageRules(source: SecuroRule[], issues: ConversionIssue[]) {
       }
 
       const candidate = RuleSchema.safeParse({
+        conditions,
+        event: { params: { actions }, type: stage },
         id: `${r.id ?? `securo-${index + 1}`}-${stage}`,
+        is_active: r.is_active,
         name: r.name,
         priority: r.priority,
-        is_active: r.is_active,
-        conditions,
-        event: { type: stage, params: { actions } },
       });
 
       if (!candidate.success) {
         issues.push({
-          path: `rules.${index}`,
           code: "UNSUPPORTED_ACTION",
           message: candidate.error.message,
+          path: `rules.${index}`,
         });
         continue;
       }

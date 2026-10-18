@@ -11,41 +11,44 @@ import { day, isMatureDate } from "./exact";
 import { fail } from "./fault.entity";
 import type { FinanceRecord } from "./finance.entity";
 
+const whitespacePattern = /\s+/g;
+const digitsPattern = /^\d+$/;
+
 export interface RecurrenceOptions {
-  from: string;
-  to: string;
+  asOfDay: string;
   currency: string;
+  from: string;
   limit?: number;
   offset?: number;
-  asOfDay: string;
+  to: string;
 }
 
 export interface EligibleRecurrenceRecord extends FinanceRecord {
-  accountingDate: string;
   absoluteAmountMinor: string;
   accountId: string;
+  accountingDate: string;
   currencyCode: string;
 }
 
 export interface Exclusion {
-  reason: string;
   count: number;
-  recordIds: string[];
   knownAmountMinor?: string;
+  reason: string;
+  recordIds: string[];
 }
 
 export interface Cadence {
-  periodicity: Periodicity;
-  observedPattern: Periodicity;
+  intervalDays: number[];
   missingCycles: number;
   multipleChargesPerMonth: boolean;
-  intervalDays: number[];
+  observedPattern: Periodicity;
+  periodicity: Periodicity;
 }
 
 export interface Payee {
+  normalized: string;
   source: string;
   value: string;
-  normalized: string;
 }
 
 export interface RecurrenceGroup {
@@ -54,27 +57,7 @@ export interface RecurrenceGroup {
 }
 
 export interface SubscriptionCandidate {
-  anchorRecordId: string;
   accountId: string;
-  payee: { name: string; normalizedName: string; source: string };
-  observedPattern: Periodicity;
-  reasons: string[];
-  warnings: string[];
-  categories: string[];
-  categoriesTruncated: boolean;
-  firstChargeDate: string;
-  lastChargeDate: string;
-  cadence: {
-    missingCycles: number;
-    intervalDays: number[];
-    intervalsTruncated: boolean;
-  };
-  currency: string;
-  classification: RecurrenceClassification;
-  confirmed: false;
-  periodicity: Periodicity;
-  recurrenceEvidenceStrength: RecurrenceStrength;
-  occurrenceCount: number;
   amounts: {
     unit: "currency_minor";
     observedTotalMinor: string;
@@ -85,6 +68,17 @@ export interface SubscriptionCandidate {
     pattern: "constant" | "variable";
     byMonth: Record<string, string>;
   };
+  anchorRecordId: string;
+  cadence: {
+    missingCycles: number;
+    intervalDays: number[];
+    intervalsTruncated: boolean;
+  };
+  categories: string[];
+  categoriesTruncated: boolean;
+  classification: RecurrenceClassification;
+  confirmed: false;
+  currency: string;
   evidence: {
     recordIds: string[];
     referencesTruncated: boolean;
@@ -95,12 +89,18 @@ export interface SubscriptionCandidate {
       classification?: Classification | undefined;
     }[];
   };
+  firstChargeDate: string;
+  lastChargeDate: string;
+  observedPattern: Periodicity;
+  occurrenceCount: number;
+  payee: { name: string; normalizedName: string; source: string };
+  periodicity: Periodicity;
+  reasons: string[];
+  recurrenceEvidenceStrength: RecurrenceStrength;
+  warnings: string[];
 }
 
 export interface RecurrenceResult {
-  recordCount: number;
-  candidates: SubscriptionCandidate[];
-  candidateCount: number;
   analysis: {
     algorithm: "recurrence_candidates_v1";
     asOfDay: string;
@@ -114,6 +114,11 @@ export interface RecurrenceResult {
     scannedAllFilteredRecords: true;
     groupCount: number;
   };
+  candidateCount: number;
+  candidates: SubscriptionCandidate[];
+  exclusions: (Exclusion & { referencesTruncated: boolean })[];
+  pagination: { limit: number; offset: number; nextOffset: number | null };
+  recordCount: number;
   totals: {
     unit: "currency_minor";
     kind: "observed_candidate_debits_not_confirmed_subscription_spending";
@@ -128,16 +133,20 @@ export interface RecurrenceResult {
     refundsNetted: false;
     currentMonthlyEstimateMinor: null;
   };
-  pagination: { limit: number; offset: number; nextOffset: number | null };
-  exclusions: (Exclusion & { referencesTruncated: boolean })[];
 }
 
 // Pure, versioned heuristics over normalized snapshot records. No API, LLM or writes.
 
 const SUBSCRIPTION_RULES = {
   algorithm: "recurrence_candidates_v1" as const,
+  annualMinimumOccurrences: 2,
+  confirmation:
+    "Candidates only; cadence strength is not probability of a subscription.",
   grouping:
     "accountId + currency + name source + NFKC/whitespace/case-normalized payee; no fuzzy matching or cross-account deduplication",
+  maxEvidencePerCandidate: 12,
+  maxExclusionIds: 25,
+  minimumOccurrences: 3,
   patterns: [
     Periodicity.weekly,
     Periodicity.monthly,
@@ -146,22 +155,20 @@ const SUBSCRIPTION_RULES = {
     Periodicity.irregular,
     Periodicity.insufficient_history,
   ],
-  minimumOccurrences: 3,
-  annualMinimumOccurrences: 2,
   tolerances: {
-    weeklyDays: 2,
+    annualDays: 10,
     monthlyDays: 5,
     quarterlyDays: 7,
-    annualDays: 10,
+    weeklyDays: 2,
   },
-  maxEvidencePerCandidate: 12,
-  maxExclusionIds: 25,
-  confirmation:
-    "Candidates only; cadence strength is not probability of a subscription.",
 };
 
 const normalizeName = (name: string) =>
-  name.normalize("NFKC").trim().replace(/\s+/g, " ").toLocaleLowerCase("pt-BR");
+  name
+    .normalize("NFKC")
+    .trim()
+    .replace(whitespacePattern, " ")
+    .toLocaleLowerCase("pt-BR");
 
 const ordinaryExpenses = new Set([
   "restaurants",
@@ -194,7 +201,8 @@ const excludedClassifications = new Set<Classification>([
   Classification.refund,
 ]);
 
-const dateIndex = (date: string) => Date.parse(`${date}T00:00:00Z`) / 86400000;
+const dateIndex = (date: string) =>
+  Date.parse(`${date}T00:00:00Z`) / 86_400_000;
 
 const monthIndex = (date: string) =>
   Number(date.slice(0, 4)) * 12 + Number(date.slice(5, 7)) - 1;
@@ -216,10 +224,10 @@ const exactSum = (rows: { absoluteAmountMinor: string }[]) =>
     .toString();
 
 interface CadenceEvidence {
-  pairs: { days: number; months: number; dayDistance: number }[];
+  monthCount: number;
   multipleInMonth: boolean;
   occurrenceCount: number;
-  monthCount: number;
+  pairs: { days: number; months: number; dayDistance: number }[];
 }
 
 // First match wins: regular patterns must take precedence over irregular history.
@@ -229,8 +237,6 @@ const cadencePatterns: {
   matches: (evidence: CadenceEvidence) => boolean;
 }[] = [
   {
-    periodicity: Periodicity.annual,
-    minimumOccurrences: SUBSCRIPTION_RULES.annualMinimumOccurrences,
     matches: ({ pairs, multipleInMonth }) =>
       !multipleInMonth &&
       pairs.every(
@@ -238,10 +244,10 @@ const cadencePatterns: {
           p.months === 12 &&
           p.dayDistance <= SUBSCRIPTION_RULES.tolerances.annualDays,
       ),
+    minimumOccurrences: SUBSCRIPTION_RULES.annualMinimumOccurrences,
+    periodicity: Periodicity.annual,
   },
   {
-    periodicity: Periodicity.quarterly,
-    minimumOccurrences: SUBSCRIPTION_RULES.minimumOccurrences,
     matches: ({ pairs, multipleInMonth }) =>
       !multipleInMonth &&
       pairs.every(
@@ -249,10 +255,10 @@ const cadencePatterns: {
           p.months === 3 &&
           p.dayDistance <= SUBSCRIPTION_RULES.tolerances.quarterlyDays,
       ),
+    minimumOccurrences: SUBSCRIPTION_RULES.minimumOccurrences,
+    periodicity: Periodicity.quarterly,
   },
   {
-    periodicity: Periodicity.monthly,
-    minimumOccurrences: SUBSCRIPTION_RULES.minimumOccurrences,
     matches: ({ pairs, multipleInMonth }) =>
       !multipleInMonth &&
       pairs.some((p) => p.months === 1) &&
@@ -262,20 +268,22 @@ const cadencePatterns: {
           p.months <= 3 &&
           p.dayDistance <= SUBSCRIPTION_RULES.tolerances.monthlyDays,
       ),
+    minimumOccurrences: SUBSCRIPTION_RULES.minimumOccurrences,
+    periodicity: Periodicity.monthly,
   },
   {
-    periodicity: Periodicity.weekly,
-    minimumOccurrences: SUBSCRIPTION_RULES.minimumOccurrences,
     matches: ({ pairs }) =>
       pairs.every(
         (p) => Math.abs(p.days - 7) <= SUBSCRIPTION_RULES.tolerances.weeklyDays,
       ),
+    minimumOccurrences: SUBSCRIPTION_RULES.minimumOccurrences,
+    periodicity: Periodicity.weekly,
   },
   {
-    periodicity: Periodicity.irregular,
-    minimumOccurrences: SUBSCRIPTION_RULES.minimumOccurrences,
     matches: ({ occurrenceCount, monthCount }) =>
       occurrenceCount >= 3 && monthCount >= 3,
+    minimumOccurrences: SUBSCRIPTION_RULES.minimumOccurrences,
+    periodicity: Periodicity.irregular,
   },
 ];
 
@@ -291,9 +299,9 @@ function cadence(rows: EligibleRecurrenceRecord[]): Cadence | null {
     }
 
     return {
+      dayDistance: distanceInMonth(previous, date),
       days: dateIndex(date) - dateIndex(previous),
       months: monthIndex(date) - monthIndex(previous),
-      dayDistance: distanceInMonth(previous, date),
     };
   });
 
@@ -301,30 +309,30 @@ function cadence(rows: EligibleRecurrenceRecord[]): Cadence | null {
   const multipleInMonth = months.size < dates.length;
 
   const evidence = {
-    pairs,
+    monthCount: months.size,
     multipleInMonth,
     occurrenceCount: rows.length,
-    monthCount: months.size,
+    pairs,
   };
-  const pattern = cadencePatterns.find((candidate) =>
-    candidate.matches(evidence),
+  const pattern = cadencePatterns.find((definition) =>
+    definition.matches(evidence),
   );
   if (!pattern) {
     return null;
   }
   return {
-    periodicity:
-      rows.length >= pattern.minimumOccurrences
-        ? pattern.periodicity
-        : Periodicity.insufficient_history,
-    observedPattern: pattern.periodicity,
+    intervalDays: pairs.map((p) => p.days),
     missingCycles:
       pattern.periodicity === Periodicity.monthly
         ? pairs.reduce((n, p) => n + p.months - 1, 0)
         : 0,
     multipleChargesPerMonth:
       multipleInMonth && pattern.periodicity !== Periodicity.weekly,
-    intervalDays: pairs.map((p) => p.days),
+    observedPattern: pattern.periodicity,
+    periodicity:
+      rows.length >= pattern.minimumOccurrences
+        ? pattern.periodicity
+        : Periodicity.insufficient_history,
   };
 }
 
@@ -333,7 +341,7 @@ function nameFor(row: FinanceRecord) {
     const value = row[source];
 
     if (value?.trim()) {
-      return { source, value, normalized: normalizeName(value) };
+      return { normalized: normalizeName(value), source, value };
     }
   }
 
@@ -383,14 +391,20 @@ function recurrenceEntry(
     total = row["creditCardMetadata.totalInstallments"];
 
   if (
-    (installment != null && Number(installment) > 0) ||
-    (total != null && Number(total) > 1)
+    (installment !== null &&
+      installment !== undefined &&
+      Number(installment) > 0) ||
+    (total !== null && total !== undefined && Number(total) > 1)
   ) {
     return { reason: "installment_metadata" };
   }
 
-  const absoluteAmountMinor = row.absoluteAmountMinor;
-  if (absoluteAmountMinor == null || !/^\d+$/.test(absoluteAmountMinor)) {
+  const { absoluteAmountMinor } = row;
+  if (
+    absoluteAmountMinor === null ||
+    absoluteAmountMinor === undefined ||
+    !digitsPattern.test(absoluteAmountMinor)
+  ) {
     return { reason: "missing_or_invalid_amount" };
   }
 
@@ -407,16 +421,16 @@ function recurrenceEntry(
     return { reason: "missing_payee" };
   }
 
-  if (row.currencyCode == null) {
+  if (row.currencyCode === null || row.currencyCode === undefined) {
     return { reason: "missing_or_invalid_amount" };
   }
   return {
     name,
     record: {
       ...row,
-      accountingDate,
       absoluteAmountMinor,
       accountId: row.accountId,
+      accountingDate,
       currencyCode: row.currencyCode,
     },
   };
@@ -426,9 +440,9 @@ function candidate(
   group: RecurrenceGroup,
   pattern: Cadence,
 ): SubscriptionCandidate {
-  const rows = group.rows;
+  const { rows } = group;
 
-  const first = rows[0];
+  const [first] = rows;
 
   if (!first) {
     fail(FaultCode.INVALID_RESPONSE);
@@ -453,7 +467,9 @@ function candidate(
 
   const categories = [
     ...new Set(
-      rows.map((row) => row.category).filter((value) => value != null),
+      rows
+        .map((row) => row.category)
+        .filter((value) => value !== null && value !== undefined),
     ),
   ].sort();
 
@@ -530,54 +546,54 @@ function candidate(
   const sample = rows.slice(-SUBSCRIPTION_RULES.maxEvidencePerCandidate);
 
   return {
-    anchorRecordId: first.id,
     accountId: first.accountId,
+    amounts: {
+      averageMinor: {
+        denominator: String(rows.length),
+        numerator: sum.toString(),
+      },
+      byMonth,
+      lastChargeMinor: last.absoluteAmountMinor,
+      maximumMinor: maximum.toString(),
+      minimumMinor: minimum.toString(),
+      observedTotalMinor: sum.toString(),
+      pattern: minimum === maximum ? "constant" : "variable",
+      unit: "currency_minor",
+    },
+    anchorRecordId: first.id,
+    cadence: {
+      intervalDays: pattern.intervalDays.slice(-12),
+      intervalsTruncated: pattern.intervalDays.length > 12,
+      missingCycles: pattern.missingCycles,
+    },
+    categories: categories.slice(0, 5),
+    categoriesTruncated: categories.length > 5,
+    classification,
+    confirmed: false,
     currency: first.currencyCode,
+    evidence: {
+      charges: sample.map((row) => ({
+        amountMinor: row.absoluteAmountMinor,
+        classification: row.classification,
+        date: row.accountingDate,
+        id: row.id,
+      })),
+      recordIds: sample.map((row) => row.id),
+      referencesTruncated: rows.length > sample.length,
+    },
+    firstChargeDate: first.accountingDate,
+    lastChargeDate: last.accountingDate,
+    observedPattern: pattern.observedPattern,
+    occurrenceCount: rows.length,
     payee: {
       name: payee.value,
       normalizedName: payee.normalized,
       source: payee.source,
     },
-    classification,
-    confirmed: false,
     periodicity: pattern.periodicity,
-    observedPattern: pattern.observedPattern,
-    recurrenceEvidenceStrength: strength,
     reasons,
+    recurrenceEvidenceStrength: strength,
     warnings,
-    categories: categories.slice(0, 5),
-    categoriesTruncated: categories.length > 5,
-    occurrenceCount: rows.length,
-    firstChargeDate: first.accountingDate,
-    lastChargeDate: last.accountingDate,
-    amounts: {
-      unit: "currency_minor",
-      observedTotalMinor: sum.toString(),
-      lastChargeMinor: last.absoluteAmountMinor,
-      minimumMinor: minimum.toString(),
-      maximumMinor: maximum.toString(),
-      averageMinor: {
-        numerator: sum.toString(),
-        denominator: String(rows.length),
-      },
-      pattern: minimum === maximum ? "constant" : "variable",
-      byMonth,
-    },
-    cadence: {
-      missingCycles: pattern.missingCycles,
-      intervalDays: pattern.intervalDays.slice(-12),
-      intervalsTruncated: pattern.intervalDays.length > 12,
-    },
-    evidence: {
-      recordIds: sample.map((row) => row.id),
-      referencesTruncated: rows.length > sample.length,
-      charges: sample.map((row) => ({
-        id: row.id,
-        date: row.accountingDate,
-        amountMinor: row.absoluteAmountMinor,
-        classification: row.classification,
-      })),
-    },
   };
 }
 
@@ -589,17 +605,18 @@ export function detectSubscriptions(
 
   const exclude = (row: FinanceRecord, reason: string) => {
     const item = exclusions.get(reason) ?? {
-      reason,
       count: 0,
       knownAmountMinor: "0",
+      reason,
       recordIds: [],
     };
 
-    item.count++;
+    item.count += 1;
 
     if (
-      row.absoluteAmountMinor != null &&
-      /^\d+$/.test(row.absoluteAmountMinor)
+      row.absoluteAmountMinor !== null &&
+      row.absoluteAmountMinor !== undefined &&
+      digitsPattern.test(row.absoluteAmountMinor)
     ) {
       item.knownAmountMinor = (
         BigInt(item.knownAmountMinor ?? "0") + BigInt(row.absoluteAmountMinor)
@@ -612,7 +629,7 @@ export function detectSubscriptions(
     exclusions.set(reason, item);
   };
 
-  const groups = collectRecurrenceGroups({ rows, currency, asOfDay, exclude });
+  const groups = collectRecurrenceGroups({ asOfDay, currency, exclude, rows });
 
   const candidates: SubscriptionCandidate[] = [];
 
@@ -689,39 +706,39 @@ export function detectSubscriptions(
     historyDays = dateIndex(to) - dateIndex(from) + 1;
 
   return {
-    recordCount: rows.length,
-    candidateCount: candidates.length,
-    candidates: candidates.slice(offset, offset + limit),
-    pagination: { limit, offset, nextOffset },
     analysis: {
       algorithm: SUBSCRIPTION_RULES.algorithm,
       asOfDay,
-      historyDays,
+      groupCount: groups.size,
       historyAssessment:
         historyDays < 90 ? "short_window" : "multi_month_window",
+      historyDays,
       outcome: recurrenceOutcome(candidates.length, historyDays),
       scannedAllFilteredRecords: true,
-      groupCount: groups.size,
     },
+    candidateCount: candidates.length,
+    candidates: candidates.slice(offset, offset + limit),
+    exclusions: [...exclusions.values()].map((item) => ({
+      ...item,
+      referencesTruncated: item.count > item.recordIds.length,
+    })),
+    pagination: { limit, nextOffset, offset },
+    recordCount: rows.length,
     totals: {
-      unit: "currency_minor",
-      kind: "observed_candidate_debits_not_confirmed_subscription_spending",
       allCandidatesMinor: exactSum(
         candidates.map((c) => ({
           absoluteAmountMinor: c.amounts.observedTotalMinor,
         })),
       ),
       byClassification,
-      byMonth,
       byClassificationMonth,
-      scope: "all candidates before pagination",
-      refundsNetted: false,
+      byMonth,
       currentMonthlyEstimateMinor: null,
+      kind: "observed_candidate_debits_not_confirmed_subscription_spending",
+      refundsNetted: false,
+      scope: "all candidates before pagination",
+      unit: "currency_minor",
     },
-    exclusions: [...exclusions.values()].map((item) => ({
-      ...item,
-      referencesTruncated: item.count > item.recordIds.length,
-    })),
   };
 }
 

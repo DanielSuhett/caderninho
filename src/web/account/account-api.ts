@@ -49,24 +49,24 @@ export function createAccountApi(
     path,
     signal,
     schema,
-    command,
+    command: mutation,
   }: {
     path: string;
     signal: AbortSignal;
     schema: z.ZodType<T>;
     command?: { csrf: string; itemId?: string };
   }): Promise<T> {
-    return requestJson({
+    return await requestJson({
       client: http,
       input: new URL(`/api/account${path}`, origin),
+      onHttpFailure: accountFailure,
       options: {
-        method: command ? "POST" : "GET",
-        ...(command && { json: command }),
+        method: mutation ? "POST" : "GET",
+        ...(mutation && { json: mutation }),
         signal,
-        totalTimeout: command ? 45000 : 15000,
+        totalTimeout: mutation ? 45_000 : 15_000,
       },
       schema,
-      onHttpFailure: accountFailure,
     });
   }
   const command = <T>({
@@ -81,10 +81,10 @@ export function createAccountApi(
     itemId?: string;
   }) =>
     request({
-      path: `/${action}`,
-      signal: context.signal,
-      schema,
       command: { csrf: context.csrf, ...(itemId !== undefined && { itemId }) },
+      path: `/${action}`,
+      schema,
+      signal: context.signal,
     });
   const maintain = async (input: {
     action: string;
@@ -94,8 +94,8 @@ export function createAccountApi(
     await command({ ...input, schema: AcceptedSchema });
   };
   return {
-    read: (signal: AbortSignal) =>
-      request({ path: "", signal, schema: AccountResponseSchema }),
+    connectItem: (context: CommandContext, itemId: string) =>
+      maintain({ action: "items", context, itemId }),
     connectToken: (context: CommandContext, itemId?: string) =>
       command({
         action: "connect-token",
@@ -103,17 +103,17 @@ export function createAccountApi(
         schema: AccountConnectTokenSchema,
         ...(itemId && { itemId }),
       }),
-    connectItem: (context: CommandContext, itemId: string) =>
-      maintain({ action: "items", context, itemId }),
-    pauseSync: (context: CommandContext) =>
-      maintain({ action: "pause", context }),
-    resumeSync: (context: CommandContext) =>
-      maintain({ action: "resume", context }),
-    requestSync: (context: CommandContext) =>
-      maintain({ action: "sync", context }),
     disconnectAssistants: (context: CommandContext) =>
       maintain({ action: "disconnect-assistants", context }),
     logout: (context: CommandContext) =>
       maintain({ action: "logout", context }),
+    pauseSync: (context: CommandContext) =>
+      maintain({ action: "pause", context }),
+    read: (signal: AbortSignal) =>
+      request({ path: "", schema: AccountResponseSchema, signal }),
+    requestSync: (context: CommandContext) =>
+      maintain({ action: "sync", context }),
+    resumeSync: (context: CommandContext) =>
+      maintain({ action: "resume", context }),
   };
 }

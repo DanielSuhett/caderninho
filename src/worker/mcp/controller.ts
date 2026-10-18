@@ -43,8 +43,8 @@ import {
 } from "./tasks";
 
 const EnvelopeSchema = z.object({
-  jsonrpc: z.literal("2.0"),
   id: z.union([z.string(), z.number()]).optional(),
+  jsonrpc: z.literal("2.0"),
   method: z.string(),
   params: z.record(z.string(), z.json()).optional(),
 }) satisfies z.ZodType<Envelope>;
@@ -74,7 +74,7 @@ export async function fetchMcp(
   routes.post("/mcp/rules/import", (c) => importHttp(c.req.raw, c.env));
   routes.post("/mcp/migration", (c) => migrationHttp(c.req.raw, c.env));
   routes.all("*", (c) => fetchTransport(c.req.raw, c.env, ctx));
-  return routes.fetch(request, env);
+  return await routes.fetch(request, env);
 }
 async function fetchTransport(
   request: Request,
@@ -96,7 +96,7 @@ async function fetchTransport(
     }
     const parsed = EnvelopeSchema.safeParse(message);
     if (parsed.success) {
-      const m = parsed.data;
+      const { data: m } = parsed;
       const params = m.params ?? {};
       let kind: LongOperationKind | undefined;
       if (m.method === "tools/call" && typeof params.name === "string") {
@@ -107,7 +107,7 @@ async function fetchTransport(
         m.method === "subscriptions/listen" ||
         kind
       ) {
-        return handleTaskRequest({ request, env, m, params, kind, ctx });
+        return handleTaskRequest({ ctx, env, kind, m, params, request });
       }
     }
   }
@@ -116,7 +116,7 @@ async function fetchTransport(
       const server = new Server(
         { name: "Caderninho", version: "0.4.0" },
         {
-          capabilities: { tools: {}, extensions: { [EXTENSION]: {} } },
+          capabilities: { extensions: { [EXTENSION]: {} }, tools: {} },
           instructions: PRODUCT_INSTRUCTIONS,
           jsonSchemaValidator: new CfWorkerJsonSchemaValidator(),
         },
@@ -132,27 +132,27 @@ async function fetchTransport(
         );
         const payload = error ? { error: error.message } : data;
         return {
-          resultType: "complete",
-          content: [{ type: "text", text: JSON.stringify(payload) }],
+          content: [{ text: JSON.stringify(payload), type: "text" }],
           isError: !!error,
+          resultType: "complete",
         };
       });
       return server;
     },
     {
-      legacy: "stateless",
-      responseMode: "auto",
-      maxRequestBodySize: 32768,
       keepAliveMs: 0,
+      legacy: "stateless",
+      maxRequestBodySize: 32_768,
+      responseMode: "auto",
     },
   );
   const req =
     text === undefined
       ? request
       : new Request(request.url, {
-          method: request.method,
-          headers: request.headers,
           body: text,
+          headers: request.headers,
+          method: request.method,
           signal: request.signal,
         });
   const { data, error } = await tryCatch(() => handler.fetch(req));
@@ -167,28 +167,30 @@ async function fetchTransport(
   }
   const reader = response.body.getReader();
   const stream = new ReadableStream({
-    async pull(controller) {
-      const { data, error } = await tryCatch(() => reader.read());
-      if (error) {
-        await handler.close();
-        controller.error(error);
-        return;
-      }
-      if (data.done) {
-        await handler.close();
-        controller.close();
-        return;
-      }
-      controller.enqueue(data.value);
-    },
     async cancel() {
       await reader.cancel();
       await handler.close();
     },
+    async pull(controller) {
+      const { data: chunk, error: readError } = await tryCatch(() =>
+        reader.read(),
+      );
+      if (readError) {
+        await handler.close();
+        controller.error(readError);
+        return;
+      }
+      if (chunk.done) {
+        await handler.close();
+        controller.close();
+        return;
+      }
+      controller.enqueue(chunk.value);
+    },
   });
   const headers = new Headers(response.headers);
   headers.set("Cache-Control", "no-store");
-  return new Response(stream, { status: response.status, headers });
+  return new Response(stream, { headers, status: response.status });
 }
 
 async function handleTaskRequest({
@@ -208,30 +210,30 @@ async function handleTaskRequest({
 }) {
   const response = (result: unknown) =>
     Response.json(
-      { jsonrpc: "2.0", id: m.id, result },
+      { id: m.id, jsonrpc: "2.0", result },
       { headers: { "Cache-Control": "no-store" } },
     );
-  const failure = (code: number, message: string, data?: unknown) =>
+  const failure = (code: number, message: string, details?: unknown) =>
     Response.json(
       {
-        jsonrpc: "2.0",
+        error: { code, message, ...(!!details && { data: details }) },
         id: m.id ?? null,
-        error: { code, message, ...(!!data && { data }) },
+        jsonrpc: "2.0",
       },
       { headers: { "Cache-Control": "no-store" } },
     );
   if (m.id === undefined) {
-    return failure(-32600, "Request id required");
+    return failure(-32_600, "Request id required");
   }
   if (request.headers.get("Mcp-Protocol-Version") !== "2026-07-28") {
-    return failure(-32600, "Tasks require protocol 2026-07-28");
+    return failure(-32_600, "Tasks require protocol 2026-07-28");
   }
   const expectedName = kind ? params.name : params.taskId;
   if (
     request.headers.get("Mcp-Method") !== m.method ||
     (expectedName && request.headers.get("Mcp-Name") !== expectedName)
   ) {
-    return failure(-32020, "MCP routing headers disagree with request");
+    return failure(-32_020, "MCP routing headers disagree with request");
   }
   const version = z
     .object({
@@ -240,10 +242,10 @@ async function handleTaskRequest({
     .loose()
     .safeParse(params._meta);
   if (params._meta && !version.success) {
-    return failure(-32600, "Protocol metadata must match routing version");
+    return failure(-32_600, "Protocol metadata must match routing version");
   }
   if (!negotiated(params)) {
-    return failure(-32021, "Missing required client capability", {
+    return failure(-32_021, "Missing required client capability", {
       requiredCapabilities: { extensions: { [EXTENSION]: {} } },
     });
   }
@@ -292,7 +294,7 @@ async function handleTaskRequest({
         })
         .parse(params);
       if (!request.headers.get("Accept")?.includes("text/event-stream")) {
-        return failure(-32600, "SSE Accept required");
+        return failure(-32_600, "SSE Accept required");
       }
       return listen(request, env, {
         id: m.id ?? "",
@@ -302,10 +304,10 @@ async function handleTaskRequest({
         }),
       });
     }
-    return failure(-32601, "Method not found");
+    return failure(-32_601, "Method not found");
   });
   if (error) {
-    return failure(-32602, "Invalid operation");
+    return failure(-32_602, "Invalid operation");
   }
   return data;
 }
@@ -322,8 +324,8 @@ async function createLongOperation(
 ) {
   const args = LongInput.parse(params.arguments);
   const op = await syncService(env).start(args.requestKey, {
-    kind,
     itemIds: args.itemIds,
+    kind,
     ...(args.renormalize && { renormalize: true }),
     ...(args.filter && { filter: args.filter }),
   });
@@ -334,7 +336,7 @@ async function createLongOperation(
   return op;
 }
 
-const MAX_MCP_BODY_BYTES = 32768;
+const MAX_MCP_BODY_BYTES = 32_768;
 
 // Consume the original stream under the SDK's byte limit, before auth/JSON parsing.
 // Cloning first would leave an unbounded tee buffer for the unread branch.
@@ -357,12 +359,12 @@ async function readMcpBody(request: Request): Promise<string | Response> {
 async function importHttp(request: Request, env: Bindings) {
   const a = z
     .object({
+      catalog: RulesSchema.pick({ categories: true, groups: true }).optional(),
       document: z.json(),
-      catalog: RulesSchema.pick({ groups: true, categories: true }).optional(),
       mode: z.enum(RuleImportMode).default(RuleImportMode.dry_run),
     })
     .strict()
-    .parse(await boundedJson(request, 1048576, true));
+    .parse(await boundedJson(request, 1_048_576, true));
   return Response.json(await importRuleDocument(ruleActions(env), a), {
     headers: { "Cache-Control": "no-store" },
   });

@@ -33,6 +33,9 @@ import type { ProviderField, ProviderRecord } from "./provider.entity";
 import providerFields from "./provider-fields";
 import { parseDomain } from "./validation";
 
+const documentNumberPattern = /^[\d./-]+$/;
+const nonDigitPattern = /\D/g;
+
 const providerMap: Record<
   Resource,
   Record<string, ProviderField>
@@ -44,8 +47,38 @@ const FLOW: Resource[] = [
 ];
 
 export const DEFINITIONS: Record<Resource, ResourceDefinition> = {
-  connections: {
+  accounts: {
+    defaults: [
+      "id",
+      "name",
+      "type",
+      "subtype",
+      "currencyCode",
+      "balance",
+      "bankData.automaticallyInvestedBalance",
+      "updatedAt",
+    ],
+    product: Product.ACCOUNTS,
+  },
+  bills: {
+    defaults: [
+      "id",
+      "accountId",
+      "dueDate",
+      "billClosingDate",
+      "totalAmount",
+      "totalAmountCurrencyCode",
+      "minimumPaymentAmount",
+      "allowsInstallments",
+    ],
+    parent: Resource.accounts,
+    product: Product.CREDIT_CARDS,
+  },
+  categories: {
+    defaults: ["id", "description", "parentId", "parentDescription"],
     product: null,
+  },
+  connections: {
     defaults: [
       "id",
       "status",
@@ -58,17 +91,13 @@ export const DEFINITIONS: Record<Resource, ResourceDefinition> = {
       "resourcesCollectedAt",
       "consentExpiresAt",
     ],
-  },
-  resources: {
     product: null,
-    defaults: ["id", "resourceId", "type", "status"],
   },
   connectors: {
-    product: null,
     defaults: ["id", "name", "products", "isOpenFinance", "isSandbox"],
+    product: null,
   },
   consents: {
-    product: null,
     defaults: [
       "id",
       "products",
@@ -76,41 +105,30 @@ export const DEFINITIONS: Record<Resource, ResourceDefinition> = {
       "expiresAt",
       "revokedAt",
     ],
+    product: null,
   },
-  accounts: {
-    product: Product.ACCOUNTS,
+  identity: {
+    defaults: ["id", "documentType", "investorProfile", "updatedAt"],
+    product: Product.IDENTITY,
+  },
+  investment_transactions: {
     defaults: [
       "id",
-      "name",
-      "type",
-      "subtype",
-      "currencyCode",
-      "balance",
-      "bankData.automaticallyInvestedBalance",
-      "updatedAt",
-    ],
-  },
-  transactions: {
-    product: Product.TRANSACTIONS,
-    parent: Resource.accounts,
-    defaults: [
-      "id",
-      "accountId",
-      "accountType",
+      "investmentId",
       "date",
-      "accountingDate",
-      "description",
+      "tradeDate",
+      "type",
+      "movementType",
       "currencyCode",
       "amount",
-      "type",
-      "status",
-      "category",
-      "operationType",
-      "classification",
+      "netAmount",
+      "quantity",
+      "value",
     ],
+    parent: Resource.investments,
+    product: Product.INVESTMENTS_TRANSACTIONS,
   },
   investments: {
-    product: Product.INVESTMENTS,
     defaults: [
       "id",
       "name",
@@ -127,40 +145,9 @@ export const DEFINITIONS: Record<Resource, ResourceDefinition> = {
       "status",
       "institution.name",
     ],
-  },
-  investment_transactions: {
-    product: Product.INVESTMENTS_TRANSACTIONS,
-    parent: Resource.investments,
-    defaults: [
-      "id",
-      "investmentId",
-      "date",
-      "tradeDate",
-      "type",
-      "movementType",
-      "currencyCode",
-      "amount",
-      "netAmount",
-      "quantity",
-      "value",
-    ],
-  },
-  bills: {
-    product: Product.CREDIT_CARDS,
-    parent: Resource.accounts,
-    defaults: [
-      "id",
-      "accountId",
-      "dueDate",
-      "billClosingDate",
-      "totalAmount",
-      "totalAmountCurrencyCode",
-      "minimumPaymentAmount",
-      "allowsInstallments",
-    ],
+    product: Product.INVESTMENTS,
   },
   loans: {
-    product: Product.LOANS,
     defaults: [
       "id",
       "productName",
@@ -172,19 +159,35 @@ export const DEFINITIONS: Record<Resource, ResourceDefinition> = {
       "payments.contractOutstandingBalance",
       "dueDate",
     ],
+    product: Product.LOANS,
   },
-  identity: {
-    product: Product.IDENTITY,
-    defaults: ["id", "documentType", "investorProfile", "updatedAt"],
-  },
-  categories: {
+  resources: {
+    defaults: ["id", "resourceId", "type", "status"],
     product: null,
-    defaults: ["id", "description", "parentId", "parentDescription"],
   },
   statements: {
+    defaults: ["id", "accountId", "monthYear", "documentAccess"],
     parent: Resource.accounts,
     product: Product.ACCOUNTS,
-    defaults: ["id", "accountId", "monthYear", "documentAccess"],
+  },
+  transactions: {
+    defaults: [
+      "id",
+      "accountId",
+      "accountType",
+      "date",
+      "accountingDate",
+      "description",
+      "currencyCode",
+      "amount",
+      "type",
+      "status",
+      "category",
+      "operationType",
+      "classification",
+    ],
+    parent: Resource.accounts,
+    product: Product.TRANSACTIONS,
   },
 };
 
@@ -201,7 +204,8 @@ const MONEY: Partial<Record<Resource, string[]>> = {
     "creditData.minimumPayment",
     "creditData.balanceForeignCurrency",
   ],
-  transactions: ["amount", "balance"],
+  bills: ["totalAmount", "minimumPaymentAmount"],
+  investment_transactions: ["amount", "netAmount"],
   investments: [
     "balance",
     "amount",
@@ -211,12 +215,15 @@ const MONEY: Partial<Record<Resource, string[]>> = {
     "taxes",
     "taxes2",
   ],
-  investment_transactions: ["amount", "netAmount"],
-  bills: ["totalAmount", "minimumPaymentAmount"],
   loans: ["contractAmount", "payments.contractOutstandingBalance"],
+  transactions: ["amount", "balance"],
 };
 
 const derived: Partial<Record<Resource, string[]>> = {
+  bills: ["accountId"],
+  investment_transactions: ["investmentId", "currencyCode", "accountingDate"],
+  resources: ["id"],
+  statements: ["accountId", "documentAccess"],
   transactions: [
     "accountType",
     "accountingDate",
@@ -232,20 +239,16 @@ const derived: Partial<Record<Resource, string[]>> = {
     "billId",
     "paymentMethod",
   ],
-  investment_transactions: ["investmentId", "currencyCode", "accountingDate"],
-  bills: ["accountId"],
-  statements: ["accountId", "documentAccess"],
-  resources: ["id"],
 };
 
 const interpretations: Record<string, string> = {
-  balance:
-    "Reported balance; account BANK available balance, CREDIT credit used. Investment net position, not immediate liquidity.",
   amount:
     "Reported gross amount; transactions retain provider sign. Not economic spending.",
-  amountWithdrawal: "Reported withdrawable investment amount, no fallback.",
   amountOriginal: "Originally invested capital; not current balance.",
   amountProfit: "Profit reported by provider; no inferred return.",
+  amountWithdrawal: "Reported withdrawable investment amount, no fallback.",
+  balance:
+    "Reported balance; account BANK available balance, CREDIT credit used. Investment net position, not immediate liquidity.",
   contractAmount: "Originally contracted credit; not current debt.",
   "payments.contractOutstandingBalance": "Reported outstanding debt.",
 };
@@ -255,50 +258,50 @@ export function metricsFor(
 ): Record<string, MetricDefinition> {
   return {
     count: {
-      unit: "records",
-      temporal: "snapshot",
       description:
         "Count filtered records, including pending and unknown status.",
+      temporal: "snapshot",
+      unit: "records",
     },
     ...Object.fromEntries(
       (MONEY[resource] ?? []).map((f) => [
         f,
         {
-          field:
-            resource === Resource.transactions && f === "amount"
-              ? "absoluteAmountMinor"
-              : `${f}Minor`,
-          unit: "currency_minor",
-          temporal: FLOW.includes(resource) ? "flow" : "stock",
           description:
             resource === Resource.transactions && f === "amount"
               ? "Gross movement magnitude of posted transactions, independent of bank/card amount sign. Filter type for CREDIT/DEBIT. Not spending."
               : (interpretations[f] ??
                 "Separate provider measure, never added to another measure."),
+          field:
+            resource === Resource.transactions && f === "amount"
+              ? "absoluteAmountMinor"
+              : `${f}Minor`,
+          temporal: FLOW.includes(resource) ? "flow" : "stock",
+          unit: "currency_minor",
         },
       ]),
     ),
     ...(resource === Resource.transactions && {
       cashFlow: {
-        field: "signedFlowMinor",
-        unit: "currency_minor",
-        temporal: "flow",
         description:
           "Posted BANK signed CREDIT minus DEBIT, includes patrimonial and own-transfer flows.",
+        field: "signedFlowMinor",
+        temporal: "flow",
+        unit: "currency_minor",
       },
       consumption_v1: {
-        field: "knownConsumptionMinor",
-        unit: "currency_minor",
-        temporal: "flow",
         description:
           "Conservative subtotal of posted debits with purchase/category evidence. Excludes bill payments, own transfers and patrimonial movements; unresolved debits reported separately. Credits/refunds not netted.",
+        field: "knownConsumptionMinor",
+        temporal: "flow",
+        unit: "currency_minor",
       },
       unclassifiedDebits: {
-        field: "unclassifiedDebitMinor",
-        unit: "currency_minor",
-        temporal: "flow",
         description:
           "Posted debit subtotal without sufficient consumption classification.",
+        field: "unclassifiedDebitMinor",
+        temporal: "flow",
+        unit: "currency_minor",
       },
     }),
   };
@@ -312,7 +315,7 @@ export function metricFor({
   metric: string | undefined;
 }) {
   if (!metric) {
-    return undefined;
+    return;
   }
   const definition = new Map(Object.entries(metricsFor(resource))).get(metric);
   if (!definition) {
@@ -356,11 +359,6 @@ const fieldProjectors: Record<
   ProviderField["kind"],
   (value: unknown, spec: ProviderField) => JsonValue
 > = {
-  decimal(value) {
-    return decimal(
-      parseDomain(decimalInput, value, FaultCode.INVALID_RESPONSE),
-    );
-  },
   array(value, spec) {
     if (!Array.isArray(value) || value.length > 2000) {
       fail(FaultCode.INVALID_RESPONSE);
@@ -379,6 +377,11 @@ const fieldProjectors: Record<
       fail(FaultCode.INVALID_RESPONSE);
     }
     return [...value];
+  },
+  decimal(value) {
+    return decimal(
+      parseDomain(decimalInput, value, FaultCode.INVALID_RESPONSE),
+    );
   },
   scalar(value) {
     if (
@@ -515,7 +518,7 @@ function normalizeMoney(resource: Resource, r: FinanceRecord) {
       ) {
         r[`${field}Minor`] = null;
         r.precisionWarnings ??= [];
-        r.precisionWarnings.push({ field, code: e.code });
+        r.precisionWarnings.push({ code: e.code, field });
       } else {
         throw e;
       }
@@ -524,7 +527,7 @@ function normalizeMoney(resource: Resource, r: FinanceRecord) {
 }
 
 function absoluteMinor(value: string | null | undefined) {
-  if (value == null) {
+  if (value === null || value === undefined) {
     return null;
   }
   const amount = BigInt(value);
@@ -625,14 +628,14 @@ function classifyTransaction(
 ) {
   const doc = (x: unknown) =>
     typeof x === "string" &&
-    /^[\d./-]+$/.test(x) &&
-    isOneOf(x.replace(/\D/g, "").length, [11, 14])
-      ? x.replace(/\D/g, "")
+    documentNumberPattern.test(x) &&
+    isOneOf(x.replace(nonDigitPattern, "").length, [11, 14])
+      ? x.replace(nonDigitPattern, "")
       : null;
 
   const payer = doc(raw.paymentData?.payer?.documentNumber?.value),
     receiver = doc(raw.paymentData?.receiver?.documentNumber?.value),
-    owner = parent.ownerDocument;
+    { ownerDocument: owner } = parent;
 
   r.ownTransferEvidence = !!(owner && payer === owner && receiver === owner);
 
@@ -733,10 +736,11 @@ function applyTransactionAmounts(
     r.accountingDate &&
     isMatureDate({ date: r.accountingDate, referenceDay }) &&
     isOneOf(raw.type ?? "", [TransactionType.CREDIT, TransactionType.DEBIT]) &&
-    r.amountMinor != null;
+    r.amountMinor !== null &&
+    r.amountMinor !== undefined;
 
   const abs = absoluteMinor(r.amountMinor);
-  const cls = r.classification;
+  const { classification: cls } = r;
 
   r.signedFlowMinor =
     valid && parent.type === AccountType.BANK

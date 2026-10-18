@@ -5,13 +5,13 @@ import { tryCatch } from "@/shared/result";
 import { authenticatedFetch } from "@/worker/auth/controller";
 import { fetchMcp } from "@/worker/mcp/controller";
 import { receiveWebhook } from "@/worker/sync/controller";
-import { FinanceWorkflow } from "@/worker/sync/workflow";
 
 import type { Bindings } from "./bindings";
 import { authService, scheduleSync, syncService } from "./composition";
 import { failureStatus, requestDiagnostic } from "./http";
 
-export { FinanceWorkflow, receiveWebhook };
+export { receiveWebhook } from "@/worker/sync/controller";
+export { FinanceWorkflow } from "@/worker/sync/workflow";
 
 function createRoutes(ctx: ExecutionContext) {
   const routes = new Hono<{ Bindings: Bindings }>();
@@ -20,7 +20,7 @@ function createRoutes(ctx: ExecutionContext) {
     const started = performance.now();
     c.header("X-Request-ID", correlation);
     await next();
-    const path = c.req.path;
+    const { path } = c.req;
     let route = "public-or-oauth";
     if (path.startsWith("/api/")) {
       route = "api";
@@ -33,9 +33,9 @@ function createRoutes(ctx: ExecutionContext) {
     }
     requestDiagnostic({
       correlation,
-      status: c.res.status,
       durationMs: Math.round(performance.now() - started),
       route,
+      status: c.res.status,
     });
   });
   routes.onError((error, c) =>
@@ -59,11 +59,11 @@ function createRoutes(ctx: ExecutionContext) {
     }
     return data;
   });
-  routes.all("*", (c) => {
-    return authenticatedFetch(c.req.raw, c.env, ctx, (request, bindings) =>
+  routes.all("*", (c) =>
+    authenticatedFetch(c.req.raw, c.env, ctx, (request, bindings) =>
       fetchMcp(request, bindings, ctx),
-    );
-  });
+    ),
+  );
   return routes;
 }
 const worker = {

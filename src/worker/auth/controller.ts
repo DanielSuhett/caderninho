@@ -35,9 +35,9 @@ export function oauth(api: McpHandler, origin: string) {
           encodeURIComponent(url.pathname + url.search),
       );
     }
-    const request = c.req.raw,
-      bindings = c.env,
-      helpers = bindings.OAUTH_PROVIDER;
+    const { raw: request } = c.req,
+      { env: bindings } = c,
+      { OAUTH_PROVIDER: helpers } = bindings;
     const auth = await helpers.parseAuthRequest(request),
       details = await helpers.describeConsent(auth),
       consent = await helpers.beginConsent(auth);
@@ -52,9 +52,9 @@ export function oauth(api: McpHandler, origin: string) {
     });
   });
   routes.post("/authorize", async (c) => {
-    const request = c.req.raw,
-      bindings = c.env,
-      helpers = bindings.OAUTH_PROVIDER;
+    const { raw: request } = c.req,
+      { env: bindings } = c,
+      { OAUTH_PROVIDER: helpers } = bindings;
     if (request.headers.get("Origin") !== origin) {
       return c.text("Origem não autorizada.", 403);
     }
@@ -73,36 +73,36 @@ export function oauth(api: McpHandler, origin: string) {
       handle = String(form.get("handle"));
     if (form.get("decision") !== "approve") {
       const denied = await helpers.denyConsent(request, handle);
-      return new Response(null, { status: 302, headers: denied.headers });
+      return new Response(null, { headers: denied.headers, status: 302 });
     }
     const approved = await helpers.approveConsent(request, handle);
     const result = await helpers.completeAuthorization({
-      request: approved.request,
-      userId: "owner",
       metadata: {},
-      scope: approved.request.scope,
       props: {},
+      request: approved.request,
+      scope: approved.request.scope,
+      userId: "owner",
     });
     approved.headers.set("Location", result.redirectTo);
-    return new Response(null, { status: 302, headers: approved.headers });
+    return new Response(null, { headers: approved.headers, status: 302 });
   });
 
   return new OAuthProvider<Bindings>({
-    apiRoute: "/mcp",
-    authorizeEndpoint: "/authorize",
-    tokenEndpoint: "/oauth/token",
-    clientRegistrationEndpoint: "/oauth/register",
-    scopesSupported: ["offline_access"],
-    resourceMetadata: {
-      resource: `${origin}/mcp`,
-      authorization_servers: [origin],
-    },
     apiHandler: {
       fetch: (request, bindings) => api(request, bindings),
     },
+    apiRoute: "/mcp",
+    authorizeEndpoint: "/authorize",
+    clientRegistrationEndpoint: "/oauth/register",
     defaultHandler: {
       fetch: (request, bindings, ctx) => routes.fetch(request, bindings, ctx),
     },
+    resourceMetadata: {
+      authorization_servers: [origin],
+      resource: `${origin}/mcp`,
+    },
+    scopesSupported: ["offline_access"],
+    tokenEndpoint: "/oauth/token",
   });
 }
 
@@ -119,8 +119,8 @@ export async function authenticatedFetch(
     return Response.json(
       { error: "AUTHENTICATION_OR_REQUEST_FAILED" },
       {
-        status: failureStatus(error),
         headers: { "Cache-Control": "no-store" },
+        status: failureStatus(error),
       },
     );
   }
@@ -142,11 +142,11 @@ function loginRoutes() {
     return c.html(
       renderPage(
         accessPage({
-          origin: requestOrigin(c.req.raw),
-          configured: configured,
-          csrf: csrf,
+          configured,
+          csrf,
           error: "",
-          target: target,
+          origin: requestOrigin(c.req.raw),
+          target,
         }),
       ),
       configured ? 200 : 503,
@@ -176,10 +176,10 @@ function loginRoutes() {
       return c.html(
         renderPage(
           accessPage({
-            origin: requestOrigin(c.req.raw),
             configured: true,
-            csrf: csrf,
+            csrf,
             error: "Limite de tentativas. Aguarde 60 segundos.",
+            origin: requestOrigin(c.req.raw),
             target: returnPath(form.get("returnTo") ?? undefined),
           }),
         ),
@@ -192,10 +192,10 @@ function loginRoutes() {
       return c.html(
         renderPage(
           accessPage({
-            origin: requestOrigin(c.req.raw),
             configured: true,
-            csrf: csrf,
+            csrf,
             error: "Senha inválida.",
+            origin: requestOrigin(c.req.raw),
             target: returnPath(form.get("returnTo") ?? undefined),
           }),
         ),

@@ -1,24 +1,24 @@
 export const Resource = {
   accounts: "accounts",
-  transactions: "transactions",
-  investments: "investments",
-  investment_transactions: "investment_transactions",
   bills: "bills",
-  loans: "loans",
-  identity: "identity",
-  connections: "connections",
-  resources: "resources",
-  consents: "consents",
-  connectors: "connectors",
   categories: "categories",
+  connections: "connections",
+  connectors: "connectors",
+  consents: "consents",
+  identity: "identity",
+  investment_transactions: "investment_transactions",
+  investments: "investments",
+  loans: "loans",
+  resources: "resources",
   statements: "statements",
+  transactions: "transactions",
 } as const;
 
 export type Resource = (typeof Resource)[keyof typeof Resource];
 
 export const EntityChange = {
-  new: "new",
   changed: "changed",
+  new: "new",
   unchanged: "unchanged",
 } as const;
 
@@ -28,8 +28,8 @@ export const TagOrigin = {
 } as const;
 
 export const FaultCode = {
-  ACCOUNTS_INCOMPLETE: "ACCOUNTS_INCOMPLETE",
   ACCOUNT_NOT_IN_SNAPSHOT: "ACCOUNT_NOT_IN_SNAPSHOT",
+  ACCOUNTS_INCOMPLETE: "ACCOUNTS_INCOMPLETE",
   AUTH_NOT_CONFIGURED: "AUTH_NOT_CONFIGURED",
   BANK_ACCOUNT_REQUIRED: "BANK_ACCOUNT_REQUIRED",
   CONCURRENT_IMPORT: "CONCURRENT_IMPORT",
@@ -76,8 +76,8 @@ export const FaultCode = {
   LIVE_DETAIL_UNSUPPORTED: "LIVE_DETAIL_UNSUPPORTED",
   METRIC_NOT_ALLOWED: "METRIC_NOT_ALLOWED",
   MONEY_PRECISION_UNSUPPORTED: "MONEY_PRECISION_UNSUPPORTED",
-  NOT_INITIALIZED: "NOT_INITIALIZED",
   NO_ACCOUNTS: "NO_ACCOUNTS",
+  NOT_INITIALIZED: "NOT_INITIALIZED",
   PAGE_LIMIT: "PAGE_LIMIT",
   PAGINATION_UNDOCUMENTED: "PAGINATION_UNDOCUMENTED",
   PARENT_MISMATCH: "PARENT_MISMATCH",
@@ -123,16 +123,16 @@ export const AccountType = {
 export type AccountType = (typeof AccountType)[keyof typeof AccountType];
 
 export const TransactionType = {
-  DEBIT: "DEBIT",
   CREDIT: "CREDIT",
+  DEBIT: "DEBIT",
 } as const;
 
 export type TransactionType =
   (typeof TransactionType)[keyof typeof TransactionType];
 
 export const TransactionStatus = {
-  POSTED: "POSTED",
   PENDING: "PENDING",
+  POSTED: "POSTED",
 } as const;
 
 export type TransactionStatus =
@@ -141,13 +141,13 @@ export type TransactionStatus =
 export const Availability = {
   available: "available",
   empty_verified: "empty_verified",
-  unsupported: "unsupported",
+  error: "error",
   not_authorized: "not_authorized",
   not_enabled: "not_enabled",
   not_synced: "not_synced",
   partial: "partial",
   stale: "stale",
-  error: "error",
+  unsupported: "unsupported",
 } as const;
 
 export type Availability = (typeof Availability)[keyof typeof Availability];
@@ -155,24 +155,24 @@ export type Availability = (typeof Availability)[keyof typeof Availability];
 export const CoverageStatus = {
   available: "available",
   empty: "empty",
+  not_authorized: "not_authorized",
+  not_enabled: "not_enabled",
   partial: "partial",
   unavailable: "unavailable",
-  not_authorized: "not_authorized",
   unsupported: "unsupported",
-  not_enabled: "not_enabled",
 } as const;
 export type CoverageStatus =
   (typeof CoverageStatus)[keyof typeof CoverageStatus];
 
 export const Classification = {
-  unknown: "unknown",
-  own_transfer: "own_transfer",
   bill_payment: "bill_payment",
   bill_payment_category: "bill_payment_category",
-  refund: "refund",
-  patrimonial_category: "patrimonial_category",
-  transfer_uncertain: "transfer_uncertain",
   consumption_evidence: "consumption_evidence",
+  own_transfer: "own_transfer",
+  patrimonial_category: "patrimonial_category",
+  refund: "refund",
+  transfer_uncertain: "transfer_uncertain",
+  unknown: "unknown",
 } as const;
 
 export type Classification =
@@ -188,12 +188,12 @@ export type RecurrenceClassification =
   (typeof RecurrenceClassification)[keyof typeof RecurrenceClassification];
 
 export const Periodicity = {
-  weekly: "weekly",
+  annual: "annual",
+  insufficient_history: "insufficient_history",
+  irregular: "irregular",
   monthly: "monthly",
   quarterly: "quarterly",
-  annual: "annual",
-  irregular: "irregular",
-  insufficient_history: "insufficient_history",
+  weekly: "weekly",
 } as const;
 
 export type Periodicity = (typeof Periodicity)[keyof typeof Periodicity];
@@ -208,11 +208,11 @@ export type RecurrenceStrength =
   (typeof RecurrenceStrength)[keyof typeof RecurrenceStrength];
 
 export const PaymentMethod = {
+  BOLETO: "BOLETO",
+  DOC: "DOC",
   PIX: "PIX",
   TED: "TED",
-  DOC: "DOC",
   TEV: "TEV",
-  BOLETO: "BOLETO",
 } as const;
 
 export type PaymentMethod = (typeof PaymentMethod)[keyof typeof PaymentMethod];
@@ -228,12 +228,12 @@ export type ProvenanceOrigin =
 
 export const Product = {
   ACCOUNTS: "ACCOUNTS",
-  TRANSACTIONS: "TRANSACTIONS",
+  CREDIT_CARDS: "CREDIT_CARDS",
+  IDENTITY: "IDENTITY",
   INVESTMENTS: "INVESTMENTS",
   INVESTMENTS_TRANSACTIONS: "INVESTMENTS_TRANSACTIONS",
-  CREDIT_CARDS: "CREDIT_CARDS",
   LOANS: "LOANS",
-  IDENTITY: "IDENTITY",
+  TRANSACTIONS: "TRANSACTIONS",
 } as const;
 
 export type Product = (typeof Product)[keyof typeof Product];

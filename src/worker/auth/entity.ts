@@ -6,15 +6,15 @@ export type PortalSession = Pick<
 >;
 
 export interface AuthRepository {
-  compact(): Promise<void>;
-  session(id: string, now: number): Promise<PortalSession | null>;
-  saveSession(input: {
+  allowLoginAttempt: (now: number) => Promise<boolean>;
+  compact: () => Promise<void>;
+  revokeSession: (id: string) => Promise<void>;
+  saveSession: (input: {
     id: string;
     csrf: string;
     expires: number;
     version: string;
     prior?: string;
-  }): Promise<void>;
-  allowLoginAttempt(now: number): Promise<boolean>;
-  revokeSession(id: string): Promise<void>;
+  }) => Promise<void>;
+  session: (id: string, now: number) => Promise<PortalSession | null>;
 }

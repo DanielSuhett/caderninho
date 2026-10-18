@@ -1,19 +1,8 @@
 import type { AccountBrowser } from "./account.types";
 
 export const accountBrowser: AccountBrowser = {
-  step() {
-    const value = new URLSearchParams(location.search).get("step");
-    if (value === null) {
-      return undefined;
-    }
-    return Math.min(2, Math.max(1, Math.trunc(Number(value)) || 1));
-  },
-  selectStep(step) {
-    history.replaceState(null, "", `/account?step=${step}`);
-  },
-  visible: () => !document.hidden,
   captureFocus() {
-    const opener = document.activeElement;
+    const { activeElement: opener } = document;
     return () => {
       if (opener instanceof HTMLElement && opener.isConnected) {
         opener.focus();
@@ -22,4 +11,15 @@ export const accountBrowser: AccountBrowser = {
   },
   copy: (value) => navigator.clipboard.writeText(value),
   login: () => location.assign("/account/login"),
+  selectStep(step) {
+    history.replaceState(null, "", `/account?step=${step}`);
+  },
+  step() {
+    const value = new URLSearchParams(location.search).get("step");
+    if (value === null) {
+      return;
+    }
+    return Math.min(2, Math.max(1, Math.trunc(Number(value)) || 1));
+  },
+  visible: () => !document.hidden,
 };

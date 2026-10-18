@@ -25,11 +25,11 @@ function Action({
 }) {
   return (
     <Button
-      type="button"
-      variant="secondary"
-      size="lg"
       disabled={disabled}
       onClick={onClick}
+      size="lg"
+      type="button"
+      variant="secondary"
     >
       {children}
     </Button>
@@ -70,7 +70,7 @@ export function AccountView({
       </>
     );
   }
-  const state = snapshot.status,
+  const { status: state } = snapshot,
     sync = SYNC_PRESENTATION[snapshot.panel.sync],
     diagnostic = supportPrompt(snapshot.panel.support);
   return (
@@ -81,10 +81,10 @@ export function AccountView({
         <nav aria-label="Configuração">
           {labels.map((label, index) => (
             <button
-              key={label}
-              type="button"
-              onClick={() => actions.selectStep(index + 1)}
               aria-current={step === index + 1 ? "step" : undefined}
+              key={label}
+              onClick={() => actions.selectStep(index + 1)}
+              type="button"
             >
               {index + 1}. {label}
             </button>
@@ -103,8 +103,8 @@ export function AccountView({
                 Conecte seus bancos em{" "}
                 <a
                   href="https://meu.pluggy.ai/"
-                  target="_blank"
                   rel="noreferrer"
+                  target="_blank"
                 >
                   Meu Pluggy
                 </a>
@@ -123,7 +123,7 @@ export function AccountView({
                   deste Worker na sua Cloudflare.
                 </p>
               )}
-              {state.connected && (
+              {state.connected ? (
                 <>
                   <h3>{sync.title}</h3>
                   <p>{sync.detail}</p>
@@ -135,7 +135,7 @@ export function AccountView({
                     Conectar meu assistente
                   </Action>
                 </>
-              )}
+              ) : null}
             </>
           ) : (
             <>
@@ -248,8 +248,8 @@ export function AccountView({
           assistente.
         </p>
         <textarea
-          readOnly
           aria-label="Diagnóstico seguro"
+          readOnly
           value={diagnostic}
         />
         <Action onClick={() => actions.copy(diagnostic)}>

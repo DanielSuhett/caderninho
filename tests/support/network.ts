@@ -3,11 +3,11 @@ import { vi } from "vitest";
 // Syntactically valid JWT for the official SDK's expiry check; not a real credential.
 export function syntheticJwt(subject = "synthetic") {
   const encode = (value: string) =>
-    btoa(value).replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
+    btoa(value).replaceAll("=", "").replaceAll("+", "-").replaceAll("/", "_");
   return (
     encode('{"alg":"HS256","typ":"JWT"}') +
     "." +
-    encode(JSON.stringify({ sub: subject, exp: 4102444800 })) +
+    encode(JSON.stringify({ exp: 4_102_444_800, sub: subject })) +
     ".synthetic"
   );
 }
@@ -20,8 +20,8 @@ export function mockNetwork(handler: typeof fetch) {
     async (input: RequestInfo | URL, init?: RequestInit) => {
       const request = new Request(input, init);
       return handler(request.url, {
-        method: request.method,
         headers: request.headers,
+        method: request.method,
         ...(request.body
           ? { body: new TextDecoder().decode(await request.arrayBuffer()) }
           : {}),

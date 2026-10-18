@@ -3,19 +3,19 @@ import type { FinanceRecord } from "./finance.entity";
 import type { Filter } from "./query.entity";
 
 export const MigrationPolicy = {
-  refuse_conflicts: "refuse-conflicts",
   keep_current: "keep-current",
   prefer_bundle: "prefer-bundle",
+  refuse_conflicts: "refuse-conflicts",
 } as const;
 export type MigrationPolicy =
   (typeof MigrationPolicy)[keyof typeof MigrationPolicy];
 
 export const OperationKind = {
-  sync: "sync",
-  reconcile: "reconcile",
-  reapply: "reapply",
-  webhook: "webhook",
   migration: "migration",
+  reapply: "reapply",
+  reconcile: "reconcile",
+  sync: "sync",
+  webhook: "webhook",
 } as const;
 export type OperationKind = (typeof OperationKind)[keyof typeof OperationKind];
 export type LongOperationKind =
@@ -24,10 +24,10 @@ export type LongOperationKind =
   | typeof OperationKind.reapply;
 
 export const OperationStatus = {
-  working: "working",
-  completed: "completed",
   cancelled: "cancelled",
+  completed: "completed",
   failed: "failed",
+  working: "working",
 } as const;
 export type OperationStatus =
   (typeof OperationStatus)[keyof typeof OperationStatus];
@@ -36,17 +36,17 @@ export type FinishedOperationStatus =
   | typeof OperationStatus.cancelled;
 
 export const OperationPhase = {
-  queued: "queued",
-  matured: "matured",
+  cancelled: "cancelled",
   checkpoint: "checkpoint",
+  completed: "completed",
+  error: "error",
+  event_resolved: "event-resolved",
+  matured: "matured",
   pending_selected: "pending-selected",
-  selected: "selected",
+  queued: "queued",
   reapply: "reapply",
   resolve_changes: "resolve-changes",
-  event_resolved: "event-resolved",
-  completed: "completed",
-  cancelled: "cancelled",
-  error: "error",
+  selected: "selected",
 } as const;
 export type OperationPhase =
   | (typeof OperationPhase)[keyof typeof OperationPhase]
@@ -54,23 +54,23 @@ export type OperationPhase =
 
 export const WebhookEventType = {
   transactions_created: "transactions/created",
-  transactions_updated: "transactions/updated",
   transactions_deleted: "transactions/deleted",
+  transactions_updated: "transactions/updated",
 } as const;
 export type WebhookEventType =
   (typeof WebhookEventType)[keyof typeof WebhookEventType];
 
 export interface MigrationRow {
-  sourceKey: string;
-  readAt: string;
-  resource: Resource;
   parentId: string;
+  readAt: string;
   record: FinanceRecord;
+  resource: Resource;
+  sourceKey: string;
 }
 
 export interface OperationSelection {
-  itemIds: string[];
   filter?: Filter | undefined;
+  itemIds: string[];
   renormalize?: boolean | undefined;
 }
 
@@ -88,20 +88,20 @@ export type OperationInput = OperationSelection &
   );
 
 export interface MigrationRequest {
-  itemId: string;
-  rows: MigrationRow[];
-  policy: MigrationPolicy;
   apply: boolean;
+  itemId: string;
+  policy: MigrationPolicy;
+  rows: MigrationRow[];
 }
 
 export interface WebhookEvent {
-  [field: string]: unknown;
-  eventId: string;
-  event: WebhookEventType;
-  itemId: string;
   accountId: string;
+  event: WebhookEventType;
+  eventId: string;
+  itemId: string;
   transactionIds?: string[] | undefined;
   transactionsCreatedAtFrom?: string | undefined;
+  [field: string]: unknown;
 }
 
 export const MigrationDecision = {
@@ -165,9 +165,9 @@ export function assertWebhookEvent(event: WebhookEvent) {
 }
 
 export const SYNC_POLICY = {
-  intervalMs: 86400000,
-  reconciliationIntervalMs: 7 * 86400000,
-  manualIntervalMs: 900000,
+  intervalMs: 86_400_000,
+  manualIntervalMs: 900_000,
+  reconciliationIntervalMs: 7 * 86_400_000,
 } as const;
 
 export function nextSyncSchedule({

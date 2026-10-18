@@ -8,6 +8,14 @@ import {
   filterOperand,
 } from "../query.entity";
 
+const invalidAmountFilterPattern = /Invalid amount filter/;
+const canonicalIntegerErrorPattern = /canonical integer/;
+const containsOnlySupportsDescriptionPattern =
+  /contains only supports description/;
+const unknownMetricPattern = /UNKNOWN_METRIC/;
+const restartRequiredPattern = /RESTART_REQUIRED/;
+const cursorScopeMismatchPattern = /CURSOR_SCOPE_MISMATCH/;
+
 await test("filter operands retain canonical zero/negative amounts and false; contains remains description-only", () => {
   assert.deepEqual(
     filterOperand({ field: "amountMinor", op: "gte", value: "0" }),
@@ -35,50 +43,50 @@ await test("filter operands retain canonical zero/negative amounts and false; co
   );
   assert.throws(
     () => filterOperand({ field: "amountMinor", op: "eq", value: false }),
-    /Invalid amount filter/,
+    invalidAmountFilterPattern,
   );
   assert.throws(
     () => filterOperand({ field: "amountMinor", op: "eq", value: "01" }),
-    /canonical integer/,
+    canonicalIntegerErrorPattern,
   );
   assert.throws(
     () => filterOperand({ field: "currency", op: "contains", value: "BR" }),
-    /contains only supports description/,
+    containsOnlySupportsDescriptionPattern,
   );
 });
 
 await test("metrics are scoped to the resource and never accept inherited object members as definitions", () => {
   assert.equal(
-    metricFor({ resource: "transactions", metric: undefined }),
+    metricFor({ metric: undefined, resource: "transactions" }),
     undefined,
   );
   assert.equal(
-    metricFor({ resource: "transactions", metric: "cashFlow" })?.field,
+    metricFor({ metric: "cashFlow", resource: "transactions" })?.field,
     "signedFlowMinor",
   );
   for (const metric of ["toString", "__proto__", "missing", "cashFlow"]) {
     assert.throws(
-      () => metricFor({ resource: "accounts", metric }),
-      /UNKNOWN_METRIC/,
+      () => metricFor({ metric, resource: "accounts" }),
+      unknownMetricPattern,
     );
   }
 });
 
 await test("reads preserve revision zero and reject mixed revisions or foreign cursor scope", () => {
-  assert.doesNotThrow(() => assertReadRevision({ expected: 0, actual: 0 }));
+  assert.doesNotThrow(() => assertReadRevision({ actual: 0, expected: 0 }));
   assert.throws(
-    () => assertReadRevision({ expected: 0, actual: 1 }),
-    /RESTART_REQUIRED/,
+    () => assertReadRevision({ actual: 1, expected: 0 }),
+    restartRequiredPattern,
   );
   assert.throws(
-    () => assertReadRevision({ expected: 2, actual: 1 }),
-    /RESTART_REQUIRED/,
+    () => assertReadRevision({ actual: 1, expected: 2 }),
+    restartRequiredPattern,
   );
   assert.doesNotThrow(() =>
-    assertCursorScope({ expected: "same", actual: "same" }),
+    assertCursorScope({ actual: "same", expected: "same" }),
   );
   assert.throws(
-    () => assertCursorScope({ expected: "first", actual: "other" }),
-    /CURSOR_SCOPE_MISMATCH/,
+    () => assertCursorScope({ actual: "other", expected: "first" }),
+    cursorScopeMismatchPattern,
   );
 });

@@ -2,12 +2,12 @@ import type { OperationStatus } from "@/contracts/operation.types";
 import type { JsonValue } from "@/shared/json.types";
 
 interface TaskState {
-  taskId: string;
   createdAt: string;
   lastUpdatedAt: string;
-  ttlMs: number | null;
   pollIntervalMs?: number;
   statusMessage?: string;
+  taskId: string;
+  ttlMs: number | null;
 }
 
 export type Task = TaskState &
@@ -25,8 +25,8 @@ export type Task = TaskState &
   );
 
 export interface Envelope {
-  jsonrpc: "2.0";
   id?: string | number | undefined;
+  jsonrpc: "2.0";
   method: string;
   params?: Record<string, JsonValue> | undefined;
 }

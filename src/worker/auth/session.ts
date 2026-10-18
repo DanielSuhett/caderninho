@@ -10,20 +10,20 @@ import type { PortalSession } from "./entity";
 export const sessionCookie = "__Host-caderninho";
 export const cookieOptions = {
   httpOnly: true,
-  secure: true,
-  sameSite: "Lax",
   path: "/",
+  sameSite: "Lax",
+  secure: true,
 } as const;
-export type PortalEnv = {
+export interface PortalEnv {
   Bindings: Bindings;
   Variables: { session: PortalSession };
-};
+}
 
 export async function readSession<E extends { Bindings: Bindings }>(
   c: Context<E>,
 ) {
   const id = getCookie(c, sessionCookie);
-  return id ? authService(c.env).readSession(id) : null;
+  return await (id ? authService(c.env).readSession(id) : null);
 }
 export async function createSession<E extends { Bindings: Bindings }>(
   c: Context<E>,
@@ -31,7 +31,7 @@ export async function createSession<E extends { Bindings: Bindings }>(
   const id = await authService(c.env).createSession(
     getCookie(c, sessionCookie),
   );
-  setCookie(c, sessionCookie, id, { ...cookieOptions, maxAge: 28800 });
+  setCookie(c, sessionCookie, id, { ...cookieOptions, maxAge: 28_800 });
 }
 export async function sessionMiddleware(c: Context<PortalEnv>, next: Next) {
   const session = await readSession(c);

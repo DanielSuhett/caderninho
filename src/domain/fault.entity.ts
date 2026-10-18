@@ -1,14 +1,14 @@
 import type { FaultCode } from "./enums";
 
 export interface ErrorDetails {
-  retryAfterSeconds?: number;
-  stage?: string;
-  exception?: string;
-  reason?: string;
   code?: FaultCode;
+  exception?: string;
   operation?: string;
   previousSnapshotPreserved?: boolean;
+  reason?: string;
   resumeToken?: string;
+  retryAfterSeconds?: number;
+  stage?: string;
 }
 
 export class Fault extends Error {

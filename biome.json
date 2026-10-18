@@ -1,14 +1,12 @@
 {
   "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
-  "vcs": {
-    "enabled": true,
-    "clientKind": "git",
-    "useIgnoreFile": true
-  },
+  "extends": [
+    "ultracite/biome/core",
+    "ultracite/biome/react",
+    "ultracite/biome/vitest"
+  ],
   "files": {
-    "ignoreUnknown": true,
     "includes": [
-      "**",
       "!!**/dist",
       "!!**/.wrangler",
       "!!.agents",
@@ -19,32 +17,18 @@
     ]
   },
   "formatter": {
-    "enabled": true,
-    "indentStyle": "space",
-    "indentWidth": 2,
-    "lineWidth": 80,
-    "lineEnding": "lf",
     "attributePosition": "multiline",
-    "bracketSpacing": true,
     "expand": "auto"
   },
   "javascript": {
     "formatter": {
       "quoteStyle": "double",
-      "jsxQuoteStyle": "double",
-      "semicolons": "always",
-      "trailingCommas": "all",
-      "arrowParentheses": "always"
+      "trailingCommas": "all"
     }
   },
   "linter": {
-    "enabled": true,
     "rules": {
       "preset": "recommended",
-      "complexity": {
-        "noBannedTypes": "error",
-        "noUselessTypeConstraint": "error"
-      },
       "correctness": {
         "noUnusedVariables": {
           "level": "error",
@@ -54,18 +38,7 @@
         }
       },
       "suspicious": {
-        "noConsole": "error",
-        "noExplicitAny": "error",
-        "noTsIgnore": "error",
-        "noDuplicateEnumValues": "error",
-        "noUnnecessaryConditions": "error",
-        "noDoubleEquals": {
-          "level": "error",
-          "options": {
-            "ignoreNull": true
-          }
-        },
-        "noVar": "error"
+        "noConsole": "error"
       },
       "style": {
         "noRestrictedImports": {
@@ -90,23 +63,13 @@
             ]
           }
         },
-        "noNonNullAssertion": "error",
-        "noNestedTernary": "error",
-        "useAsConstAssertion": "error",
-        "useConst": "error",
         "noCommonJs": "error",
-        "useBlockStatements": "error",
         "useImportType": {
           "level": "error",
           "options": {
             "style": "auto"
           }
-        },
-        "useExportType": "error",
-        "noUselessElse": "error"
-      },
-      "performance": {
-        "noAccumulatingSpread": "error"
+        }
       },
       "nursery": {
         "noFloatingPromises": "error",
@@ -145,12 +108,6 @@
       "linter": {
         "rules": {
           "complexity": {
-            "noExcessiveCognitiveComplexity": {
-              "level": "error",
-              "options": {
-                "maxAllowedComplexity": 20
-              }
-            },
             "useMaxParams": {
               "level": "error",
               "options": {
@@ -162,12 +119,15 @@
       }
     },
     {
-      "includes": ["src/**/__tests__/**"],
+      "includes": ["src/**/__tests__/**", "tests/**/*.ts"],
       "linter": {
         "rules": {
           "complexity": {
             "noExcessiveCognitiveComplexity": "off",
             "useMaxParams": "off"
+          },
+          "suspicious": {
+            "noExplicitAny": "error"
           }
         }
       }

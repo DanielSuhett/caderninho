@@ -49,13 +49,25 @@ deploy nem consulta bancos reais. Build dry-run e execução local são provas d
 
 ## Layout e TypeScript
 
+Ultracite 8 usa Biome com os presets `core`, `react` e `vitest`. As regras próprias
+de camadas, imports, promises e layout continuam após os presets em `biome.json`.
+Os extras `type-aware` e `js-plugins` permanecem desativados. Consulte o
+[setup oficial](https://www.ultracite.ai/docs/setup) para atualizar a integração.
+
+Execute `mise exec -- npx ultracite fix` para lint e formatação,
+`mise exec -- npx ultracite check` para verificar e
+`mise exec -- npx ultracite doctor` para diagnosticar a instalação.
+Não desative regras para eliminar diagnósticos; preserve invariantes financeiros,
+ordem dos checkpoints e contratos ao revisar sugestões de performance.
+
 Biome aplica 80 colunas e atributos JSX em múltiplas linhas. Execute `npm run lint:fix`
 para correções seguras e organização de imports e `npm run format` para layout.
 Revise consolidação de imports separadamente da formatação global; repetir os
 dois comandos depois da consolidação deve produzir zero alterações adicionais.
 Imports com valores e tipos usam `import { value, type Type }`; imports só de
 tipos usam `import type`. Preserve aliases, comentários e a ordem dos imports
-com efeitos colaterais. Reexports usam bindings locais quando já importados.
+com efeitos colaterais. Reexports declaram a origem com `export { nome } from`;
+imports usados localmente permanecem separados.
 
 `biome.json` é a fonte das regras ativas. Use regras nativas, sem plugins próprios
 para reproduzir regras indisponíveis. Políticas como a forma de consumir
@@ -129,7 +141,7 @@ import { accountPanel } from "./panel";
 Use `if (objeto)` e `if (!lista.length)` para presença de objetos e coleções
 vazias, `!!valor` quando for necessário produzir um booleano e
 `...(condição && { campo })` para campos opcionais. Ausência e falsy são decisões
-diferentes: use `valor == null` para `null`/`undefined` e `valor ?? padrão` para
+diferentes: compare explicitamente `null` e `undefined` e use `valor ?? padrão` para
 preservar zero, falso e texto vazio. Mantenha comparações exatas quando o contrato
 exigir um sentinel específico, como IDs de JSON-RPC, exclusão de override e flags
 numéricas do banco. Um array vazio continua sendo um objeto presente.
@@ -176,8 +188,9 @@ casos repetidos em camadas diferentes sem exercitar uma integração adicional.
 Lint, formatação, tipos e fronteiras de imports são executados diretamente pelo
 check. Helpers e fixtures exclusivos de um teste removido devem sair junto dele.
 
-Skills em `.agents/` e o arquivo `skills-lock.json` são configuração local do
-agente e ficam fora dos commits.
+Skills em `.agents/`, hooks em `.codex/` e o arquivo `skills-lock.json` são
+configuração local do agente e ficam fora dos commits. O setup gera o hook de
+formatação do Codex; revise-o em `/hooks` para habilitá-lo em um projeto confiável.
 
 ## Escopo dos PRs
 

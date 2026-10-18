@@ -13,38 +13,39 @@ type QueryParameters = Record<
 >;
 
 const transportCodes: Record<HttpFailureKind, string> = {
-  unauthorized: "UPSTREAM_HTTP_ERROR",
   forbidden: "UPSTREAM_HTTP_ERROR",
-  not_found: "UPSTREAM_HTTP_ERROR",
-  rate_limit: "UPSTREAM_HTTP_ERROR",
   invalid_request: "UPSTREAM_HTTP_ERROR",
-  server: "UPSTREAM_HTTP_ERROR",
-  redirect: FaultCode.UPSTREAM_REDIRECT,
-  timeout: "ETIMEDOUT",
-  too_large: FaultCode.UPSTREAM_TOO_LARGE,
   invalid_response: "ERR_BODY_PARSE_FAILURE",
   network: "UPSTREAM_HTTP_ERROR",
+  not_found: "UPSTREAM_HTTP_ERROR",
+  rate_limit: "UPSTREAM_HTTP_ERROR",
+  redirect: FaultCode.UPSTREAM_REDIRECT,
+  server: "UPSTREAM_HTTP_ERROR",
+  timeout: "ETIMEDOUT",
+  too_large: FaultCode.UPSTREAM_TOO_LARGE,
+  unauthorized: "UPSTREAM_HTTP_ERROR",
 };
 
 function transportError(failure: HttpFailure) {
   const code = transportCodes[failure.kind];
   return Object.assign(new Error(code), {
     code,
-    ...(failure.status != null && {
-      response: {
-        statusCode: failure.status,
-        headers: {
-          "retry-after": failure.retryAfter ?? "",
+    ...(failure.status !== null &&
+      failure.status !== undefined && {
+        response: {
+          headers: {
+            "retry-after": failure.retryAfter ?? "",
+          },
+          statusCode: failure.status,
         },
-      },
-    }),
+      }),
   });
 }
 
 // Keep the official SDK endpoint methods; adapt its protected transport to Fetch.
 // Upstream bodies and credentials never enter errors or logs.
 export class PersonalPluggyClient extends PluggyClient {
-  private cachedKey: string = "";
+  private cachedKey: string | undefined;
   private readonly maximum: number;
   private readonly timeoutMs: number;
   private readonly http = httpClient.extend({
@@ -53,8 +54,8 @@ export class PersonalPluggyClient extends PluggyClient {
 
   constructor(
     credentials: { clientId: string; clientSecret: string },
-    maximum = 4000000,
-    timeoutMs = 15000,
+    maximum = 4_000_000,
+    timeoutMs = 15_000,
   ) {
     super(credentials);
     this.maximum = maximum;
@@ -118,8 +119,8 @@ export class PersonalPluggyClient extends PluggyClient {
           method,
           ...(body && { json: body }),
           headers: apiKey ? { "X-API-KEY": apiKey } : {},
-          totalTimeout: this.timeoutMs,
           maxResponseSize: this.maximum,
+          totalTimeout: this.timeoutMs,
         },
       }),
     );

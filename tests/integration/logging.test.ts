@@ -9,29 +9,29 @@ import { requestDiagnostic } from "@/worker/http";
 test("Worker logging filters polling and writes only safe structured HTTP metadata", () => {
   const lines: string[] = [];
   const logger = createLogger({
-    name: "synthetic-worker",
-    level: "warn",
     destination: { write: (line) => lines.push(line) },
+    level: "warn",
+    name: "synthetic-worker",
   });
   const diagnostic = {
+    body: { balance: "123.45", token: "synthetic-secret" },
     correlation: "synthetic-correlation",
-    route: "api",
     durationMs: 3,
-    body: { token: "synthetic-secret", balance: "123.45" },
+    route: "api",
     url: "https://synthetic.example?token=synthetic-secret",
   };
   requestDiagnostic({ ...diagnostic, status: 200 }, logger);
   requestDiagnostic({ ...diagnostic, status: 503 }, logger);
   assert.equal(lines.length, 1);
   z.object({
-    name: z.literal("synthetic-worker"),
-    level: z.literal(50),
-    time: z.number(),
     code: z.literal("REQUEST_FAILED"),
-    status: z.literal(503),
     correlation: z.literal("synthetic-correlation"),
-    route: z.literal("api"),
     durationMs: z.literal(3),
+    level: z.literal(50),
+    name: z.literal("synthetic-worker"),
+    route: z.literal("api"),
+    status: z.literal(503),
+    time: z.number(),
   })
     .strict()
     .parse(JSON.parse(lines.join("")));

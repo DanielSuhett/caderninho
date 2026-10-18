@@ -9,7 +9,7 @@ const level = z
 // Wrangler selects Pino's browser build, which writes structured objects through
 // the platform logger. Only Node gets a bounded asynchronous stdout buffer.
 const standardOutput = pino.destination
-  ? pino.destination({ sync: false, minLength: 0, maxLength: 65536 })
+  ? pino.destination({ maxLength: 65_536, minLength: 0, sync: false })
   : undefined;
 
 export function createLogger(input: {
@@ -17,9 +17,8 @@ export function createLogger(input: {
   level?: LevelWithSilent;
   destination?: DestinationStream;
 }) {
-  const customOutput = input.destination;
+  const { destination: customOutput } = input;
   const options = {
-    level: input.level ?? level,
     base: null,
     browser: {
       asObject: true,
@@ -29,6 +28,7 @@ export function createLogger(input: {
         },
       }),
     },
+    level: input.level ?? level,
   };
   const destination = input.destination ?? standardOutput;
   const instance = destination ? pino(options, destination) : pino(options);

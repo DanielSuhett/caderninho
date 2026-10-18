@@ -26,7 +26,7 @@ export function spawnManaged(args: string[], options: SpawnOptions = {}) {
   const completion = tryCatch(finished);
   let stopping: Promise<void> | undefined;
   async function kill(signal: NodeJS.Signals) {
-    const pid = child.pid;
+    const { pid } = child;
     if (!pid) {
       return;
     }

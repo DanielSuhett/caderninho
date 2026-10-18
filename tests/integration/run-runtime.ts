@@ -16,7 +16,7 @@ import { tryCatch } from "@/shared/result";
 import { required, responseJson } from "@/testing/helpers";
 import { spawnManaged } from "@/testing/process";
 
-const logger = createLogger({ name: "run-runtime", level: "info" });
+const logger = createLogger({ level: "info", name: "run-runtime" });
 
 const cwd = fileURLToPath(new URL("../..", import.meta.url)),
   state = await mkdtemp(join(tmpdir(), "caderninho-test-")),
@@ -27,8 +27,8 @@ const runtime = fileURLToPath(
 );
 const env = {
   ...process.env,
-  WRANGLER_SEND_METRICS: "false",
   WRANGLER_LOG_PATH: join(state, "wrangler.log"),
+  WRANGLER_SEND_METRICS: "false",
 };
 async function command(args: string[], extra: Record<string, string> = {}) {
   const task = spawnManaged(args, {
@@ -73,9 +73,13 @@ async function start() {
     ],
     { cwd, env, stdio: "pipe" },
   );
-  task.child.stdout?.on("data", (x) => (logs = (logs + x).slice(-5000)));
-  task.child.stderr?.on("data", (x) => (logs = (logs + x).slice(-5000)));
-  for (let i = 0; i < 60; i++) {
+  task.child.stdout?.on("data", (chunk) => {
+    logs = (logs + chunk).slice(-5000);
+  });
+  task.child.stderr?.on("data", (chunk) => {
+    logs = (logs + chunk).slice(-5000);
+  });
+  for (let i = 0; i < 60; i += 1) {
     if (task.child.exitCode !== null || task.child.signalCode !== null) {
       break;
     }
@@ -95,10 +99,10 @@ const worker = await start();
 const { data: _data, error } = await tryCatch(async () => {
   await fetch(`${base}/setup`, { method: "POST" });
   const meta = {
-    "io.modelcontextprotocol/protocolVersion": "2026-07-28",
     "io.modelcontextprotocol/clientCapabilities": {
       extensions: { "io.modelcontextprotocol/tasks": {} },
     },
+    "io.modelcontextprotocol/protocolVersion": "2026-07-28",
   };
   const rpc = async (
     method: string,
@@ -106,32 +110,32 @@ const { data: _data, error } = await tryCatch(async () => {
   ) =>
     responseJson(
       await fetch(`${base}/mcp`, {
-        method: "POST",
+        body: JSON.stringify({
+          id: 1,
+          jsonrpc: "2.0",
+          method,
+          params: { ...params, _meta: meta },
+        }),
         headers: {
-          "Content-Type": "application/json",
           Accept: "application/json, text/event-stream",
+          "Content-Type": "application/json",
           "Mcp-Method": method,
           "Mcp-Name": params.name ?? params.taskId ?? "",
           "Mcp-Protocol-Version": "2026-07-28",
         },
-        body: JSON.stringify({
-          jsonrpc: "2.0",
-          id: 1,
-          method,
-          params: { ...params, _meta: meta },
-        }),
+        method: "POST",
       }),
     );
   const started = await rpc("tools/call", {
-    name: "caderninho_sync",
     arguments: {
-      requestKey: "restart-test",
       itemIds: ["11111111-1111-4111-8111-111111111111"],
+      requestKey: "restart-test",
     },
+    name: "caderninho_sync",
   });
   const taskId = required(required(started.result).taskId);
   let partial = false;
-  for (let i = 0; i < 30; i++) {
+  for (let i = 0; i < 30; i += 1) {
     const t = await rpc("tasks/get", { taskId });
     if (
       required(t.result).status === "working" &&
@@ -150,7 +154,7 @@ const { data: _data, error } = await tryCatch(async () => {
   // the complete Wrangler process also kills its emulated Workflow service;
   // that emulator restart limitation is documented separately.
   let terminal: Awaited<ReturnType<typeof responseJson>>["result"];
-  for (let i = 0; i < 40; i++) {
+  for (let i = 0; i < 40; i += 1) {
     const t = await rpc("tasks/get", { taskId });
     if (required(t.result).status !== "working") {
       terminal = t.result;
@@ -184,11 +188,11 @@ await cp(join(state, "v3/d1"), join(snapshot, ".wrangler/state/v3/d1"), {
   recursive: true,
 });
 const config = JSON.stringify({
-  name: "synthetic-backup",
   compatibility_date: "2026-10-06",
   d1_databases: [
-    { binding: "DB", database_name: "test", database_id: "local-test" },
+    { binding: "DB", database_id: "local-test", database_name: "test" },
   ],
+  name: "synthetic-backup",
 });
 await writeFile(join(snapshot, "wrangler.json"), config);
 await writeFile(join(restored, "wrangler.json"), config);

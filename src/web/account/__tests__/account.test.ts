@@ -11,21 +11,23 @@ import { createConnectWidget } from "../connect-widget";
 
 await test("account commands preserve CSRF, validate responses and never retry an uncertain mutation", async () => {
   const requests: Request[] = [];
-  const api = createAccountApi("https://caderninho.test", async (input) => {
+  const api = createAccountApi("https://caderninho.test", (input) => {
     const request = new Request(input);
     requests.push(request);
     if (request.method === "GET") {
-      return Response.json(accountSnapshot());
+      return Promise.resolve(Response.json(accountSnapshot()));
     }
     if (request.url.endsWith("/pause")) {
-      return Response.json({ ok: true });
+      return Promise.resolve(Response.json({ ok: true }));
     }
-    return Response.json(
-      { issue: "rate", private: "never exposed" },
-      { status: 429 },
+    return Promise.resolve(
+      Response.json(
+        { issue: "rate", private: "never exposed" },
+        { status: 429 },
+      ),
     );
   });
-  const signal = new AbortController().signal;
+  const { signal } = new AbortController();
   assert.deepEqual(await api.read(signal), accountSnapshot());
   await api.pauseSync({ csrf: "synthetic-csrf", signal });
   assert.deepEqual(await requests[1]?.json(), {
@@ -40,9 +42,11 @@ await test("account commands preserve CSRF, validate responses and never retry a
   );
   assert.equal(requests.length, 3);
   let applied = 0;
-  const unavailable = createAccountApi("https://caderninho.test", async () => {
-    applied++;
-    throw new Error("Response lost after the command was applied");
+  const unavailable = createAccountApi("https://caderninho.test", () => {
+    applied += 1;
+    return Promise.reject(
+      new Error("Response lost after the command was applied"),
+    );
   });
   await assert.rejects(
     unavailable.pauseSync({ csrf: "synthetic-csrf", signal }),
@@ -51,50 +55,57 @@ await test("account commands preserve CSRF, validate responses and never retry a
 });
 
 await test("expired session, redirected login and malformed account response cannot become valid state", async () => {
-  for (const status of [401, 403, 302]) {
-    const api = createAccountApi(
-      "https://caderninho.test",
-      async () => new Response("", { status }),
-    );
-    await assert.rejects(
-      api.read(new AbortController().signal),
-      (error) =>
-        error instanceof AccountRequestError && error.issue === "session",
-    );
-  }
-  for (const body of [JSON.stringify({ data: {} }), "invalid JSON", ""]) {
-    const api = createAccountApi(
-      "https://caderninho.test",
-      async () => new Response(body),
-    );
-    await assert.rejects(api.read(new AbortController().signal));
-  }
-  for (const body of [
-    "invalid JSON",
-    JSON.stringify({ issue: "private-code" }),
-  ]) {
-    const api = createAccountApi(
-      "https://caderninho.test",
-      async () => new Response(body, { status: 500 }),
-    );
-    await assert.rejects(
-      api.read(new AbortController().signal),
-      (error) =>
-        error instanceof AccountRequestError && error.issue === "unknown",
-    );
-  }
+  await Promise.all(
+    [401, 403, 302].map(async (status) => {
+      const api = createAccountApi(
+        "https://caderninho.test",
+        async () => new Response("", { status }),
+      );
+      await assert.rejects(
+        api.read(new AbortController().signal),
+        (error) =>
+          error instanceof AccountRequestError && error.issue === "session",
+      );
+    }),
+  );
+  await Promise.all(
+    [JSON.stringify({ data: {} }), "invalid JSON", ""].map(async (body) => {
+      const api = createAccountApi(
+        "https://caderninho.test",
+        async () => new Response(body),
+      );
+      await assert.rejects(api.read(new AbortController().signal));
+    }),
+  );
+  await Promise.all(
+    ["invalid JSON", JSON.stringify({ issue: "private-code" })].map(
+      async (body) => {
+        const api = createAccountApi(
+          "https://caderninho.test",
+          async () => new Response(body, { status: 500 }),
+        );
+        await assert.rejects(
+          api.read(new AbortController().signal),
+          (error) =>
+            error instanceof AccountRequestError && error.issue === "unknown",
+        );
+      },
+    ),
+  );
 });
 
 await test("account token and Item commands consume one response and preserve command fields", async () => {
   const requests: Request[] = [];
-  const api = createAccountApi("https://caderninho.test", async (input) => {
+  const api = createAccountApi("https://caderninho.test", (input) => {
     const request = new Request(input);
     requests.push(request);
     assert.equal(request.headers.get("Accept"), "application/json");
     assert.equal(request.redirect, "manual");
-    return request.url.endsWith("connect-token")
-      ? Response.json(accountConnectToken())
-      : Response.json({ ok: true });
+    return Promise.resolve(
+      request.url.endsWith("connect-token")
+        ? Response.json(accountConnectToken())
+        : Response.json({ ok: true }),
+    );
   });
   const context = {
     csrf: "synthetic-csrf",
@@ -105,12 +116,14 @@ await test("account token and Item commands consume one response and preserve co
   await api.connectItem(context, "synthetic-item");
   assert.equal(requests.length, 3);
   assert.deepEqual(await required(requests[0]).json(), { csrf: context.csrf });
-  for (const request of requests.slice(1)) {
-    assert.deepEqual(await request.json(), {
-      csrf: context.csrf,
-      itemId: "synthetic-item",
-    });
-  }
+  await Promise.all(
+    requests.slice(1).map(async (request) => {
+      assert.deepEqual(await request.json(), {
+        csrf: context.csrf,
+        itemId: "synthetic-item",
+      });
+    }),
+  );
 });
 
 await test("account cancellation interrupts a stalled response body without retry", async () => {
@@ -121,26 +134,28 @@ await test("account cancellation interrupts a stalled response body without retr
   });
   let calls = 0;
   let cancelled = false;
-  const api = createAccountApi("https://caderninho.test", async (input) => {
-    calls++;
+  const api = createAccountApi("https://caderninho.test", (input) => {
+    calls += 1;
     const { signal } = new Request(input);
-    return new Response(
-      new ReadableStream({
-        start(stream) {
-          stream.enqueue(new TextEncoder().encode("{"));
-          signal.addEventListener(
-            "abort",
-            () => {
-              cancelled = true;
-              stream.error(signal.reason);
-            },
-            { once: true },
-          );
-        },
-        pull() {
-          bodyRead?.();
-        },
-      }),
+    return Promise.resolve(
+      new Response(
+        new ReadableStream({
+          pull() {
+            bodyRead?.();
+          },
+          start(stream) {
+            stream.enqueue(new TextEncoder().encode("{"));
+            signal.addEventListener(
+              "abort",
+              () => {
+                cancelled = true;
+                stream.error(signal.reason);
+              },
+              { once: true },
+            );
+          },
+        }),
+      ),
     );
   });
   const reason = new Error("View disposed");
@@ -167,7 +182,7 @@ await test("widget ignores late SDK loading and stale events after replacement o
       return Promise.resolve();
     }
     destroy() {
-      destroyed++;
+      destroyed += 1;
       return Promise.resolve();
     }
   }
@@ -175,17 +190,17 @@ await test("widget ignores late SDK loading and stale events after replacement o
     ...accountConnectToken(),
     configuration: {
       connectorIds: [321],
-      selectedConnectorId: 321,
       includeSandbox: false,
+      selectedConnectorId: 321,
     },
     itemId: undefined,
-    onSuccess() {},
     onClose() {
       throw new Error("stale close");
     },
     onError() {
       throw new Error("stale error");
     },
+    onSuccess: () => undefined,
   };
   const widget = createConnectWidget(async () => ({ PluggyConnect: Widget }));
   await widget.open(callbacks);
@@ -228,11 +243,11 @@ await test("overlapping opens wait for old widget cleanup and only the latest re
   let destroyed = 0;
   class Widget {
     init() {
-      initialized++;
+      initialized += 1;
       return Promise.resolve();
     }
     destroy() {
-      destroyed++;
+      destroyed += 1;
       return destroyed === 1 ? closed : Promise.resolve();
     }
   }
@@ -240,9 +255,9 @@ await test("overlapping opens wait for old widget cleanup and only the latest re
   const options = {
     ...accountConnectToken(),
     itemId: undefined,
-    onSuccess() {},
-    onClose() {},
-    onError() {},
+    onClose: () => undefined,
+    onError: () => undefined,
+    onSuccess: () => undefined,
   };
   await widget.open(options);
   const obsolete = widget.open(options);

@@ -21,6 +21,10 @@ import {
 import { applyD1Migrations, reset } from "cloudflare:test";
 import { env as bindings } from "cloudflare:workers";
 
+const loginPathPattern = /account\/login/;
+const consentHandlePattern = /name="handle" value="([^"]+)"/;
+const sessionCookiePattern = /__Host-caderninho=/;
+
 beforeEach(async () => {
   await reset();
   await applyD1Migrations(bindings.DB, bindings.TEST_MIGRATIONS);
@@ -32,15 +36,15 @@ async function grant(
   name = "Synthetic assistant",
 ) {
   const registered = await app.request("/oauth/register", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       client_name: name,
-      redirect_uris: ["http://localhost:8123/callback"],
-      token_endpoint_auth_method: "none",
       grant_types: ["authorization_code", "refresh_token"],
+      redirect_uris: ["http://localhost:8123/callback"],
       response_types: ["code"],
+      token_endpoint_auth_method: "none",
     }),
+    headers: { "Content-Type": "application/json" },
+    method: "POST",
   });
   assert.equal(registered.status, 201);
   const client = z
@@ -58,34 +62,32 @@ async function grant(
   const authorize =
     "/authorize?" +
     new URLSearchParams({
-      response_type: "code",
       client_id: client.client_id,
-      redirect_uri: "http://localhost:8123/callback",
-      scope: "offline_access",
       code_challenge: challenge,
       code_challenge_method: "S256",
+      redirect_uri: "http://localhost:8123/callback",
+      response_type: "code",
+      scope: "offline_access",
       state: "synthetic-state",
     });
   const anonymous = await app.request(authorize);
   assert.equal(anonymous.status, 302);
-  assert.match(anonymous.headers.get("Location") ?? "", /account\/login/);
+  assert.match(anonymous.headers.get("Location") ?? "", loginPathPattern);
   const consent = await app.request(authorize, {
     headers: { Cookie: ownerCookie },
   });
   assert.equal(consent.status, 200);
   const html = await consent.text();
   assert.ok(!html.includes("<script>synthetic</script>"));
-  const handle = z
-    .string()
-    .parse(html.match(/name="handle" value="([^"]+)"/)?.[1]);
+  const handle = z.string().parse(html.match(consentHandlePattern)?.[1]);
   const approved = await app.request("/authorize", {
-    method: "POST",
+    body: new URLSearchParams({ decision: "approve", handle }),
     headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
       Cookie: `${ownerCookie}; ${cookies(consent)}`,
       Origin: origin,
-      "Content-Type": "application/x-www-form-urlencoded",
     },
-    body: new URLSearchParams({ handle, decision: "approve" }),
+    method: "POST",
   });
   assert.equal(approved.status, 302);
   const code = required(
@@ -94,15 +96,15 @@ async function grant(
     ),
   );
   const response = await app.request("/oauth/token", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
-      grant_type: "authorization_code",
       client_id: client.client_id,
       code,
-      redirect_uri: "http://localhost:8123/callback",
       code_verifier: verifier,
+      grant_type: "authorization_code",
+      redirect_uri: "http://localhost:8123/callback",
     }),
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    method: "POST",
   });
   assert.equal(response.status, 200);
   return z.object({ access_token: z.string() }).parse(await response.json())
@@ -117,7 +119,7 @@ test("the password opens private routes; missing configuration fails closed", as
   const authenticated = await login(app);
   assert.equal(authenticated.status, 303);
   const cookie = cookies(authenticated);
-  assert.match(cookie, /__Host-caderninho=/);
+  assert.match(cookie, sessionCookiePattern);
   const flags = authenticated.headers.getSetCookie().join(";");
   for (const flag of ["HttpOnly", "Secure", "SameSite=Lax"]) {
     assert.ok(flags.includes(flag));
@@ -131,8 +133,7 @@ test("the password opens private routes; missing configuration fails closed", as
   for (const secret of [password, "synthetic-secret", "synthetic-client"]) {
     assert.ok(!JSON.stringify(state).includes(secret));
   }
-  const absent = settings();
-  delete absent.ADMIN_PASSWORD;
+  const { ADMIN_PASSWORD: _password, ...absent } = settings();
   assert.equal((await fixture(absent).request("/account/login")).status, 503);
   assert.equal((await fixture(absent).request("/api/account")).status, 401);
   assert.equal((await app.request("/account/access")).status, 404);
@@ -141,26 +142,26 @@ test("the password opens private routes; missing configuration fails closed", as
 test("login rate limit, CSRF and request origin cannot be bypassed by identity headers", async () => {
   const app = fixture();
   const forged = await app.request("/account/login", {
-    method: "POST",
+    body: new URLSearchParams({ password }),
     headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
       Origin: "https://attacker.test",
       "X-Forwarded-Host": "attacker.test",
       "x-user-id": "owner",
-      "Content-Type": "application/x-www-form-urlencoded",
     },
-    body: new URLSearchParams({ password }),
+    method: "POST",
   });
   assert.equal(forged.status, 403);
   const missingCsrf = await app.request("/account/login", {
-    method: "POST",
-    headers: {
-      Origin: origin,
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
     body: new URLSearchParams({ password }),
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      Origin: origin,
+    },
+    method: "POST",
   });
   assert.equal(missingCsrf.status, 403);
-  for (let i = 0; i < 10; i++) {
+  for (let i = 0; i < 10; i += 1) {
     assert.equal((await login(app, "wrong-synthetic-password")).status, 401);
   }
   const limited = await login(app);
@@ -173,30 +174,29 @@ test("webhook authenticates the raw secret before reading its body", async () =>
   for (const supplied of [null, "wrong-secret", "synthetic-webhook-secreX"]) {
     const response = await receiveWebhook(
       new Request(`${origin}/webhook`, {
-        method: "POST",
-        headers: supplied ? { "X-Caderninho-Webhook-Secret": supplied } : {},
         body: "invalid JSON must not be read before authentication",
+        headers: supplied ? { "X-Caderninho-Webhook-Secret": supplied } : {},
+        method: "POST",
       }),
       config,
     );
     assert.equal(response.status, 401);
   }
   const event = {
-    eventId: "synthetic-event",
-    event: "transactions/created",
-    itemId: "11111111-1111-4111-8111-111111111111",
     accountId: "22222222-2222-4222-8222-222222222222",
+    event: "transactions/created",
+    eventId: "synthetic-event",
+    itemId: "11111111-1111-4111-8111-111111111111",
     transactionsCreatedAtFrom: "2026-10-01T00:00:00.000Z",
   };
   const request = () =>
     new Request(`${origin}/webhook`, {
-      method: "POST",
-      headers: { "X-Caderninho-Webhook-Secret": config.WEBHOOK_SECRET },
       body: JSON.stringify(event),
+      headers: { "X-Caderninho-Webhook-Secret": config.WEBHOOK_SECRET },
+      method: "POST",
     });
   assert.equal((await receiveWebhook(request(), config)).status, 404);
-  const missing = settings();
-  delete missing.WEBHOOK_SECRET;
+  const { WEBHOOK_SECRET: _secret, ...missing } = settings();
   assert.equal((await receiveWebhook(request(), missing)).status, 401);
 });
 
@@ -204,13 +204,13 @@ test("private commands require CSRF; logout, expiry and a new deployment invalid
   const app = fixture();
   const cookie = cookies(await login(app));
   const forged = await app.request("/api/account/pause", {
-    method: "POST",
+    body: JSON.stringify({ csrf: "forged" }),
     headers: {
+      "Content-Type": "application/json",
       Cookie: cookie,
       Origin: origin,
-      "Content-Type": "application/json",
     },
-    body: JSON.stringify({ csrf: "forged" }),
+    method: "POST",
   });
   assert.equal(forged.status, 403);
   assert.equal((await command(app, cookie, "logout")).status, 200);
@@ -249,7 +249,7 @@ test("official OAuth authorizes assistants and the owner can revoke every grant"
   assert.equal(
     (
       await app.request("/mcp", {
-        headers: { "x-user-id": "owner", "x-authenticated-user-id": "owner" },
+        headers: { "x-authenticated-user-id": "owner", "x-user-id": "owner" },
       })
     ).status,
     401,

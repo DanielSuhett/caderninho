@@ -10,58 +10,48 @@ import type {
 import { DEFINITIONS, normalizeResource } from "./finance-model";
 
 interface Participant {
-  [field: string]: unknown;
-  name?: OptionalText;
   documentNumber?: { value?: OptionalText } | null | undefined;
+  name?: OptionalText;
+  [field: string]: unknown;
 }
 
 interface ConnectorDetails {
   id?: OptionalScalar;
-  name?: OptionalText;
-  products?: string[] | null | undefined;
   isOpenFinance?: boolean | null | undefined;
   isSandbox?: boolean | null | undefined;
+  name?: OptionalText;
+  products?: string[] | null | undefined;
 }
 
 export interface ProviderRecord {
-  [field: string]: unknown;
-  id?: string | number | null | undefined;
-  resourceId?: OptionalText;
-  itemId?: OptionalText;
   accountId?: OptionalText;
-  investmentId?: OptionalText;
-  type?: OptionalText;
-  status?: OptionalText;
-  executionStatus?: OptionalText;
-  lastUpdatedAt?: OptionalText;
-  consentExpiresAt?: OptionalText;
-  products?: string[] | null | undefined;
-  resourcesCollectedAt?: JsonValue | undefined;
-  connector?: (ConnectorDetails & Record<string, unknown>) | null | undefined;
-  name?: OptionalText;
-  currencyCode?: OptionalText;
-  date?: OptionalText;
   amount?: MoneyInput;
-  description?: OptionalText;
-  operationType?: OptionalText;
+  automaticallyInvestedBalance?: MoneyInput;
+  availableBalance?: MoneyInput;
+  balance?: MoneyInput;
   category?: OptionalText;
   categoryId?: OptionalText;
-  taxNumber?: OptionalText;
-  url?: OptionalText;
-  updatedAt?: OptionalText;
+  connector?: (ConnectorDetails & Record<string, unknown>) | null | undefined;
+  consentExpiresAt?: OptionalText;
   createdAt?: OptionalText;
-  updateDateTime?: OptionalText;
-  balance?: MoneyInput;
-  availableBalance?: MoneyInput;
-  automaticallyInvestedBalance?: MoneyInput;
-  merchant?:
-    | { [field: string]: unknown; name?: OptionalText }
-    | null
-    | undefined;
   creditCardMetadata?:
     | { [field: string]: unknown; billId?: OptionalText }
     | null
     | undefined;
+  currencyCode?: OptionalText;
+  date?: OptionalText;
+  description?: OptionalText;
+  executionStatus?: OptionalText;
+  id?: string | number | null | undefined;
+  investmentId?: OptionalText;
+  itemId?: OptionalText;
+  lastUpdatedAt?: OptionalText;
+  merchant?:
+    | { [field: string]: unknown; name?: OptionalText }
+    | null
+    | undefined;
+  name?: OptionalText;
+  operationType?: OptionalText;
   paymentData?:
     | {
         [field: string]: unknown;
@@ -71,23 +61,33 @@ export interface ProviderRecord {
       }
     | null
     | undefined;
+  products?: string[] | null | undefined;
+  resourceId?: OptionalText;
+  resourcesCollectedAt?: JsonValue | undefined;
+  status?: OptionalText;
+  taxNumber?: OptionalText;
+  type?: OptionalText;
+  updateDateTime?: OptionalText;
+  updatedAt?: OptionalText;
+  url?: OptionalText;
+  [field: string]: unknown;
 }
 
 export interface ProviderField {
-  kind: "scalar" | "decimal" | "array" | "array_scalar";
   fields?: Record<string, ProviderField>;
+  kind: "scalar" | "decimal" | "array" | "array_scalar";
 }
 
 export interface ItemInfo {
-  id?: OptionalScalar;
-  status?: OptionalText;
+  connector: ConnectorDetails;
+  consentExpiresAt?: OptionalText;
   executionStatus?: OptionalText;
+  id?: OptionalScalar;
+  lastUpdatedAt?: OptionalText;
   products?: string[] | null | undefined;
   resourcesCollectedAt?: JsonValue | undefined;
-  consentExpiresAt?: OptionalText;
-  lastUpdatedAt?: OptionalText;
+  status?: OptionalText;
   statusDetail?: Record<string, JsonValue> | null | undefined;
-  connector: ConnectorDetails;
 }
 
 export interface Credentials {
@@ -96,10 +96,10 @@ export interface Credentials {
 }
 
 export interface SourceContext {
-  resource: Resource;
+  connectorId?: string | undefined;
   item: string;
   parent?: string;
-  connectorId?: string | undefined;
+  resource: Resource;
 }
 
 export function itemInfo(raw: ProviderRecord): ItemInfo {
@@ -115,21 +115,21 @@ export function itemInfo(raw: ProviderRecord): ItemInfo {
   );
 
   return {
-    id: raw.id,
-    status: raw.status ?? null,
-    executionStatus: raw.executionStatus ?? null,
-    products: raw.products ?? null,
-    resourcesCollectedAt: raw.resourcesCollectedAt ?? null,
-    consentExpiresAt: raw.consentExpiresAt ?? null,
-    lastUpdatedAt: raw.lastUpdatedAt ?? null,
-    statusDetail,
     connector: {
       id: raw.connector?.id ?? null,
-      name: raw.connector?.name ?? null,
       isOpenFinance: raw.connector?.isOpenFinance ?? null,
       isSandbox: raw.connector?.isSandbox ?? null,
+      name: raw.connector?.name ?? null,
       products: raw.connector?.products ?? null,
     },
+    consentExpiresAt: raw.consentExpiresAt ?? null,
+    executionStatus: raw.executionStatus ?? null,
+    id: raw.id,
+    lastUpdatedAt: raw.lastUpdatedAt ?? null,
+    products: raw.products ?? null,
+    resourcesCollectedAt: raw.resourcesCollectedAt ?? null,
+    status: raw.status ?? null,
+    statusDetail,
   };
 }
 
@@ -139,7 +139,7 @@ export function productState(
   consents: FinanceRecord[],
   now: number,
 ) {
-  const product = DEFINITIONS[resource].product;
+  const { product } = DEFINITIONS[resource];
 
   if (
     resource === Resource.resources &&
@@ -151,7 +151,7 @@ export function productState(
   if (
     product &&
     item.connector.products &&
-    !supportsProduct({ resource, product, products: item.connector.products })
+    !supportsProduct({ product, products: item.connector.products, resource })
   ) {
     return Availability.unsupported;
   }
@@ -159,7 +159,7 @@ export function productState(
   if (
     product &&
     item.products &&
-    !supportsProduct({ resource, product, products: item.products })
+    !supportsProduct({ product, products: item.products, resource })
   ) {
     return Availability.not_enabled;
   }
@@ -225,12 +225,12 @@ export function assertSourceRecords({
   const definition = DEFINITIONS[context.resource];
   for (const record of records) {
     if (context.resource === Resource.connections) {
-      assertSourceIdentity({ id: record.id, expected: context.item });
+      assertSourceIdentity({ expected: context.item, id: record.id });
     }
     if (context.resource === Resource.connectors) {
       assertSourceIdentity({
-        id: String(record.id),
         expected: context.connectorId,
+        id: String(record.id),
       });
     }
     if (

@@ -12,7 +12,7 @@ export async function revokeAssistantGrants(
       ...(cursor && { cursor }),
     });
     grants.push(...page.items.map((grant) => grant.id));
-    cursor = page.cursor;
+    ({ cursor } = page);
   } while (cursor);
   for (const grant of grants) {
     await provider.revokeGrant(grant, "owner");

@@ -10,7 +10,14 @@ import {
 import { hash } from "@/shared/crypto";
 
 import { database, required } from "../database";
-import * as tables from "../schema";
+import {
+  aliases as aliasesTable,
+  categories as categoriesTable,
+  category_groups as categoryGroupsTable,
+  rule_sets as ruleSetsTable,
+  rules as rulesTable,
+  settings as settingsTable,
+} from "../schema";
 
 export async function saveRules(
   db: D1Database,
@@ -21,23 +28,23 @@ export async function saveRules(
   const id = await hash({ document, normalizer: NORMALIZER });
   const statements: BatchItem<"sqlite">[] = [
     database(db)
-      .insert(tables.rule_sets)
+      .insert(ruleSetsTable)
       .values({
-        id: id,
-        document: document,
-        normalizer: NORMALIZER,
         created_at: new Date().toISOString(),
+        document,
+        id,
+        normalizer: NORMALIZER,
       })
       .onConflictDoNothing(),
   ];
   for (const g of document.groups) {
     statements.push(
       database(db)
-        .insert(tables.category_groups)
+        .insert(categoryGroupsTable)
         .values({
-          revision: id,
           id: g.id,
           name: g.name,
+          revision: id,
         })
         .onConflictDoNothing(),
     );
@@ -45,23 +52,23 @@ export async function saveRules(
   for (const c of document.categories) {
     statements.push(
       database(db)
-        .insert(tables.categories)
+        .insert(categoriesTable)
         .values({
-          revision: id,
-          id: c.id,
           group_id: c.group_id,
+          id: c.id,
           name: c.name,
+          revision: id,
         })
         .onConflictDoNothing(),
     );
     for (const alias of [c.name, ...c.aliases]) {
       statements.push(
         database(db)
-          .insert(tables.aliases)
+          .insert(aliasesTable)
           .values({
-            revision: id,
-            alias: alias,
+            alias,
             category_id: c.id,
+            revision: id,
           })
           .onConflictDoNothing(),
       );
@@ -70,15 +77,15 @@ export async function saveRules(
   for (const [r, rule] of document.rules.entries()) {
     statements.push(
       database(db)
-        .insert(tables.rules)
+        .insert(rulesTable)
         .values({
-          revision: id,
+          active: Number(rule.is_active),
+          definition: rule,
           id: rule.id,
           position: r,
           priority: rule.priority,
+          revision: id,
           stage: rule.event.type,
-          active: Number(rule.is_active),
-          definition: rule,
         })
         .onConflictDoNothing(),
     );
@@ -91,31 +98,29 @@ export async function saveRules(
     }
   }
   await database(db)
-    .update(tables.rule_sets)
+    .update(ruleSetsTable)
     .set({ ready: 1 })
-    .where(eq(tables.rule_sets.id, id))
+    .where(eq(ruleSetsTable.id, id))
     .run();
   if (activate) {
     await database(db)
-      .update(tables.settings)
+      .update(settingsTable)
       .set({ active_rules: id })
-      .where(eq(tables.settings.id, 1))
+      .where(eq(settingsTable.id, 1))
       .run();
   }
-  return { id, rules: document.rules.length, activated: activate };
+  return { activated: activate, id, rules: document.rules.length };
 }
 
 async function ruleRevision(db: D1Database, revision: string) {
   return required(
     await database(db)
       .select({
-        document: tables.rule_sets.document,
-        normalizer: tables.rule_sets.normalizer,
+        document: ruleSetsTable.document,
+        normalizer: ruleSetsTable.normalizer,
       })
-      .from(tables.rule_sets)
-      .where(
-        and(eq(tables.rule_sets.id, revision), eq(tables.rule_sets.ready, 1)),
-      )
+      .from(ruleSetsTable)
+      .where(and(eq(ruleSetsTable.id, revision), eq(ruleSetsTable.ready, 1)))
       .get(),
   );
 }
@@ -131,22 +136,22 @@ export async function rulesFor(db: D1Database, revision: string) {
 }
 
 export async function listRules(db: D1Database) {
-  return database(db)
+  return await database(db)
     .select({
-      id: tables.rule_sets.id,
-      created_at: tables.rule_sets.created_at,
-      normalizer: tables.rule_sets.normalizer,
+      created_at: ruleSetsTable.created_at,
+      id: ruleSetsTable.id,
+      normalizer: ruleSetsTable.normalizer,
     })
-    .from(tables.rule_sets)
-    .orderBy(desc(tables.rule_sets.created_at))
+    .from(ruleSetsTable)
+    .orderBy(desc(ruleSetsTable.created_at))
     .all();
 }
 export async function activateRules(db: D1Database, revision: string) {
   await rulesFor(db, revision);
   await database(db)
-    .update(tables.settings)
+    .update(settingsTable)
     .set({ active_rules: revision })
-    .where(eq(tables.settings.id, 1))
+    .where(eq(settingsTable.id, 1))
     .run();
   return { activated: revision, historicalReclassification: false };
 }

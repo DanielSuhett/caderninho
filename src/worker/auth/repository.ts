@@ -10,24 +10,28 @@ import type { AuthRepository } from "./entity";
 export function createAuthRepository(binding: D1Database): AuthRepository {
   const db = database(binding);
   return {
+    async allowLoginAttempt(now: number) {
+      const [row] = await db
+        .insert(login_attempts)
+        .values({ attempts: 1, expires: now + 60_000, id: "admin" })
+        .onConflictDoUpdate({
+          set: {
+            attempts: sql`case when ${login_attempts.expires} <= ${now} then 1 else ${login_attempts.attempts} + 1 end`,
+            expires: sql`case when ${login_attempts.expires} <= ${now} then excluded.expires else ${login_attempts.expires} end`,
+          },
+          target: login_attempts.id,
+        })
+        .returning({ attempts: login_attempts.attempts });
+      if (!row) {
+        throw new Error("LOGIN_ATTEMPT_NOT_SAVED");
+      }
+      return row.attempts <= 10;
+    },
     compact: () => compactAccess(binding),
-    async session(id: string, now: number) {
-      return (
-        (await db
-          .select({
-            csrf: portal_sessions.csrf,
-            expires: portal_sessions.expires,
-            auth_version: portal_sessions.auth_version,
-          })
-          .from(portal_sessions)
-          .where(
-            and(
-              eq(portal_sessions.id, await hash(id)),
-              gt(portal_sessions.expires, now),
-            ),
-          )
-          .get()) ?? null
-      );
+    async revokeSession(id: string) {
+      await db
+        .delete(portal_sessions)
+        .where(eq(portal_sessions.id, await hash(id)));
     },
     async saveSession(input: {
       id: string;
@@ -37,10 +41,10 @@ export function createAuthRepository(binding: D1Database): AuthRepository {
       prior?: string;
     }) {
       const insert = db.insert(portal_sessions).values({
-        id: await hash(input.id),
+        auth_version: input.version,
         csrf: input.csrf,
         expires: input.expires,
-        auth_version: input.version,
+        id: await hash(input.id),
       });
       const rest: BatchItem<"sqlite">[] = [];
       if (input.prior) {
@@ -52,27 +56,23 @@ export function createAuthRepository(binding: D1Database): AuthRepository {
       }
       await db.batch([insert, ...rest]);
     },
-    async allowLoginAttempt(now: number) {
-      const [row] = await db
-        .insert(login_attempts)
-        .values({ id: "admin", attempts: 1, expires: now + 60000 })
-        .onConflictDoUpdate({
-          target: login_attempts.id,
-          set: {
-            attempts: sql`case when ${login_attempts.expires} <= ${now} then 1 else ${login_attempts.attempts} + 1 end`,
-            expires: sql`case when ${login_attempts.expires} <= ${now} then excluded.expires else ${login_attempts.expires} end`,
-          },
-        })
-        .returning({ attempts: login_attempts.attempts });
-      if (!row) {
-        throw new Error("LOGIN_ATTEMPT_NOT_SAVED");
-      }
-      return row.attempts <= 10;
-    },
-    async revokeSession(id: string) {
-      await db
-        .delete(portal_sessions)
-        .where(eq(portal_sessions.id, await hash(id)));
+    async session(id: string, now: number) {
+      return (
+        (await db
+          .select({
+            auth_version: portal_sessions.auth_version,
+            csrf: portal_sessions.csrf,
+            expires: portal_sessions.expires,
+          })
+          .from(portal_sessions)
+          .where(
+            and(
+              eq(portal_sessions.id, await hash(id)),
+              gt(portal_sessions.expires, now),
+            ),
+          )
+          .get()) ?? null
+      );
     },
   };
 }

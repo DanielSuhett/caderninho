@@ -25,25 +25,47 @@ function controllerFixture({
 } = {}) {
   return createAccountController({
     api: {
-      read: async () => accountSnapshot(),
+      connectItem() {
+        return Promise.resolve();
+      },
       connectToken: async () => accountConnectToken(),
-      async connectItem() {},
-      async pauseSync() {},
-      async resumeSync() {},
-      async requestSync() {},
-      async disconnectAssistants() {},
-      async logout() {},
+      disconnectAssistants() {
+        return Promise.resolve();
+      },
+      logout() {
+        return Promise.resolve();
+      },
+      pauseSync() {
+        return Promise.resolve();
+      },
+      read: async () => accountSnapshot(),
+      requestSync() {
+        return Promise.resolve();
+      },
+      resumeSync() {
+        return Promise.resolve();
+      },
       ...api,
     },
-    widget: { async open() {}, async destroy() {}, ...widget },
     browser: {
+      captureFocus: () => () => undefined,
+      copy() {
+        return Promise.resolve();
+      },
+      login: () => undefined,
+      selectStep: () => undefined,
       step: () => undefined,
-      selectStep() {},
       visible: () => true,
-      captureFocus: () => () => {},
-      async copy() {},
-      login() {},
       ...browser,
+    },
+    widget: {
+      destroy() {
+        return Promise.resolve();
+      },
+      open() {
+        return Promise.resolve();
+      },
+      ...widget,
     },
   });
 }
@@ -60,13 +82,13 @@ await test("account reads deduplicate and ignore responses from a disposed lifet
       },
     },
   });
-  const stop = controller.start(() => {});
+  const stop = controller.start(() => undefined);
   const first = controller.actions.refresh();
   const repeated = controller.actions.refresh();
   assert.equal(signals.length, 1);
   stop();
   assert.equal(required(signals[0]).aborted, true);
-  const dispose = controller.start(() => {});
+  const dispose = controller.start(() => undefined);
   const second = controller.actions.refresh();
   const snapshot = { ...accountSnapshot(), csrf: "current-csrf" };
   latest.resolve(snapshot);
@@ -87,17 +109,19 @@ await test("account commands serialize, use the confirmed CSRF and retain the sn
     api: {
       pauseSync(context) {
         assert.equal(context.csrf, "synthetic-csrf");
-        commands++;
+        commands += 1;
         return pending.promise;
       },
-      async resumeSync() {
-        commands++;
+      resumeSync() {
+        commands += 1;
+
+        return Promise.resolve();
       },
     },
   });
-  const dispose = controller.start(() => {});
+  const dispose = controller.start(() => undefined);
   await controller.actions.refresh();
-  const snapshot = controller.getSnapshot().snapshot;
+  const { snapshot } = controller.getSnapshot();
   assert.equal(pollingDelay(controller.getSnapshot()), 5000);
   const paused = controller.actions.pauseSync();
   await controller.actions.resumeSync();
@@ -118,29 +142,29 @@ await test("account commands serialize, use the confirmed CSRF and retain the sn
 await test("the client follows backend navigation and polling decisions and preserves visual selection on refresh", async () => {
   const snapshot = accountSnapshot();
   snapshot.panel.initialStep = 1;
-  snapshot.panel.polling = { intervalMs: 12000, retryIntervalMs: 45000 };
+  snapshot.panel.polling = { intervalMs: 12_000, retryIntervalMs: 45_000 };
   snapshot.status.sync = "completed";
   let reads = 0;
   const controller = controllerFixture({
     api: {
-      async read() {
-        reads++;
+      read() {
+        reads += 1;
         if (reads > 2) {
-          throw new Error("Synthetic transient failure");
+          return Promise.reject(new Error("Synthetic transient failure"));
         }
-        return snapshot;
+        return Promise.resolve(snapshot);
       },
     },
   });
-  const dispose = controller.start(() => {});
+  const dispose = controller.start(() => undefined);
   await controller.actions.refresh();
   assert.equal(controller.getSnapshot().step, 1);
-  assert.equal(pollingDelay(controller.getSnapshot()), 12000);
+  assert.equal(pollingDelay(controller.getSnapshot()), 12_000);
   controller.actions.selectStep(2);
   await controller.actions.refresh();
   assert.equal(controller.getSnapshot().step, 2);
   await controller.actions.refresh();
-  assert.equal(pollingDelay(controller.getSnapshot()), 45000);
+  assert.equal(pollingDelay(controller.getSnapshot()), 45_000);
   assert.equal(controller.getSnapshot().snapshot, snapshot);
   dispose();
 });
@@ -152,22 +176,26 @@ await test("connect persists the returned Item before refreshing and ignores old
   let restored = 0;
   const controller = controllerFixture({
     api: {
-      async connectItem(context, itemId) {
+      connectItem(context, itemId) {
         assert.equal(context.csrf, "synthetic-csrf");
         saved.push(itemId);
-      },
-    },
-    widget: {
-      async open(options) {
-        events.push(options);
+
+        return Promise.resolve();
       },
     },
     browser: {
+      captureFocus: () => () => {
+        restored += 1;
+      },
       selectStep(step) {
         steps.push(step);
       },
-      captureFocus: () => () => {
-        restored++;
+    },
+    widget: {
+      open(options) {
+        events.push(options);
+
+        return Promise.resolve();
       },
     },
   });
@@ -187,7 +215,7 @@ await test("connect persists the returned Item before refreshing and ignores old
   assert.deepEqual(steps, [1]);
   assert.equal(restored, 1);
   dispose();
-  const stop = controller.start(() => {});
+  const stop = controller.start(() => undefined);
   await controller.actions.refresh();
   const confirmed = controller.getSnapshot();
   widget.onSuccess("obsolete-item");
@@ -205,17 +233,22 @@ await test("a disposed command cannot unlock a command in the next account lifet
   let commands = 0;
   const controller = controllerFixture({
     api: {
-      pauseSync: () => (++commands === 1 ? old.promise : latest.promise),
-      async resumeSync() {
-        commands++;
+      pauseSync: () => {
+        commands += 1;
+        return commands === 1 ? old.promise : latest.promise;
+      },
+      resumeSync() {
+        commands += 1;
+
+        return Promise.resolve();
       },
     },
   });
-  const dispose = controller.start(() => {});
+  const dispose = controller.start(() => undefined);
   await controller.actions.refresh();
   const first = controller.actions.pauseSync();
   dispose();
-  const stop = controller.start(() => {});
+  const stop = controller.start(() => undefined);
   await controller.actions.refresh();
   const second = controller.actions.pauseSync();
   old.resolve();
@@ -236,29 +269,31 @@ await test("disposing pending token, maintenance and logout work prevents later 
     let reads = 0;
     const controller = controllerFixture({
       api: {
-        async read() {
-          reads++;
-          return accountSnapshot();
-        },
         async connectToken() {
           await pending.promise;
           return accountConnectToken();
         },
-        pauseSync: () => pending.promise,
         logout: () => pending.promise,
-      },
-      widget: {
-        async open() {
-          effects++;
+        pauseSync: () => pending.promise,
+        read() {
+          reads += 1;
+          return Promise.resolve(accountSnapshot());
         },
       },
       browser: {
         login() {
-          effects++;
+          effects += 1;
+        },
+      },
+      widget: {
+        open() {
+          effects += 1;
+
+          return Promise.resolve();
         },
       },
     });
-    const dispose = controller.start(() => {});
+    const dispose = controller.start(() => undefined);
     await controller.actions.refresh();
     const work = controller.actions[command]();
     dispose();

@@ -26,18 +26,18 @@ export async function task(env: Bindings, id: string): Promise<Task> {
 
 function taskResult(state: OperationState): Task {
   const base = {
-    taskId: state.id,
     createdAt: state.createdAt,
     lastUpdatedAt: state.updatedAt,
-    statusMessage: state.summary,
-    ttlMs: null,
     pollIntervalMs: 5000,
+    statusMessage: state.summary,
+    taskId: state.id,
+    ttlMs: null,
   };
   if (state.status === OperationStatus.completed) {
-    return { ...base, status: state.status, result: state.result ?? {} };
+    return { ...base, result: state.result ?? {}, status: state.status };
   }
   if (state.status === OperationStatus.failed) {
-    return { ...base, status: state.status, error: state.error ?? {} };
+    return { ...base, error: state.error ?? {}, status: state.status };
   }
   return { ...base, status: state.status };
 }
@@ -108,7 +108,7 @@ export async function listen(
   validateTaskWire("TaskSubscriptionAcknowledgedNotifications", {
     taskIds: ids,
   });
-  let release: () => void = () => {};
+  let release: () => void = () => undefined;
   const lifetime = new Promise<void>((resolve) => {
     release = resolve;
   });
@@ -117,7 +117,7 @@ export async function listen(
     clientClosed = false;
   // Read live cancellation state after awaits; callbacks may change it meanwhile.
   const isClientClosed = () => clientClosed;
-  const expires = setTimeout(() => dispose(), 300000);
+  const expires = setTimeout(() => dispose(), 300_000);
   function dispose() {
     if (disposed) {
       return;
@@ -179,6 +179,10 @@ export async function listen(
   }
   const stream = new ReadableStream<Uint8Array>(
     {
+      cancel() {
+        clientClosed = true;
+        dispose();
+      },
       async pull(controller) {
         const { data: _data, error } = await tryCatch(async () => {
           if (isClientClosed()) {
@@ -195,8 +199,8 @@ export async function listen(
             }
             if (allTerminal) {
               queue.push({
-                jsonrpc: "2.0",
                 id,
+                jsonrpc: "2.0",
                 result: validateSubscriptionWire("SubscriptionsListenResult", {
                   resultType: "complete",
                 }),
@@ -214,12 +218,12 @@ export async function listen(
             new TextEncoder().encode(
               "event: message\ndata: " +
                 JSON.stringify({
-                  jsonrpc: "2.0",
-                  id,
                   error: {
-                    code: -32603,
+                    code: -32_603,
                     message: "SUBSCRIPTION_CLOSED_RECONNECT",
                   },
+                  id,
+                  jsonrpc: "2.0",
                 }) +
                 "\n\n",
             ),
@@ -227,17 +231,13 @@ export async function listen(
           controller.close();
         }
       },
-      cancel() {
-        clientClosed = true;
-        dispose();
-      },
     },
     { highWaterMark: 1 },
   );
   return new Response(stream, {
     headers: {
-      "Content-Type": "text/event-stream",
       "Cache-Control": "no-store",
+      "Content-Type": "text/event-stream",
       "X-Accel-Buffering": "no",
     },
   });

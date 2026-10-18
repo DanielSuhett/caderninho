@@ -9,32 +9,32 @@ export function accountConnectToken(): AccountConnectToken {
     accessToken: "synthetic-token",
     configuration: {
       connectorIds: [200],
-      selectedConnectorId: 200,
       includeSandbox: false,
+      selectedConnectorId: 200,
     },
   };
 }
 
 export function accountSnapshot(): AccountResponse {
   const status: WizardState = {
-    credentials: true,
     connected: true,
-    sync: "working",
+    coverage: { complete: 1, total: 2 },
+    credentials: true,
     paused: false,
-    coverage: { total: 2, complete: 1 },
+    sync: "working",
   };
   return {
-    origin: "https://caderninho.test",
-    csrf: "synthetic-csrf",
     checkedAt: "2026-10-17T12:00:00Z",
-    checks: { database: true, workflow: true, oauth: true, migrations: true },
+    checks: { database: true, migrations: true, oauth: true, workflow: true },
+    csrf: "synthetic-csrf",
     items: [],
     latest: null,
+    origin: "https://caderninho.test",
     panel: {
       initialStep: 2,
+      polling: { intervalMs: 5000, retryIntervalMs: 30_000 },
+      support: { connectorId: 200, diagnostic: { ...status, issue: null } },
       sync: "preparing",
-      polling: { intervalMs: 5000, retryIntervalMs: 30000 },
-      support: { diagnostic: { ...status, issue: null }, connectorId: 200 },
     },
     status,
   };

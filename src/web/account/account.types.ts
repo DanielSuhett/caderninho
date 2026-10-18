@@ -9,29 +9,29 @@ export type LoadState =
   | { kind: typeof LoadStatus.failed; session: boolean };
 
 export const LoadStatus = {
+  failed: "failed",
   loading: "loading",
   ready: "ready",
-  failed: "failed",
 } as const;
 
 export interface AccountState {
-  snapshot: AccountResponse | undefined;
-  load: LoadState;
-  step: number;
-  message: string;
   busy: boolean;
+  load: LoadState;
+  message: string;
+  snapshot: AccountResponse | undefined;
+  step: number;
 }
 
 export interface AccountActions {
-  refresh(): void;
-  selectStep(step: number): void;
-  connectItem(itemId?: string): void;
-  pauseSync(): void;
-  resumeSync(): void;
-  requestSync(): void;
-  disconnectAssistants(): void;
-  logout(): void;
-  copy(value: string): void;
+  connectItem: (itemId?: string) => void;
+  copy: (value: string) => void;
+  disconnectAssistants: () => void;
+  logout: () => void;
+  pauseSync: () => void;
+  refresh: () => void;
+  requestSync: () => void;
+  resumeSync: () => void;
+  selectStep: (step: number) => void;
 }
 
 export interface CommandContext {
@@ -40,36 +40,36 @@ export interface CommandContext {
 }
 
 export interface AccountApi {
-  read(signal: AbortSignal): Promise<AccountResponse>;
-  connectToken(
+  connectItem: (context: CommandContext, itemId: string) => Promise<void>;
+  connectToken: (
     context: CommandContext,
     itemId?: string,
-  ): Promise<AccountConnectToken>;
-  connectItem(context: CommandContext, itemId: string): Promise<void>;
-  pauseSync(context: CommandContext): Promise<void>;
-  resumeSync(context: CommandContext): Promise<void>;
-  requestSync(context: CommandContext): Promise<void>;
-  disconnectAssistants(context: CommandContext): Promise<void>;
-  logout(context: CommandContext): Promise<void>;
+  ) => Promise<AccountConnectToken>;
+  disconnectAssistants: (context: CommandContext) => Promise<void>;
+  logout: (context: CommandContext) => Promise<void>;
+  pauseSync: (context: CommandContext) => Promise<void>;
+  read: (signal: AbortSignal) => Promise<AccountResponse>;
+  requestSync: (context: CommandContext) => Promise<void>;
+  resumeSync: (context: CommandContext) => Promise<void>;
 }
 
 export interface ConnectRequest extends AccountConnectToken {
   itemId: string | undefined;
-  onSuccess(itemId: string): void;
-  onError(): void;
-  onClose(): void;
+  onClose: () => void;
+  onError: () => void;
+  onSuccess: (itemId: string) => void;
 }
 
 export interface ConnectWidget {
-  open(request: ConnectRequest): Promise<void>;
-  destroy(): Promise<void>;
+  destroy: () => Promise<void>;
+  open: (request: ConnectRequest) => Promise<void>;
 }
 
 export interface AccountBrowser {
-  step(): number | undefined;
-  selectStep(step: number): void;
-  visible(): boolean;
-  captureFocus(): () => void;
-  copy(value: string): Promise<void>;
-  login(): void;
+  captureFocus: () => () => void;
+  copy: (value: string) => Promise<void>;
+  login: () => void;
+  selectStep: (step: number) => void;
+  step: () => number | undefined;
+  visible: () => boolean;
 }

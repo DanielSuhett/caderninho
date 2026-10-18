@@ -11,7 +11,7 @@ import type { Bindings } from "@/worker/bindings";
 import { synchronizationDependencies, syncService } from "@/worker/composition";
 import { database } from "@/worker/database";
 import { fetchMcp } from "@/worker/mcp/controller";
-import * as tables from "@/worker/schema";
+import { inbox as inboxTable, items as itemsTable } from "@/worker/schema";
 import { type FinancialSource, runOperation } from "@/worker/sync";
 
 import {
@@ -27,7 +27,7 @@ const fixtureRows = sqliteTable("fixture", {
 const item = "11111111-1111-4111-8111-111111111111",
   account = "22222222-2222-4222-8222-222222222222";
 class Fixture implements FinancialSource {
-  private db: D1Database;
+  private readonly db: D1Database;
   constructor(env: Bindings) {
     this.db = env.DB;
   }
@@ -38,27 +38,27 @@ class Fixture implements FinancialSource {
   }: Parameters<FinancialSource["page"]>[0]) {
     if (resource === "connections") {
       return {
-        records: [{ id: item, connector: { id: 200, isOpenFinance: false } }],
         next: null,
+        records: [{ connector: { id: 200, isOpenFinance: false }, id: item }],
       };
     }
     if (resource === "accounts") {
       return {
+        next: null,
         records: [
           {
+            balance: "100",
+            currencyCode: "BRL",
             id: account,
             itemId: item,
-            type: "BANK",
             name: "Synthetic",
-            currencyCode: "BRL",
-            balance: "100",
+            type: "BANK",
           },
         ],
-        next: null,
       };
     }
     if (resource !== "transactions") {
-      return { records: [], next: null };
+      return { next: null, records: [] };
     }
     const result = await database(this.db)
       .select()
@@ -68,8 +68,8 @@ class Fixture implements FinancialSource {
     if (!result) {
       throw new Error("FIXTURE_MISSING");
     }
-    const record = result.payload;
-    return { records: [record], next: !cursor && !floor ? "second" : null };
+    const { payload: record } = result;
+    return { next: cursor || floor ? null : "second", records: [record] };
   }
   async ids(_account: string, ids: string[]) {
     const result = await database(this.db).select().from(fixtureRows);
@@ -83,15 +83,15 @@ export class TestWorkflow extends WorkflowEntrypoint<
   { operationId: string }
 > {
   async run(event: WorkflowEvent<{ operationId: string }>, step: WorkflowStep) {
-    return runOperation(
+    return await runOperation(
       {
         ...synchronizationDependencies(this.env),
-        source: async () => new Fixture(this.env),
+        source: () => Promise.resolve(new Fixture(this.env)),
       },
       event.payload.operationId,
       {
         do: (name, fn) =>
-          step.do(name, { retries: { limit: 1, delay: "1 second" } }, fn),
+          step.do(name, { retries: { delay: "1 second", limit: 1 } }, fn),
         sleep: (name) => step.sleep(name, "3 seconds"),
       },
     );
@@ -99,7 +99,7 @@ export class TestWorkflow extends WorkflowEntrypoint<
 }
 const worker = {
   async fetch(req: Request, env: Bindings, ctx: ExecutionContext) {
-    const path = new URL(req.url).pathname;
+    const { pathname: path } = new URL(req.url);
     if (path === "/auth-probe") {
       return authenticatedFetch(
         new Request("https://synthetic.example.com/mcp", req),
@@ -116,7 +116,7 @@ const worker = {
         "CREATE TRIGGER IF NOT EXISTS fixture_fail BEFORE INSERT ON inbox WHEN NEW.event_id='synthetic-force-failure' BEGIN SELECT RAISE(ABORT,'synthetic storage failure'); END;",
       );
       await database(env.DB)
-        .insert(tables.items)
+        .insert(itemsTable)
         .values({
           id: item,
         })
@@ -131,20 +131,20 @@ const worker = {
           .values({
             id: key,
             payload: {
-              id,
               accountId: account,
-              type: "DEBIT",
               amount: "-9007199254740993.01",
+              createdAt: "2026-10-01T00:00:00.000Z",
               currencyCode: "BRL",
               date: "2026-01-01T00:00:00.000Z",
-              status: "POSTED",
               description: "Synthetic",
-              createdAt: "2026-10-01T00:00:00.000Z",
+              id,
+              status: "POSTED",
+              type: "DEBIT",
             },
           })
           .onConflictDoUpdate({
-            target: fixtureRows.id,
             set: { payload: sql`excluded.payload` },
+            target: fixtureRows.id,
           })
           .run();
       }
@@ -165,16 +165,16 @@ const worker = {
       const eventId = new URL(req.url).searchParams.get("id") ?? "";
       const receipt = await database(env.DB)
         .select({
-          processed_at: tables.inbox.processed_at,
-          operation_id: tables.inbox.operation_id,
+          operation_id: inboxTable.operation_id,
+          processed_at: inboxTable.processed_at,
         })
-        .from(tables.inbox)
-        .where(eq(tables.inbox.event_id, eventId))
+        .from(inboxTable)
+        .where(eq(inboxTable.event_id, eventId))
         .get();
       return Response.json({
-        receipts: receipt ? 1 : 0,
-        processed: Boolean(receipt?.processed_at),
         operations: receipt?.operation_id ? 1 : 0,
+        processed: Boolean(receipt?.processed_at),
+        receipts: receipt ? 1 : 0,
       });
     }
     if (path === "/webhook") {

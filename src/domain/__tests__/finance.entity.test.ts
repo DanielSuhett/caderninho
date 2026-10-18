@@ -9,9 +9,12 @@ import {
   recordChange,
 } from "../finance.entity";
 
+const sourceIdMismatchPattern = /SOURCE_ID_MISMATCH/;
+const ignoredFlagErrorPattern = /ignored requires 0 or 1/;
+
 await test("unchanged data is observed without classification; resurrection and explicit renormalization remain changes", () => {
   const input = { digest: "synthetic-hash", renormalize: false };
-  const previous = { relevantHash: input.digest, deleted: false };
+  const previous = { deleted: false, relevantHash: input.digest };
   assert.equal(entityChange({ ...input, previous: undefined }), "new");
   assert.equal(entityChange({ ...input, previous }), "unchanged");
   assert.equal(
@@ -23,38 +26,38 @@ await test("unchanged data is observed without classification; resurrection and 
     "changed",
   );
   assert.equal(
-    entityChange({ ...input, previous, digest: "changed-hash" }),
+    entityChange({ ...input, digest: "changed-hash", previous }),
     "changed",
   );
   assert.doesNotThrow(() =>
     assertEntityIdentity({
-      source: { resourceId: "resource" },
       expectedId: "resource",
+      source: { resourceId: "resource" },
     }),
   );
   assert.throws(
     () =>
       assertEntityIdentity({
-        source: { id: "foreign", resourceId: "resource" },
         expectedId: "resource",
+        source: { id: "foreign", resourceId: "resource" },
       }),
-    /SOURCE_ID_MISMATCH/,
+    sourceIdMismatchPattern,
   );
 });
 
 await test("maturity is inclusive, retains zero money and never promotes future or pending records", () => {
   const legacyProjection = {
-    id: "synthetic-tx",
     accountingDate: "2026-10-18",
     amountMinor: "0",
     currencyCode: "BRL",
+    id: "synthetic-tx",
   };
   const input = {
-    resource: "transactions" as const,
-    raw: { id: legacyProjection.id },
-    parent: undefined,
-    referenceDay: "2026-10-18",
     legacyProjection,
+    parent: undefined,
+    raw: { id: legacyProjection.id },
+    referenceDay: "2026-10-18",
+    resource: "transactions" as const,
   };
   assert.equal(projectEntity(input).eligible, true);
   assert.equal(projectEntity(input).amountText, "0");
@@ -80,10 +83,10 @@ await test("maturity is inclusive, retains zero money and never promotes future 
 
 await test("local correction requires an explicit tag key and exact ignored flags, while null restores inheritance", () => {
   const reference = {
-    itemId: "synthetic-item",
-    resource: "transactions",
-    parentId: "account",
     id: "transaction",
+    itemId: "synthetic-item",
+    parentId: "account",
+    resource: "transactions",
   } satisfies Omit<CorrectionInput, "field" | "value">;
 
   assert.throws(() =>
@@ -91,7 +94,7 @@ await test("local correction requires an explicit tag key and exact ignored flag
   );
   assert.throws(
     () => recordChange({ ...reference, field: "ignored", value: "true" }),
-    /ignored requires 0 or 1/,
+    ignoredFlagErrorPattern,
   );
   assert.deepEqual(
     recordChange({ ...reference, field: "ignored", value: "1" }),

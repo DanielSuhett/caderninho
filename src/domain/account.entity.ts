@@ -1,42 +1,42 @@
 import { OperationPhase, OperationStatus } from "./operation.entity";
 
 export const WizardIssue = {
-  credentials: "credentials",
-  rate: "rate",
-  unavailable: "unavailable",
-  item: "item",
   connector: "connector",
+  credentials: "credentials",
+  item: "item",
+  rate: "rate",
   session: "session",
+  unavailable: "unavailable",
   unknown: "unknown",
 } as const;
 
 export type WizardIssue = (typeof WizardIssue)[keyof typeof WizardIssue];
 
 export const WizardSyncState = {
-  waiting: "waiting",
-  working: "working",
+  cancelled: "cancelled",
   completed: "completed",
   error: "error",
-  cancelled: "cancelled",
+  waiting: "waiting",
+  working: "working",
 } as const;
 export type WizardSyncState =
   (typeof WizardSyncState)[keyof typeof WizardSyncState];
 
 export interface WizardState {
-  credentials: boolean;
   connected: boolean;
-  sync: WizardSyncState;
   coverage: { total: number; complete: number };
+  credentials: boolean;
   paused: boolean;
+  sync: WizardSyncState;
 }
 
 export const AccountSyncOutcome = {
-  preparing: "preparing",
-  failed: "failed",
   cancelled: "cancelled",
-  paused: "paused",
-  partial: "partial",
   complete: "complete",
+  failed: "failed",
+  partial: "partial",
+  paused: "paused",
+  preparing: "preparing",
 } as const;
 export type AccountSyncOutcome =
   (typeof AccountSyncOutcome)[keyof typeof AccountSyncOutcome];
@@ -44,9 +44,9 @@ export type AccountSyncOutcome =
 export interface AccountEvidence {
   configured: boolean;
   connected: boolean;
-  syncEnabled: boolean;
-  latest: { phase: OperationPhase; status: OperationStatus } | null;
   coverage: { total: number; complete: number | null };
+  latest: { phase: OperationPhase; status: OperationStatus } | null;
+  syncEnabled: boolean;
 }
 
 export function accountState({
@@ -56,21 +56,17 @@ export function accountState({
   latest,
   coverage,
 }: AccountEvidence): WizardState {
-  let sync: WizardState["sync"] = WizardSyncState.waiting;
-  if (
+  const sync =
     latest?.phase === OperationPhase.error ||
     latest?.status === OperationStatus.failed
-  ) {
-    sync = WizardSyncState.error;
-  } else if (latest) {
-    sync = latest.status;
-  }
+      ? WizardSyncState.error
+      : (latest?.status ?? WizardSyncState.waiting);
   return {
-    credentials: configured,
     connected,
-    sync,
-    coverage: { total: coverage.total, complete: coverage.complete ?? 0 },
+    coverage: { complete: coverage.complete ?? 0, total: coverage.total },
+    credentials: configured,
     paused: !syncEnabled && connected,
+    sync,
   };
 }
 

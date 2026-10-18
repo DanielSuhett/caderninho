@@ -6,12 +6,15 @@ import {
   assertPersonalConnector,
 } from "../connection.entity";
 
+const meuPluggyRequiredPattern = /MEU_PLUGGY_REQUIRED/;
+const itemLimitPattern = /ITEM_LIMIT/;
+
 await test("personal connector policy permits reconnection at capacity", () => {
   for (const id of [200, "200"]) {
     assert.doesNotThrow(() => assertPersonalConnector(id));
   }
   for (const id of [undefined, 201, "0200"]) {
-    assert.throws(() => assertPersonalConnector(id), /MEU_PLUGGY_REQUIRED/);
+    assert.throws(() => assertPersonalConnector(id), meuPluggyRequiredPattern);
   }
   assert.doesNotThrow(() =>
     assertConnectionCapacity({ count: 9, exists: false }),
@@ -21,6 +24,6 @@ await test("personal connector policy permits reconnection at capacity", () => {
   );
   assert.throws(
     () => assertConnectionCapacity({ count: 10, exists: false }),
-    /ITEM_LIMIT/,
+    itemLimitPattern,
   );
 });

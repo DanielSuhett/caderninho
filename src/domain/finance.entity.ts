@@ -22,72 +22,72 @@ export type Provenance = {
 };
 
 export type PrecisionWarning = {
-  field: string;
   code: string;
+  field: string;
 };
 
 export interface FinanceRecord {
-  [field: string]: JsonValue | undefined;
-  id: string;
+  absoluteAmountMinor?: OptionalText;
   accountId?: OptionalText;
-  accountName?: OptionalText;
-  investmentId?: OptionalText;
-  accountType?: OptionalText;
-  ownerDocument?: OptionalText;
-  date?: OptionalText;
   accountingDate?: OptionalText;
-  timestampLocalDate?: OptionalText;
-  updatedAt?: OptionalText;
-  dueDate?: OptionalText;
-  currencyCode?: OptionalText;
-  totalAmountCurrencyCode?: OptionalText;
-  type?: OptionalText;
-  subtype?: OptionalText;
-  status?: OptionalText;
-  name?: OptionalText;
-  description?: OptionalText;
-  parentDescription?: OptionalText;
-  category?: OptionalText;
-  categoryId?: OptionalText;
-  billId?: OptionalText;
-  paymentMethod?: OptionalText;
-  operationType?: OptionalText;
-  counterparty?: OptionalText;
+  accountName?: OptionalText;
+  accountType?: OptionalText;
   amount?: MoneyInput;
   amountMinor?: OptionalText;
   balanceMinor?: OptionalText;
-  totalAmountMinor?: OptionalText;
-  contractAmountMinor?: OptionalText;
-  absoluteAmountMinor?: OptionalText;
-  signedFlowMinor?: OptionalText;
-  knownConsumptionMinor?: OptionalText;
-  unclassifiedDebitMinor?: OptionalText;
+  billId?: OptionalText;
+  category?: OptionalText;
+  categoryId?: OptionalText;
   classification?: Classification | undefined;
   classificationEvidence?: string[] | undefined;
-  ownTransferEvidence?: boolean | undefined;
-  products?: string[] | null | undefined;
-  revokedAt?: OptionalText;
-  expiresAt?: OptionalText;
-  parentId?: OptionalText;
-  monthYear?: OptionalText;
-  "merchant.name"?: OptionalText;
+  contractAmountMinor?: OptionalText;
+  counterparty?: OptionalText;
   "creditCardMetadata.installmentNumber"?: OptionalScalar;
   "creditCardMetadata.totalInstallments"?: OptionalScalar;
-  provenance?: Record<string, Provenance> | undefined;
+  currencyCode?: OptionalText;
+  date?: OptionalText;
+  description?: OptionalText;
+  dueDate?: OptionalText;
+  expiresAt?: OptionalText;
+  id: string;
+  investmentId?: OptionalText;
+  knownConsumptionMinor?: OptionalText;
+  "merchant.name"?: OptionalText;
+  monthYear?: OptionalText;
+  name?: OptionalText;
+  operationType?: OptionalText;
+  ownerDocument?: OptionalText;
+  ownTransferEvidence?: boolean | undefined;
+  parentDescription?: OptionalText;
+  parentId?: OptionalText;
+  paymentMethod?: OptionalText;
   precisionWarnings?: PrecisionWarning[] | undefined;
+  products?: string[] | null | undefined;
+  provenance?: Record<string, Provenance> | undefined;
+  revokedAt?: OptionalText;
+  signedFlowMinor?: OptionalText;
+  status?: OptionalText;
+  subtype?: OptionalText;
+  timestampLocalDate?: OptionalText;
+  totalAmountCurrencyCode?: OptionalText;
+  totalAmountMinor?: OptionalText;
+  type?: OptionalText;
+  unclassifiedDebitMinor?: OptionalText;
+  updatedAt?: OptionalText;
+  [field: string]: JsonValue | undefined;
 }
 
 export interface ResourceDefinition {
-  product: string | null;
   defaults: string[];
   parent?: Resource;
+  product: string | null;
 }
 
 export interface MetricDefinition {
-  field?: string;
-  unit: string;
-  temporal: string;
   description: string;
+  field?: string;
+  temporal: string;
+  unit: string;
 }
 
 export const CorrectionField = {
@@ -100,10 +100,10 @@ export type CorrectionField =
   (typeof CorrectionField)[keyof typeof CorrectionField];
 
 export interface RecordReference {
-  itemId: string;
-  resource: Resource;
-  parentId: string;
   id: string;
+  itemId: string;
+  parentId: string;
+  resource: Resource;
 }
 
 export interface CorrectionInput extends RecordReference {
@@ -190,16 +190,16 @@ export function projectEntity({
     record.status !== TransactionStatus.PENDING;
 
   return {
-    record,
-    amountText,
-    date,
-    eligible,
-    currency: record.currencyCode ?? record.totalAmountCurrencyCode ?? null,
     accountType: record.accountType ?? record.type ?? null,
-    direction: record.type ?? null,
-    status: record.status ?? null,
+    amountText,
     category: record.category ?? null,
+    currency: record.currencyCode ?? record.totalAmountCurrencyCode ?? null,
+    date,
     description: record.description ?? null,
+    direction: record.type ?? null,
+    eligible,
+    record,
+    status: record.status ?? null,
   };
 }
 
@@ -221,16 +221,16 @@ export function entityFingerprint({
   const source = relevantSource(resource, raw, legacyProjection);
 
   return {
-    source,
     parent:
       resource === Resource.transactions
         ? {
             id: parent?.id,
-            type: parent?.type,
             name: parent?.name,
             ownerDocument: parent?.ownerDocument,
+            type: parent?.type,
           }
         : null,
+    source,
   };
 }
 
@@ -239,12 +239,8 @@ function relevantSource(
   raw: ProviderRecord,
   legacyProjection: FinanceRecord | undefined,
 ) {
-  const source: Record<string, unknown> = { ...raw };
-
   if (resource !== Resource.transactions) {
-    delete source.updatedAt;
-    delete source.createdAt;
-
+    const { updatedAt: _updatedAt, createdAt: _createdAt, ...source } = raw;
     return source;
   }
 

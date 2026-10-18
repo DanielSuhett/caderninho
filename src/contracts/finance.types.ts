@@ -3,41 +3,41 @@ import type { Catalog } from "@/domain/rules";
 import type { JsonValue } from "@/shared/json.types";
 
 export const RuleCommandAction = {
-  validate: "validate",
-  save: "save",
   activate: "activate",
   read: "read",
+  save: "save",
+  validate: "validate",
 } as const;
 export type RuleCommandAction =
   (typeof RuleCommandAction)[keyof typeof RuleCommandAction];
 
 export const RuleImportMode = {
+  activate: "activate",
   dry_run: "dry-run",
   save: "save",
-  activate: "activate",
 } as const;
 export type RuleImportMode =
   (typeof RuleImportMode)[keyof typeof RuleImportMode];
 
 export interface RuleCommand {
   action: RuleCommandAction;
+  catalog?: Catalog | undefined;
   document?: JsonValue | undefined;
   revision?: string | undefined;
-  catalog?: Catalog | undefined;
 }
 
 export interface PreviewInput {
   filter?: Filter | undefined;
   itemIds: string[];
-  revision: string;
   limit: number;
+  revision: string;
 }
 
 export interface SubscriptionInput {
-  from: string;
-  to: string;
   currency: string;
+  from: string;
   limit: number;
+  to: string;
 }
 
 export interface LiveBalanceInput {

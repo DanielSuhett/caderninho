@@ -3,15 +3,15 @@ export function DesignHead() {
   return (
     <>
       <link
-        rel="preload"
-        href="/hanken-grotesk.ttf"
         as="font"
-        type="font/ttf"
         crossOrigin="anonymous"
+        href="/hanken-grotesk.ttf"
+        rel="preload"
+        type="font/ttf"
       />
       <link
-        rel="stylesheet"
         href="/kumo.css"
+        rel="stylesheet"
       />
       <style>{`
     @font-face {

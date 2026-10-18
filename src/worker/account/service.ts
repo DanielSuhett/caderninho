@@ -16,11 +16,11 @@ import {
 } from "./entity";
 
 interface AccountDependencies {
+  disconnectAssistants: () => Promise<void>;
+  installation: () => Promise<InstallationChecks>;
+  now: () => Date;
   repository: AccountRepository;
   source: AccountSource;
-  disconnectAssistants(): Promise<void>;
-  installation(): Promise<InstallationChecks>;
-  now(): Date;
 }
 
 export function createAccountService(deps: AccountDependencies) {
@@ -29,30 +29,13 @@ export function createAccountService(deps: AccountDependencies) {
     const status = accountState({
       configured: deps.source.configured,
       connected: !!evidence.items.length,
-      syncEnabled: evidence.config.sync_enabled !== 0,
-      latest: evidence.latest,
       coverage: evidence.coverage,
+      latest: evidence.latest,
+      syncEnabled: evidence.config.sync_enabled !== 0,
     });
     return { evidence, status };
   }
   return {
-    async state() {
-      const [{ evidence, status }, checks] = await Promise.all([
-        readState(),
-        deps.installation(),
-      ]);
-      return {
-        status,
-        panel: accountPanel(status),
-        checks,
-        items: evidence.items,
-        latest: evidence.latest,
-        checkedAt: deps.now().toISOString(),
-      };
-    },
-    async wizardState() {
-      return (await readState()).status;
-    },
     async connectItem(itemId: string) {
       const application = await deps.source.application();
       const connections =
@@ -65,6 +48,27 @@ export function createAccountService(deps: AccountDependencies) {
         deps.now().toISOString(),
       );
     },
+    disconnectAssistants: () => deps.disconnectAssistants(),
+    pause: () => deps.repository.pause(),
+    requestSync: () => deps.repository.requestSync(deps.now()),
+    async resume() {
+      await deps.source.application();
+      await deps.repository.resume(deps.now().toISOString());
+    },
+    async state() {
+      const [{ evidence, status }, checks] = await Promise.all([
+        readState(),
+        deps.installation(),
+      ]);
+      return {
+        checkedAt: deps.now().toISOString(),
+        checks,
+        items: evidence.items,
+        latest: evidence.latest,
+        panel: accountPanel(status),
+        status,
+      };
+    },
     async token(itemId?: string): Promise<AccountConnectToken> {
       const application = await deps.source.application();
       const token = await application.token(itemId);
@@ -72,17 +76,13 @@ export function createAccountService(deps: AccountDependencies) {
         accessToken: token.accessToken,
         configuration: {
           connectorIds: [PERSONAL_CONNECTOR_ID],
-          selectedConnectorId: PERSONAL_CONNECTOR_ID,
           includeSandbox: false,
+          selectedConnectorId: PERSONAL_CONNECTOR_ID,
         },
       };
     },
-    pause: () => deps.repository.pause(),
-    async resume() {
-      await deps.source.application();
-      await deps.repository.resume(deps.now().toISOString());
+    async wizardState() {
+      return (await readState()).status;
     },
-    requestSync: () => deps.repository.requestSync(deps.now()),
-    disconnectAssistants: () => deps.disconnectAssistants(),
   };
 }

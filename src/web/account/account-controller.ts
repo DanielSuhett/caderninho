@@ -16,10 +16,10 @@ import { WIZARD_ISSUES } from "./account-presentation";
 import { createConnectWidget } from "./connect-widget";
 
 interface Session {
+  changed: (state: AccountState) => void;
+  inFlight: Promise<void> | undefined;
   lifetime: AbortController;
   request: AbortController | undefined;
-  inFlight: Promise<void> | undefined;
-  changed(state: AccountState): void;
 }
 
 // Owns the account interaction lifetime, not React rendering or HTTP parsing.
@@ -34,11 +34,11 @@ export function createAccountController({
   browser?: AccountBrowser;
 } = {}) {
   let state: AccountState = {
-    snapshot: undefined,
-    load: { kind: LoadStatus.loading },
-    step: browser.step() ?? 1,
-    message: "",
     busy: false,
+    load: { kind: LoadStatus.loading },
+    message: "",
+    snapshot: undefined,
+    step: browser.step() ?? 1,
   };
   let current: Session | undefined;
 
@@ -66,7 +66,7 @@ export function createAccountController({
     return { csrf: state.snapshot.csrf, signal: session.lifetime.signal };
   }
   function refresh(session = current, force = false): Promise<void> {
-    if (!active(session) || !browser.visible()) {
+    if (!(active(session) && browser.visible())) {
       return Promise.resolve();
     }
     if (session.inFlight && !force) {
@@ -94,15 +94,13 @@ export function createAccountController({
         });
         return;
       }
-      let step = state.step;
-      if (!state.snapshot) {
-        if (browser.step() === undefined) {
-          step = data.panel.initialStep;
-        }
+      let { step } = state;
+      if (!state.snapshot && browser.step() === undefined) {
+        step = data.panel.initialStep;
       }
       publish(session, {
-        snapshot: data,
         load: { kind: LoadStatus.ready },
+        snapshot: data,
         step,
       });
     };
@@ -142,8 +140,6 @@ export function createAccountController({
     });
   }
   const actions = {
-    refresh: () => refresh(),
-    selectStep: (step: number) => selectStep(current, step),
     connectItem(itemId?: string) {
       const restoreFocus = browser.captureFocus();
       return act(async (session) => {
@@ -154,6 +150,13 @@ export function createAccountController({
         await widget.open({
           ...token,
           itemId,
+          onClose() {
+            if (active(session)) {
+              restoreFocus();
+            }
+          },
+          onError: () =>
+            publish(session, { message: WIZARD_ISSUES.unavailable.title }),
           onSuccess(connectedId) {
             void act(async (connected) => {
               await api.connectItem(context(connected), connectedId);
@@ -165,19 +168,16 @@ export function createAccountController({
               selectStep(connected, 1);
             }, session);
           },
-          onError: () =>
-            publish(session, { message: WIZARD_ISSUES.unavailable.title }),
-          onClose() {
-            if (active(session)) {
-              restoreFocus();
-            }
-          },
         });
       });
     },
-    pauseSync: () => maintain(api.pauseSync),
-    resumeSync: () => maintain(api.resumeSync),
-    requestSync: () => maintain(api.requestSync),
+    copy: (value: string) =>
+      act(async (session) => {
+        await browser.copy(value);
+        publish(session, {
+          message: "Copiado. Cole no destino indicado nesta etapa.",
+        });
+      }),
     disconnectAssistants: () => maintain(api.disconnectAssistants),
     logout: () =>
       act(async (session) => {
@@ -186,13 +186,11 @@ export function createAccountController({
           browser.login();
         }
       }),
-    copy: (value: string) =>
-      act(async (session) => {
-        await browser.copy(value);
-        publish(session, {
-          message: "Copiado. Cole no destino indicado nesta etapa.",
-        });
-      }),
+    pauseSync: () => maintain(api.pauseSync),
+    refresh: () => refresh(),
+    requestSync: () => maintain(api.requestSync),
+    resumeSync: () => maintain(api.resumeSync),
+    selectStep: (step: number) => selectStep(current, step),
   } satisfies AccountActions;
 
   return {
@@ -200,10 +198,10 @@ export function createAccountController({
     getSnapshot: () => state,
     start(changed: (state: AccountState) => void) {
       const session: Session = {
+        changed,
+        inFlight: undefined,
         lifetime: new AbortController(),
         request: undefined,
-        inFlight: undefined,
-        changed,
       };
       current = session;
       publish(session, { busy: false });
@@ -232,11 +230,11 @@ function requestIssue(error: Error) {
 
 export function pollingDelay({ snapshot, load }: AccountState) {
   if (load.kind === LoadStatus.failed && load.session) {
-    return undefined;
+    return;
   }
   const polling = snapshot?.panel.polling;
   if (!polling) {
-    return undefined;
+    return;
   }
   return load.kind === LoadStatus.failed
     ? polling.retryIntervalMs

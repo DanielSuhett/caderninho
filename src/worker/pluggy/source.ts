@@ -24,17 +24,17 @@ const transportFaults = new Map<string, FaultCode>([
   ["ERR_BODY_PARSE_FAILURE", FaultCode.INVALID_RESPONSE],
 ]);
 const httpFaults: Record<HttpFailureKind, FaultCode> = {
-  unauthorized: FaultCode.UPSTREAM_AUTH,
   forbidden: FaultCode.UPSTREAM_FORBIDDEN,
-  not_found: FaultCode.UPSTREAM_NOT_FOUND,
-  rate_limit: FaultCode.UPSTREAM_RATE_LIMIT,
   invalid_request: FaultCode.UPSTREAM_INVALID_REQUEST,
-  server: FaultCode.UPSTREAM_ERROR,
-  redirect: FaultCode.UPSTREAM_REDIRECT,
-  timeout: FaultCode.UPSTREAM_TIMEOUT,
-  too_large: FaultCode.UPSTREAM_TOO_LARGE,
   invalid_response: FaultCode.INVALID_RESPONSE,
   network: FaultCode.UPSTREAM_UNAVAILABLE,
+  not_found: FaultCode.UPSTREAM_NOT_FOUND,
+  rate_limit: FaultCode.UPSTREAM_RATE_LIMIT,
+  redirect: FaultCode.UPSTREAM_REDIRECT,
+  server: FaultCode.UPSTREAM_ERROR,
+  timeout: FaultCode.UPSTREAM_TIMEOUT,
+  too_large: FaultCode.UPSTREAM_TOO_LARGE,
+  unauthorized: FaultCode.UPSTREAM_AUTH,
 };
 
 // Translate only transport metadata into public faults. Upstream bodies, URLs and credentials
@@ -49,12 +49,12 @@ async function sdkResult<T>(operation: () => Promise<T>): Promise<T> {
       code: z.string().optional(),
       response: z
         .object({
-          statusCode: z.number(),
           headers: z.object({
             "retry-after": z
               .union([z.string(), z.array(z.string())])
               .optional(),
           }),
+          statusCode: z.number(),
         })
         .optional(),
     })
@@ -70,7 +70,7 @@ async function sdkResult<T>(operation: () => Promise<T>): Promise<T> {
     transportFaults.get(upstream.code ?? "") ??
       httpFaults[failure?.kind ?? HttpFailureKind.network],
   );
-  if (failure?.retryAfterSeconds != null) {
+  if (failure?.retryAfterSeconds !== undefined) {
     fault.details = { retryAfterSeconds: failure.retryAfterSeconds };
   }
   throw fault;
@@ -79,7 +79,7 @@ async function sdkResult<T>(operation: () => Promise<T>): Promise<T> {
 export async function connectToken(credentials: Credentials, itemId?: string) {
   const { data, error } = await tryCatch(() =>
     sdkResult(() =>
-      new PersonalPluggyClient(credentials, 16384).createConnectToken(itemId, {
+      new PersonalPluggyClient(credentials, 16_384).createConnectToken(itemId, {
         avoidDuplicates: true,
       }),
     ),
@@ -98,21 +98,21 @@ export async function connectToken(credentials: Credentials, itemId?: string) {
         : "CONNECT_TOKEN_FAILED",
     );
   }
-  return z.object({ accessToken: z.string().min(1).max(12000) }).parse(data);
+  return z.object({ accessToken: z.string().min(1).max(12_000) }).parse(data);
 }
 
 export async function readItem(credentials: Credentials, itemId: string) {
   const item = z
     .object({
-      id: z.string(),
       connector: z.object({ id: z.union([z.number(), z.string()]) }).optional(),
+      id: z.string(),
     })
     .parse(
       await sdkResult(() =>
         new PersonalPluggyClient(credentials).fetchItem(itemId),
       ),
     );
-  assertSourceIdentity({ id: item.id, expected: itemId });
+  assertSourceIdentity({ expected: itemId, id: item.id });
   return {
     id: item.id,
     ...(item.connector && { connector: item.connector }),
@@ -123,16 +123,16 @@ export async function readAccount(client: PluggyClient, accountId: string) {
   const record = ProviderRecordSchema.parse(
     await sdkResult(() => client.fetchAccount(accountId)),
   );
-  assertSourceIdentity({ id: record.id, expected: accountId });
+  assertSourceIdentity({ expected: accountId, id: record.id });
   return record;
 }
 
 const PageSchema = z.object({
-  results: z.array(ProviderRecordSchema).max(1000),
   next: z.unknown().optional(),
   page: z.coerce.number().int().positive().default(1),
-  totalPages: z.coerce.number().int().nonnegative().optional(),
+  results: z.array(ProviderRecordSchema).max(1000),
   total: z.coerce.number().int().nonnegative().optional(),
+  totalPages: z.coerce.number().int().nonnegative().optional(),
 });
 const TransactionPageSchema = PageSchema.extend({
   results: z
@@ -150,30 +150,43 @@ const paged: Resource[] = [
 
 export function financialSource(client: PluggyClient): FinancialSource {
   return {
+    async ids(account, ids) {
+      if (!ids.length || ids.length > 500) {
+        throw new Error("IDS_LIMIT");
+      }
+      const data = PageSchema.parse(
+        await sdkResult(() => client.fetchTransactionsCursor(account, { ids })),
+      );
+      if (data.next !== null) {
+        throw new Error("IDS_RESPONSE_INCOMPLETE");
+      }
+      assertTransactionSelection({ account, ids, records: data.results });
+      return data.results;
+    },
     async page({ resource, item, parent, cursor, floor, connectorId }) {
       const options = { page: Number(cursor ?? 1), pageSize: 100 };
       const operations = {
+        accounts: () => client.fetchAccounts(item),
+        bills: () => client.fetchCreditCardBills(parent, options),
+        categories: () => client.fetchCategories(),
         connections: () => client.fetchItem(item),
-        resources: () => client.fetchItemResources(item, options),
         connectors: () =>
           client.fetchConnector(
             z.coerce.number().int().positive().parse(connectorId),
           ),
         consents: () => client.fetchConsents(item),
-        accounts: () => client.fetchAccounts(item),
+        identity: () => client.fetchIdentityByItemId(item),
+        investment_transactions: () =>
+          client.fetchInvestmentTransactions(parent, options),
+        investments: () => client.fetchInvestments(item, undefined, options),
+        loans: () => client.fetchLoans(item),
+        resources: () => client.fetchItemResources(item, options),
+        statements: () => client.fetchAccountStatements(parent),
         transactions: () =>
           client.fetchTransactionsCursor(parent, {
             ...(floor && { createdAtFrom: floor }),
             ...(cursor && { after: cursor }),
           }),
-        investments: () => client.fetchInvestments(item, undefined, options),
-        investment_transactions: () =>
-          client.fetchInvestmentTransactions(parent, options),
-        bills: () => client.fetchCreditCardBills(parent, options),
-        loans: () => client.fetchLoans(item),
-        identity: () => client.fetchIdentityByItemId(item),
-        categories: () => client.fetchCategories(),
-        statements: () => client.fetchAccountStatements(parent),
       };
       // SDK types describe its default date/number parser; our parser returns raw JSON.
       // Parse at this boundary instead of letting SDK models enter financial logic.
@@ -185,20 +198,20 @@ export function financialSource(client: PluggyClient): FinancialSource {
       ) {
         const record = ProviderRecordSchema.parse(raw);
         assertSourceRecords({
+          context: { connectorId, item, resource },
           records: [record],
-          context: { resource, item, connectorId },
         });
-        return { records: [record], next: null };
+        return { next: null, records: [record] };
       }
       const data = (
         resource === Resource.transactions ? TransactionPageSchema : PageSchema
       ).parse(raw);
-      const records = data.results;
-      assertSourceRecords({ records, context: { resource, item, parent } });
+      const { results: records } = data;
+      assertSourceRecords({ context: { item, parent, resource }, records });
       if (resource === Resource.transactions) {
         return {
-          records,
           next: validateCursor(data.next, parent, cursor, floor),
+          records,
         };
       }
       const { page, totalPages, total } = data;
@@ -211,27 +224,14 @@ export function financialSource(client: PluggyClient): FinancialSource {
       ) {
         throw new Error(FaultCode.INVALID_PAGE);
       }
-      if (page < totalPages && (!paged.includes(resource) || !records.length)) {
+      if (page < totalPages && !(paged.includes(resource) && records.length)) {
         throw new Error("PAGINATION_UNDOCUMENTED_OR_INCOMPLETE");
       }
       return {
-        records,
         next: page < totalPages ? String(page + 1) : null,
+        records,
         total,
       };
-    },
-    async ids(account, ids) {
-      if (!ids.length || ids.length > 500) {
-        throw new Error("IDS_LIMIT");
-      }
-      const data = PageSchema.parse(
-        await sdkResult(() => client.fetchTransactionsCursor(account, { ids })),
-      );
-      if (data.next !== null) {
-        throw new Error("IDS_RESPONSE_INCOMPLETE");
-      }
-      assertTransactionSelection({ records: data.results, account, ids });
-      return data.results;
     },
   };
 }
@@ -269,12 +269,11 @@ function validateCursor(
 // A 429 acknowledgement is a durable step result; wait outside the billed step.
 export function providerRetries(steps: Steps): Steps {
   return {
-    sleep: (name, duration) => steps.sleep(name, duration),
     async do<T extends StepValue<T>>(
       name: string,
       callback: () => Promise<T>,
     ): Promise<T> {
-      for (let attempt = 0; attempt < rateLimitRetry.attempts; attempt++) {
+      for (let attempt = 0; attempt < rateLimitRetry.attempts; attempt += 1) {
         const outcome = await steps.do(
           `${name}-attempt-${attempt}`,
           async () => {
@@ -292,7 +291,7 @@ export function providerRetries(steps: Steps): Steps {
               kind: "retry" as const,
               seconds: rateLimitRetry.delay({
                 attempt,
-                ...(error.details?.retryAfterSeconds != null && {
+                ...(error.details?.retryAfterSeconds !== undefined && {
                   retryAfterSeconds: error.details.retryAfterSeconds,
                 }),
               }),
@@ -309,5 +308,6 @@ export function providerRetries(steps: Steps): Steps {
       }
       throw new Error("UPSTREAM_RATE_LIMIT_RETRIES_EXHAUSTED");
     },
+    sleep: (name, duration) => steps.sleep(name, duration),
   };
 }

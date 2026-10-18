@@ -8,6 +8,7 @@ import {
   type Condition,
   compileValidatedRules,
   type LegacyRules,
+  type Rule,
   type RuleImportReport,
   RuleOperator,
   RulePhase,
@@ -15,22 +16,22 @@ import {
 import { ActionSchema, CatalogSchema, RulesSchema } from "./rule.schema";
 
 export const LegacyRulesSchema = CatalogSchema.extend({
-  version: z.literal(1),
   rules: z
     .array(
       z
         .object({
+          actions: z.array(ActionSchema).min(1).max(32),
           id: z.string().min(1).max(128),
+          is_active: z.boolean().default(true),
           name: z.string().max(2048),
           priority: z.number().int().safe(),
-          is_active: z.boolean().default(true),
           stage: z.enum(RulePhase),
           when: JsonValueSchema,
-          actions: z.array(ActionSchema).min(1).max(32),
         })
         .strict(),
     )
     .max(2000),
+  version: z.literal(1),
 }).strict() satisfies z.ZodType<LegacyRules>;
 
 class ConversionError extends Error {
@@ -88,7 +89,7 @@ export function convertPredicate(
   }
   const entries = Object.entries(v);
 
-  const entry = entries[0];
+  const [entry] = entries;
 
   if (entries.length !== 1 || !entry) {
     fail(path, "Expected one operator");
@@ -98,7 +99,7 @@ export function convertPredicate(
     args = Array.isArray(raw) ? raw : [raw];
 
   if (op === "and" || op === "or") {
-    return convertGroup(raw, { op, path, depth });
+    return convertGroup(raw, { depth, op, path });
   }
 
   if ((op === "!" || op === "!!") && args.length === 1) {
@@ -122,7 +123,7 @@ function convertGroup(
   raw: JsonValue | undefined,
   { op, path, depth }: { op: "and" | "or"; path: string; depth: number },
 ): Condition {
-  if (!Array.isArray(raw) || !raw.length) {
+  if (!(Array.isArray(raw) && raw.length)) {
     fail(path, "Empty JSONLogic group returns null");
   }
 
@@ -147,7 +148,7 @@ function convertEquality(
   const operand = left.success ? args[0] : args[1];
   const value = left.success ? args[1] : args[0];
 
-  if (!left.success && !right.success) {
+  if (!(left.success || right.success)) {
     fail(path, "Equality requires one explicit fact");
   }
 
@@ -186,11 +187,7 @@ function convertIf(
   branches.push({
     all: [
       ...previous,
-      convertPredicate(
-        args[args.length - 1],
-        `${path}.if.${args.length - 1}`,
-        depth + 1,
-      ),
+      convertPredicate(args.at(-1), `${path}.if.${args.length - 1}`, depth + 1),
     ],
   });
 
@@ -260,25 +257,25 @@ function convertFactPredicate(
 
 export function convertValidatedRules(document: LegacyRules): RuleImportReport {
   const issues: { path: string; code: string; message: string }[] = [];
-  const rules = [];
+  const rules: Rule[] = [];
 
   for (const [index, rule] of document.rules.entries()) {
     try {
       const condition = convertPredicate(rule.when, `rules.${index}.when`);
       rules.push({
+        conditions: "fact" in condition ? { all: [condition] } : condition,
+        event: { params: { actions: rule.actions }, type: rule.stage },
         id: rule.id,
+        is_active: rule.is_active,
         name: rule.name,
         priority: rule.priority,
-        is_active: rule.is_active,
-        conditions: "fact" in condition ? { all: [condition] } : condition,
-        event: { type: rule.stage, params: { actions: rule.actions } },
       });
     } catch (error) {
       issues.push({
-        path:
-          error instanceof ConversionError ? error.path : `rules.${index}.when`,
         code: "UNREPRESENTABLE_EXPRESSION",
         message: error instanceof Error ? error.message : "Invalid expression",
+        path:
+          error instanceof ConversionError ? error.path : `rules.${index}.when`,
       });
     }
   }
@@ -288,7 +285,7 @@ export function convertValidatedRules(document: LegacyRules): RuleImportReport {
   }
 
   try {
-    const converted = RulesSchema.parse({ ...document, version: 2, rules });
+    const converted = RulesSchema.parse({ ...document, rules, version: 2 });
     compileValidatedRules(converted);
 
     return { compatible: true, document: converted, issues };
@@ -298,10 +295,10 @@ export function convertValidatedRules(document: LegacyRules): RuleImportReport {
       document: null,
       issues: [
         {
-          path: "rules",
           code: "INVALID_CONVERSION",
           message:
             error instanceof Error ? error.message : "Invalid conversion",
+          path: "rules",
         },
       ],
     };

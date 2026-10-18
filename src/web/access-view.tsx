@@ -21,37 +21,37 @@ export function accessPage({
       <p>
         Esta instalação está em <code>{origin}</code>.
       </p>
-      {error && (
+      {!!error && (
         <p
-          role="alert"
           className="notice"
+          role="alert"
         >
           {error}
         </p>
       )}
       {configured ? (
         <form
-          method="post"
           action="/account/login"
+          method="post"
         >
           <input
-            type="hidden"
             name="csrf"
+            type="hidden"
             value={csrf}
           />
           <input
-            type="hidden"
             name="returnTo"
+            type="hidden"
             value={target}
           />
           <UiField
-            label="Sua senha"
-            name="password"
-            type="password"
             autoComplete="current-password"
-            required
-            minLength={16}
+            label="Sua senha"
             maxLength={256}
+            minLength={16}
+            name="password"
+            required
+            type="password"
           />
           <UiButton>Entrar</UiButton>
         </form>

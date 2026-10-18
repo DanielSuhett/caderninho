@@ -5,7 +5,6 @@ import { Document } from "./document";
 export function Portal({ children }: { children: ReactNode }) {
   return (
     <Document
-      title="Caderninho · instalação MCP pessoal"
       head={
         <style>{`
           pre {
@@ -203,6 +202,7 @@ export function Portal({ children }: { children: ReactNode }) {
           }
         `}</style>
       }
+      title="Caderninho · instalação MCP pessoal"
     >
       <main>
         <nav aria-label="Navegação principal">
@@ -228,13 +228,13 @@ export function accountPage() {
         Ative JavaScript para usar o painel. O acesso MCP continua disponível.
       </noscript>
       <link
-        rel="stylesheet"
         href="/account.css"
+        rel="stylesheet"
       />
       <script
-        type="module"
         src="/account.js"
-      ></script>
+        type="module"
+      />
     </Portal>
   );
 }

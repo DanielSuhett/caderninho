@@ -19,10 +19,23 @@ import {
   transactionCreationFloor,
 } from "../operation.entity";
 
+const syncFilterNotSupportedUseItemScopePattern =
+  /SYNC_FILTER_NOT_SUPPORTED_USE_ITEM_SCOPE/;
+const renormalizeRequiresReconciliationPattern =
+  /RENORMALIZE_REQUIRES_RECONCILIATION/;
+const idempotencyConflictPattern = /IDEMPOTENCY_CONFLICT/;
+const missingCreationFloorPattern = /MISSING_CREATION_FLOOR/;
+const missingTransactionIdsPattern = /MISSING_TRANSACTION_IDS/;
+const creationCheckpointMissingReconcileRequiredPattern =
+  /CREATION_CHECKPOINT_MISSING_RECONCILE_REQUIRED/;
+const sourceTotalChangedReconcileRequiredPattern =
+  /SOURCE_TOTAL_CHANGED_RECONCILE_REQUIRED/;
+const sourcePageCountIncompletePattern = /SOURCE_PAGE_COUNT_INCOMPLETE/;
+
 await test("operation policy restricts filters and renormalization independently of the caller", () => {
   const scope = {
-    itemIds: ["synthetic-item"],
     filter: { tag: "budget", value: "house" },
+    itemIds: ["synthetic-item"],
   };
   assert.doesNotThrow(() =>
     assertOperationInput({ ...scope, kind: "reapply" }),
@@ -30,24 +43,24 @@ await test("operation policy restricts filters and renormalization independently
   for (const kind of ["sync", "reconcile"] as const) {
     assert.throws(
       () => assertOperationInput({ ...scope, kind }),
-      /SYNC_FILTER_NOT_SUPPORTED_USE_ITEM_SCOPE/,
+      syncFilterNotSupportedUseItemScopePattern,
     );
   }
   assert.doesNotThrow(() =>
     assertOperationInput({
-      kind: "reconcile",
       itemIds: scope.itemIds,
+      kind: "reconcile",
       renormalize: true,
     }),
   );
   assert.throws(
     () =>
       assertOperationInput({
-        kind: "reapply",
         itemIds: scope.itemIds,
+        kind: "reapply",
         renormalize: true,
       }),
-    /RENORMALIZE_REQUIRES_RECONCILIATION/,
+    renormalizeRequiresReconciliationPattern,
   );
   for (const kind of [
     "sync",
@@ -55,15 +68,15 @@ await test("operation policy restricts filters and renormalization independently
     "reapply",
   ] satisfies OperationKind[]) {
     assert.doesNotThrow(() =>
-      assertOperationInput({ kind, itemIds: scope.itemIds }),
+      assertOperationInput({ itemIds: scope.itemIds, kind }),
     );
   }
   assert.doesNotThrow(() =>
-    assertIdempotency({ expected: "same", actual: "same" }),
+    assertIdempotency({ actual: "same", expected: "same" }),
   );
   assert.throws(
-    () => assertIdempotency({ expected: "committed", actual: "changed" }),
-    /IDEMPOTENCY_CONFLICT/,
+    () => assertIdempotency({ actual: "changed", expected: "committed" }),
+    idempotencyConflictPattern,
   );
 });
 
@@ -81,9 +94,9 @@ await test("migration conflicts require an explicit policy and never skip identi
 
 await test("creation events require a watermark and update/delete events require transaction IDs", () => {
   const scope = {
+    accountId: "synthetic-account",
     eventId: "synthetic-event",
     itemId: "synthetic-item",
-    accountId: "synthetic-account",
   };
   assert.throws(
     () =>
@@ -92,7 +105,7 @@ await test("creation events require a watermark and update/delete events require
         event: "transactions/created",
         transactionIds: ["synthetic-tx"],
       }),
-    /MISSING_CREATION_FLOOR/,
+    missingCreationFloorPattern,
   );
   assert.doesNotThrow(() =>
     assertWebhookEvent({
@@ -107,7 +120,7 @@ await test("creation events require a watermark and update/delete events require
   ] as const) {
     assert.throws(
       () => assertWebhookEvent({ ...scope, event, transactionIds: [] }),
-      /MISSING_TRANSACTION_IDS/,
+      missingTransactionIdsPattern,
     );
     assert.doesNotThrow(() =>
       assertWebhookEvent({ ...scope, event, transactionIds: ["synthetic-tx"] }),
@@ -137,12 +150,12 @@ await test("daily sync preserves a future reconciliation deadline and weekly rec
 
 await test("only bootstrapped incremental transactions use a creation floor and missing evidence requires reconciliation", () => {
   const input = {
-    resource: "transactions" as const,
-    kind: "sync" as const,
     coverage: {
       complete: true,
       confirmedCreatedAt: "2026-10-01T00:00:00.000Z",
     },
+    kind: "sync" as const,
+    resource: "transactions" as const,
   };
   assert.equal(
     transactionCreationFloor(input),
@@ -167,97 +180,97 @@ await test("only bootstrapped incremental transactions use a creation floor and 
         ...input,
         coverage: { complete: true, confirmedCreatedAt: null },
       }),
-    /CREATION_CHECKPOINT_MISSING_RECONCILE_REQUIRED/,
+    creationCheckpointMissingReconcileRequiredPattern,
   );
 });
 
 await test("missing flow records are deleted only after complete reconciliation; card bills require a credit parent", () => {
   for (const resource of ["transactions", "investment_transactions"] as const) {
     assert.equal(
-      deleteMissingAfterPage({ resource, kind: "sync", next: null }),
+      deleteMissingAfterPage({ kind: "sync", next: null, resource }),
       false,
     );
     assert.equal(
-      deleteMissingAfterPage({ resource, kind: "reconcile", next: "next" }),
+      deleteMissingAfterPage({ kind: "reconcile", next: "next", resource }),
       false,
     );
     assert.equal(
-      deleteMissingAfterPage({ resource, kind: "reconcile", next: null }),
+      deleteMissingAfterPage({ kind: "reconcile", next: null, resource }),
       true,
     );
   }
   assert.equal(
-    deleteMissingAfterPage({ resource: "accounts", kind: "sync", next: null }),
+    deleteMissingAfterPage({ kind: "sync", next: null, resource: "accounts" }),
     true,
   );
   assert.equal(
-    resourceParentAllowed({ resource: "bills", parentType: "BANK" }),
+    resourceParentAllowed({ parentType: "BANK", resource: "bills" }),
     false,
   );
   assert.equal(
-    resourceParentAllowed({ resource: "bills", parentType: "CREDIT" }),
+    resourceParentAllowed({ parentType: "CREDIT", resource: "bills" }),
     true,
   );
   assert.equal(
-    resourceParentAllowed({ resource: "statements", parentType: "BANK" }),
+    resourceParentAllowed({ parentType: "BANK", resource: "statements" }),
     true,
   );
 });
 
 await test("coverage and source totals distinguish missing evidence, zero records and incomplete pagination", () => {
   assert.equal(
-    pageCoverage({ next: "next", records: 0, previousPages: 0 }),
+    pageCoverage({ next: "next", previousPages: 0, records: 0 }),
     "partial",
   );
   assert.equal(
-    pageCoverage({ next: null, records: 0, previousPages: 0 }),
+    pageCoverage({ next: null, previousPages: 0, records: 0 }),
     "empty",
   );
   assert.equal(
-    pageCoverage({ next: null, records: 0, previousPages: 1 }),
+    pageCoverage({ next: null, previousPages: 1, records: 0 }),
     "available",
   );
   assert.equal(
-    pageCoverage({ next: null, records: 1, previousPages: 0 }),
+    pageCoverage({ next: null, previousPages: 0, records: 1 }),
     "available",
   );
   assert.equal(sourceFailureCoverage("UPSTREAM_FORBIDDEN"), "not_authorized");
   assert.equal(sourceFailureCoverage("UPSTREAM_NOT_FOUND"), "unavailable");
   assert.equal(sourceFailureCoverage("UPSTREAM_ERROR"), "partial");
-  assert.doesNotThrow(() => assertSourceTotal({ expected: null, actual: 0 }));
-  assert.doesNotThrow(() => assertSourceTotal({ expected: 0, actual: 0 }));
+  assert.doesNotThrow(() => assertSourceTotal({ actual: 0, expected: null }));
+  assert.doesNotThrow(() => assertSourceTotal({ actual: 0, expected: 0 }));
   assert.throws(
-    () => assertSourceTotal({ expected: 0, actual: undefined }),
-    /SOURCE_TOTAL_CHANGED_RECONCILE_REQUIRED/,
+    () => assertSourceTotal({ actual: undefined, expected: 0 }),
+    sourceTotalChangedReconcileRequiredPattern,
   );
   assert.doesNotThrow(() =>
-    assertCollectionComplete({ total: undefined, collected: 3, next: null }),
+    assertCollectionComplete({ collected: 3, next: null, total: undefined }),
   );
   assert.doesNotThrow(() =>
-    assertCollectionComplete({ total: 3, collected: 1, next: "next" }),
+    assertCollectionComplete({ collected: 1, next: "next", total: 3 }),
   );
   assert.throws(
-    () => assertCollectionComplete({ total: 3, collected: 1, next: null }),
-    /SOURCE_PAGE_COUNT_INCOMPLETE/,
+    () => assertCollectionComplete({ collected: 1, next: null, total: 3 }),
+    sourcePageCountIncompletePattern,
   );
   assert.doesNotThrow(() =>
-    assertCollectionComplete({ total: 0, collected: 0, next: null }),
+    assertCollectionComplete({ collected: 0, next: null, total: 0 }),
   );
 });
 
 await test("creation watermark normalizes timezone offsets and never moves backwards", () => {
   const maximum = "2026-10-18T12:00:00.000Z";
-  assert.equal(latestCreatedAt({ maximum, created: null }), maximum);
+  assert.equal(latestCreatedAt({ created: null, maximum }), maximum);
   assert.equal(
-    latestCreatedAt({ maximum, created: "2026-10-18T08:00:00-03:00" }),
+    latestCreatedAt({ created: "2026-10-18T08:00:00-03:00", maximum }),
     maximum,
   );
   assert.equal(
-    latestCreatedAt({ maximum, created: "2026-10-18T10:00:00-03:00" }),
+    latestCreatedAt({ created: "2026-10-18T10:00:00-03:00", maximum }),
     "2026-10-18T13:00:00.000Z",
   );
   assert.equal(
-    latestCreatedAt({ maximum: null, created: "2026-10-18T09:00:00-03:00" }),
+    latestCreatedAt({ created: "2026-10-18T09:00:00-03:00", maximum: null }),
     maximum,
   );
 });

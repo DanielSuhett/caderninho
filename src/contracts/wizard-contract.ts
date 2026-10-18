@@ -4,9 +4,9 @@ import { WizardIssue, type WizardState, WizardSyncState } from "./wizard.types";
 
 export const WizardIssueSchema = z.enum(WizardIssue);
 export const WizardStateSchema = z.object({
-  credentials: z.boolean(),
   connected: z.boolean(),
-  sync: z.enum(WizardSyncState),
-  coverage: z.object({ total: z.number(), complete: z.number() }),
+  coverage: z.object({ complete: z.number(), total: z.number() }),
+  credentials: z.boolean(),
   paused: z.boolean(),
+  sync: z.enum(WizardSyncState),
 }) satisfies z.ZodType<WizardState>;

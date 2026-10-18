@@ -10,20 +10,20 @@ await test("financial failure overrides transport completion and setup never equ
   const evidence = {
     configured: true,
     connected: true,
+    coverage: { complete: 1, total: 4 },
+    latest: { phase: "error", status: "completed" },
     syncEnabled: true,
-    coverage: { total: 4, complete: 1 },
-    latest: { status: "completed", phase: "error" },
   } satisfies Parameters<typeof accountState>[0];
   assert.equal(accountState(evidence).sync, "error");
   assert.deepEqual(accountState(evidence).coverage, {
-    total: 4,
     complete: 1,
+    total: 4,
   });
   assert.equal(accountState({ ...evidence, latest: null }).sync, "waiting");
   assert.equal(
     accountState({
       ...evidence,
-      latest: { status: "cancelled", phase: "cancelled" },
+      latest: { phase: "cancelled", status: "cancelled" },
     }).sync,
     "cancelled",
   );
@@ -66,11 +66,11 @@ await test("wizard errors expose actionable issues without accepting arbitrary c
 
 await test("the backend decides sync outcome and polling without turning partial coverage into completion", () => {
   const state: WizardState = {
-    credentials: true,
     connected: true,
-    sync: "completed",
+    coverage: { complete: 1, total: 2 },
+    credentials: true,
     paused: false,
-    coverage: { total: 2, complete: 1 },
+    sync: "completed",
   };
   for (const [sync, paused, total, complete, outcome, interval] of [
     ["error", true, 2, 2, "failed", null],
@@ -85,16 +85,16 @@ await test("the backend decides sync outcome and polling without turning partial
   ] as const) {
     const panel = accountPanel({
       ...state,
-      sync,
+      coverage: { complete, total },
       paused,
-      coverage: { total, complete },
+      sync,
     });
     assert.equal(panel.sync, outcome);
     assert.equal(panel.polling?.intervalMs ?? null, interval);
   }
   assert.deepEqual(accountPanel({ ...state, sync: "working" }).polling, {
     intervalMs: 5000,
-    retryIntervalMs: 30000,
+    retryIntervalMs: 30_000,
   });
   assert.equal(accountPanel(state).initialStep, 2);
   const disconnected = accountPanel({
@@ -108,15 +108,15 @@ await test("the backend decides sync outcome and polling without turning partial
 
 await test("the backend diagnostic allowlist excludes private fields and retains actual partial coverage", () => {
   const state = {
-    credentials: false,
     connected: true,
-    sync: "error" as const,
-    paused: false,
-    coverage: { total: 4, complete: 1, private: "synthetic-private-coverage" },
-    origin: "https://synthetic-private.test",
+    coverage: { complete: 1, private: "synthetic-private-coverage", total: 4 },
+    credentials: false,
     csrf: "synthetic-private-csrf",
     itemId: "synthetic-private-item",
+    origin: "https://synthetic-private.test",
+    paused: false,
     sourceMessage: "synthetic-private-message",
+    sync: "error" as const,
   };
   const { diagnostic, connectorId } = accountPanel(state).support;
   assert.equal(diagnostic.credentials, false);

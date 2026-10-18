@@ -5,7 +5,6 @@ import { defineConfig, type Plugin } from "vite";
 
 function copyPortalAssets(): Plugin {
   return {
-    name: "copy-portal-assets",
     async closeBundle() {
       const root = new URL("./", import.meta.url);
       const output = new URL("dist/web/", root);
@@ -23,15 +22,13 @@ function copyPortalAssets(): Plugin {
         `/*\n  Referrer-Policy: same-origin\n  X-Content-Type-Options: nosniff\n  Content-Security-Policy: default-src 'none'; font-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'\n`,
       );
     },
+    name: "copy-portal-assets",
   };
 }
 
 export default defineConfig({
-  resolve: { tsconfigPaths: true },
-  plugins: [copyPortalAssets()],
   build: {
     outDir: "dist/web",
-    target: "es2022",
     rolldownOptions: {
       input: {
         account: fileURLToPath(
@@ -39,12 +36,15 @@ export default defineConfig({
         ),
       },
       output: {
+        assetFileNames: "[name][extname]",
+        chunkFileNames: "chunks/[name]-[hash].js",
+        entryFileNames: "[name].js",
         manualChunks: (id) =>
           id.includes("/node_modules/zod/") ? "validation" : undefined,
-        entryFileNames: "[name].js",
-        chunkFileNames: "chunks/[name]-[hash].js",
-        assetFileNames: "[name][extname]",
       },
     },
+    target: "es2022",
   },
+  plugins: [copyPortalAssets()],
+  resolve: { tsconfigPaths: true },
 });

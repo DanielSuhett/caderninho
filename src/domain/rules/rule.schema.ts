@@ -22,8 +22,8 @@ export const ActionSchema = z.discriminatedUnion("op", [
   z.object({ op: z.literal(RuleAction.set_description), value: Text }).strict(),
   z
     .object({
-      op: z.literal(RuleAction.set_tag),
       key: z.string().min(1).max(80),
+      op: z.literal(RuleAction.set_tag),
       value: Text,
     })
     .strict(),
@@ -156,10 +156,6 @@ const ConditionSchema: z.ZodType<Condition> = z.union([
 
 export const RuleSchema = z
   .object({
-    id: z.string().min(1).max(128),
-    name: Text,
-    priority: z.number().int().safe(),
-    is_active: z.boolean().default(true),
     conditions: z.union([
       z.object({ all: z.array(ConditionSchema).max(1000) }).strict(),
       z.object({ any: z.array(ConditionSchema).min(1).max(1000) }).strict(),
@@ -167,34 +163,38 @@ export const RuleSchema = z
     ]),
     event: z
       .object({
-        type: z.enum(RulePhase),
         params: z
           .object({ actions: z.array(ActionSchema).min(1).max(32) })
           .strict(),
+        type: z.enum(RulePhase),
       })
       .strict(),
+    id: z.string().min(1).max(128),
+    is_active: z.boolean().default(true),
+    name: Text,
+    priority: z.number().int().safe(),
   })
   .strict() satisfies z.ZodType<Rule>;
 
 export const CatalogSchema = z.object({
-  groups: z.array(z.object({ id: Text, name: Text }).strict()).max(1000),
   categories: z
     .array(
       z
         .object({
+          aliases: z.array(Text).default([]),
+          group_id: Text,
           id: Text,
           name: Text,
-          group_id: Text,
-          aliases: z.array(Text).default([]),
         })
         .strict(),
     )
     .max(5000),
+  groups: z.array(z.object({ id: Text, name: Text }).strict()).max(1000),
 });
 
 export const RulesSchema = CatalogSchema.extend({
-  version: z.literal(2),
   rules: z.array(RuleSchema).max(2000),
+  version: z.literal(2),
 }).strict() satisfies z.ZodType<Rules>;
 
 export function compileRules(input: unknown) {

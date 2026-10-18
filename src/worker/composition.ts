@@ -47,8 +47,8 @@ export function synchronizationDependencies(
 ): SynchronizationDependencies {
   const pluggy = pluggyAdapter(env);
   return {
-    repository: createExecutionRepository(env.DB),
     prepare: (input) => prepareEntity(env.DB, input),
+    repository: createExecutionRepository(env.DB),
     source: () => pluggy.financialSource(),
   };
 }
@@ -59,19 +59,19 @@ export function prepareEntity(
 ) {
   return prepareFinancialEntity(
     {
-      repository: entityReader(db),
-      hash,
       evaluate: input.engine.evaluate,
+      hash,
+      repository: entityReader(db),
     },
     {
       identity: input.identity,
-      source: input.source,
-      parent: input.parent,
-      operationId: input.operation.id,
-      referenceDay: input.operation.reference_day,
-      rulesRevision: input.operation.rules_revision,
-      renormalize: input.operation.input.renormalize ?? false,
       observedAt: input.observedAt ?? new Date().toISOString(),
+      operationId: input.operation.id,
+      parent: input.parent,
+      referenceDay: input.operation.reference_day,
+      renormalize: input.operation.input.renormalize ?? false,
+      rulesRevision: input.operation.rules_revision,
+      source: input.source,
       ...(input.legacyProjection && {
         legacyProjection: input.legacyProjection,
       }),
@@ -82,36 +82,36 @@ export function prepareEntity(
 export function financialQueries(env: Bindings): FinancialQueries {
   const pluggy = pluggyAdapter(env);
   return createFinancialService({
-    setupStatus: () => accountService(env).wizardState(),
+    actions: ruleActions(env),
+    now: () => new Date(),
+    readAccount: (accountId) => pluggy.readAccount(accountId),
     repository: {
-      query: (input) => queryEntities(env.DB, input),
       aggregate: (input) => aggregateEntities(env.DB, input),
-      readStatus: () => readStatus(env.DB),
       correct: (identity, change) => correctRecord(env.DB, identity, change),
       explain: (input) => explainRecord(env.DB, input),
       preview: (input, before) => previewSelection(env.DB, input, before),
-      subscriptions: (input) => subscriptionRecords(env.DB, input),
+      query: (input) => queryEntities(env.DB, input),
+      readStatus: () => readStatus(env.DB),
       revision: () => revision(env.DB),
-      rules: (revision) => rulesFor(env.DB, revision),
+      rules: (id) => rulesFor(env.DB, id),
+      subscriptions: (input) => subscriptionRecords(env.DB, input),
     },
-    actions: ruleActions(env),
-    readAccount: (accountId) => pluggy.readAccount(accountId),
-    now: () => new Date(),
+    setupStatus: () => accountService(env).wizardState(),
   });
 }
 
 export function accountService(env: Bindings) {
   return createAccountService({
-    repository: createAccountRepository(env.DB),
-    source: pluggyAdapter(env).account,
     disconnectAssistants: () => revokeAssistantGrants(env.OAUTH_PROVIDER),
     installation: async () => ({
       database: !!env.DB,
-      workflow: !!env.FINANCE,
-      oauth: !!env.OAUTH_KV,
       migrations: !!env.DB && (await migrationsReady(env.DB)),
+      oauth: !!env.OAUTH_KV,
+      workflow: !!env.FINANCE,
     }),
     now: () => new Date(),
+    repository: createAccountRepository(env.DB),
+    source: pluggyAdapter(env).account,
   });
 }
 
@@ -134,9 +134,9 @@ export function authService(env: Bindings) {
 
 export function ruleActions(env: Bindings) {
   return {
-    read: (revision: string) => readRules(env.DB, revision),
+    activate: (id: string) => activateRules(env.DB, id),
     list: () => listRules(env.DB),
-    activate: (revision: string) => activateRules(env.DB, revision),
+    read: (id: string) => readRules(env.DB, id),
     save: (document: Rules, activate = false) =>
       saveRules(env.DB, document, activate),
   };

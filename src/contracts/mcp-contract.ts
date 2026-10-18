@@ -17,97 +17,100 @@ import { AggregateSchema, QuerySchema } from "./queries";
 
 export const LongInput = z
   .object({
-    requestKey: z.string().min(1).max(200),
-    renormalize: z.boolean().optional(),
-    itemIds: z.array(z.string()).min(1).max(100),
     filter: FilterSchema.optional(),
+    itemIds: z.array(z.string()).min(1).max(100),
+    renormalize: z.boolean().optional(),
+    requestKey: z.string().min(1).max(200),
   })
   .strict();
 const declarations = [
   {
-    name: ToolName.setup_status,
     description:
       "Diagnóstico de configuração sem credenciais, identificadores ou dados bancários. Oriente uma ação por vez. Nunca peça secrets, senhas ou prints de chaves. Não inicia importação.",
+    name: ToolName.setup_status,
     schema: z.object({}).strict(),
   },
   {
-    name: ToolName.sync,
     description:
       "Materializar todos os recursos dos Items selecionados; primeira carga integral, depois incremento. MCP Task durável.",
+    name: ToolName.sync,
     schema: LongInput,
   },
   {
-    name: ToolName.reconcile,
     description:
       "Reconciliação explícita de todos os recursos dos Items indicados. MCP Task.",
+    name: ToolName.reconcile,
     schema: LongInput,
   },
   {
-    name: ToolName.reapply,
     description:
       "Reaplicar versão ativa de regras ao filtro explícito, preservando overrides. MCP Task.",
+    name: ToolName.reapply,
     schema: LongInput,
   },
   {
-    name: ToolName.status,
     description:
       "Consultar cobertura D1, operações e backlog; sem iniciar importação.",
+    name: ToolName.status,
     schema: z.object({}).strict(),
   },
   {
-    name: ToolName.query,
     description:
       "Consultar registros no D1. Campos original.* e effective.* são distintos. Cursor exige mesma revisão.",
+    name: ToolName.query,
     schema: QuerySchema,
   },
   {
-    name: ToolName.aggregate,
     description:
       "Totais exatos por moeda do universo SQL. metric aceita count, amount, cashFlow (BANK), consumption_v1 ou unclassifiedDebits para transações e métricas próprias de cada recurso. Métricas flow excluem pendentes/futuros; valores ignorados são excluídos. Sem metric, soma bruta assinada da origem.",
+    name: ToolName.aggregate,
     schema: AggregateSchema,
   },
   {
-    name: ToolName.rules,
     description:
       "Importar/validar, criar/editar versão completa, ativar, desativar ou ordenar regras. Importação dry-run por padrão; activate publica versão sem recategorizar o passado.",
+    name: ToolName.rules,
     schema: RuleCommandSchema,
   },
   {
-    name: ToolName.preview,
     description:
       "Simular regras no mesmo filtro usado por reaplicação. Quantidade total SQL; diferenças da amostra identificada, sem alterar dados.",
+    name: ToolName.preview,
     schema: PreviewInputSchema,
   },
   {
-    name: ToolName.override,
     description:
       "Corrigir campo local; value=null remove override e volta à herança. Não escreve na Pluggy.",
+    name: ToolName.override,
     schema: CorrectionInputSchema,
   },
   {
-    name: ToolName.explain,
     description:
       "Explicar origem, versão, regras aplicadas e overrides da transação.",
+    name: ToolName.explain,
     schema: RecordReferenceSchema,
   },
   {
-    name: ToolName.get_subscriptions,
     description:
       "Detectar recorrências na base D1 completa do período solicitado. Recusa universo maior que o limite de análise; não inventa totais de amostra.",
+    name: ToolName.get_subscriptions,
     schema: SubscriptionInputSchema,
   },
   {
-    name: ToolName.live_balance,
     description:
       "Leitura pontual da conta na Pluggy, sem sync ou PATCH. Informa horário da leitura e referência da origem; não garante saldo bancário em tempo real.",
+    name: ToolName.live_balance,
     schema: LiveBalanceInputSchema,
   },
 ] as const;
 export const tools = declarations.map((t) => ({
-  name: t.name,
-  description: t.description,
-  inputSchema: z.toJSONSchema(t.schema),
   annotations: {
+    destructiveHint: false,
+    openWorldHint: [
+      ToolName.sync,
+      ToolName.reconcile,
+      ToolName.live_balance,
+    ].some((name) => name === t.name),
     readOnlyHint: ![
       ToolName.sync,
       ToolName.reconcile,
@@ -115,66 +118,63 @@ export const tools = declarations.map((t) => ({
       ToolName.rules,
       ToolName.override,
     ].some((name) => name === t.name),
-    destructiveHint: false,
-    openWorldHint: [
-      ToolName.sync,
-      ToolName.reconcile,
-      ToolName.live_balance,
-    ].some((name) => name === t.name),
   },
+  description: t.description,
+  inputSchema: z.toJSONSchema(t.schema),
+  name: t.name,
 }));
 export const ToolCallSchema = z.discriminatedUnion("name", [
   z.object({
-    name: z.literal(ToolName.setup_status),
     input: declarations[0].schema,
+    name: z.literal(ToolName.setup_status),
   }),
   z.object({
-    name: z.literal(ToolName.sync),
     input: declarations[1].schema,
+    name: z.literal(ToolName.sync),
   }),
   z.object({
-    name: z.literal(ToolName.reconcile),
     input: declarations[2].schema,
+    name: z.literal(ToolName.reconcile),
   }),
   z.object({
-    name: z.literal(ToolName.reapply),
     input: declarations[3].schema,
+    name: z.literal(ToolName.reapply),
   }),
   z.object({
-    name: z.literal(ToolName.status),
     input: declarations[4].schema,
+    name: z.literal(ToolName.status),
   }),
   z.object({
-    name: z.literal(ToolName.query),
     input: declarations[5].schema,
+    name: z.literal(ToolName.query),
   }),
   z.object({
-    name: z.literal(ToolName.aggregate),
     input: declarations[6].schema,
+    name: z.literal(ToolName.aggregate),
   }),
   z.object({
-    name: z.literal(ToolName.rules),
     input: declarations[7].schema,
+    name: z.literal(ToolName.rules),
   }),
   z.object({
-    name: z.literal(ToolName.preview),
     input: declarations[8].schema,
+    name: z.literal(ToolName.preview),
   }),
   z.object({
-    name: z.literal(ToolName.override),
     input: declarations[9].schema,
+    name: z.literal(ToolName.override),
   }),
   z.object({
-    name: z.literal(ToolName.explain),
     input: declarations[10].schema,
+    name: z.literal(ToolName.explain),
   }),
   z.object({
-    name: z.literal(ToolName.get_subscriptions),
     input: declarations[11].schema,
+    name: z.literal(ToolName.get_subscriptions),
   }),
   z.object({
-    name: z.literal(ToolName.live_balance),
     input: declarations[12].schema,
+    name: z.literal(ToolName.live_balance),
   }),
 ]) satisfies z.ZodType<ToolCall>;
 

@@ -42,8 +42,8 @@ import type {
 import { progressWithDefaults } from "./entity";
 
 interface Execution extends ExecutionDependencies {
-  op: Operation;
   engine: RuleEngine;
+  op: Operation;
   step: Steps;
 }
 
@@ -58,8 +58,8 @@ export async function runOperation(
     return;
   }
   const engine = await repository.rules(op.rules_revision);
-  const execution = { ...dependencies, op, engine, step };
-  for (let n = 0; ; n++) {
+  const execution = { ...dependencies, engine, op, step };
+  for (let n = 0; ; n += 1) {
     if ((await repository.read(id)).cancel_requested) {
       await repository.finish(op, OperationStatus.cancelled);
       return;
@@ -71,10 +71,13 @@ export async function runOperation(
   }
   const { data, error } = await tryCatch(async () => {
     let sourcePromise: Promise<FinancialSource> | undefined;
-    const resolveSource = () => (sourcePromise ??= dependencies.source());
+    const resolveSource = () => {
+      sourcePromise ??= dependencies.source();
+      return sourcePromise;
+    };
     const source: FinancialSource = {
-      page: async (...args) => (await resolveSource()).page(...args),
       ids: async (...args) => (await resolveSource()).ids(...args),
+      page: async (...args) => (await resolveSource()).page(...args),
     };
     await step.do("mature", async () => {
       await repository.mature(op);
@@ -104,7 +107,7 @@ export async function runOperation(
 }
 
 function executeOperation(execution: Execution, source: FinancialSource) {
-  const input = execution.op.input;
+  const { input } = execution.op;
   switch (input.kind) {
     case OperationKind.migration:
       return migrateLegacy(execution);
@@ -115,6 +118,10 @@ function executeOperation(execution: Execution, source: FinancialSource) {
     case OperationKind.sync:
     case OperationKind.reconcile:
       return synchronizeResources(execution, source);
+    default: {
+      const unexpected: never = input;
+      throw new Error(`UNSUPPORTED_OPERATION: ${unexpected}`);
+    }
   }
 }
 
@@ -123,7 +130,7 @@ async function reapplyRules({ repository, op, engine, step }: Execution) {
     await repository.selectReapplication(op);
     return { phase: OperationPhase.selected };
   });
-  for (let batch = 0; ; batch++) {
+  for (let batch = 0; ; batch += 1) {
     const key = `reapply-${batch}`;
     const result = await step.do(key, async () => {
       const saved = await repository.receipt(op.id, key);
@@ -131,19 +138,21 @@ async function reapplyRules({ repository, op, engine, step }: Execution) {
         return saved;
       }
       if ((await repository.read(op.id)).cancel_requested) {
-        return { done: true, cancelled: true };
+        return { cancelled: true, done: true };
       }
       const selected = await repository.reapplicationTargets(op.id);
-      const changes = [];
+      const changes: Parameters<
+        ExecutionRepository["commitReapplication"]
+      >[0]["changes"] = [];
       for (const entity of selected) {
         changes.push({
-          identity: {
-            itemId: entity.item_id,
-            resource: entity.resource,
-            parentId: entity.parent_id,
-            id: entity.id,
-          },
           derived: await engine.evaluate(txContext(entity.normalized)),
+          identity: {
+            id: entity.id,
+            itemId: entity.item_id,
+            parentId: entity.parent_id,
+            resource: entity.resource,
+          },
         });
       }
       const progress = progressWithDefaults(
@@ -151,13 +160,13 @@ async function reapplyRules({ repository, op, engine, step }: Execution) {
       );
       progress.classified += selected.length;
       progress.received += selected.length;
-      const outcome = { done: selected.length < 20, cancelled: false };
+      const outcome = { cancelled: false, done: selected.length < 20 };
       await repository.commitReapplication({
-        op,
-        key,
         changes,
-        progress,
+        key,
+        op,
         outcome,
+        progress,
       });
       return outcome;
     });
@@ -178,7 +187,7 @@ async function migrateLegacy({
   prepare,
   step,
 }: Execution) {
-  const input = op.input;
+  const { input } = op;
   if (input.kind !== OperationKind.migration) {
     throw new Error("OPERATION_KIND_MISMATCH");
   }
@@ -186,17 +195,17 @@ async function migrateLegacy({
     if ((await repository.read(op.id)).cancel_requested) {
       return { cancelled: true };
     }
-    const itemId = input.itemIds[0];
+    const [itemId] = input.itemIds;
     if (!itemId) {
       throw new Error(FaultCode.INVALID_ITEM_ID);
     }
-    const rows = [];
+    const rows: Parameters<ExecutionRepository["commitMigration"]>[0] = [];
     for (const row of input.migration) {
       const identity = {
-        itemId,
-        resource: row.resource,
-        parentId: row.parentId,
         id: row.record.id,
+        itemId,
+        parentId: row.parentId,
+        resource: row.resource,
       };
       const digest = await hash(row);
       if (await repository.imported(row.sourceKey, digest)) {
@@ -216,19 +225,19 @@ async function migrateLegacy({
         continue;
       }
       const prepared = await prepare({
+        engine,
         identity,
+        legacyProjection: row.record,
+        operation: op,
+        parent: undefined,
         source: {
           id: row.record.id,
-          resourceId: row.record.id,
           legacyProjection: row.record,
           legacySourceKey: row.sourceKey,
+          resourceId: row.record.id,
         },
-        parent: undefined,
-        operation: op,
-        engine,
-        legacyProjection: row.record,
       });
-      rows.push({ prepared, sourceKey: row.sourceKey, digest });
+      rows.push({ digest, prepared, sourceKey: row.sourceKey });
     }
     await repository.commitMigration(rows);
     return { imported: input.migration.length };
@@ -288,12 +297,12 @@ async function synchronizeItemResource(
   for (const parent of parents) {
     if (
       parent &&
-      !resourceParentAllowed({ resource, parentType: parent.normalized.type })
+      !resourceParentAllowed({ parentType: parent.normalized.type, resource })
     ) {
       continue;
     }
     const parentId = parent?.id ?? "";
-    const identity = { operationId: op.id, itemId, resource, parentId };
+    const identity = { itemId, operationId: op.id, parentId, resource };
     if (
       resource === Resource.investment_transactions &&
       op.input.kind === OperationKind.sync
@@ -323,17 +332,17 @@ async function synchronizeCollection(
   await step.do(`checkpoint-${itemId}-${resource}-${parentId}`, async () => {
     const coverage = await repository.coverage(itemId, resource, parentId);
     const floor = transactionCreationFloor({
-      resource,
-      kind: op.input.kind,
       coverage: coverage && {
         complete: !!coverage.bootstrap_complete,
         confirmedCreatedAt: coverage.confirmed_created_at,
       },
+      kind: op.input.kind,
+      resource,
     });
     await repository.createCheckpoint(identity, floor);
     return { phase: OperationPhase.checkpoint };
   });
-  for (let pageIndex = 0; ; pageIndex++) {
+  for (let pageIndex = 0; ; pageIndex += 1) {
     const name = `page-${itemId}-${resource}-${parentId}-${pageIndex}`;
     const result = await step.do(name, () =>
       publishPage(execution, source, { identity, name, parent }),
@@ -388,7 +397,7 @@ async function resolvePendingTransactions(
     await repository.selectPending(op.id, itemIds);
     return { phase: OperationPhase.pending_selected };
   });
-  for (let batch = 0; ; batch++) {
+  for (let batch = 0; ; batch += 1) {
     const key = `pending-${batch}`;
     const outcome = await step.do(key, async () => {
       const committed = await repository.receipt(op.id, key);
@@ -396,12 +405,12 @@ async function resolvePendingTransactions(
         return committed;
       }
       if ((await repository.read(op.id)).cancel_requested) {
-        return { done: true, cancelled: true };
+        return { cancelled: true, done: true };
       }
       const selected = await repository.pending(op.id);
-      const first = selected[0];
+      const [first] = selected;
       if (!first) {
-        return { done: true, cancelled: false };
+        return { cancelled: false, done: true };
       }
       const group = selected.filter(
         (entry) =>
@@ -409,16 +418,16 @@ async function resolvePendingTransactions(
           entry.parent_id === first.parent_id,
       );
       const ids = group.map((entry) => entry.id);
-      const records = await source.ids(first.parent_id, ids);
-      const outcome = { done: false, cancelled: false };
+      const fetchedRecords = await source.ids(first.parent_id, ids);
+      const pageOutcome = { cancelled: false, done: false };
       await publishResolved(execution, {
-        itemId: first.item_id,
         accountId: first.parent_id,
         ids,
-        records,
-        receipt: { key, outcome, processedIds: ids },
+        itemId: first.item_id,
+        receipt: { key, outcome: pageOutcome, processedIds: ids },
+        records: fetchedRecords,
       });
-      return outcome;
+      return pageOutcome;
     });
     if (outcome.cancelled) {
       return true;
@@ -449,22 +458,22 @@ async function publishResolved(
   const prepared = await prepareRecords(execution, {
     identity: {
       itemId: input.itemId,
-      resource: Resource.transactions,
       parentId: input.accountId,
+      resource: Resource.transactions,
     },
-    records: input.records,
     parent: parent ?? undefined,
     progress,
+    records: input.records,
   });
   const receivedIds = new Set(
     prepared.map((entry) => entry.mutation.value.identity.id),
   );
   await repository.commitResolved({
-    operationId: op.id,
-    itemId: input.itemId,
     accountId: input.accountId,
-    prepared,
+    itemId: input.itemId,
     missingIds: input.ids.filter((id) => !receivedIds.has(id)),
+    operationId: op.id,
+    prepared,
     progress,
     ...(input.receipt && { receipt: input.receipt }),
   });
@@ -478,7 +487,7 @@ async function resolveEvent(
   const { repository, op, step } = execution;
   const event = await repository.event(eventId);
   let cursor: string | null = null;
-  for (let batch = 0; ; batch++) {
+  for (let batch = 0; ; batch += 1) {
     const key = `event-${batch}`,
       previous = cursor;
     const result: { done: boolean; cancelled: boolean; next: string | null } =
@@ -488,7 +497,7 @@ async function resolveEvent(
           return { ...saved, next: saved.next ?? null };
         }
         if ((await repository.read(op.id)).cancel_requested) {
-          return { done: true, cancelled: true, next: null };
+          return { cancelled: true, done: true, next: null };
         }
         const { ids, page, done } = await readEventPage(source, event, {
           batch,
@@ -498,16 +507,16 @@ async function resolveEvent(
           throw new Error(FaultCode.CURSOR_LOOP);
         }
         const outcome = {
-          done,
           cancelled: false,
+          done,
           next: page.next,
         };
         await publishResolved(execution, {
-          itemId: event.item_id,
           accountId: event.account_id,
           ids,
-          records: page.records,
+          itemId: event.item_id,
           receipt: { key, outcome },
+          records: page.records,
         });
         return outcome;
       });
@@ -532,30 +541,30 @@ async function readEventPage(
   event: StoredEvent,
   { batch, cursor }: { batch: number; cursor: string | null },
 ) {
-  const payload = event.payload;
-  if (!payload.transactionIds && !payload.transactionsCreatedAtFrom) {
+  const { payload } = event;
+  if (!(payload.transactionIds || payload.transactionsCreatedAtFrom)) {
     throw new Error("CREATED_EVENT_WATERMARK_MISSING");
   }
   if (payload.transactionIds) {
     const ids = payload.transactionIds.slice(batch * 20, (batch + 1) * 20);
     const page = {
-      records: await source.ids(event.account_id, ids),
       next: null,
+      records: await source.ids(event.account_id, ids),
     };
     return {
+      done: (batch + 1) * 20 >= payload.transactionIds.length,
       ids,
       page,
-      done: (batch + 1) * 20 >= payload.transactionIds.length,
     };
   }
   const page = await source.page({
-    resource: Resource.transactions,
-    item: event.item_id,
-    parent: event.account_id,
     cursor,
     floor: payload.transactionsCreatedAtFrom ?? null,
+    item: event.item_id,
+    parent: event.account_id,
+    resource: Resource.transactions,
   });
-  return { ids: [], page, done: !page.next };
+  return { done: !page.next, ids: [], page };
 }
 
 export async function publishPage(
@@ -570,20 +579,20 @@ export async function publishPage(
   const { repository, op } = execution;
   const committed = await repository.receipt(op.id, name);
   if (committed) {
-    return { done: committed.done, cancelled: committed.cancelled };
+    return { cancelled: committed.cancelled, done: committed.done };
   }
   if ((await repository.read(op.id)).cancel_requested) {
-    return { done: true, cancelled: true };
+    return { cancelled: true, done: true };
   }
   const cp = await repository.checkpoint(identity);
   if (cp.done) {
-    return { done: true, cancelled: false };
+    return { cancelled: false, done: true };
   }
-  const page = await fetchSourcePage(repository, source, { identity, cp });
+  const page = await fetchSourcePage(repository, source, { cp, identity });
   if (!page) {
-    return { done: true, cancelled: false };
+    return { cancelled: false, done: true };
   }
-  assertSourceTotal({ expected: cp.expected_total, actual: page.total });
+  assertSourceTotal({ actual: page.total, expected: cp.expected_total });
   if (page.next && (await repository.continuationUsed(identity, page.next))) {
     throw new Error(FaultCode.CURSOR_LOOP);
   }
@@ -593,52 +602,52 @@ export async function publishPage(
   const prepared = await prepareRecords(execution, {
     identity,
     parent: parent?.normalized,
-    records: page.records,
     progress,
+    records: page.records,
   });
-  let collected = cp.collected;
-  let maximum = cp.maximum_created_at;
+  let { collected } = cp;
+  let { maximum_created_at: maximum } = cp;
   for (const entry of prepared) {
     if (!entry.seenInOperation) {
-      collected++;
+      collected += 1;
     }
     if (identity.resource === Resource.transactions) {
       maximum = latestCreatedAt({
-        maximum,
         created: entry.mutation.value.source.createdAt,
+        maximum,
       });
     }
   }
-  assertCollectionComplete({ next: page.next, total: page.total, collected });
+  assertCollectionComplete({ collected, next: page.next, total: page.total });
   // Empty initial accounts receive an inclusive creation watermark fixed at
   // operation start, only after complete pagination.
   if (identity.resource === Resource.transactions && !maximum && !page.next) {
     maximum = op.created_at;
   }
   if (!page.next) {
-    progress.resources++;
+    progress.resources += 1;
   }
   await repository.commitPage({
-    identity,
-    key: name,
-    prepared,
-    progress,
-    page,
-    maximum,
     collected,
-    parentSignature: parent?.relevant_hash ?? null,
-    deleteMissing: deleteMissingAfterPage({
-      resource: identity.resource,
-      kind: op.input.kind,
-      next: page.next,
-    }),
     coverageStatus: pageCoverage({
       next: page.next,
-      records: page.records.length,
       previousPages: cp.page,
+      records: page.records.length,
     }),
+    deleteMissing: deleteMissingAfterPage({
+      kind: op.input.kind,
+      next: page.next,
+      resource: identity.resource,
+    }),
+    identity,
+    key: name,
+    maximum,
+    page,
+    parentSignature: parent?.relevant_hash ?? null,
+    prepared,
+    progress,
   });
-  return { done: !page.next, cancelled: false };
+  return { cancelled: false, done: !page.next };
 }
 
 async function fetchSourcePage(
@@ -662,11 +671,11 @@ async function fetchSourcePage(
   }
   const { data, error } = await tryCatch(() =>
     source.page({
-      resource: identity.resource,
-      item: identity.itemId,
-      parent: identity.parentId,
       cursor: cp.cursor,
       floor: cp.creation_floor,
+      item: identity.itemId,
+      parent: identity.parentId,
+      resource: identity.resource,
       ...(connectorId && { connectorId }),
     }),
   );
@@ -701,13 +710,13 @@ async function prepareRecords(
   },
 ) {
   const prepared: PreparedEntity[] = [];
-  progress.pages++;
+  progress.pages += 1;
   progress.received += records.length;
   const identities = new Map<string, string>();
   for (const record of records) {
     const id =
       identity.resource === Resource.resources ? record.resourceId : record.id;
-    if (id == null) {
+    if (id === null || id === undefined) {
       throw new Error("SOURCE_ID_MISSING");
     }
     const recordId = String(id);
@@ -717,24 +726,24 @@ async function prepareRecords(
       if (duplicate !== contentHash) {
         throw new Error("DUPLICATE_SOURCE_ID_CHANGED_IN_PAGE");
       }
-      progress.duplicates++;
+      progress.duplicates += 1;
       continue;
     }
     identities.set(recordId, contentHash);
     const entry = await prepare({
-      identity: {
-        itemId: identity.itemId,
-        resource: identity.resource,
-        parentId: identity.parentId,
-        id: recordId,
-      },
-      source: record,
-      parent,
-      operation: op,
       engine,
+      identity: {
+        id: recordId,
+        itemId: identity.itemId,
+        parentId: identity.parentId,
+        resource: identity.resource,
+      },
+      operation: op,
+      parent,
+      source: record,
     });
     prepared.push(entry);
-    progress[entry.state]++;
+    progress[entry.state] += 1;
     progress.classified += entry.classified;
   }
   return prepared;

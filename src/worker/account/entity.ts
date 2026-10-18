@@ -13,23 +13,26 @@ import { PERSONAL_CONNECTOR_ID } from "@/domain/connection.entity";
 import { FaultCode } from "@/domain/enums";
 
 export interface AccountSource {
-  readonly configured: boolean;
-  application(): Promise<{
-    readItem(
+  application: () => Promise<{
+    readItem: (
       itemId: string,
-    ): Promise<{ id: string; connector?: { id: number | string } }>;
-    token(itemId?: string): Promise<{ accessToken: string }>;
+    ) => Promise<{ id: string; connector?: { id: number | string } }>;
+    token: (itemId?: string) => Promise<{ accessToken: string }>;
   }>;
+  readonly configured: boolean;
 }
 
 export interface AccountRepository {
   connection: {
-    connectionCount(
+    connectionCount: (
       itemId: string,
-    ): Promise<{ count: number; exists: boolean }>;
-    connect(itemId: string, now: string): Promise<void>;
+    ) => Promise<{ count: number; exists: boolean }>;
+    connect: (itemId: string, now: string) => Promise<void>;
   };
-  status(): Promise<{
+  pause: () => Promise<void>;
+  requestSync: (now: Date) => Promise<boolean>;
+  resume: (now: string) => Promise<void>;
+  status: () => Promise<{
     config: { sync_enabled: number; connected_at: string };
     latest: {
       status: OperationStatus;
@@ -39,9 +42,6 @@ export interface AccountRepository {
     items: { id: string }[];
     coverage: { total: number; complete: number | null };
   }>;
-  pause(): Promise<void>;
-  resume(now: string): Promise<void>;
-  requestSync(now: Date): Promise<boolean>;
 }
 
 export function accountPanel(state: WizardState): AccountPanel {
@@ -50,26 +50,26 @@ export function accountPanel(state: WizardState): AccountPanel {
     state.sync === WizardSyncState.working;
   return {
     initialStep: state.connected ? AccountStep.assistant : AccountStep.connect,
-    sync: accountSyncOutcome(state),
     polling:
       state.connected && !state.paused && active
-        ? { intervalMs: 5000, retryIntervalMs: 30000 }
+        ? { intervalMs: 5000, retryIntervalMs: 30_000 }
         : null,
     support: {
+      connectorId: PERSONAL_CONNECTOR_ID,
       // Explicit allowlist: no names, credentials, identifiers or provider messages.
       diagnostic: {
-        credentials: state.credentials,
         connected: state.connected,
-        sync: state.sync,
-        paused: state.paused,
         coverage: {
-          total: state.coverage.total,
           complete: state.coverage.complete,
+          total: state.coverage.total,
         },
+        credentials: state.credentials,
         issue: null,
+        paused: state.paused,
+        sync: state.sync,
       },
-      connectorId: PERSONAL_CONNECTOR_ID,
     },
+    sync: accountSyncOutcome(state),
   };
 }
 

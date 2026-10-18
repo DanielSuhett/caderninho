@@ -7,7 +7,15 @@ import { CorrectionField, type RecordChange } from "@/domain/finance.entity";
 import type { Derived } from "@/domain/rules";
 
 import { database } from "../database";
-import * as tables from "../schema";
+import {
+  categories as categoriesTable,
+  derived as derivedTable,
+  effective_entities as effectiveEntitiesTable,
+  entities as entitiesTable,
+  overrides as overridesTable,
+  settings as settingsTable,
+  tags as tagsTable,
+} from "../schema";
 import type {
   EntityMutation,
   EntityObservation,
@@ -30,59 +38,59 @@ export function derivedStatements(
 ) {
   const out: BatchItem<"sqlite">[] = [
     database(db)
-      .insert(tables.derived)
+      .insert(derivedTable)
       .values({
-        item_id: identity.itemId,
-        resource: identity.resource,
-        parent_id: identity.parentId,
-        id: identity.id,
-        rules_revision: rulesRevision,
         category: derived.category,
         category_id: derived.category_id,
-        group_id: derived.category_group_id,
         description: derived.description,
-        ignored: Number(derived.ignored),
         evidence: derived.evidence,
+        group_id: derived.category_group_id,
+        id: identity.id,
+        ignored: Number(derived.ignored),
+        item_id: identity.itemId,
+        parent_id: identity.parentId,
+        resource: identity.resource,
+        rules_revision: rulesRevision,
       })
       .onConflictDoUpdate({
-        target: [
-          tables.derived.item_id,
-          tables.derived.resource,
-          tables.derived.parent_id,
-          tables.derived.id,
-        ],
         set: {
-          rules_revision: sql`excluded.rules_revision`,
           category: sql`excluded.category`,
           category_id: sql`excluded.category_id`,
-          group_id: sql`excluded.group_id`,
           description: sql`excluded.description`,
-          ignored: sql`excluded.ignored`,
           evidence: sql`excluded.evidence`,
+          group_id: sql`excluded.group_id`,
+          ignored: sql`excluded.ignored`,
+          rules_revision: sql`excluded.rules_revision`,
         },
+        target: [
+          derivedTable.item_id,
+          derivedTable.resource,
+          derivedTable.parent_id,
+          derivedTable.id,
+        ],
       }),
     database(db)
-      .delete(tables.tags)
+      .delete(tagsTable)
       .where(
         and(
-          eq(tables.tags.item_id, identity.itemId),
-          eq(tables.tags.resource, identity.resource),
-          eq(tables.tags.parent_id, identity.parentId),
-          eq(tables.tags.id, identity.id),
-          eq(tables.tags.origin, TagOrigin.derived),
+          eq(tagsTable.item_id, identity.itemId),
+          eq(tagsTable.resource, identity.resource),
+          eq(tagsTable.parent_id, identity.parentId),
+          eq(tagsTable.id, identity.id),
+          eq(tagsTable.origin, TagOrigin.derived),
         ),
       ),
   ];
   for (const [tag, value] of Object.entries(derived.tags)) {
     out.push(
-      database(db).insert(tables.tags).values({
-        item_id: identity.itemId,
-        resource: identity.resource,
-        parent_id: identity.parentId,
+      database(db).insert(tagsTable).values({
         id: identity.id,
+        item_id: identity.itemId,
         key: tag,
-        value: value,
         origin: TagOrigin.derived,
+        parent_id: identity.parentId,
+        resource: identity.resource,
+        value,
       }),
     );
   }
@@ -102,16 +110,6 @@ export function entityStatements(db: D1Database, mutation: EntityMutation) {
 
 function entityPersistence(db: D1Database) {
   return {
-    read: (identity: Identity) =>
-      database(db)
-        .select({
-          relevant_hash: tables.entities.relevant_hash,
-          deleted: tables.entities.deleted,
-          seen_operation: tables.entities.seen_operation,
-        })
-        .from(tables.entities)
-        .where(entityIdentity(identity))
-        .get(),
     observe: ({
       identity,
       source,
@@ -119,39 +117,49 @@ function entityPersistence(db: D1Database) {
       observedAt,
     }: EntityObservation) => [
       database(db)
-        .update(tables.entities)
+        .update(entitiesTable)
         .set({
-          source,
-          source_updated_at: source.updatedAt ?? null,
           observed_at: observedAt,
           seen_operation: operationId,
+          source,
+          source_updated_at: source.updatedAt ?? null,
         })
         .where(entityIdentity(identity)),
     ],
+    read: (identity: Identity) =>
+      database(db)
+        .select({
+          deleted: entitiesTable.deleted,
+          relevant_hash: entitiesTable.relevant_hash,
+          seen_operation: entitiesTable.seen_operation,
+        })
+        .from(entitiesTable)
+        .where(entityIdentity(identity))
+        .get(),
     save(input: EntityPublication) {
       const value = entityValues(input);
       // Preserve first_seen_at when a source identity is updated.
       const { first_seen_at: _firstSeen, ...updated } = value;
       const statements: BatchItem<"sqlite">[] = [
         database(db)
-          .insert(tables.entities)
+          .insert(entitiesTable)
           .values(value)
           .onConflictDoUpdate({
-            target: [
-              tables.entities.item_id,
-              tables.entities.resource,
-              tables.entities.parent_id,
-              tables.entities.id,
-            ],
             set: updated,
+            target: [
+              entitiesTable.item_id,
+              entitiesTable.resource,
+              entitiesTable.parent_id,
+              entitiesTable.id,
+            ],
           }),
       ];
       if (input.derived) {
         statements.push(
           ...derivedStatements(db, {
+            derived: input.derived,
             identity: input.identity,
             rulesRevision: input.rulesRevision,
-            derived: input.derived,
           }),
         );
       }
@@ -162,10 +170,10 @@ function entityPersistence(db: D1Database) {
 
 function entityIdentity(identity: Identity) {
   return and(
-    eq(tables.entities.item_id, identity.itemId),
-    eq(tables.entities.resource, identity.resource),
-    eq(tables.entities.parent_id, identity.parentId),
-    eq(tables.entities.id, identity.id),
+    eq(entitiesTable.item_id, identity.itemId),
+    eq(entitiesTable.resource, identity.resource),
+    eq(entitiesTable.parent_id, identity.parentId),
+    eq(entitiesTable.id, identity.id),
   );
 }
 
@@ -177,38 +185,38 @@ function entityValues({
   projection,
   normalizer,
   digest,
-}: EntityPublication): typeof tables.entities.$inferInsert {
+}: EntityPublication): typeof entitiesTable.$inferInsert {
   const { record, amountText, date, eligible } = projection;
   return {
-    item_id: identity.itemId,
-    resource: identity.resource,
-    parent_id: identity.parentId,
-    id: identity.id,
-    source,
-    normalized: record,
-    relevant_hash: digest,
-    normalizer,
-    source_created_at: source.createdAt ?? null,
-    source_updated_at: source.updatedAt ?? null,
-    first_seen_at: observedAt,
-    observed_at: observedAt,
-    transaction_date: date,
-    currency: projection.currency,
-    amount_minor: amountText,
-    amount_key: amountText === null ? null : moneyKey(amountText),
+    account_type: projection.accountType,
     amount_digits:
       amountText === null
         ? null
         : amountText.replace("-", "").padStart(30, "0"),
+    amount_key: amountText === null ? null : moneyKey(amountText),
+    amount_minor: amountText,
     amount_sign: amountText?.startsWith("-") ? -1 : 1,
-    account_type: projection.accountType,
+    currency: projection.currency,
+    deleted: 0,
     direction: projection.direction,
-    status: projection.status,
+    eligible: Number(eligible),
+    first_seen_at: observedAt,
+    id: identity.id,
+    item_id: identity.itemId,
+    normalized: record,
+    normalizer,
+    observed_at: observedAt,
     original_category: projection.category,
     original_description: projection.description,
-    eligible: Number(eligible),
-    deleted: 0,
+    parent_id: identity.parentId,
+    relevant_hash: digest,
+    resource: identity.resource,
     seen_operation: operationId,
+    source,
+    source_created_at: source.createdAt ?? null,
+    source_updated_at: source.updatedAt ?? null,
+    status: projection.status,
+    transaction_date: date,
   };
 }
 
@@ -219,79 +227,80 @@ export async function override(
   value: string | null,
 ) {
   const exists = await database(db)
-    .select({ id: tables.entities.id })
-    .from(tables.entities)
+    .select({ id: entitiesTable.id })
+    .from(entitiesTable)
     .where(entityIdentity(i))
     .get();
   if (!exists) {
     throw new Error("NOT_FOUND");
   }
+  let overrideValue = value;
   if (field === CorrectionField.category && value !== null) {
     const category = await database(db)
       .select({
-        id: tables.categories.id,
-        name: tables.categories.name,
-        group_id: tables.categories.group_id,
-        revision: tables.categories.revision,
+        group_id: categoriesTable.group_id,
+        id: categoriesTable.id,
+        name: categoriesTable.name,
+        revision: categoriesTable.revision,
       })
-      .from(tables.categories)
+      .from(categoriesTable)
       .innerJoin(
-        tables.settings,
+        settingsTable,
         and(
-          eq(tables.settings.id, 1),
-          eq(tables.settings.active_rules, tables.categories.revision),
+          eq(settingsTable.id, 1),
+          eq(settingsTable.active_rules, categoriesTable.revision),
         ),
       )
-      .where(eq(tables.categories.id, value))
+      .where(eq(categoriesTable.id, value))
       .get();
     if (!category) {
       throw new Error("UNKNOWN_CATEGORY");
     }
-    value = JSON.stringify(category);
+    overrideValue = JSON.stringify(category);
   }
   const edit =
-    value === null
+    overrideValue === null
       ? database(db)
-          .delete(tables.overrides)
+          .delete(overridesTable)
           .where(
             and(
-              eq(tables.overrides.item_id, i.itemId),
-              eq(tables.overrides.resource, i.resource),
-              eq(tables.overrides.parent_id, i.parentId),
-              eq(tables.overrides.id, i.id),
-              eq(tables.overrides.field, field),
+              eq(overridesTable.item_id, i.itemId),
+              eq(overridesTable.resource, i.resource),
+              eq(overridesTable.parent_id, i.parentId),
+              eq(overridesTable.id, i.id),
+              eq(overridesTable.field, field),
             ),
           )
       : database(db)
-          .insert(tables.overrides)
+          .insert(overridesTable)
           .values({
-            item_id: i.itemId,
-            resource: i.resource,
-            parent_id: i.parentId,
+            field,
             id: i.id,
-            field: field,
-            value: value,
+            item_id: i.itemId,
+            parent_id: i.parentId,
+            resource: i.resource,
             updated_at: new Date().toISOString(),
+            value: overrideValue,
           })
           .onConflictDoUpdate({
-            target: [
-              tables.overrides.item_id,
-              tables.overrides.resource,
-              tables.overrides.parent_id,
-              tables.overrides.id,
-              tables.overrides.field,
-            ],
             set: {
-              value: sql`excluded.value`,
               updated_at: sql`excluded.updated_at`,
+              value: sql`excluded.value`,
             },
+            target: [
+              overridesTable.item_id,
+              overridesTable.resource,
+              overridesTable.parent_id,
+              overridesTable.id,
+              overridesTable.field,
+            ],
           });
   await database(db).batch([
     edit,
     database(db)
-      .update(tables.settings)
-      .set({ revision: sql`${tables.settings.revision} + 1` })
-      .where(eq(tables.settings.id, 1)),
+      .update(settingsTable)
+      .set({ revision: sql`${settingsTable.revision} + 1` })
+      .where(eq(settingsTable.id, 1)),
   ]);
 }
 
@@ -302,49 +311,49 @@ export async function correctRecord(
 ) {
   const a = { ...identity, ...change };
   if (a.field === CorrectionField.tag) {
-    const key = a.key;
+    const { key } = a;
     const edit =
       a.value === null
         ? database(db)
-            .delete(tables.tags)
+            .delete(tagsTable)
             .where(
               and(
-                eq(tables.tags.item_id, a.itemId),
-                eq(tables.tags.resource, a.resource),
-                eq(tables.tags.parent_id, a.parentId),
-                eq(tables.tags.id, a.id),
-                eq(tables.tags.key, key),
-                eq(tables.tags.origin, TagOrigin.manual),
+                eq(tagsTable.item_id, a.itemId),
+                eq(tagsTable.resource, a.resource),
+                eq(tagsTable.parent_id, a.parentId),
+                eq(tagsTable.id, a.id),
+                eq(tagsTable.key, key),
+                eq(tagsTable.origin, TagOrigin.manual),
               ),
             )
         : database(db)
-            .insert(tables.tags)
+            .insert(tagsTable)
             .values({
-              item_id: a.itemId,
-              resource: a.resource,
-              parent_id: a.parentId,
               id: a.id,
-              key: key,
-              value: a.value,
+              item_id: a.itemId,
+              key,
               origin: TagOrigin.manual,
+              parent_id: a.parentId,
+              resource: a.resource,
+              value: a.value,
             })
             .onConflictDoUpdate({
-              target: [
-                tables.tags.item_id,
-                tables.tags.resource,
-                tables.tags.parent_id,
-                tables.tags.id,
-                tables.tags.key,
-                tables.tags.origin,
-              ],
               set: { value: sql`excluded.value` },
+              target: [
+                tagsTable.item_id,
+                tagsTable.resource,
+                tagsTable.parent_id,
+                tagsTable.id,
+                tagsTable.key,
+                tagsTable.origin,
+              ],
             });
     await database(db).batch([
       edit,
       database(db)
-        .update(tables.settings)
-        .set({ revision: sql`${tables.settings.revision} + 1` })
-        .where(eq(tables.settings.id, 1)),
+        .update(settingsTable)
+        .set({ revision: sql`${settingsTable.revision} + 1` })
+        .where(eq(settingsTable.id, 1)),
     ]);
   } else {
     await override(db, a, a.field, a.value);
@@ -354,46 +363,46 @@ export async function correctRecord(
 
 export async function explainRecord(db: D1Database, a: Identity) {
   const explanation = {
-    tags: await database(db)
+    overrides: await database(db)
       .select({
-        key: tables.tags.key,
-        value: tables.tags.value,
-        origin: tables.tags.origin,
+        field: overridesTable.field,
+        value: overridesTable.value,
       })
-      .from(tables.tags)
+      .from(overridesTable)
       .where(
         and(
-          eq(tables.tags.item_id, a.itemId),
-          eq(tables.tags.resource, a.resource),
-          eq(tables.tags.parent_id, a.parentId),
-          eq(tables.tags.id, a.id),
+          eq(overridesTable.item_id, a.itemId),
+          eq(overridesTable.resource, a.resource),
+          eq(overridesTable.parent_id, a.parentId),
+          eq(overridesTable.id, a.id),
         ),
       )
       .all(),
     record: await database(db)
       .select()
-      .from(tables.effective_entities)
+      .from(effectiveEntitiesTable)
       .where(
         and(
-          eq(tables.effective_entities.item_id, a.itemId),
-          eq(tables.effective_entities.resource, a.resource),
-          eq(tables.effective_entities.parent_id, a.parentId),
-          eq(tables.effective_entities.id, a.id),
+          eq(effectiveEntitiesTable.item_id, a.itemId),
+          eq(effectiveEntitiesTable.resource, a.resource),
+          eq(effectiveEntitiesTable.parent_id, a.parentId),
+          eq(effectiveEntitiesTable.id, a.id),
         ),
       )
       .get(),
-    overrides: await database(db)
+    tags: await database(db)
       .select({
-        field: tables.overrides.field,
-        value: tables.overrides.value,
+        key: tagsTable.key,
+        origin: tagsTable.origin,
+        value: tagsTable.value,
       })
-      .from(tables.overrides)
+      .from(tagsTable)
       .where(
         and(
-          eq(tables.overrides.item_id, a.itemId),
-          eq(tables.overrides.resource, a.resource),
-          eq(tables.overrides.parent_id, a.parentId),
-          eq(tables.overrides.id, a.id),
+          eq(tagsTable.item_id, a.itemId),
+          eq(tagsTable.resource, a.resource),
+          eq(tagsTable.parent_id, a.parentId),
+          eq(tagsTable.id, a.id),
         ),
       )
       .all(),

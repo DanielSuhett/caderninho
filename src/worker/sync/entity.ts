@@ -22,38 +22,38 @@ import type {
 } from "../schema";
 
 export type Operation = typeof operations.$inferSelect;
-export type Progress = {
+export interface Progress {
+  changed: number;
+  classified: number;
+  duplicates: number;
+  errors: number;
+  new: number;
   pages: number;
   received: number;
-  new: number;
-  changed: number;
-  unchanged: number;
-  classified: number;
   resources: number;
-  errors: number;
-  duplicates: number;
-};
-export type PageCommit = {
-  done: boolean;
+  unchanged: number;
+}
+export interface PageCommit {
   cancelled: boolean;
+  done: boolean;
+  item?: string;
   next?: string | null;
   nextCursor?: string | null;
-  resource?: string;
   parent?: string;
-  item?: string;
-};
+  resource?: string;
+}
 
 export function progressWithDefaults(saved: Partial<Progress>): Progress {
   return {
+    changed: 0,
+    classified: 0,
+    duplicates: 0,
+    errors: 0,
+    new: 0,
     pages: 0,
     received: 0,
-    new: 0,
-    changed: 0,
-    unchanged: 0,
-    classified: 0,
     resources: 0,
-    errors: 0,
-    duplicates: 0,
+    unchanged: 0,
     ...saved,
   };
 }
@@ -64,19 +64,19 @@ export interface OperationHandle {
 }
 
 export interface FinancialSource {
-  page(input: {
+  ids: (account: string, ids: string[]) => Promise<ProviderRecord[]>;
+  page: (input: {
     resource: Resource;
     item: string;
     parent: string;
     cursor: string | null;
     floor: string | null;
     connectorId?: string | undefined;
-  }): Promise<{
+  }) => Promise<{
     records: ProviderRecord[];
     next: string | null;
     total?: number;
   }>;
-  ids(account: string, ids: string[]): Promise<ProviderRecord[]>;
 }
 // Durable checkpoints carry plain serializable data, independent of the host SDK.
 export type StepValue<T> =
@@ -88,14 +88,14 @@ export type StepValue<T> =
   | ReadonlyArray<T extends ReadonlyArray<infer U> ? StepValue<U> : never>
   | { [K in keyof T]: K extends string | number ? StepValue<T[K]> : never };
 export interface Steps {
-  do<T extends StepValue<T>>(
+  do: <T extends StepValue<T>>(
     name: string,
     callback: () => Promise<T>,
-  ): Promise<T>;
-  sleep(name: string, duration: string): Promise<void>;
+  ) => Promise<T>;
+  sleep: (name: string, duration: string) => Promise<void>;
 }
 export interface SynchronizationDependencies extends ExecutionDependencies {
-  source(): Promise<FinancialSource>;
+  source: () => Promise<FinancialSource>;
 }
 
 export interface DueSchedule {
@@ -103,44 +103,44 @@ export interface DueSchedule {
   reconcile_after: string;
 }
 export interface SchedulingStore {
-  due(now: string): Promise<DueSchedule | null>;
-  enqueue(
+  due: (now: string) => Promise<DueSchedule | null>;
+  enqueue: (
     account: DueSchedule,
     kind: typeof OperationKind.sync | typeof OperationKind.reconcile,
     next: string,
     reconcileAfter: string,
-  ): Promise<OperationHandle | null>;
+  ) => Promise<OperationHandle | null>;
 }
 
 export interface OperationState {
-  id: string;
-  status: OperationStatus;
   createdAt: string;
-  updatedAt: string;
-  summary: string;
-  result?: NonNullable<Operation["result"]>;
   error?: NonNullable<Operation["error"]>;
+  id: string;
+  result?: NonNullable<Operation["result"]>;
+  status: OperationStatus;
+  summary: string;
+  updatedAt: string;
 }
 export interface SyncRepository {
-  markDispatched(id: string): Promise<void>;
-  needsDispatch(id: string): Promise<boolean>;
-  operations(dispatched: boolean): Promise<OperationHandle[]>;
-  inbox(): Promise<{ event_id: string; item_id: string }[]>;
-  linkEvent(eventId: string, id: string): Promise<void>;
-  start(key: string, input: OperationInput): Promise<Operation>;
-  read(id: string): Promise<Operation>;
-  state(id: string): Promise<OperationState>;
-  states(ids: string[]): Promise<OperationState[]>;
-  compact(): Promise<void>;
-  finish(
+  acceptWebhook: (event: WebhookEvent, receivedAt: string) => Promise<boolean>;
+  cancel: (id: string) => Promise<void>;
+  compact: () => Promise<void>;
+  fingerprint: (value: unknown) => Promise<string>;
+  finish: (
     id: string,
     status: FinishedOperationStatus,
     error: boolean,
-  ): Promise<void>;
-  cancel(id: string): Promise<void>;
-  acceptWebhook(event: WebhookEvent, receivedAt: string): Promise<boolean>;
-  migrationOverlaps(input: MigrationRequest): Promise<number>;
-  fingerprint(value: unknown): Promise<string>;
+  ) => Promise<void>;
+  inbox: () => Promise<{ event_id: string; item_id: string }[]>;
+  linkEvent: (eventId: string, id: string) => Promise<void>;
+  markDispatched: (id: string) => Promise<void>;
+  migrationOverlaps: (input: MigrationRequest) => Promise<number>;
+  needsDispatch: (id: string) => Promise<boolean>;
+  operations: (dispatched: boolean) => Promise<OperationHandle[]>;
+  read: (id: string) => Promise<Operation>;
+  start: (key: string, input: OperationInput) => Promise<Operation>;
+  state: (id: string) => Promise<OperationState>;
+  states: (ids: string[]) => Promise<OperationState[]>;
 }
 export type StoredEntity = typeof entities.$inferSelect;
 export type Checkpoint = typeof checkpoints.$inferSelect;
@@ -164,55 +164,19 @@ export type EntityPreparer = (input: {
   legacyProjection?: FinanceRecord;
 }) => Promise<PreparedEntity>;
 export interface CollectionIdentity {
-  operationId: string;
   itemId: string;
-  resource: Resource;
+  operationId: string;
   parentId: string;
+  resource: Resource;
 }
 export interface ExecutionRepository {
-  read(id: string): Promise<Operation>;
-  items(ids: string[]): Promise<ConnectedItem[]>;
-  rules(revision: string): Promise<RuleEngine>;
-  acquire(id: string): Promise<boolean>;
-  mature(op: Operation): Promise<void>;
-  finish(
-    op: Operation,
-    status: FinishedOperationStatus,
-    error?: boolean,
-  ): Promise<void>;
-  receipt(operationId: string, key: string): Promise<PageCommit | null>;
-  checkpoint(identity: CollectionIdentity): Promise<Checkpoint>;
-  connectionSource(itemId: string): Promise<ProviderRecord | null>;
-  parents(itemId: string, resource: Resource): Promise<StoredEntity[]>;
-  coverage(
-    itemId: string,
-    resource: Resource,
-    parentId: string,
-  ): Promise<{
-    bootstrap_complete: number;
-    confirmed_created_at: string | null;
-    parent_signature: string | null;
-  } | null>;
-  setCoverage(
-    itemId: string,
-    resource: Resource,
-    status: CoverageStatus,
-  ): Promise<void>;
-  sourceFailure(
-    identity: CollectionIdentity,
-    status: CoverageStatus,
-    countError: boolean,
-  ): Promise<void>;
-  createCheckpoint(
-    identity: CollectionIdentity,
-    floor: string | null,
-  ): Promise<void>;
-  continuationUsed(
-    identity: CollectionIdentity,
-    next: string,
-  ): Promise<boolean>;
-  eventCursorUsed(operationId: string, next: string): Promise<boolean>;
-  commitPage(input: {
+  account: (itemId: string, accountId: string) => Promise<FinanceRecord | null>;
+  acquire: (id: string) => Promise<boolean>;
+  checkpoint: (identity: CollectionIdentity) => Promise<Checkpoint>;
+  commitMigration: (
+    rows: { prepared: PreparedEntity; sourceKey: string; digest: string }[],
+  ) => Promise<void>;
+  commitPage: (input: {
     identity: CollectionIdentity;
     key: string;
     prepared: PreparedEntity[];
@@ -223,11 +187,15 @@ export interface ExecutionRepository {
     parentSignature: string | null;
     deleteMissing: boolean;
     coverageStatus: CoverageStatus;
-  }): Promise<void>;
-  event(id: string): Promise<StoredEvent>;
-  completeEvent(id: string): Promise<void>;
-  account(itemId: string, accountId: string): Promise<FinanceRecord | null>;
-  commitResolved(input: {
+  }) => Promise<void>;
+  commitReapplication: (input: {
+    op: Operation;
+    key: string;
+    changes: { identity: Identity; derived: Derived }[];
+    progress: Progress;
+    outcome: PageCommit;
+  }) => Promise<void>;
+  commitResolved: (input: {
     operationId: string;
     itemId: string;
     accountId: string;
@@ -235,27 +203,59 @@ export interface ExecutionRepository {
     missingIds: string[];
     progress: Progress;
     receipt?: { key: string; outcome: PageCommit; processedIds?: string[] };
-  }): Promise<void>;
-  selectPending(operationId: string, itemIds: string[]): Promise<void>;
-  pending(
+  }) => Promise<void>;
+  completeEvent: (id: string) => Promise<void>;
+  connectionSource: (itemId: string) => Promise<ProviderRecord | null>;
+  continuationUsed: (
+    identity: CollectionIdentity,
+    next: string,
+  ) => Promise<boolean>;
+  coverage: (
+    itemId: string,
+    resource: Resource,
+    parentId: string,
+  ) => Promise<{
+    bootstrap_complete: number;
+    confirmed_created_at: string | null;
+    parent_signature: string | null;
+  } | null>;
+  createCheckpoint: (
+    identity: CollectionIdentity,
+    floor: string | null,
+  ) => Promise<void>;
+  current: (identity: Identity) => Promise<FinanceRecord | null>;
+  event: (id: string) => Promise<StoredEvent>;
+  eventCursorUsed: (operationId: string, next: string) => Promise<boolean>;
+  finish: (
+    op: Operation,
+    status: FinishedOperationStatus,
+    error?: boolean,
+  ) => Promise<void>;
+  imported: (sourceKey: string, digest: string) => Promise<boolean>;
+  items: (ids: string[]) => Promise<ConnectedItem[]>;
+  mature: (op: Operation) => Promise<void>;
+  parents: (itemId: string, resource: Resource) => Promise<StoredEntity[]>;
+  pending: (
     operationId: string,
-  ): Promise<{ item_id: string; parent_id: string; id: string }[]>;
-  selectReapplication(op: Operation): Promise<void>;
-  reapplicationTargets(operationId: string): Promise<StoredEntity[]>;
-  commitReapplication(input: {
-    op: Operation;
-    key: string;
-    changes: { identity: Identity; derived: Derived }[];
-    progress: Progress;
-    outcome: PageCommit;
-  }): Promise<void>;
-  imported(sourceKey: string, digest: string): Promise<boolean>;
-  current(identity: Identity): Promise<FinanceRecord | null>;
-  commitMigration(
-    rows: { prepared: PreparedEntity; sourceKey: string; digest: string }[],
-  ): Promise<void>;
+  ) => Promise<{ item_id: string; parent_id: string; id: string }[]>;
+  read: (id: string) => Promise<Operation>;
+  reapplicationTargets: (operationId: string) => Promise<StoredEntity[]>;
+  receipt: (operationId: string, key: string) => Promise<PageCommit | null>;
+  rules: (revision: string) => Promise<RuleEngine>;
+  selectPending: (operationId: string, itemIds: string[]) => Promise<void>;
+  selectReapplication: (op: Operation) => Promise<void>;
+  setCoverage: (
+    itemId: string,
+    resource: Resource,
+    status: CoverageStatus,
+  ) => Promise<void>;
+  sourceFailure: (
+    identity: CollectionIdentity,
+    status: CoverageStatus,
+    countError: boolean,
+  ) => Promise<void>;
 }
 export interface ExecutionDependencies {
-  repository: ExecutionRepository;
   prepare: EntityPreparer;
+  repository: ExecutionRepository;
 }

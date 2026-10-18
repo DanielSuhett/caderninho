@@ -49,8 +49,8 @@ export async function scheduleSync(
 export function createSyncService(
   repository: SyncRepository,
   workflow: {
-    create(id: string): Promise<void>;
-    status(id: string): Promise<string>;
+    create: (id: string) => Promise<void>;
+    status: (id: string) => Promise<string>;
   },
   now: () => Date = () => new Date(),
 ) {
@@ -63,7 +63,7 @@ export function createSyncService(
     }
     const { data: _data, error } = await tryCatch(() => workflow.create(op.id));
     if (error) {
-      const { data: _data, error: statusError } = await tryCatch(() =>
+      const { data: _status, error: statusError } = await tryCatch(() =>
         workflow.status(op.id),
       );
       if (statusError) {
@@ -73,12 +73,54 @@ export function createSyncService(
     await repository.markDispatched(op.id);
   };
   return {
-    dispatch,
-    start: repository.start,
-    read: repository.read,
-    state: repository.state,
-    states: repository.states,
+    async acceptWebhook(event: WebhookEvent) {
+      assertWebhookEvent(event);
+      return await repository.acceptWebhook(event, now().toISOString());
+    },
+    cancel: (id: string) => repository.cancel(id),
     compact: repository.compact,
+    dispatch,
+    async migrate(input: MigrationRequest) {
+      const overlaps = await repository.migrationOverlaps(input);
+      if (!input.apply) {
+        return {
+          body: {
+            applied: false,
+            overlaps,
+            policy: input.policy,
+            records: input.rows.length,
+          },
+          status: 200 as const,
+        };
+      }
+      if (
+        migrationDecision({ conflicting: !!overlaps, policy: input.policy }) ===
+        MigrationDecision.refuse
+      ) {
+        return {
+          body: { error: "MIGRATION_OVERLAP_REQUIRES_POLICY", overlaps },
+          status: 409 as const,
+        };
+      }
+      const op = await repository.start(
+        `migration:${await repository.fingerprint(input)}`,
+        {
+          itemIds: [input.itemId],
+          kind: OperationKind.migration,
+          migration: input.rows,
+          migrationPolicy: input.policy,
+        },
+      );
+      // The committed outbox remains pending if dispatch fails.
+      await tryCatch(() => dispatch(op)).then(({ data, error }) =>
+        error ? undefined : data,
+      );
+      return {
+        body: { applied: false, operationId: op.id, status: op.status },
+        status: 200 as const,
+      };
+    },
+    read: repository.read,
     async recover() {
       for (const op of await repository.operations(false)) {
         // The committed outbox remains pending if dispatch fails.
@@ -100,9 +142,9 @@ export function createSyncService(
       }
       for (const event of await repository.inbox()) {
         const op = await repository.start(`webhook:${event.event_id}`, {
-          kind: OperationKind.webhook,
-          itemIds: [event.item_id],
           eventId: event.event_id,
+          itemIds: [event.item_id],
+          kind: OperationKind.webhook,
         });
         await repository.linkEvent(event.event_id, op.id);
         // The committed outbox remains pending if dispatch fails.
@@ -111,50 +153,8 @@ export function createSyncService(
         );
       }
     },
-    cancel: (id: string) => repository.cancel(id),
-    async acceptWebhook(event: WebhookEvent) {
-      assertWebhookEvent(event);
-      return repository.acceptWebhook(event, now().toISOString());
-    },
-    async migrate(input: MigrationRequest) {
-      const overlaps = await repository.migrationOverlaps(input);
-      if (!input.apply) {
-        return {
-          status: 200 as const,
-          body: {
-            records: input.rows.length,
-            overlaps,
-            policy: input.policy,
-            applied: false,
-          },
-        };
-      }
-      if (
-        migrationDecision({ conflicting: !!overlaps, policy: input.policy }) ===
-        MigrationDecision.refuse
-      ) {
-        return {
-          status: 409 as const,
-          body: { error: "MIGRATION_OVERLAP_REQUIRES_POLICY", overlaps },
-        };
-      }
-      const op = await repository.start(
-        `migration:${await repository.fingerprint(input)}`,
-        {
-          kind: OperationKind.migration,
-          itemIds: [input.itemId],
-          migration: input.rows,
-          migrationPolicy: input.policy,
-        },
-      );
-      // The committed outbox remains pending if dispatch fails.
-      await tryCatch(() => dispatch(op)).then(({ data, error }) =>
-        error ? undefined : data,
-      );
-      return {
-        status: 200 as const,
-        body: { operationId: op.id, status: op.status, applied: false },
-      };
-    },
+    start: repository.start,
+    state: repository.state,
+    states: repository.states,
   };
 }

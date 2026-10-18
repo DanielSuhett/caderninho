@@ -8,52 +8,54 @@ import type { Bindings } from "@/worker/bindings";
 import { createExecutionContext } from "cloudflare:test";
 import { env as bindings } from "cloudflare:workers";
 
+const csrfInputPattern = /name="csrf" value="([^"]+)"/;
+
 export const origin = "https://caderninho.test";
 export const password = "synthetic-personal-password";
-export function settings() {
+export function settings(): Bindings {
   const config: Omit<Bindings, "OAUTH_PROVIDER"> = {
-    DB: bindings.DB,
-    OAUTH_KV: bindings.OAUTH_KV,
+    ADMIN_PASSWORD: password,
     CF_VERSION_METADATA: {
       id: "synthetic-version",
       tag: "test",
       timestamp: "2026-10-17T12:00:00Z",
     },
-    ADMIN_PASSWORD: password,
-    PLUGGY_CLIENT_ID: "synthetic-client",
-    PLUGGY_CLIENT_SECRET: "synthetic-secret",
+    DB: bindings.DB,
     FINANCE: {
-      async create({ id }) {
-        return {
+      create({ id }) {
+        return Promise.resolve({
           id,
-          async status() {
-            return { status: "running" };
+          status() {
+            return Promise.resolve({ status: "running" });
           },
-        };
+        });
       },
-      async get(id) {
-        return {
+      get(id) {
+        return Promise.resolve({
           id,
-          async status() {
-            return { status: "running" };
+          status() {
+            return Promise.resolve({ status: "running" });
           },
-        };
+        });
       },
     },
+    OAUTH_KV: bindings.OAUTH_KV,
+    PLUGGY_CLIENT_ID: "synthetic-client",
+    PLUGGY_CLIENT_SECRET: "synthetic-secret",
   };
   return {
     ...config,
     OAUTH_PROVIDER: getOAuthApi(
       {
-        apiRoute: "/mcp",
-        resourceMetadata: {
-          resource: `${origin}/mcp`,
-          authorization_servers: [origin],
-        },
-        authorizeEndpoint: "/authorize",
-        tokenEndpoint: "/oauth/token",
         apiHandler: { fetch: () => new Response("synthetic MCP") },
+        apiRoute: "/mcp",
+        authorizeEndpoint: "/authorize",
         defaultHandler: { fetch: () => new Response("synthetic portal") },
+        resourceMetadata: {
+          authorization_servers: [origin],
+          resource: `${origin}/mcp`,
+        },
+        tokenEndpoint: "/oauth/token",
       },
       config,
     ),
@@ -84,15 +86,15 @@ export async function login(
   const page = await app.request("/account/login");
   const csrf = z
     .string()
-    .parse((await page.text()).match(/name="csrf" value="([^"]+)"/)?.[1]);
+    .parse((await page.text()).match(csrfInputPattern)?.[1]);
   return app.request("/account/login", {
-    method: "POST",
+    body: new URLSearchParams({ csrf, password: supplied }),
     headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
       Cookie: cookies(page),
       Origin: origin,
-      "Content-Type": "application/x-www-form-urlencoded",
     },
-    body: new URLSearchParams({ csrf, password: supplied }),
+    method: "POST",
   });
 }
 export async function command(
@@ -107,12 +109,12 @@ export async function command(
     ).json(),
   );
   return app.request(`/api/account/${action}`, {
-    method: "POST",
+    body: JSON.stringify({ csrf: state.csrf, ...fields }),
     headers: {
+      "Content-Type": "application/json",
       Cookie: cookie,
       Origin: origin,
-      "Content-Type": "application/json",
     },
-    body: JSON.stringify({ csrf: state.csrf, ...fields }),
+    method: "POST",
   });
 }

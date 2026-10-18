@@ -18,6 +18,19 @@ import type { AccountRepository } from "./entity";
 function connectionStore(binding: D1Database) {
   const db = database(binding);
   return {
+    async connect(itemId: string, now: string) {
+      await db.batch([
+        db
+          .update(settings)
+          .set({
+            connected_at: now,
+            next_sync_at: now,
+            sync_enabled: 1,
+          })
+          .where(eq(settings.id, 1)),
+        db.insert(items).values({ id: itemId }).onConflictDoNothing(),
+      ]);
+    },
     async connectionCount(itemId: string) {
       const row = await db.select({ count: count() }).from(items).get();
       return {
@@ -31,27 +44,14 @@ function connectionStore(binding: D1Database) {
         ),
       };
     },
-    async connect(itemId: string, now: string) {
-      await db.batch([
-        db
-          .update(settings)
-          .set({
-            sync_enabled: 1,
-            next_sync_at: now,
-            connected_at: now,
-          })
-          .where(eq(settings.id, 1)),
-        db.insert(items).values({ id: itemId }).onConflictDoNothing(),
-      ]);
-    },
   };
 }
 export async function readPortalStatus(binding: D1Database) {
   const db = database(binding);
   const config = await db
     .select({
-      sync_enabled: settings.sync_enabled,
       connected_at: settings.connected_at,
+      sync_enabled: settings.sync_enabled,
     })
     .from(settings)
     .where(eq(settings.id, 1))
@@ -62,8 +62,8 @@ export async function readPortalStatus(binding: D1Database) {
   const latest =
     (await db
       .select({
-        status: operations.status,
         phase: operations.phase,
+        status: operations.status,
         updated_at: operations.updated_at,
       })
       .from(operations)
@@ -85,18 +85,18 @@ export async function readPortalStatus(binding: D1Database) {
     .orderBy(items.id);
   const totals = await db
     .select({
-      total: count(),
       complete: sql<
         number | null
       >`sum(case when ${coverage.status} in ('available','empty') and ${coverage.bootstrap_complete}=1 then 1 else 0 end)`,
+      total: count(),
     })
     .from(coverage)
     .get();
   return {
     config,
-    latest,
+    coverage: totals ?? { complete: null, total: 0 },
     items: connected,
-    coverage: totals ?? { total: 0, complete: null },
+    latest,
   };
 }
 export async function migrationsReady(binding: D1Database) {
@@ -108,8 +108,8 @@ export async function migrationsReady(binding: D1Database) {
       db.select().from(settings).limit(0),
       db
         .select({
-          status: coverage.status,
           bootstrap_complete: coverage.bootstrap_complete,
+          status: coverage.status,
         })
         .from(coverage)
         .limit(0),
@@ -123,27 +123,20 @@ export function createAccountRepository(
   const db = database(binding);
   return {
     connection: connectionStore(binding),
-    status: () => readPortalStatus(binding),
     async pause() {
       await db
         .update(settings)
         .set({ sync_enabled: 0 })
         .where(eq(settings.id, 1));
     },
-    async resume(now: string) {
-      await db
-        .update(settings)
-        .set({ sync_enabled: 1, next_sync_at: now })
-        .where(and(eq(settings.id, 1), eq(settings.sync_enabled, 0)));
-    },
     async requestSync(now: Date) {
       const result = await db
         .update(settings)
         .set({
-          next_sync_at: now.toISOString(),
           manual_sync_after: new Date(
             now.getTime() + SYNC_POLICY.manualIntervalMs,
           ).toISOString(),
+          next_sync_at: now.toISOString(),
         })
         .where(
           and(
@@ -156,5 +149,12 @@ export function createAccountRepository(
         .run();
       return result.meta.changes === 1;
     },
+    async resume(now: string) {
+      await db
+        .update(settings)
+        .set({ next_sync_at: now, sync_enabled: 1 })
+        .where(and(eq(settings.id, 1), eq(settings.sync_enabled, 0)));
+    },
+    status: () => readPortalStatus(binding),
   };
 }

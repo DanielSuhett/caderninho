@@ -19,8 +19,8 @@
   Trate ausências reais; omita opcionais ausentes em vez de passar `undefined`.
 - Use truthiness para objetos opcionais, flags e coleções vazias. Use `!!` quando
   o resultado precisa ser booleano e `condição && { campos }` em spreads opcionais.
-  Preserve `0`, `false` e `""` válidos: para ausência, use `== null`, `??` ou a
-  comparação explícita com o sentinel definido pelo contrato.
+  Preserve `0`, `false` e `""` válidos: para ausência, use `??` ou comparações
+  explícitas com `null`, `undefined` e o sentinel definido pelo contrato.
 - Prefira enums para conjuntos fechados de valores do produto. Siga o padrão
   existente de objetos `as const` e uniões derivadas, compatível com TypeScript
   executável no Node. Reutilize-os em schemas, tipos e consumidores; mantenha
@@ -72,11 +72,16 @@
 
 1. Confira `git status` e o diff; preserve alterações existentes. Consulte a
    documentação da área antes de mudar contratos ou arquitetura.
-   Skills em `.agents/` e `skills-lock.json` são locais e ficam fora dos commits.
+   Skills em `.agents/`, hooks em `.codex/` e `skills-lock.json` são locais e
+   ficam fora dos commits.
 2. Use mise com Node 24: `mise install` e `mise run setup` no primeiro preparo;
    repita setup ao mudar o lockfile. `package.json` define comandos e dependências.
    Consulte `mise tasks ls`; para comandos avulsos, use `mise exec -- <comando>`.
-3. Faça mudanças pequenas e verificáveis. Durante a edição, execute
+3. Ultracite usa Biome com presets `core`, `react` e `vitest`. Execute
+   `mise exec -- npx ultracite fix`, `check` e `doctor` para corrigir, verificar e
+   diagnosticar a configuração. Preserve as restrições locais de `biome.json`;
+   não desative regras para eliminar diagnósticos.
+   Faça mudanças pequenas e verificáveis. Durante a edição, execute
    `mise run check:quick`; mantenha testes de comportamento relevantes.
    Execute lint, tipos e formatação diretamente; não crie metatestes de ferramentas,
    fontes ou configurações. Remova fixtures e helpers sem consumidores.

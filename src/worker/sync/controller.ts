@@ -13,7 +13,7 @@ export async function migrationHttp(request: Request, env: Bindings) {
 }
 export async function receiveWebhook(request: Request, env: Bindings) {
   const supplied = request.headers.get("X-Caderninho-Webhook-Secret");
-  if (!env.WEBHOOK_SECRET || !supplied) {
+  if (!(env.WEBHOOK_SECRET && supplied)) {
     return new Response("Unauthorized", { status: 401 });
   }
   if (!(await secretsEqual({ expected: env.WEBHOOK_SECRET, supplied }))) {

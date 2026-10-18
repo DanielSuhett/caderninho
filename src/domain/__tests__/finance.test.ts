@@ -4,6 +4,11 @@ import test from "node:test";
 import { accountingDay, localDay } from "../exact";
 import { normalizeResource } from "../finance-model";
 
+const invalidDatePattern = /INVALID_DATE/;
+const fieldTooLargePattern = /FIELD_TOO_LARGE/;
+const invalidResponsePattern = /INVALID_RESPONSE/;
+const canonicalMinorErrorPattern = /canonical integer, at most 30 digits/;
+
 const aid = "22222222-2222-2222-2222-222222222222",
   cid = "33333333-3333-3333-3333-333333333333";
 
@@ -14,21 +19,21 @@ const tx = (
   amount: number,
   extra: Record<string, unknown> = {},
 ) => ({
-  id,
   accountId,
-  type,
   amount,
   currencyCode: "BRL",
   date: "2026-09-01T00:00:00.000Z",
-  status: "POSTED",
   description: "Synthetic",
+  id,
+  status: "POSTED",
+  type,
   ...extra,
 });
 
 await test("accounting dates preserve the calendar day separately from the Sao Paulo date", () => {
   assert.equal(accountingDay("2026-09-01T00:00:00Z"), "2026-09-01");
   assert.equal(localDay(new Date("2026-09-01T00:00:00Z")), "2026-08-31");
-  assert.throws(() => accountingDay("2026-02-30"), /INVALID_DATE/);
+  assert.throws(() => accountingDay("2026-02-30"), invalidDatePattern);
 });
 
 await test("card signs, uncertainty and nulls remain explicit; no ticker deduplication", () => {
@@ -54,12 +59,12 @@ await test("card signs, uncertainty and nulls remain explicit; no ticker dedupli
     "transactions",
     tx("u", aid, "DEBIT", -10, {
       paymentData: {
-        paymentMethod: "PIX",
         payer: { documentNumber: { value: "***1111" } },
+        paymentMethod: "PIX",
         receiver: { documentNumber: { value: "***1111" } },
       },
     }),
-    { id: aid, type: "BANK", ownerDocument: "11111111111" },
+    { id: aid, ownerDocument: "11111111111", type: "BANK" },
     { referenceDay: "2026-09-30" },
   );
 
@@ -69,9 +74,9 @@ await test("card signs, uncertainty and nulls remain explicit; no ticker dedupli
   const i = normalizeResource(
     "investments",
     {
-      id: "x",
-      currencyCode: "BRL",
       balance: null,
+      currencyCode: "BRL",
+      id: "x",
       quantity: "0.1234567890123456789",
     },
     undefined,
@@ -87,14 +92,14 @@ await test("provider capabilities distinguish missing products, revoked consent 
   const { itemInfo, productState } = await import("../provider.entity");
 
   const item = itemInfo({
+    connector: { id: 1, isOpenFinance: false, products: ["INVESTMENTS"] },
     id: "synthetic-item",
     products: ["INVESTMENTS"],
-    connector: { id: 1, isOpenFinance: false, products: ["INVESTMENTS"] },
   });
   const cardOnly = itemInfo({
+    connector: { id: 1, products: ["CREDIT_CARDS"] },
     id: "synthetic-card-item",
     products: ["CREDIT_CARDS"],
-    connector: { id: 1, products: ["CREDIT_CARDS"] },
   });
   assert.equal(
     productState("accounts", cardOnly, [], Date.parse("2026-09-30")),
@@ -128,9 +133,9 @@ await test("provider capabilities distinguish missing products, revoked consent 
       item,
       [
         {
+          expiresAt: "2020-01-01",
           id: "synthetic-consent",
           products: ["INVESTMENTS"],
-          expiresAt: "2020-01-01",
         },
       ],
       Date.parse("2026-09-30"),
@@ -181,8 +186,8 @@ await test("holder and operation evidence retain priority over conflicting categ
       {
         operationType: "PAGAMENTO_FATURA",
         paymentData: {
-          paymentMethod: "PIX",
           payer: { documentNumber: { value: owner } },
+          paymentMethod: "PIX",
           receiver: { documentNumber: { value: owner } },
         },
       },
@@ -190,7 +195,7 @@ await test("holder and operation evidence retain priority over conflicting categ
       "paymentData participant documents equal authenticated account holder document",
     ],
     [
-      { operationType: "PAGAMENTO_FATURA", category: "Investments" },
+      { category: "Investments", operationType: "PAGAMENTO_FATURA" },
       "bill_payment",
       "operationType=PAGAMENTO_FATURA (institution or Pluggy synthesized bill payment)",
     ],
@@ -220,7 +225,7 @@ await test("holder and operation evidence retain priority over conflicting categ
         paymentData: { paymentMethod: "PIX" },
         ...extra,
       }),
-      { id: aid, type: "BANK", ownerDocument: owner },
+      { id: aid, ownerDocument: owner, type: "BANK" },
       { referenceDay: "2026-09-30" },
     );
     assert.equal(record.classification, classification);
@@ -233,24 +238,24 @@ await test("provider projection preserves nested precision and valid falsy value
   const account = normalizeResource(
     "accounts",
     {
-      id: aid,
-      currencyCode: "BRL",
       balance: 0,
-      name: "",
-      marketingName: null,
-      privateExtra: "discarded",
       bankData: {
         hasReservedBalance: false,
         reservedBalances: [
           {
-            name: "Synthetic reserve",
-            privateExtra: "discarded",
             availableAmounts: [
               { amount: "9007199254740993.29", currencyCode: "BRL" },
             ],
+            name: "Synthetic reserve",
+            privateExtra: "discarded",
           },
         ],
       },
+      currencyCode: "BRL",
+      id: aid,
+      marketingName: null,
+      name: "",
+      privateExtra: "discarded",
     },
     undefined,
     { referenceDay: null },
@@ -262,10 +267,10 @@ await test("provider projection preserves nested precision and valid falsy value
   assert.equal(account.privateExtra, undefined);
   assert.deepEqual(account["bankData.reservedBalances"], [
     {
-      name: "Synthetic reserve",
       availableAmounts: [
         { amount: "9007199254740993.29", currencyCode: "BRL" },
       ],
+      name: "Synthetic reserve",
     },
   ]);
   const consent = normalizeResource(
@@ -276,17 +281,21 @@ await test("provider projection preserves nested precision and valid falsy value
   );
   assert.deepEqual(consent.products, ["ACCOUNTS"]);
   for (const [resource, input, fault] of [
-    ["accounts", { name: "x".repeat(4001) }, /FIELD_TOO_LARGE/],
+    ["accounts", { name: "x".repeat(4001) }, fieldTooLargePattern],
     [
       "accounts",
       { marketingName: Number.POSITIVE_INFINITY },
-      /INVALID_RESPONSE/,
+      invalidResponsePattern,
     ],
-    ["accounts", { bankData: { reservedBalances: {} } }, /INVALID_RESPONSE/],
+    [
+      "accounts",
+      { bankData: { reservedBalances: {} } },
+      invalidResponsePattern,
+    ],
     [
       "consents",
       { products: Array.from({ length: 2001 }, () => "ACCOUNTS") },
-      /INVALID_RESPONSE/,
+      invalidResponsePattern,
     ],
   ] as const) {
     assert.throws(
@@ -307,14 +316,14 @@ await test("normalization establishes the persisted monetary range for primary a
         normalizeResource(
           "investments",
           {
-            id: "synthetic-investment",
             currencyCode: "BRL",
+            id: "synthetic-investment",
             ...fields,
           },
           undefined,
           { referenceDay: null },
         ),
-      /canonical integer, at most 30 digits/,
+      canonicalMinorErrorPattern,
     );
   }
   assert.throws(
@@ -325,6 +334,6 @@ await test("normalization establishes the persisted monetary range for primary a
         { id: cid, type: "CREDIT" },
         { referenceDay: "2026-09-30" },
       ),
-    /canonical integer, at most 30 digits/,
+    canonicalMinorErrorPattern,
   );
 });

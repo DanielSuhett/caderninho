@@ -1,6 +1,6 @@
 export interface ConsentDetails {
-  clientName: string;
   clientDomain?: string | null | undefined;
+  clientName: string;
   redirectHost: string;
   redirectIsLoopback: boolean;
 }

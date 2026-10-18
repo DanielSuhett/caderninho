@@ -7,7 +7,7 @@ export async function invoke(
   name: string,
   input: unknown,
 ): Promise<unknown> {
-  const call = ToolCallSchema.parse({ name, input });
+  const call = ToolCallSchema.parse({ input, name });
   switch (call.name) {
     case ToolName.setup_status:
       return queries.setupStatus();
@@ -31,15 +31,19 @@ export async function invoke(
       const raw = await queries.readAccount(call.input.accountId);
       return {
         balance: raw.balance,
-        currency: raw.currencyCode,
-        sourceUpdatedAt: raw.updatedAt ?? null,
-        readAt: queries.now(),
         bankRealtime: false,
+        currency: raw.currencyCode,
+        readAt: queries.now(),
+        sourceUpdatedAt: raw.updatedAt ?? null,
       };
     }
     case ToolName.sync:
     case ToolName.reconcile:
     case ToolName.reapply:
       throw new Error("DURABLE_TASK_REQUIRED");
+    default: {
+      const unexpected: never = call;
+      throw new Error(`UNSUPPORTED_TOOL: ${unexpected}`);
+    }
   }
 }

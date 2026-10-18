@@ -9,10 +9,15 @@ import { fail } from "./fault.entity";
 import type { MoneyInput } from "./finance.entity";
 import { parseDomain } from "./validation";
 
-export { fail };
+const canonicalMinorPattern = /^-?(0|[1-9]\d{0,29})$/;
+const decimalPattern = /^[-+]?\d+(?:\.\d+)?(?:e[-+]?\d+)?$/i;
+const dayPattern = /^\d{4}-\d{2}-\d{2}$/;
+const identifierPattern = /^[a-zA-Z0-9_-]{1,128}$/;
+
+export { fail } from "./fault.entity";
 
 export function assertMinor(value: string) {
-  if (!/^-?(0|[1-9]\d{0,29})$/.test(value)) {
+  if (!canonicalMinorPattern.test(value)) {
     throw new Error(
       "Minor amount must be canonical integer, at most 30 digits",
     );
@@ -25,12 +30,12 @@ export function exactJSON(text: string) {
 }
 
 export function decimal(value: MoneyInput) {
-  if (value == null) {
+  if (value === null || value === undefined) {
     return null;
   }
   const s = String(value);
 
-  if (s.length > 100 || !/^[-+]?\d+(?:\.\d+)?(?:e[-+]?\d+)?$/i.test(s)) {
+  if (s.length > 100 || !decimalPattern.test(s)) {
     fail(FaultCode.INVALID_DECIMAL);
   }
   const exponent = Number(s.toLowerCase().split("e")[1] ?? "0");
@@ -43,24 +48,24 @@ export function decimal(value: MoneyInput) {
 }
 
 export function minor(value: MoneyInput, currency: string) {
-  if (value == null) {
+  if (value === null || value === undefined) {
     return null;
   }
 
   // Explicit currency scales; an unknown currency is queryable, never silently assumed 2dp.
   const scales: Record<string, number> = {
+    ARS: 2,
+    AUD: 2,
+    BHD: 3,
     BRL: 2,
-    USD: 2,
+    CAD: 2,
+    CHF: 2,
+    CLP: 0,
     EUR: 2,
     GBP: 2,
-    ARS: 2,
-    CHF: 2,
-    CAD: 2,
-    AUD: 2,
     JPY: 0,
-    CLP: 0,
     KWD: 3,
-    BHD: 3,
+    USD: 2,
   };
 
   const scale = scales[currency];
@@ -87,7 +92,7 @@ export function minor(value: MoneyInput, currency: string) {
 export function day(value: unknown) {
   if (
     typeof value !== "string" ||
-    !/^\d{4}-\d{2}-\d{2}$/.test(value) ||
+    !dayPattern.test(value) ||
     !Number.isFinite(Date.parse(value)) ||
     new Date(value).toISOString().slice(0, 10) !== value
   ) {
@@ -98,7 +103,7 @@ export function day(value: unknown) {
 }
 
 export const accountingDay = (value: string | null | undefined) =>
-  value == null ? null : day(value.slice(0, 10));
+  value === null || value === undefined ? null : day(value.slice(0, 10));
 
 export function isMatureDate({
   date,
@@ -107,21 +112,26 @@ export function isMatureDate({
   date: string | null | undefined;
   referenceDay: string | null;
 }) {
-  return date != null && referenceDay !== null && date <= referenceDay;
+  return (
+    date !== null &&
+    date !== undefined &&
+    referenceDay !== null &&
+    date <= referenceDay
+  );
 }
 
 export function localDay(value: Date) {
   return new Intl.DateTimeFormat("en-CA", {
+    day: "2-digit",
+    month: "2-digit",
     timeZone: "America/Sao_Paulo",
     year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
   }).format(value);
 }
 
 export function id(value: unknown) {
   return parseDomain(
-    z.string().regex(/^[a-zA-Z0-9_-]{1,128}$/),
+    z.string().regex(identifierPattern),
     value,
     FaultCode.INVALID_ID,
   );

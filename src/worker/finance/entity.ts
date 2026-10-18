@@ -52,13 +52,7 @@ export type QueryCoverage = {
   )[];
 }[];
 export interface FinancialRepository {
-  query(input: Query): Promise<{
-    revision: number;
-    coverage: QueryCoverage;
-    records: (SerializedEntity & { effective_tags: string })[];
-    cursor: Cursor | null;
-  }>;
-  aggregate(input: Aggregate): Promise<{
+  aggregate: (input: Aggregate) => Promise<{
     revision: number;
     coverage: QueryCoverage;
     metric: string;
@@ -71,7 +65,23 @@ export interface FinancialRepository {
       partial: boolean;
     }[];
   }>;
-  readStatus(): Promise<{
+  correct: (
+    identity: Identity,
+    change: RecordChange,
+  ) => Promise<{ updated: true }>;
+  explain: (identity: Identity) => Promise<{
+    tags: Pick<typeof tags.$inferSelect, "key" | "value" | "origin">[];
+    record: SerializedEntity | null;
+    overrides: Pick<typeof overrides.$inferSelect, "field" | "value">[];
+  }>;
+  preview: (input: PreviewInput, before: number) => Promise<PreviewSelection>;
+  query: (input: Query) => Promise<{
+    revision: number;
+    coverage: QueryCoverage;
+    records: (SerializedEntity & { effective_tags: string })[];
+    cursor: Cursor | null;
+  }>;
+  readStatus: () => Promise<{
     items: (typeof items.$inferSelect)[];
     coverage: (typeof coverage.$inferSelect)[];
     operations: (Pick<
@@ -81,67 +91,62 @@ export interface FinancialRepository {
     backlog: { pending: number } | undefined;
     limitation: string;
   }>;
-  correct(identity: Identity, change: RecordChange): Promise<{ updated: true }>;
-  explain(identity: Identity): Promise<{
-    tags: Pick<typeof tags.$inferSelect, "key" | "value" | "origin">[];
-    record: SerializedEntity | null;
-    overrides: Pick<typeof overrides.$inferSelect, "field" | "value">[];
-  }>;
-  preview(input: PreviewInput, before: number): Promise<PreviewSelection>;
-  subscriptions(
+  revision: () => Promise<number>;
+  rules: (revision: string) => Promise<RuleEngine>;
+  subscriptions: (
     input: SubscriptionInput,
-  ): Promise<{ before: number; records: FinanceRecord[] }>;
-  revision(): Promise<number>;
-  rules(revision: string): Promise<RuleEngine>;
+  ) => Promise<{ before: number; records: FinanceRecord[] }>;
 }
 export interface PreviewSelection {
   before: number;
-  total: number;
   sample: {
     id: string;
     normalized: FinanceRecord;
     effective_category: string | null;
     effective_description: string | null;
   }[];
+  total: number;
 }
 export interface RuleActions {
-  read(revision: string): Promise<(typeof rule_sets.$inferSelect)["document"]>;
-  list(): Promise<
+  activate: (
+    revision: string,
+  ) => Promise<{ activated: string; historicalReclassification: boolean }>;
+  list: () => Promise<
     Pick<typeof rule_sets.$inferSelect, "id" | "created_at" | "normalizer">[]
   >;
-  activate(
+  read: (
     revision: string,
-  ): Promise<{ activated: string; historicalReclassification: boolean }>;
-  save(
+  ) => Promise<(typeof rule_sets.$inferSelect)["document"]>;
+  save: (
     document: Rules,
     activate?: boolean,
-  ): Promise<{ id: string; rules: number; activated: boolean }>;
+  ) => Promise<{ id: string; rules: number; activated: boolean }>;
 }
 
 export interface EntityObservation {
   identity: Identity;
-  source: ProviderRecord;
-  operationId: string;
   observedAt: string;
+  operationId: string;
+  source: ProviderRecord;
 }
 export interface EntityPublication extends EntityObservation {
-  projection: ReturnType<typeof projectEntity>;
+  derived: Derived | undefined;
   digest: string;
   normalizer: string;
+  projection: ReturnType<typeof projectEntity>;
   rulesRevision: string;
-  derived: Derived | undefined;
 }
 export type EntityMutation =
   | { kind: "observe"; value: EntityObservation }
   | { kind: "save"; value: EntityPublication };
 export interface PreparedEntity {
+  classified: number;
   mutation: EntityMutation;
   seenInOperation: boolean;
   state: (typeof EntityChange)[keyof typeof EntityChange];
-  classified: number;
 }
 export interface EntityReader {
-  read(identity: Identity): Promise<
+  read: (identity: Identity) => Promise<
     | {
         relevant_hash: string;
         deleted: number;
@@ -152,17 +157,17 @@ export interface EntityReader {
 }
 export interface EntityInput {
   identity: Identity;
-  source: ProviderRecord;
-  parent: FinanceRecord | undefined;
-  operationId: string;
-  referenceDay: string;
-  rulesRevision: string;
-  renormalize: boolean;
-  observedAt: string;
   legacyProjection?: FinanceRecord;
+  observedAt: string;
+  operationId: string;
+  parent: FinanceRecord | undefined;
+  referenceDay: string;
+  renormalize: boolean;
+  rulesRevision: string;
+  source: ProviderRecord;
 }
 export interface EntityPreparation {
-  repository: EntityReader;
-  hash(value: unknown): Promise<string>;
   evaluate: RuleEngine["evaluate"];
+  hash: (value: unknown) => Promise<string>;
+  repository: EntityReader;
 }

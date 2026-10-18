@@ -9,33 +9,33 @@ import { prepareEntity } from "../service";
 
 const input: EntityInput = {
   identity: {
+    id: "tx",
     itemId: "item",
-    resource: Resource.transactions,
     parentId: "account",
-    id: "tx",
+    resource: Resource.transactions,
   },
-  source: { id: "tx" },
-  parent: undefined,
-  operationId: "operation",
-  referenceDay: "2026-10-18",
-  rulesRevision: "revision",
-  renormalize: false,
-  observedAt: "2026-10-18T12:00:00Z",
   legacyProjection: {
-    id: "tx",
     accountingDate: "2026-10-18",
     amountMinor: "900719925474099329",
     currencyCode: "BRL",
+    id: "tx",
   },
+  observedAt: "2026-10-18T12:00:00Z",
+  operationId: "operation",
+  parent: undefined,
+  referenceDay: "2026-10-18",
+  renormalize: false,
+  rulesRevision: "revision",
+  source: { id: "tx" },
 };
 
 await test("preparation returns a typed publication plan with exact money and no database builders", async () => {
   const engine = compileValidatedRules(EMPTY_RULES);
   const prepared = await prepareEntity(
     {
-      repository: { read: async () => undefined },
-      hash: async () => "digest",
       evaluate: engine.evaluate,
+      hash: async () => "digest",
+      repository: { read: async () => undefined },
     },
     input,
   );
@@ -56,16 +56,14 @@ await test("preparation returns a typed publication plan with exact money and no
 await test("unchanged observations bypass classification and keep the operation observation", async () => {
   const prepared = await prepareEntity(
     {
+      evaluate: () => Promise.reject(new Error("UNCHANGED_MUST_NOT_EVALUATE")),
+      hash: async () => "digest",
       repository: {
         read: async () => ({
-          relevant_hash: "digest",
           deleted: 0,
+          relevant_hash: "digest",
           seen_operation: "operation",
         }),
-      },
-      hash: async () => "digest",
-      evaluate: async () => {
-        throw new Error("UNCHANGED_MUST_NOT_EVALUATE");
       },
     },
     input,

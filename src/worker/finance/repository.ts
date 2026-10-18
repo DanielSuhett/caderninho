@@ -42,27 +42,38 @@ import {
 import { hash } from "@/shared/crypto";
 
 import { database } from "../database";
-import * as tables from "../schema";
+import {
+  coverage as coverageTable,
+  type derived as derivedTable,
+  effective_entities as e,
+  type entities as entitiesTable,
+  inbox as inboxTable,
+  items as itemsTable,
+  operations as o,
+  settings as settingsTable,
+  tags as tagsTable,
+} from "../schema";
 
-const e = tables.effective_entities;
+const jsonFieldPattern = /^[a-zA-Z0-9_.]+$/;
+
 const effectiveColumns = getViewSelectedFields(e);
-const t = alias(tables.tags, "t"),
-  m = alias(tables.tags, "m");
+const t = alias(tagsTable, "t"),
+  m = alias(tagsTable, "m");
 const columns = {
-  date: e.transaction_date,
   account: e.parent_id,
-  item: e.item_id,
-  currency: e.currency,
-  direction: e.direction,
-  "original.category": e.original_category,
-  "effective.category": e.effective_category,
-  "effective.group": e.group_id,
-  "original.description": e.original_description,
-  "effective.description": e.effective_description,
   amountMinor: e.amount_key,
-  status: e.status,
+  currency: e.currency,
+  date: e.transaction_date,
+  direction: e.direction,
+  "effective.category": e.effective_category,
+  "effective.description": e.effective_description,
+  "effective.group": e.group_id,
   eligible: e.eligible,
   ignored: e.ignored,
+  item: e.item_id,
+  "original.category": e.original_category,
+  "original.description": e.original_description,
+  status: e.status,
 };
 
 export function moneyKey(s: string) {
@@ -132,11 +143,11 @@ export function compileFilter(db: D1Database, filter: Filter): SQL {
       );
     }
     const value = filterValue(f);
-    parameters++;
+    parameters += 1;
     if (f.op === FilterOperator.contains) {
       return gt(sql<number>`instr(${columns[f.field]}, ${value})`, 0);
     }
-    return { eq, ne, gte, lte }[f.op](columns[f.field], value);
+    return { eq, gte, lte, ne }[f.op](columns[f.field], value);
   }
   return walk(filter, 0);
 }
@@ -152,10 +163,10 @@ function filterValue(filter: Extract<Filter, { field: string }>) {
 }
 
 export async function connectedItems(db: D1Database, ids?: string[]) {
-  return database(db)
+  return await database(db)
     .select()
-    .from(tables.items)
-    .where(ids ? inArray(tables.items.id, ids) : undefined);
+    .from(itemsTable)
+    .where(ids ? inArray(itemsTable.id, ids) : undefined);
 }
 async function coverageFor(db: D1Database, resource: Resource) {
   const items = await connectedItems(db);
@@ -164,23 +175,23 @@ async function coverageFor(db: D1Database, resource: Resource) {
   }
   const found = await database(db)
     .select({
-      itemId: tables.coverage.item_id,
       coverage: {
-        resource: tables.coverage.resource,
-        parent_id: tables.coverage.parent_id,
-        status: tables.coverage.status,
-        bootstrap_complete: tables.coverage.bootstrap_complete,
-        observed_at: tables.coverage.observed_at,
+        bootstrap_complete: coverageTable.bootstrap_complete,
+        observed_at: coverageTable.observed_at,
+        parent_id: coverageTable.parent_id,
+        resource: coverageTable.resource,
+        status: coverageTable.status,
       },
+      itemId: coverageTable.item_id,
     })
-    .from(tables.coverage)
+    .from(coverageTable)
     .where(
       and(
         inArray(
-          tables.coverage.item_id,
+          coverageTable.item_id,
           items.map((item) => item.id),
         ),
-        eq(tables.coverage.resource, resource),
+        eq(coverageTable.resource, resource),
       ),
     );
   const byItem = new Map<string, (typeof found)[number]["coverage"][]>();
@@ -190,21 +201,21 @@ async function coverageFor(db: D1Database, resource: Resource) {
     byItem.set(row.itemId, coverage);
   }
   return items.map((item) => ({
-    itemId: item.id,
     coverage: byItem.get(item.id) ?? [
       {
+        bootstrap_complete: 0,
         resource,
         status: Availability.not_synced,
-        bootstrap_complete: 0,
       },
     ],
+    itemId: item.id,
   }));
 }
 export async function revision(db: D1Database) {
   const row = await database(db)
-    .select({ revision: tables.settings.revision })
-    .from(tables.settings)
-    .where(eq(tables.settings.id, 1))
+    .select({ revision: settingsTable.revision })
+    .from(settingsTable)
+    .where(eq(settingsTable.id, 1))
     .get();
   if (!row) {
     throw new Error("SETTINGS_MISSING");
@@ -215,16 +226,16 @@ export async function revision(db: D1Database) {
 // Public tools historically expose these JSON columns as strings.
 export function serializedEntity<
   T extends {
-    source: typeof tables.entities.$inferSelect.source;
-    normalized: typeof tables.entities.$inferSelect.normalized;
-    evidence: typeof tables.derived.$inferSelect.evidence | null;
+    source: typeof entitiesTable.$inferSelect.source;
+    normalized: typeof entitiesTable.$inferSelect.normalized;
+    evidence: typeof derivedTable.$inferSelect.evidence | null;
   },
 >(row: T) {
   return {
     ...row,
-    source: JSON.stringify(row.source),
-    normalized: JSON.stringify(row.normalized),
     evidence: row.evidence ? JSON.stringify(row.evidence) : null,
+    normalized: JSON.stringify(row.normalized),
+    source: JSON.stringify(row.source),
   };
 }
 
@@ -232,17 +243,17 @@ export async function queryEntities(
   db: D1Database,
   input: Omit<Partial<Query>, "cursor"> & { cursor?: Query["cursor"] | null },
 ) {
-  const args = { resource: Resource.transactions, limit: 50, ...input };
+  const args = { limit: 50, resource: Resource.transactions, ...input };
   const scope = await hash({
-    resource: args.resource,
     filter: args.filter ?? null,
+    resource: args.resource,
   });
   if (args.cursor) {
-    assertCursorScope({ expected: scope, actual: args.cursor.scope });
+    assertCursorScope({ actual: args.cursor.scope, expected: scope });
   }
   const before = await revision(db);
   if (args.cursor) {
-    assertReadRevision({ expected: before, actual: args.cursor.revision });
+    assertReadRevision({ actual: args.cursor.revision, expected: before });
   }
   const tags = database(db)
     .select({ value: sql<string>`json_group_object(${t.key}, ${t.value})` })
@@ -262,19 +273,19 @@ export async function queryEntities(
     .limit(args.limit + 1)
     .offset(args.cursor?.offset ?? 0);
   const coverage = await coverageFor(db, args.resource);
-  assertReadRevision({ expected: before, actual: await revision(db) });
+  assertReadRevision({ actual: await revision(db), expected: before });
   return {
-    revision: before,
     coverage,
-    records: result.slice(0, args.limit).map(serializedEntity),
     cursor:
       result.length > args.limit
         ? {
-            revision: before,
             offset: (args.cursor?.offset ?? 0) + args.limit,
+            revision: before,
             scope,
           }
         : null,
+    records: result.slice(0, args.limit).map(serializedEntity),
+    revision: before,
   };
 }
 
@@ -284,9 +295,9 @@ export async function aggregateEntities(
 ) {
   const args = { resource: Resource.transactions, ...input };
   const before = await revision(db),
-    definition = metricFor({ resource: args.resource, metric: args.metric });
+    definition = metricFor({ metric: args.metric, resource: args.resource });
   const field = definition?.field;
-  if (field && !/^[a-zA-Z0-9_.]+$/.test(field)) {
+  if (field && !jsonFieldPattern.test(field)) {
     throw new Error("INVALID_METRIC_FIELD");
   }
   const measure = field
@@ -323,8 +334,8 @@ export async function aggregateEntities(
   const result = await database(db)
     .with(selected)
     .select({
-      currency: selected.currency,
       count: sql<string>`cast(count(*) as text)`,
+      currency: selected.currency,
       known: sql<string>`cast(count(${selected.measure}) as text)`,
       limb0: limb(0),
       limb1: limb(1),
@@ -340,11 +351,9 @@ export async function aggregateEntities(
     .from(selected)
     .groupBy(selected.currency);
   const coverage = await coverageFor(db, args.resource);
-  assertReadRevision({ expected: before, actual: await revision(db) });
+  assertReadRevision({ actual: await revision(db), expected: before });
   return {
-    revision: before,
     coverage,
-    metric: args.metric ?? "source_amount",
     definition: definition ?? null,
     groups: result.map((r) => {
       if (BigInt(r.count) > 9000000000000n) {
@@ -366,47 +375,48 @@ export async function aggregateEntities(
         total = total * 1000n + BigInt(part ?? "0");
       }
       return {
-        currency: r.currency,
         count: r.count,
+        currency: r.currency,
         known: r.known,
+        partial: r.count !== r.known,
         totalMinor:
           args.metric === "count" || r.known === "0" ? null : total.toString(),
-        partial: r.count !== r.known,
       };
     }),
+    metric: args.metric ?? "source_amount",
+    revision: before,
   };
 }
 
 export async function readStatus(db: D1Database) {
-  const o = tables.operations;
   const operations = await database(db)
     .select({
-      id: o.id,
-      status: o.status,
-      phase: o.phase,
-      progress: o.progress,
       created_at: o.created_at,
       dispatched: o.dispatched,
+      id: o.id,
+      phase: o.phase,
+      progress: o.progress,
+      status: o.status,
     })
     .from(o)
     .orderBy(desc(o.created_at))
     .limit(50);
   return {
-    items: await connectedItems(db),
+    backlog: await database(db)
+      .select({ pending: count() })
+      .from(inboxTable)
+      .where(isNull(inboxTable.processed_at))
+      .get(),
     coverage: await database(db)
-      .select(getTableColumns(tables.coverage))
-      .from(tables.coverage),
+      .select(getTableColumns(coverageTable))
+      .from(coverageTable),
+    items: await connectedItems(db),
+    limitation:
+      "Webhooks can be lost; eventId is not a sequence. Explicit reconciliation is required for known or suspected gaps.",
     operations: operations.map((op) => ({
       ...op,
       progress: JSON.stringify(op.progress),
     })),
-    backlog: await database(db)
-      .select({ pending: count() })
-      .from(tables.inbox)
-      .where(isNull(tables.inbox.processed_at))
-      .get(),
-    limitation:
-      "Webhooks can be lost; eventId is not a sequence. Explicit reconciliation is required for known or suspected gaps.",
   };
 }
 export async function previewSelection(
@@ -427,10 +437,10 @@ export async function previewSelection(
     .get();
   const sample = await database(db)
     .select({
-      id: e.id,
-      normalized: e.normalized,
       effective_category: e.effective_category,
       effective_description: e.effective_description,
+      id: e.id,
+      normalized: e.normalized,
     })
     .from(e)
     .where(predicate)
@@ -438,8 +448,8 @@ export async function previewSelection(
     .limit(a.limit);
   return {
     before,
-    total: total?.count ?? 0,
     sample,
+    total: total?.count ?? 0,
   };
 }
 export async function subscriptionRecords(
@@ -449,9 +459,9 @@ export async function subscriptionRecords(
   const before = await revision(db);
   const selected = await database(db)
     .select({
-      normalized: e.normalized,
-      effective_description: e.effective_description,
       effective_category: e.effective_category,
+      effective_description: e.effective_description,
+      normalized: e.normalized,
     })
     .from(e)
     .where(
@@ -464,16 +474,16 @@ export async function subscriptionRecords(
         eq(e.currency, a.currency),
       ),
     )
-    .limit(10001);
-  if (selected.length > 10000) {
+    .limit(10_001);
+  if (selected.length > 10_000) {
     throw new Error("ANALYSIS_LIMIT_NARROW_PERIOD");
   }
   return {
     before,
     records: selected.map((r) => ({
       ...r.normalized,
-      description: r.effective_description,
       category: r.effective_category,
+      description: r.effective_description,
     })),
   };
 }

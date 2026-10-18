@@ -17,11 +17,19 @@ import {
 } from "@/worker/composition";
 import { database } from "@/worker/database";
 import { invoke } from "@/worker/mcp/invoke";
-import * as tables from "@/worker/schema";
+import {
+  items as itemsTable,
+  operations as operationsTable,
+  settings as settingsTable,
+} from "@/worker/schema";
 
 import { command, cookies, fixture, login, settings } from "./personal-fixture";
 import { applyD1Migrations, reset } from "cloudflare:test";
 import { env as bindings } from "cloudflare:workers";
+
+const sourceIdentityMismatchPattern = /SOURCE_IDENTITY_MISMATCH/;
+const meuPluggyRequiredPattern = /MEU_PLUGGY_REQUIRED/;
+const pluggyAccountNotConfiguredPattern = /PLUGGY_ACCOUNT_NOT_CONFIGURED/;
 
 const item = "11111111-1111-4111-8111-111111111111";
 beforeEach(async () => {
@@ -30,18 +38,22 @@ beforeEach(async () => {
 });
 afterEach(() => vi.unstubAllGlobals());
 function source(connector = 200) {
-  mockNetwork(async (input) => {
+  mockNetwork((input) => {
     const url = sourceUrl(input);
     if (url.pathname === "/auth") {
-      return Response.json({ apiKey: syntheticJwt() });
+      return Promise.resolve(Response.json({ apiKey: syntheticJwt() }));
     }
     if (url.pathname === "/connect_token") {
-      return Response.json({ accessToken: "synthetic-widget-token" });
+      return Promise.resolve(
+        Response.json({ accessToken: "synthetic-widget-token" }),
+      );
     }
     if (url.pathname === `/items/${item}`) {
-      return Response.json({ id: item, connector: { id: connector } });
+      return Promise.resolve(
+        Response.json({ connector: { id: connector }, id: item }),
+      );
     }
-    throw new Error("Unexpected synthetic request");
+    return Promise.reject(new Error("Unexpected synthetic request"));
   });
 }
 
@@ -60,11 +72,11 @@ test("deployment credentials connect Meu Pluggy; D1 stores settings without cred
   assert.equal(state.panel.sync, "preparing");
   assert.deepEqual(state.panel.polling, {
     intervalMs: 5000,
-    retryIntervalMs: 30000,
+    retryIntervalMs: 30_000,
   });
   const stored = await database(bindings.DB)
     .select()
-    .from(tables.settings)
+    .from(settingsTable)
     .get()
     .then((row) => row ?? null);
   assert.ok(!JSON.stringify(stored).includes("synthetic-secret"));
@@ -78,26 +90,28 @@ test("deployment credentials connect Meu Pluggy; D1 stores settings without cred
 });
 
 test("upstream validation rejects a wrong Item and direct bank connector before anything is saved", async () => {
-  mockNetwork(async (input) => {
+  mockNetwork((input) => {
     if (sourceUrl(input).pathname === "/auth") {
-      return Response.json({ apiKey: syntheticJwt() });
+      return Promise.resolve(Response.json({ apiKey: syntheticJwt() }));
     }
-    return Response.json({ id: "different-item", connector: { id: 200 } });
+    return Promise.resolve(
+      Response.json({ connector: { id: 200 }, id: "different-item" }),
+    );
   });
   await assert.rejects(
     accountService(settings()).connectItem(item),
-    /SOURCE_IDENTITY_MISMATCH/,
+    sourceIdentityMismatchPattern,
   );
   source(1);
   const config = settings();
   await assert.rejects(
     accountService(config).connectItem(item),
-    /MEU_PLUGGY_REQUIRED/,
+    meuPluggyRequiredPattern,
   );
   assert.equal(
     await database(bindings.DB)
       .select({ n: count() })
-      .from(tables.items)
+      .from(itemsTable)
       .get()
       .then((row) => row?.n ?? null),
     0,
@@ -122,14 +136,14 @@ test("pause and manual sync preserve settings; daily scheduling creates one dura
   assert.equal(
     await database(bindings.DB)
       .select({ n: count() })
-      .from(tables.operations)
+      .from(operationsTable)
       .get()
       .then((row) => row?.n ?? null),
     0,
   );
   await service.resume();
   await database(bindings.DB)
-    .update(tables.settings)
+    .update(settingsTable)
     .set({ next_sync_at: "2099-01-01T00:00:00Z" });
   assert.equal(await service.requestSync(), true);
   assert.equal(await service.requestSync(), false);
@@ -138,15 +152,15 @@ test("pause and manual sync preserve settings; daily scheduling creates one dura
   assert.equal(
     await database(bindings.DB)
       .select({ n: count() })
-      .from(tables.operations)
+      .from(operationsTable)
       .get()
       .then((row) => row?.n ?? null),
     1,
   );
   assert.equal(
     await database(bindings.DB)
-      .select({ dispatched: tables.operations.dispatched })
-      .from(tables.operations)
+      .select({ dispatched: operationsTable.dispatched })
+      .from(operationsTable)
       .get()
       .then((row) => row?.dispatched ?? null),
     1,
@@ -167,8 +181,8 @@ test("named account commands connect an Item and never return deployment secrets
   assert.equal(tokenBody.accessToken, "synthetic-widget-token");
   assert.deepEqual(tokenBody.configuration, {
     connectorIds: [200],
-    selectedConnectorId: 200,
     includeSandbox: false,
+    selectedConnectorId: 200,
   });
   assert.ok(!JSON.stringify(tokenBody).includes("synthetic-secret"));
   assert.equal((await command(app, cookie, "pause")).status, 200);
@@ -183,8 +197,7 @@ test("named account commands connect an Item and never return deployment secrets
   assert.ok(!diagnostic.includes(item));
   assert.ok(!diagnostic.includes(paused.csrf));
   assert.equal((await command(app, cookie, "resume")).status, 200);
-  const missing = settings();
-  delete missing.PLUGGY_CLIENT_SECRET;
+  const { PLUGGY_CLIENT_SECRET: _secret, ...missing } = settings();
   assert.equal(
     (await accountService(missing).wizardState()).credentials,
     false,
@@ -192,7 +205,7 @@ test("named account commands connect an Item and never return deployment secrets
   assert.equal((await financialQueries(missing).readStatus()).items.length, 1);
   await assert.rejects(
     accountService(missing).token(),
-    /PLUGGY_ACCOUNT_NOT_CONFIGURED/,
+    pluggyAccountNotConfiguredPattern,
   );
 });
 
@@ -201,21 +214,23 @@ test("live balance reads the owner's account directly with renewed installation 
   const accountId = "22222222-2222-4222-8222-222222222222";
   let requests = 0;
   config.PLUGGY_CLIENT_SECRET = "renewed-synthetic-secret";
-  mockNetwork(async (input, init) => {
-    requests++;
+  mockNetwork((input, init) => {
+    requests += 1;
     const url = sourceUrl(input);
     if (url.pathname === "/auth") {
       const body = z
         .object({ clientSecret: z.string() })
         .parse(JSON.parse(z.string().parse(init?.body)));
       assert.equal(body.clientSecret, "renewed-synthetic-secret");
-      return Response.json({ apiKey: syntheticJwt() });
+      return Promise.resolve(Response.json({ apiKey: syntheticJwt() }));
     }
     assert.equal(url.pathname, `/accounts/${accountId}`);
-    return new Response(
-      '{"id":"' +
-        accountId +
-        '","balance":9007199254740993.29,"currencyCode":"BRL"}',
+    return Promise.resolve(
+      new Response(
+        '{"id":"' +
+          accountId +
+          '","balance":9007199254740993.29,"currencyCode":"BRL"}',
+      ),
     );
   });
   const queries = financialQueries(config);
@@ -226,10 +241,10 @@ test("live balance reads the owner's account directly with renewed installation 
   const balance = z
     .object({
       balance: z.string(),
-      currency: z.string(),
-      sourceUpdatedAt: z.null(),
-      readAt: z.iso.datetime(),
       bankRealtime: z.literal(false),
+      currency: z.string(),
+      readAt: z.iso.datetime(),
+      sourceUpdatedAt: z.null(),
     })
     .parse(result);
   assert.equal(balance.balance, "9007199254740993.29");
