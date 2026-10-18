@@ -1,13 +1,14 @@
 import assert from "node:assert/strict";
 
-import { beforeEach, test } from "vitest";
+import { afterEach, beforeEach, test, vi } from "vitest";
 import { z } from "zod/v4";
 
 import { createLogger } from "../../src/shared/logger";
 import { fetchMcp } from "../../src/worker/mcp";
 import { withObservation } from "../../src/worker/observability";
 import { startOperation } from "../../src/worker/sync/repository";
-import { responseJson } from "../support";
+import { responseJson, sourceUrl } from "../support";
+import { mockNetwork, syntheticJwt } from "../support/network";
 import { settings, testMigrations } from "./personal-fixture";
 import {
   applyD1Migrations,
@@ -71,6 +72,7 @@ beforeEach(async () => {
   await reset();
   await applyD1Migrations(bindings.DB, testMigrations);
 });
+afterEach(() => vi.unstubAllGlobals());
 
 test("an internal tool error remains HTTP 200 and emits one safe MCP failure", async () => {
   await bindings.DB.exec("DROP VIEW effective_entities");
@@ -267,6 +269,164 @@ test("100 polls, rejections and normal cancellations stay quiet and close every 
       assert.ok(span.correlation.startsWith("rejected-"));
     }
   }
+  assert.equal(
+    JSON.stringify([observed.lines, observed.spans]).includes("private-"),
+    false,
+  );
+});
+
+test("concurrent provider and Task failures retain separate HTTP 200 diagnostics", async () => {
+  await bindings.DB.exec("DROP TABLE operations");
+  const accountId = "22222222-2222-4222-8222-222222222222";
+  mockNetwork((input) =>
+    Promise.resolve(
+      sourceUrl(input).pathname === "/auth"
+        ? Response.json({ apiKey: syntheticJwt() })
+        : Response.json({
+            balance: { secret: "private-provider-body" },
+            id: accountId,
+          }),
+    ),
+  );
+  const observed = observation();
+  const [provider, task] = await Promise.all([
+    withObservation(
+      { ...observed.input, correlation: "provider-request" },
+      () =>
+        fetchMcp(
+          rpc("tools/call", {
+            arguments: { accountId },
+            name: "caderninho_live_balance",
+          }),
+          settings(),
+        ),
+    ),
+    withObservation({ ...observed.input, correlation: "task-request" }, () =>
+      fetchMcp(
+        rpc("tasks/get", { taskId: "private-unverified-task" }),
+        settings(),
+      ),
+    ),
+  ]);
+  assert.equal(provider.status, 200);
+  assert.equal(task.status, 200);
+  assert.equal((await responseJson(provider)).result?.isError, true);
+  assert.equal((await responseJson(task)).error?.code, -32_602);
+  const diagnostics = z
+    .array(
+      z.object({
+        correlation: z.string(),
+        event: z.literal("MCP_REQUEST"),
+        failure: z.string(),
+        level: z.literal(50),
+        outcome: z.literal("failed"),
+      }),
+    )
+    .parse(observed.lines.map((line) => JSON.parse(line)));
+  assert.equal(diagnostics.length, 2);
+  assert.deepEqual(
+    new Map(diagnostics.map((entry) => [entry.correlation, entry.failure])),
+    new Map([
+      ["provider-request", "INVALID_RESPONSE"],
+      ["task-request", "INTERNAL_ERROR"],
+    ]),
+  );
+  const spans = z
+    .array(
+      z.object({
+        action: z.string().optional(),
+        correlation: z.string(),
+        failure: z.string().optional(),
+        name: z.string(),
+        outcome: z.string(),
+      }),
+    )
+    .parse(observed.spans);
+  for (const span of spans) {
+    if (span.action === "live_balance") {
+      assert.equal(span.correlation, "provider-request");
+    }
+    if (span.action === "tasks_get") {
+      assert.equal(span.correlation, "task-request");
+    }
+  }
+  assert.equal(
+    JSON.stringify([observed.lines, observed.spans]).includes("private-"),
+    false,
+  );
+  assert.equal(
+    JSON.stringify([observed.lines, observed.spans]).includes(accountId),
+    false,
+  );
+});
+
+test("MCP local reapplication replays its receipt without another publication", async () => {
+  const observed = observation();
+  const params = {
+    _meta: { "io.modelcontextprotocol/protocolVersion": "2026-07-28" },
+    arguments: {
+      itemIds: ["11111111-1111-4111-8111-111111111111"],
+      requestKey: "private-reapply-key",
+    },
+    name: "caderninho_reapply",
+  };
+  const first = await responseJson(
+    await withObservation(
+      { ...observed.input, correlation: "reapply-first" },
+      () => fetchMcp(rpc("tools/call", params), settings()),
+    ),
+  );
+  const replayed = await responseJson(
+    await withObservation(
+      { ...observed.input, correlation: "reapply-replayed" },
+      () => fetchMcp(rpc("tools/call", params), settings()),
+    ),
+  );
+  assert.equal(first.result?.resultType, "complete");
+  assert.deepEqual(replayed.result, first.result);
+  const result = z
+    .object({ operationId: z.uuid(), processed: z.literal(0) })
+    .parse(JSON.parse(z.string().parse(first.result?.content?.[0]?.text)));
+  const spans = z
+    .array(
+      z.object({
+        batches: z.number().optional(),
+        correlation: z.string(),
+        name: z.string(),
+        operationId: z.string().optional(),
+        outcome: z.string(),
+      }),
+    )
+    .parse(observed.spans);
+  assert.deepEqual(
+    spans
+      .filter((span) => span.name === "finance.reapply")
+      .map((span) => ({
+        batches: span.batches,
+        correlation: span.correlation,
+        operationId: span.operationId,
+        outcome: span.outcome,
+      })),
+    [
+      {
+        batches: 1,
+        correlation: "reapply-first",
+        operationId: result.operationId,
+        outcome: "completed",
+      },
+      {
+        batches: 0,
+        correlation: "reapply-replayed",
+        operationId: result.operationId,
+        outcome: "replayed",
+      },
+    ],
+  );
+  assert.equal(
+    spans.filter((span) => span.name === "finance.publish").length,
+    1,
+  );
+  assert.deepEqual(observed.lines, []);
   assert.equal(
     JSON.stringify([observed.lines, observed.spans]).includes("private-"),
     false,

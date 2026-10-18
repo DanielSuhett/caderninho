@@ -30,6 +30,8 @@ const requestActions = new Map<string, NonNullable<SafeFields["action"]>>([
   ["/api/account/logout", "logout"],
   ["/authorize", "authorize"],
   ["/oauth/token", "token"],
+  ["/mcp/rules/import", "rules"],
+  ["/mcp/migration", "migration"],
 ]);
 export function requestCategory(
   path: string,
@@ -38,7 +40,7 @@ export function requestCategory(
   if (path === "/account" || path.startsWith("/api/account")) {
     return { action, phase: "account.action" };
   }
-  if (path === "/mcp") {
+  if (path === "/mcp" || path.startsWith("/mcp/")) {
     return { action, phase: "mcp.call" };
   }
   if (path === "/webhook") {

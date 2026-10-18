@@ -214,6 +214,7 @@ export interface SafeFields {
     | "rules_save"
     | "rules_activate"
     | "tasks_get"
+    | "migration"
     | "tasks_cancel"
     | "tasks_update"
     | "subscriptions_listen"
