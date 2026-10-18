@@ -197,6 +197,9 @@ export interface SafeFields {
   action?:
     | (typeof ToolName)[keyof typeof ToolName]
     | "reconcile"
+    | "compact_sync"
+    | "compact_auth"
+    | "readiness"
     | "status"
     | "subscriptions"
     | "live_balance"
@@ -238,6 +241,7 @@ export interface SafeFields {
   batches?: number;
   deferred?: number;
   delayMs?: number;
+  dispatchPending?: number;
   durationMs?: number;
   failed?: number;
   failure?: FailureCode;
@@ -249,9 +253,11 @@ export interface SafeFields {
   recovery?: Recovery;
   resource?: Resource;
   retries?: number;
+  schedulePending?: number;
   sourceUnauthorized?: number;
   sourceUnavailable?: number;
   status?: number;
+  statusUnavailable?: number;
 }
 function safeFields(input: SafeFields): SafeFields {
   return {
@@ -262,6 +268,11 @@ function safeFields(input: SafeFields): SafeFields {
     ...(input.operationKind && { operationKind: input.operationKind }),
     ...(input.resource && { resource: input.resource }),
     ...(input.phase && { phase: input.phase }),
+    ...safeMeasurements(input),
+  };
+}
+function safeMeasurements(input: SafeFields): SafeFields {
+  return {
     ...(input.processed !== undefined && { processed: input.processed }),
     ...(input.sourceUnauthorized !== undefined && {
       sourceUnauthorized: input.sourceUnauthorized,
@@ -277,6 +288,15 @@ function safeFields(input: SafeFields): SafeFields {
     ...(input.attempt !== undefined && { attempt: input.attempt }),
     ...(input.delayMs !== undefined && { delayMs: input.delayMs }),
     ...(input.status !== undefined && { status: input.status }),
+    ...(input.statusUnavailable !== undefined && {
+      statusUnavailable: input.statusUnavailable,
+    }),
+    ...(input.dispatchPending !== undefined && {
+      dispatchPending: input.dispatchPending,
+    }),
+    ...(input.schedulePending !== undefined && {
+      schedulePending: input.schedulePending,
+    }),
     ...(input.durationMs !== undefined && { durationMs: input.durationMs }),
   };
 }
@@ -365,6 +385,19 @@ function diagnosticOutcome(input: SafeFields, failure?: FailureCode): Outcome {
   return input.status && input.status >= 400
     ? Outcome.rejected
     : Outcome.success;
+}
+function spanOutcome(input: SafeFields): Outcome {
+  if (
+    input.failure &&
+    (!input.outcome ||
+      input.outcome === Outcome.success ||
+      input.outcome === Outcome.completed ||
+      input.outcome === Outcome.replayed ||
+      input.outcome === Outcome.noop)
+  ) {
+    return failureOutcome(input.failure);
+  }
+  return diagnosticOutcome(input, input.failure);
 }
 function diagnosticSeverity(outcome: Outcome, recovery?: Recovery) {
   if (outcome === Outcome.partial || outcome === Outcome.deferred) {
@@ -460,11 +493,11 @@ function spanHandle(
         return;
       }
       ended = true;
+      const finalFields = { ...fields, ...next };
       annotate({
-        outcome: Outcome.success,
-        ...fields,
-        ...next,
+        ...finalFields,
         durationMs: Math.round(performance.now() - started),
+        outcome: spanOutcome(finalFields),
       });
       try {
         native?.end();
@@ -510,11 +543,11 @@ export async function observeSpan<T>(
     operationResult = error ? { data: null, error } : { data, error: null };
     if (error) {
       const failure = classifyFailure(error);
-      span.end({ failure, outcome: failureOutcome(failure) });
+      span.end({ failure });
       throw error;
     }
     const failure = parent?.primary.failure;
-    span.end(failure ? { failure, outcome: failureOutcome(failure) } : {});
+    span.end(failure ? { failure } : {});
     return data;
   };
   const { data, error } = await tryCatch(() => tracing.enterSpan(name, run));
