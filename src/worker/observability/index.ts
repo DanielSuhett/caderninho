@@ -3,13 +3,14 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import type { Logger } from "pino";
 import { z } from "zod/v4";
 
+import type { ToolName } from "../../contracts";
 import {
   Fault,
   FaultCode,
   type OperationKind,
   type Resource,
 } from "../../domain";
-import { tryCatch } from "../../shared";
+import { type Result, tryCatch } from "../../shared";
 import { logger } from "../../shared/logger";
 import { tracing } from "cloudflare:workers";
 
@@ -81,6 +82,7 @@ export type DiagnosticEvent =
 
 const localFailures = {
   DISPATCH_UNCERTAIN: "DISPATCH_UNCERTAIN",
+  EXECUTOR_BUSY: "EXECUTOR_BUSY",
   INSTALLATION_INCOMPLETE: "INSTALLATION_INCOMPLETE",
   INVALID_REQUEST: "INVALID_REQUEST",
   SESSION_REQUIRED: "SESSION_REQUIRED",
@@ -102,6 +104,7 @@ for (const code of [
   "FORM_TOO_LARGE",
   "DUPLICATE_FORM_FIELD",
   "UNKNOWN_ACTION",
+  "HTTPS_REQUIRED",
   "BODY_REQUIRED",
   "BODY_LIMIT",
   "MEU_PLUGGY_REQUIRED",
@@ -128,6 +131,10 @@ for (const code of [
 ]) {
   failures.set(code, localFailures.INVALID_REQUEST);
 }
+failures.set(
+  "FINANCIAL_EXECUTOR_BUSY_RESUME_DISPATCH",
+  localFailures.EXECUTOR_BUSY,
+);
 for (const code of ["PLUGGY_ACCOUNT_NOT_CONFIGURED", "SETTINGS_MISSING"]) {
   failures.set(code, localFailures.INSTALLATION_INCOMPLETE);
 }
@@ -173,7 +180,7 @@ const expected = new Set<FailureCode>([
 ]);
 
 export function classifyFailure(error: Error): FailureCode {
-  if (error instanceof z.ZodError) {
+  if (error instanceof z.ZodError || error instanceof SyntaxError) {
     return localFailures.INVALID_REQUEST;
   }
   return (
@@ -188,6 +195,8 @@ export function failureOutcome(failure: FailureCode): Outcome {
 // Each attribute is selected explicitly; callers cannot serialize arbitrary inputs.
 export interface SafeFields {
   action?:
+    | (typeof ToolName)[keyof typeof ToolName]
+    | "reconcile"
     | "status"
     | "subscriptions"
     | "live_balance"
@@ -202,16 +211,6 @@ export interface SafeFields {
     | "tasks_update"
     | "subscriptions_listen"
     | "tools_list"
-    | "caderninho_query"
-    | "caderninho_aggregate"
-    | "caderninho_explain"
-    | "caderninho_rules"
-    | "caderninho_correct"
-    | "caderninho_reapply"
-    | "caderninho_initialize"
-    | "caderninho_status"
-    | "caderninho_sync"
-    | "caderninho_live_balance"
     | "read"
     | "write"
     | "login"
@@ -250,6 +249,8 @@ export interface SafeFields {
   recovery?: Recovery;
   resource?: Resource;
   retries?: number;
+  sourceUnauthorized?: number;
+  sourceUnavailable?: number;
   status?: number;
 }
 function safeFields(input: SafeFields): SafeFields {
@@ -262,6 +263,12 @@ function safeFields(input: SafeFields): SafeFields {
     ...(input.resource && { resource: input.resource }),
     ...(input.phase && { phase: input.phase }),
     ...(input.processed !== undefined && { processed: input.processed }),
+    ...(input.sourceUnauthorized !== undefined && {
+      sourceUnauthorized: input.sourceUnauthorized,
+    }),
+    ...(input.sourceUnavailable !== undefined && {
+      sourceUnavailable: input.sourceUnavailable,
+    }),
     ...(input.failed !== undefined && { failed: input.failed }),
     ...(input.pages !== undefined && { pages: input.pages }),
     ...(input.batches !== undefined && { batches: input.batches }),
@@ -373,8 +380,14 @@ export function reportDiagnostic(
   input: SafeFields & { event: DiagnosticEvent; additional?: boolean },
 ) {
   const context = observation.getStore();
-  const failure = input.failure ?? context?.primary.failure;
+  const failure =
+    input.failure ??
+    context?.primary.failure ??
+    (input.status && input.status >= 500
+      ? FaultCode.INTERNAL_ERROR
+      : undefined);
   const fields = {
+    recovery: Recovery.none,
     ...safeFields(input),
     ...(failure && { failure }),
     ...(context?.primary.phase &&
@@ -484,6 +497,7 @@ export async function observeSpan<T>(
 ): Promise<T> {
   const parent = observation.getStore();
   let entered = false;
+  let operationResult: Result<T> | undefined;
   const run = async (native?: Span) => {
     entered = true;
     const span = spanHandle(name, native, fields);
@@ -493,6 +507,7 @@ export async function observeSpan<T>(
         ? observation.run({ ...parent, activeSpan: name }, invoke)
         : invoke(),
     );
+    operationResult = error ? { data: null, error } : { data, error: null };
     if (error) {
       const failure = classifyFailure(error);
       span.end({ failure, outcome: failureOutcome(failure) });
@@ -506,6 +521,12 @@ export async function observeSpan<T>(
   if (error) {
     if (!entered) {
       return run();
+    }
+    if (operationResult) {
+      if (operationResult.error) {
+        throw operationResult.error;
+      }
+      return operationResult.data;
     }
     throw error;
   }
