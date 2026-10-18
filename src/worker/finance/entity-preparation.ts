@@ -1,11 +1,14 @@
-import type { Identity } from "#contracts/queries.ts";
+import type { Identity } from "#contracts/queries.types.ts";
 import {
   entityFingerprint,
   NORMALIZER,
   projectEntity,
 } from "#domain/entity.ts";
-import { type compileRules, txContext } from "#domain/rules/rules.ts";
-import type { FinanceRecord, ProviderRecord } from "#domain/schemas.ts";
+import { EntityChange, Resource } from "#domain/enums.ts";
+import type { FinanceRecord } from "#domain/finance.types.ts";
+import type { ProviderRecord } from "#domain/provider.types.ts";
+import { txContext } from "#domain/rules/rules.ts";
+import type { RuleEngine } from "#domain/rules/rules.types.ts";
 import type { entityPersistence } from "#worker/finance/entities.repository.ts";
 
 interface EntityInput {
@@ -24,7 +27,7 @@ export async function prepareEntity(
   dependencies: {
     repository: ReturnType<typeof entityPersistence>;
     hash(value: unknown): Promise<string>;
-    evaluate: ReturnType<typeof compileRules>["evaluate"];
+    evaluate: RuleEngine["evaluate"];
   },
   input: EntityInput,
 ) {
@@ -32,15 +35,17 @@ export async function prepareEntity(
   if (String(source.id ?? source.resourceId) !== identity.id) {
     throw new Error("SOURCE_ID_MISMATCH");
   }
-  const digest = await dependencies.hash(
-    entityFingerprint({
-      resource: identity.resource,
-      raw: source,
-      parent,
-      legacyProjection,
-    }),
-  );
-  const previous = await dependencies.repository.read(identity);
+  const [digest, previous] = await Promise.all([
+    dependencies.hash(
+      entityFingerprint({
+        resource: identity.resource,
+        raw: source,
+        parent,
+        legacyProjection,
+      }),
+    ),
+    dependencies.repository.read(identity),
+  ]);
   const observation = {
     identity,
     source,
@@ -56,7 +61,7 @@ export async function prepareEntity(
     return {
       statements: dependencies.repository.observe(observation),
       seenInOperation,
-      state: "unchanged" as const,
+      state: EntityChange.unchanged,
       classified: 0,
     };
   }
@@ -65,10 +70,10 @@ export async function prepareEntity(
     raw: source,
     parent,
     referenceDay: input.referenceDay,
-    ...(legacyProjection === undefined ? {} : { legacyProjection }),
+    ...(legacyProjection && { legacyProjection }),
   });
   const derived =
-    identity.resource === "transactions"
+    identity.resource === Resource.transactions
       ? await dependencies.evaluate(txContext(projection.record))
       : undefined;
   return {
@@ -81,7 +86,7 @@ export async function prepareEntity(
       derived,
     }),
     seenInOperation,
-    state: previous ? ("changed" as const) : ("new" as const),
-    classified: Number(derived !== undefined),
+    state: previous ? EntityChange.changed : EntityChange.new,
+    classified: derived ? 1 : 0,
   };
 }

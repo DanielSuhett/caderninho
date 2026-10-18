@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 
+import { FaultCode } from "#domain/enums.ts";
 import { tryCatch } from "#shared/result.ts";
 import { authenticatedFetch } from "#worker/auth/controller.ts";
 import { compactAccess } from "#worker/auth/repository.ts";
@@ -42,31 +43,22 @@ function createRoutes(ctx: ExecutionContext) {
     c.json(
       {
         code:
-          failureStatus(error) === 400 ? "INVALID_REQUEST" : "INTERNAL_ERROR",
+          failureStatus(error) === 400
+            ? "INVALID_REQUEST"
+            : FaultCode.INTERNAL_ERROR,
       },
       failureStatus(error),
     ),
   );
 
-  routes.get("/", async (c) => {
-    c.header("Referrer-Policy", "no-referrer");
-    c.header(
-      "Content-Security-Policy",
-      "default-src 'none'; font-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
-    );
-    if (!c.env.ASSETS) {
-      return c.text("Assets unavailable", 503);
-    }
-    const response = await c.env.ASSETS.fetch(c.req.raw);
-    return c.newResponse(response.body, response);
-  });
-
   routes.post("/webhook", async (c) => {
-    const result = await tryCatch(receiveWebhook(c.req.raw, c.env));
-    if (result.error) {
+    const { data, error } = await tryCatch(() =>
+      receiveWebhook(c.req.raw, c.env),
+    );
+    if (error) {
       return new Response("Receipt not confirmed; retry", { status: 503 });
     }
-    return result.data;
+    return data;
   });
   routes.all("*", (c) => {
     return authenticatedFetch(c.req.raw, c.env, ctx, (request, bindings) =>

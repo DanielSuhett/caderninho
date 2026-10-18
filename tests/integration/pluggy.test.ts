@@ -6,11 +6,11 @@ import { z } from "zod/v4";
 import { Fault } from "#domain/fault.ts";
 import { required, sourceUrl } from "#testing/helpers.ts";
 import { mockNetwork, syntheticJwt } from "#testing/network.ts";
+import { createPluggyAccess } from "#worker/pluggy/access.adapter.ts";
 import { PersonalPluggyClient } from "#worker/pluggy/client.adapter.ts";
 import {
   connectToken,
   financialSource,
-  pluggyClient,
   providerRetries,
   readAccount,
 } from "#worker/pluggy/source.ts";
@@ -20,7 +20,7 @@ const credentials = {
   clientSecret: "synthetic-secret",
 };
 const origin = "https://api.pluggy.ai";
-const client = () => pluggyClient(credentials);
+const client = () => new PersonalPluggyClient(credentials);
 const auth = () => Response.json({ apiKey: syntheticJwt() });
 
 beforeEach(() =>
@@ -31,6 +31,44 @@ beforeEach(() =>
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+});
+
+test("Pluggy access stays lazy and denies upstream operations with missing or different application credentials", async () => {
+  let authorized = 0;
+  const missing = createPluggyAccess({
+    clientId: undefined,
+    clientSecret: undefined,
+    async authorizeApplication() {
+      authorized++;
+    },
+  });
+  assert.equal(missing.account.configured, false);
+  for (const use of [
+    () => missing.account.application(),
+    () => missing.financialSource(),
+    () => missing.readAccount("synthetic-account"),
+  ]) {
+    await assert.rejects(use(), /PLUGGY_ACCOUNT_NOT_CONFIGURED/);
+  }
+  assert.equal(authorized, 0);
+  const changed = createPluggyAccess({
+    ...credentials,
+    async authorizeApplication(clientId) {
+      assert.equal(clientId, credentials.clientId);
+      authorized++;
+      throw new Error("APPLICATION_CHANGE_REQUIRES_MIGRATION");
+    },
+  });
+  assert.equal(changed.account.configured, true);
+  assert.equal(authorized, 0);
+  for (const use of [
+    () => changed.account.application(),
+    () => changed.financialSource(),
+    () => changed.readAccount("synthetic-account"),
+  ]) {
+    await assert.rejects(use(), /APPLICATION_CHANGE_REQUIRES_MIGRATION/);
+  }
+  assert.equal(authorized, 3);
 });
 
 test("SDK/Fetch in workerd preserve numeric lexemes and date strings on auth, reads and mutations", async () => {
@@ -77,7 +115,7 @@ test("tokens are reused only inside a client and invalidated after a 401 without
     return Response.json({ id: "account" });
   });
   const alice = client();
-  const bob = pluggyClient({
+  const bob = new PersonalPluggyClient({
     clientId: "other-client",
     clientSecret: "other-secret",
   });
@@ -97,6 +135,7 @@ test("tokens are reused only inside a client and invalidated after a 401 without
 test("HTTP errors keep original status and headers, map non-JSON safely, and never log private data", async () => {
   const log = vi.spyOn(console, "error").mockImplementation(() => {});
   for (const [status, body, code] of [
+    [400, "private invalid request", "UPSTREAM_INVALID_REQUEST"],
     [401, "", "UPSTREAM_AUTH"],
     [403, "private forbidden", "UPSTREAM_FORBIDDEN"],
     [404, "private missing", "UPSTREAM_NOT_FOUND"],
@@ -219,7 +258,7 @@ test("byte limits stop streaming reads regardless of missing or dishonest Conten
       return new Response("x".repeat(16385));
     });
     await assert.rejects(
-      pluggyClient(credentials, 16384).createConnectToken(),
+      new PersonalPluggyClient(credentials, 16384).createConnectToken(),
       /UPSTREAM_TOO_LARGE/,
     );
     await assert.rejects(connectToken(credentials), /CONNECT_TOKEN_FAILED/);
@@ -356,6 +395,9 @@ test("429 Retry-After is returned to the Workflow and waited outside a durable s
       return auth();
     }
     reads++;
+    if (reads > 2) {
+      return new Response("private failure", { status: 503 });
+    }
     return reads === 1
       ? new Response("private", {
           status: 429,
@@ -388,6 +430,12 @@ test("429 Retry-After is returned to the Workflow and waited outside a durable s
   );
   assert.deepEqual(sleeps, ["90 seconds"]);
   assert.equal(reads, 2);
+  await assert.rejects(
+    steps.do("unavailable", async () => (await readAccount(sdk, "account")).id),
+    (error) => error instanceof Fault && error.code === "UPSTREAM_ERROR",
+  );
+  assert.equal(reads, 3);
+  assert.deepEqual(sleeps, ["90 seconds"]);
 });
 
 test("every financial resource uses the public SDK operation with one-page checkpoints", async () => {

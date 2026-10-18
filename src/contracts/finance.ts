@@ -1,34 +1,37 @@
 import { z } from "zod/v4";
 
-import { FilterSchema } from "#contracts/queries.ts";
+import {
+  type LiveBalanceInput,
+  type PreviewInput,
+  type RuleCommand,
+  RuleCommandAction,
+  type SubscriptionInput,
+} from "#contracts/finance.types.ts";
+import { FilterSchema } from "#domain/filter.ts";
 import { RulesSchema } from "#domain/rules/rules-schema.ts";
 
 export const RuleCommandSchema = z.object({
-  action: z.enum(["validate", "save", "activate", "read"]),
+  action: z.enum(RuleCommandAction),
   document: z.json().optional(),
   revision: z.string().optional(),
   catalog: RulesSchema.pick({ groups: true, categories: true }).optional(),
-});
-export type RuleCommand = z.infer<typeof RuleCommandSchema>;
+}) satisfies z.ZodType<RuleCommand>;
 
 export const PreviewInputSchema = z.object({
   filter: FilterSchema.optional(),
   itemIds: z.array(z.string()).min(1).max(100),
   revision: z.string(),
   limit: z.number().int().min(1).max(50).default(20),
-});
-export type PreviewInput = z.infer<typeof PreviewInputSchema>;
+}) satisfies z.ZodType<PreviewInput>;
 
 export const SubscriptionInputSchema = z.object({
   from: z.string(),
   to: z.string(),
   currency: z.string(),
   limit: z.number().int().min(1).max(100).default(20),
-});
-export type SubscriptionInput = z.infer<typeof SubscriptionInputSchema>;
+}) satisfies z.ZodType<SubscriptionInput>;
 
 export const LiveBalanceInputSchema = z.object({
   itemId: z.string(),
   accountId: z.string(),
-});
-export type LiveBalanceInput = z.infer<typeof LiveBalanceInputSchema>;
+}) satisfies z.ZodType<LiveBalanceInput>;

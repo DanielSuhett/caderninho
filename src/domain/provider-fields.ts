@@ -2,1302 +2,1302 @@ import type { Resource } from "#domain/enums.ts";
 import type { ProviderField } from "#domain/provider.types.ts";
 
 const providerFields = {
-  "accounts": {
-    "id": {
-      "kind": "scalar"
+  accounts: {
+    id: {
+      kind: "scalar",
     },
-    "type": {
-      "kind": "scalar"
+    type: {
+      kind: "scalar",
     },
-    "subtype": {
-      "kind": "scalar"
+    subtype: {
+      kind: "scalar",
     },
-    "name": {
-      "kind": "scalar"
+    name: {
+      kind: "scalar",
     },
-    "marketingName": {
-      "kind": "scalar"
+    marketingName: {
+      kind: "scalar",
     },
-    "balance": {
-      "kind": "decimal"
+    balance: {
+      kind: "decimal",
     },
-    "itemId": {
-      "kind": "scalar"
+    itemId: {
+      kind: "scalar",
     },
-    "currencyCode": {
-      "kind": "scalar"
+    currencyCode: {
+      kind: "scalar",
     },
     "bankData.closingBalance": {
-      "kind": "decimal"
+      kind: "decimal",
     },
     "bankData.automaticallyInvestedBalance": {
-      "kind": "decimal"
+      kind: "decimal",
     },
     "bankData.overdraftContractedLimit": {
-      "kind": "decimal"
+      kind: "decimal",
     },
     "bankData.overdraftUsedLimit": {
-      "kind": "decimal"
+      kind: "decimal",
     },
     "bankData.unarrangedOverdraftAmount": {
-      "kind": "decimal"
+      kind: "decimal",
     },
     "bankData.hasReservedBalance": {
-      "kind": "scalar"
+      kind: "scalar",
     },
     "bankData.reservedBalances": {
-      "kind": "array",
-      "fields": {
-        "name": {
-          "kind": "scalar"
+      kind: "array",
+      fields: {
+        name: {
+          kind: "scalar",
         },
-        "identification": {
-          "kind": "scalar"
+        identification: {
+          kind: "scalar",
         },
-        "availableAmounts": {
-          "kind": "array",
-          "fields": {
-            "amount": {
-              "kind": "decimal"
+        availableAmounts: {
+          kind: "array",
+          fields: {
+            amount: {
+              kind: "decimal",
             },
-            "currencyCode": {
-              "kind": "scalar"
+            currencyCode: {
+              kind: "scalar",
             },
             "remuneration.preFixedRate": {
-              "kind": "decimal"
+              kind: "decimal",
             },
             "remuneration.postFixedIndexerPercentage": {
-              "kind": "decimal"
+              kind: "decimal",
             },
             "remuneration.rateType": {
-              "kind": "scalar"
+              kind: "scalar",
             },
             "remuneration.indexer": {
-              "kind": "scalar"
+              kind: "scalar",
             },
             "remuneration.calculation": {
-              "kind": "scalar"
+              kind: "scalar",
             },
             "remuneration.ratePeriodicity": {
-              "kind": "scalar"
+              kind: "scalar",
             },
             "remuneration.indexerAdditionalInfo": {
-              "kind": "scalar"
-            }
-          }
-        }
-      }
+              kind: "scalar",
+            },
+          },
+        },
+      },
     },
     "creditData.level": {
-      "kind": "scalar"
+      kind: "scalar",
     },
     "creditData.brand": {
-      "kind": "scalar"
+      kind: "scalar",
     },
     "creditData.brandAdditionalInfo": {
-      "kind": "scalar"
+      kind: "scalar",
     },
     "creditData.balanceCloseDate": {
-      "kind": "scalar"
+      kind: "scalar",
     },
     "creditData.balanceDueDate": {
-      "kind": "scalar"
+      kind: "scalar",
     },
     "creditData.availableCreditLimit": {
-      "kind": "decimal"
+      kind: "decimal",
     },
     "creditData.balanceForeignCurrency": {
-      "kind": "decimal"
+      kind: "decimal",
     },
     "creditData.minimumPayment": {
-      "kind": "decimal"
+      kind: "decimal",
     },
     "creditData.creditLimit": {
-      "kind": "decimal"
+      kind: "decimal",
     },
     "creditData.isLimitFlexible": {
-      "kind": "scalar"
+      kind: "scalar",
     },
     "creditData.status": {
-      "kind": "scalar"
+      kind: "scalar",
     },
     "creditData.holderType": {
-      "kind": "scalar"
+      kind: "scalar",
     },
     "creditData.disaggregatedCreditLimits": {
-      "kind": "array",
-      "fields": {
-        "creditLineLimitType": {
-          "kind": "scalar"
+      kind: "array",
+      fields: {
+        creditLineLimitType: {
+          kind: "scalar",
         },
-        "consolidationType": {
-          "kind": "scalar"
+        consolidationType: {
+          kind: "scalar",
         },
-        "identificationNumber": {
-          "kind": "scalar"
+        identificationNumber: {
+          kind: "scalar",
         },
-        "isLimitFlexible": {
-          "kind": "scalar"
+        isLimitFlexible: {
+          kind: "scalar",
         },
-        "usedAmount": {
-          "kind": "decimal"
+        usedAmount: {
+          kind: "decimal",
         },
-        "usedAmountCurrencyCode": {
-          "kind": "scalar"
+        usedAmountCurrencyCode: {
+          kind: "scalar",
         },
-        "lineName": {
-          "kind": "scalar"
+        lineName: {
+          kind: "scalar",
         },
-        "lineNameAdditionalInfo": {
-          "kind": "scalar"
+        lineNameAdditionalInfo: {
+          kind: "scalar",
         },
-        "limitAmount": {
-          "kind": "decimal"
+        limitAmount: {
+          kind: "decimal",
         },
-        "limitAmountCurrencyCode": {
-          "kind": "scalar"
+        limitAmountCurrencyCode: {
+          kind: "scalar",
         },
-        "limitAmountReason": {
-          "kind": "scalar"
+        limitAmountReason: {
+          kind: "scalar",
         },
-        "customizedLimitAmount": {
-          "kind": "decimal"
+        customizedLimitAmount: {
+          kind: "decimal",
         },
-        "customizedLimitAmountCurrencyCode": {
-          "kind": "scalar"
+        customizedLimitAmountCurrencyCode: {
+          kind: "scalar",
         },
-        "availableAmount": {
-          "kind": "decimal"
+        availableAmount: {
+          kind: "decimal",
         },
-        "availableAmountCurrencyCode": {
-          "kind": "scalar"
-        }
-      }
+        availableAmountCurrencyCode: {
+          kind: "scalar",
+        },
+      },
     },
-    "createdAt": {
-      "kind": "scalar"
+    createdAt: {
+      kind: "scalar",
     },
-    "updatedAt": {
-      "kind": "scalar"
-    }
+    updatedAt: {
+      kind: "scalar",
+    },
   },
-  "transactions": {
-    "id": {
-      "kind": "scalar"
+  transactions: {
+    id: {
+      kind: "scalar",
     },
-    "description": {
-      "kind": "scalar"
+    description: {
+      kind: "scalar",
     },
-    "descriptionRaw": {
-      "kind": "scalar"
+    descriptionRaw: {
+      kind: "scalar",
     },
-    "currencyCode": {
-      "kind": "scalar"
+    currencyCode: {
+      kind: "scalar",
     },
-    "amount": {
-      "kind": "decimal"
+    amount: {
+      kind: "decimal",
     },
-    "amountInAccountCurrency": {
-      "kind": "decimal"
+    amountInAccountCurrency: {
+      kind: "decimal",
     },
-    "date": {
-      "kind": "scalar"
+    date: {
+      kind: "scalar",
     },
-    "type": {
-      "kind": "scalar"
+    type: {
+      kind: "scalar",
     },
-    "balance": {
-      "kind": "decimal"
+    balance: {
+      kind: "decimal",
     },
-    "providerCode": {
-      "kind": "scalar"
+    providerCode: {
+      kind: "scalar",
     },
-    "status": {
-      "kind": "scalar"
+    status: {
+      kind: "scalar",
     },
-    "category": {
-      "kind": "scalar"
+    category: {
+      kind: "scalar",
     },
-    "categoryId": {
-      "kind": "scalar"
+    categoryId: {
+      kind: "scalar",
     },
     "paymentData.payer.name": {
-      "kind": "scalar"
+      kind: "scalar",
     },
     "paymentData.payer.routingNumber": {
-      "kind": "scalar"
+      kind: "scalar",
     },
     "paymentData.payer.routingNumberISPB": {
-      "kind": "scalar"
+      kind: "scalar",
     },
     "paymentData.receiver.name": {
-      "kind": "scalar"
+      kind: "scalar",
     },
     "paymentData.receiver.routingNumber": {
-      "kind": "scalar"
+      kind: "scalar",
     },
     "paymentData.receiver.routingNumberISPB": {
-      "kind": "scalar"
+      kind: "scalar",
     },
     "paymentData.reason": {
-      "kind": "scalar"
+      kind: "scalar",
     },
     "paymentData.referenceNumber": {
-      "kind": "scalar"
+      kind: "scalar",
     },
     "paymentData.receiverReferenceId": {
-      "kind": "scalar"
+      kind: "scalar",
     },
     "paymentData.paymentMethod": {
-      "kind": "scalar"
+      kind: "scalar",
     },
     "paymentData.boletoMetadata.baseAmount": {
-      "kind": "decimal"
+      kind: "decimal",
     },
     "paymentData.boletoMetadata.interestAmount": {
-      "kind": "decimal"
+      kind: "decimal",
     },
     "paymentData.boletoMetadata.penaltyAmount": {
-      "kind": "decimal"
+      kind: "decimal",
     },
     "paymentData.boletoMetadata.discountAmount": {
-      "kind": "decimal"
+      kind: "decimal",
     },
     "creditCardMetadata.installmentNumber": {
-      "kind": "decimal"
+      kind: "decimal",
     },
     "creditCardMetadata.totalInstallments": {
-      "kind": "decimal"
+      kind: "decimal",
     },
     "creditCardMetadata.totalAmount": {
-      "kind": "decimal"
+      kind: "decimal",
     },
     "creditCardMetadata.feeType": {
-      "kind": "scalar"
+      kind: "scalar",
     },
     "creditCardMetadata.feeTypeAdditionalInfo": {
-      "kind": "scalar"
+      kind: "scalar",
     },
     "creditCardMetadata.otherCreditsType": {
-      "kind": "scalar"
+      kind: "scalar",
     },
     "creditCardMetadata.otherCreditsAdditionalInfo": {
-      "kind": "scalar"
+      kind: "scalar",
     },
     "creditCardMetadata.purchaseDate": {
-      "kind": "scalar"
+      kind: "scalar",
     },
     "creditCardMetadata.payeeMCC": {
-      "kind": "scalar"
+      kind: "scalar",
     },
     "creditCardMetadata.billId": {
-      "kind": "scalar"
+      kind: "scalar",
     },
     "creditCardMetadata.billForecastDate": {
-      "kind": "scalar"
+      kind: "scalar",
     },
     "creditCardMetadata.paymentType": {
-      "kind": "scalar"
+      kind: "scalar",
     },
     "creditCardMetadata.billPostDate": {
-      "kind": "scalar"
+      kind: "scalar",
     },
     "creditCardMetadata.transactionDateTime": {
-      "kind": "scalar"
+      kind: "scalar",
     },
     "merchant.name": {
-      "kind": "scalar"
+      kind: "scalar",
     },
     "merchant.businessName": {
-      "kind": "scalar"
+      kind: "scalar",
     },
     "merchant.cnpj": {
-      "kind": "scalar"
+      kind: "scalar",
     },
     "merchant.cnae": {
-      "kind": "scalar"
+      kind: "scalar",
     },
     "merchant.category": {
-      "kind": "scalar"
+      kind: "scalar",
     },
-    "operationType": {
-      "kind": "scalar"
+    operationType: {
+      kind: "scalar",
     },
-    "operationTypeAdditionalInfo": {
-      "kind": "scalar"
+    operationTypeAdditionalInfo: {
+      kind: "scalar",
     },
-    "providerId": {
-      "kind": "scalar"
+    providerId: {
+      kind: "scalar",
     },
-    "accountId": {
-      "kind": "scalar"
+    accountId: {
+      kind: "scalar",
     },
-    "order": {
-      "kind": "decimal"
+    order: {
+      kind: "decimal",
     },
-    "createdAt": {
-      "kind": "scalar"
+    createdAt: {
+      kind: "scalar",
     },
-    "updatedAt": {
-      "kind": "scalar"
-    }
+    updatedAt: {
+      kind: "scalar",
+    },
   },
-  "investments": {
-    "id": {
-      "kind": "scalar"
+  investments: {
+    id: {
+      kind: "scalar",
     },
-    "itemId": {
-      "kind": "scalar"
+    itemId: {
+      kind: "scalar",
     },
-    "type": {
-      "kind": "scalar"
+    type: {
+      kind: "scalar",
     },
-    "subtype": {
-      "kind": "scalar"
+    subtype: {
+      kind: "scalar",
     },
-    "balance": {
-      "kind": "decimal"
+    balance: {
+      kind: "decimal",
     },
-    "name": {
-      "kind": "scalar"
+    name: {
+      kind: "scalar",
     },
-    "lastMonthRate": {
-      "kind": "decimal"
+    lastMonthRate: {
+      kind: "decimal",
     },
-    "lastTwelveMonthsRate": {
-      "kind": "decimal"
+    lastTwelveMonthsRate: {
+      kind: "decimal",
     },
-    "annualRate": {
-      "kind": "decimal"
+    annualRate: {
+      kind: "decimal",
     },
-    "currencyCode": {
-      "kind": "scalar"
+    currencyCode: {
+      kind: "scalar",
     },
-    "code": {
-      "kind": "scalar"
+    code: {
+      kind: "scalar",
     },
-    "isin": {
-      "kind": "scalar"
+    isin: {
+      kind: "scalar",
     },
-    "value": {
-      "kind": "decimal"
+    value: {
+      kind: "decimal",
     },
-    "quantity": {
-      "kind": "decimal"
+    quantity: {
+      kind: "decimal",
     },
-    "amount": {
-      "kind": "decimal"
+    amount: {
+      kind: "decimal",
     },
-    "taxes": {
-      "kind": "decimal"
+    taxes: {
+      kind: "decimal",
     },
-    "taxes2": {
-      "kind": "decimal"
+    taxes2: {
+      kind: "decimal",
     },
-    "date": {
-      "kind": "scalar"
+    date: {
+      kind: "scalar",
     },
-    "amountProfit": {
-      "kind": "decimal"
+    amountProfit: {
+      kind: "decimal",
     },
-    "amountWithdrawal": {
-      "kind": "decimal"
+    amountWithdrawal: {
+      kind: "decimal",
     },
-    "amountOriginal": {
-      "kind": "decimal"
+    amountOriginal: {
+      kind: "decimal",
     },
     "metadata.taxRegime": {
-      "kind": "scalar"
+      kind: "scalar",
     },
     "metadata.fundName": {
-      "kind": "scalar"
+      kind: "scalar",
     },
     "metadata.insurer.name": {
-      "kind": "scalar"
+      kind: "scalar",
     },
     "metadata.insurer.cnpj": {
-      "kind": "scalar"
+      kind: "scalar",
     },
     "metadata.anbimaClass": {
-      "kind": "scalar"
+      kind: "scalar",
     },
     "metadata.anbimaSubclass": {
-      "kind": "scalar"
+      kind: "scalar",
     },
     "metadata.anbimaCategory": {
-      "kind": "scalar"
+      kind: "scalar",
     },
-    "dueDate": {
-      "kind": "scalar"
+    dueDate: {
+      kind: "scalar",
     },
-    "issuer": {
-      "kind": "scalar"
+    issuer: {
+      kind: "scalar",
     },
-    "issuerCNPJ": {
-      "kind": "scalar"
+    issuerCNPJ: {
+      kind: "scalar",
     },
-    "issueDate": {
-      "kind": "scalar"
+    issueDate: {
+      kind: "scalar",
     },
-    "purchaseDate": {
-      "kind": "scalar"
+    purchaseDate: {
+      kind: "scalar",
     },
-    "gracePeriodDate": {
-      "kind": "scalar"
+    gracePeriodDate: {
+      kind: "scalar",
     },
-    "rate": {
-      "kind": "decimal"
+    rate: {
+      kind: "decimal",
     },
-    "rateType": {
-      "kind": "scalar"
+    rateType: {
+      kind: "scalar",
     },
-    "fixedAnnualRate": {
-      "kind": "decimal"
+    fixedAnnualRate: {
+      kind: "decimal",
     },
-    "taxExempt": {
-      "kind": "scalar"
+    taxExempt: {
+      kind: "scalar",
     },
-    "ratePeriodicity": {
-      "kind": "scalar"
+    ratePeriodicity: {
+      kind: "scalar",
     },
-    "indexerAdditionalInfo": {
-      "kind": "scalar"
+    indexerAdditionalInfo: {
+      kind: "scalar",
     },
-    "priceFactor": {
-      "kind": "decimal"
+    priceFactor: {
+      kind: "decimal",
     },
     "debtor.name": {
-      "kind": "scalar"
+      kind: "scalar",
     },
     "couponPayment.hasCoupon": {
-      "kind": "scalar"
+      kind: "scalar",
     },
     "couponPayment.periodicity": {
-      "kind": "scalar"
+      kind: "scalar",
     },
     "couponPayment.additionalInfo": {
-      "kind": "scalar"
+      kind: "scalar",
     },
-    "status": {
-      "kind": "scalar"
+    status: {
+      kind: "scalar",
     },
-    "createdAt": {
-      "kind": "scalar"
+    createdAt: {
+      kind: "scalar",
     },
-    "updatedAt": {
-      "kind": "scalar"
+    updatedAt: {
+      kind: "scalar",
     },
     "institution.name": {
-      "kind": "scalar"
-    }
+      kind: "scalar",
+    },
   },
-  "investment_transactions": {
-    "id": {
-      "kind": "scalar"
+  investment_transactions: {
+    id: {
+      kind: "scalar",
     },
-    "type": {
-      "kind": "scalar"
+    type: {
+      kind: "scalar",
     },
-    "movementType": {
-      "kind": "scalar"
+    movementType: {
+      kind: "scalar",
     },
-    "quantity": {
-      "kind": "decimal"
+    quantity: {
+      kind: "decimal",
     },
-    "value": {
-      "kind": "decimal"
+    value: {
+      kind: "decimal",
     },
-    "amount": {
-      "kind": "decimal"
+    amount: {
+      kind: "decimal",
     },
-    "agreedRate": {
-      "kind": "decimal"
+    agreedRate: {
+      kind: "decimal",
     },
-    "indexerPercentage": {
-      "kind": "decimal"
+    indexerPercentage: {
+      kind: "decimal",
     },
-    "priceFactor": {
-      "kind": "decimal"
+    priceFactor: {
+      kind: "decimal",
     },
-    "date": {
-      "kind": "scalar"
+    date: {
+      kind: "scalar",
     },
-    "tradeDate": {
-      "kind": "scalar"
+    tradeDate: {
+      kind: "scalar",
     },
     "expenses.serviceTax": {
-      "kind": "decimal"
+      kind: "decimal",
     },
     "expenses.brokerageFee": {
-      "kind": "decimal"
+      kind: "decimal",
     },
     "expenses.incomeTax": {
-      "kind": "decimal"
+      kind: "decimal",
     },
     "expenses.tradingAssetsNoticeFee": {
-      "kind": "decimal"
+      kind: "decimal",
     },
     "expenses.maintenanceFee": {
-      "kind": "decimal"
+      kind: "decimal",
     },
     "expenses.settlementFee": {
-      "kind": "decimal"
+      kind: "decimal",
     },
     "expenses.clearingFee": {
-      "kind": "decimal"
+      kind: "decimal",
     },
     "expenses.stockExchangeFee": {
-      "kind": "decimal"
+      kind: "decimal",
     },
     "expenses.custodyFee": {
-      "kind": "decimal"
+      kind: "decimal",
     },
     "expenses.operatingFee": {
-      "kind": "decimal"
+      kind: "decimal",
     },
     "expenses.other": {
-      "kind": "decimal"
+      kind: "decimal",
     },
     "expenses.iof": {
-      "kind": "decimal"
+      kind: "decimal",
     },
     "expenses.iofProvision": {
-      "kind": "decimal"
+      kind: "decimal",
     },
-    "description": {
-      "kind": "scalar"
+    description: {
+      kind: "scalar",
     },
-    "netAmount": {
-      "kind": "decimal"
+    netAmount: {
+      kind: "decimal",
     },
-    "brokerageNumber": {
-      "kind": "scalar"
-    }
+    brokerageNumber: {
+      kind: "scalar",
+    },
   },
-  "bills": {
-    "id": {
-      "kind": "scalar"
+  bills: {
+    id: {
+      kind: "scalar",
     },
-    "dueDate": {
-      "kind": "scalar"
+    dueDate: {
+      kind: "scalar",
     },
-    "billClosingDate": {
-      "kind": "scalar"
+    billClosingDate: {
+      kind: "scalar",
     },
-    "totalAmount": {
-      "kind": "decimal"
+    totalAmount: {
+      kind: "decimal",
     },
-    "totalAmountCurrencyCode": {
-      "kind": "scalar"
+    totalAmountCurrencyCode: {
+      kind: "scalar",
     },
-    "minimumPaymentAmount": {
-      "kind": "decimal"
+    minimumPaymentAmount: {
+      kind: "decimal",
     },
-    "allowsInstallments": {
-      "kind": "scalar"
+    allowsInstallments: {
+      kind: "scalar",
     },
-    "financeCharges": {
-      "kind": "array",
-      "fields": {
-        "id": {
-          "kind": "scalar"
+    financeCharges: {
+      kind: "array",
+      fields: {
+        id: {
+          kind: "scalar",
         },
-        "type": {
-          "kind": "scalar"
+        type: {
+          kind: "scalar",
         },
-        "amount": {
-          "kind": "decimal"
+        amount: {
+          kind: "decimal",
         },
-        "currencyCode": {
-          "kind": "scalar"
+        currencyCode: {
+          kind: "scalar",
         },
-        "additionalInfo": {
-          "kind": "scalar"
-        }
-      }
+        additionalInfo: {
+          kind: "scalar",
+        },
+      },
     },
-    "payments": {
-      "kind": "array",
-      "fields": {
-        "id": {
-          "kind": "scalar"
+    payments: {
+      kind: "array",
+      fields: {
+        id: {
+          kind: "scalar",
         },
-        "valueType": {
-          "kind": "scalar"
+        valueType: {
+          kind: "scalar",
         },
-        "paymentDate": {
-          "kind": "scalar"
+        paymentDate: {
+          kind: "scalar",
         },
-        "paymentMode": {
-          "kind": "scalar"
+        paymentMode: {
+          kind: "scalar",
         },
-        "amount": {
-          "kind": "decimal"
+        amount: {
+          kind: "decimal",
         },
-        "currencyCode": {
-          "kind": "scalar"
-        }
-      }
-    }
+        currencyCode: {
+          kind: "scalar",
+        },
+      },
+    },
   },
-  "loans": {
-    "id": {
-      "kind": "scalar"
+  loans: {
+    id: {
+      kind: "scalar",
     },
-    "itemId": {
-      "kind": "scalar"
+    itemId: {
+      kind: "scalar",
     },
-    "productName": {
-      "kind": "scalar"
+    productName: {
+      kind: "scalar",
     },
-    "type": {
-      "kind": "scalar"
+    type: {
+      kind: "scalar",
     },
-    "kind": {
-      "kind": "scalar"
+    kind: {
+      kind: "scalar",
     },
-    "date": {
-      "kind": "scalar"
+    date: {
+      kind: "scalar",
     },
-    "contractDate": {
-      "kind": "scalar"
+    contractDate: {
+      kind: "scalar",
     },
-    "disbursementDates": {
-      "kind": "array_scalar"
+    disbursementDates: {
+      kind: "array_scalar",
     },
-    "settlementDate": {
-      "kind": "scalar"
+    settlementDate: {
+      kind: "scalar",
     },
-    "contractAmount": {
-      "kind": "decimal"
+    contractAmount: {
+      kind: "decimal",
     },
-    "currencyCode": {
-      "kind": "scalar"
+    currencyCode: {
+      kind: "scalar",
     },
-    "dueDate": {
-      "kind": "scalar"
+    dueDate: {
+      kind: "scalar",
     },
-    "installmentPeriodicity": {
-      "kind": "scalar"
+    installmentPeriodicity: {
+      kind: "scalar",
     },
-    "installmentPeriodicityAdditionalInfo": {
-      "kind": "scalar"
+    installmentPeriodicityAdditionalInfo: {
+      kind: "scalar",
     },
-    "firstInstallmentDueDate": {
-      "kind": "scalar"
+    firstInstallmentDueDate: {
+      kind: "scalar",
     },
-    "CET": {
-      "kind": "decimal"
+    CET: {
+      kind: "decimal",
     },
-    "amortizationScheduled": {
-      "kind": "scalar"
+    amortizationScheduled: {
+      kind: "scalar",
     },
-    "amortizationScheduledAdditionalInfo": {
-      "kind": "scalar"
+    amortizationScheduledAdditionalInfo: {
+      kind: "scalar",
     },
-    "cnpjConsignee": {
-      "kind": "scalar"
+    cnpjConsignee: {
+      kind: "scalar",
     },
-    "interestRates": {
-      "kind": "array",
-      "fields": {
-        "taxType": {
-          "kind": "scalar"
+    interestRates: {
+      kind: "array",
+      fields: {
+        taxType: {
+          kind: "scalar",
         },
-        "interestRateType": {
-          "kind": "scalar"
+        interestRateType: {
+          kind: "scalar",
         },
-        "taxPeriodicity": {
-          "kind": "scalar"
+        taxPeriodicity: {
+          kind: "scalar",
         },
-        "calculation": {
-          "kind": "scalar"
+        calculation: {
+          kind: "scalar",
         },
-        "referentialRateIndexerType": {
-          "kind": "scalar"
+        referentialRateIndexerType: {
+          kind: "scalar",
         },
-        "referentialRateIndexerSubType": {
-          "kind": "scalar"
+        referentialRateIndexerSubType: {
+          kind: "scalar",
         },
-        "referentialRateIndexerAdditionalInfo": {
-          "kind": "scalar"
+        referentialRateIndexerAdditionalInfo: {
+          kind: "scalar",
         },
-        "preFixedRate": {
-          "kind": "decimal"
+        preFixedRate: {
+          kind: "decimal",
         },
-        "postFixedRate": {
-          "kind": "decimal"
+        postFixedRate: {
+          kind: "decimal",
         },
-        "additionalInfo": {
-          "kind": "scalar"
-        }
-      }
+        additionalInfo: {
+          kind: "scalar",
+        },
+      },
     },
-    "contractedFees": {
-      "kind": "array",
-      "fields": {
-        "name": {
-          "kind": "scalar"
+    contractedFees: {
+      kind: "array",
+      fields: {
+        name: {
+          kind: "scalar",
         },
-        "code": {
-          "kind": "scalar"
+        code: {
+          kind: "scalar",
         },
-        "chargeType": {
-          "kind": "scalar"
+        chargeType: {
+          kind: "scalar",
         },
-        "charge": {
-          "kind": "scalar"
+        charge: {
+          kind: "scalar",
         },
-        "amount": {
-          "kind": "decimal"
+        amount: {
+          kind: "decimal",
         },
-        "rate": {
-          "kind": "decimal"
-        }
-      }
+        rate: {
+          kind: "decimal",
+        },
+      },
     },
-    "contractedFinanceCharges": {
-      "kind": "array",
-      "fields": {
-        "type": {
-          "kind": "scalar"
+    contractedFinanceCharges: {
+      kind: "array",
+      fields: {
+        type: {
+          kind: "scalar",
         },
-        "additionalInfo": {
-          "kind": "scalar"
+        additionalInfo: {
+          kind: "scalar",
         },
-        "rate": {
-          "kind": "decimal"
-        }
-      }
+        rate: {
+          kind: "decimal",
+        },
+      },
     },
-    "warranties": {
-      "kind": "array",
-      "fields": {
-        "currencyCode": {
-          "kind": "scalar"
+    warranties: {
+      kind: "array",
+      fields: {
+        currencyCode: {
+          kind: "scalar",
         },
-        "type": {
-          "kind": "scalar"
+        type: {
+          kind: "scalar",
         },
-        "subtype": {
-          "kind": "scalar"
+        subtype: {
+          kind: "scalar",
         },
-        "amount": {
-          "kind": "decimal"
-        }
-      }
+        amount: {
+          kind: "decimal",
+        },
+      },
     },
     "installments.typeNumberOfInstallments": {
-      "kind": "scalar"
+      kind: "scalar",
     },
     "installments.totalNumberOfInstallments": {
-      "kind": "decimal"
+      kind: "decimal",
     },
     "installments.typeContractRemaining": {
-      "kind": "scalar"
+      kind: "scalar",
     },
     "installments.contractRemainingNumber": {
-      "kind": "decimal"
+      kind: "decimal",
     },
     "installments.paidInstallments": {
-      "kind": "decimal"
+      kind: "decimal",
     },
     "installments.dueInstallments": {
-      "kind": "decimal"
+      kind: "decimal",
     },
     "installments.pastDueInstallments": {
-      "kind": "decimal"
+      kind: "decimal",
     },
     "installments.balloonPayments": {
-      "kind": "array",
-      "fields": {
-        "dueDate": {
-          "kind": "scalar"
+      kind: "array",
+      fields: {
+        dueDate: {
+          kind: "scalar",
         },
         "amount.value": {
-          "kind": "decimal"
+          kind: "decimal",
         },
         "amount.currencyCode": {
-          "kind": "scalar"
-        }
-      }
+          kind: "scalar",
+        },
+      },
     },
     "payments.contractOutstandingBalance": {
-      "kind": "decimal"
+      kind: "decimal",
     },
     "payments.releases": {
-      "kind": "array",
-      "fields": {
-        "isOverParcelPayment": {
-          "kind": "scalar"
+      kind: "array",
+      fields: {
+        isOverParcelPayment: {
+          kind: "scalar",
         },
-        "installmentId": {
-          "kind": "scalar"
+        installmentId: {
+          kind: "scalar",
         },
-        "paidDate": {
-          "kind": "scalar"
+        paidDate: {
+          kind: "scalar",
         },
-        "currencyCode": {
-          "kind": "scalar"
+        currencyCode: {
+          kind: "scalar",
         },
-        "paidAmount": {
-          "kind": "decimal"
+        paidAmount: {
+          kind: "decimal",
         },
         "overParcel.fees": {
-          "kind": "array",
-          "fields": {
-            "name": {
-              "kind": "scalar"
+          kind: "array",
+          fields: {
+            name: {
+              kind: "scalar",
             },
-            "code": {
-              "kind": "scalar"
+            code: {
+              kind: "scalar",
             },
-            "amount": {
-              "kind": "decimal"
-            }
-          }
+            amount: {
+              kind: "decimal",
+            },
+          },
         },
         "overParcel.charges": {
-          "kind": "array",
-          "fields": {
-            "type": {
-              "kind": "scalar"
+          kind: "array",
+          fields: {
+            type: {
+              kind: "scalar",
             },
-            "additionalInfo": {
-              "kind": "scalar"
+            additionalInfo: {
+              kind: "scalar",
             },
-            "amount": {
-              "kind": "decimal"
-            }
-          }
-        }
-      }
-    }
+            amount: {
+              kind: "decimal",
+            },
+          },
+        },
+      },
+    },
   },
-  "identity": {
-    "id": {
-      "kind": "scalar"
+  identity: {
+    id: {
+      kind: "scalar",
     },
-    "itemId": {
-      "kind": "scalar"
+    itemId: {
+      kind: "scalar",
     },
-    "documentType": {
-      "kind": "scalar"
+    documentType: {
+      kind: "scalar",
     },
-    "jobTitle": {
-      "kind": "scalar"
+    jobTitle: {
+      kind: "scalar",
     },
-    "fullName": {
-      "kind": "scalar"
+    fullName: {
+      kind: "scalar",
     },
-    "companyName": {
-      "kind": "scalar"
+    companyName: {
+      kind: "scalar",
     },
-    "investorProfile": {
-      "kind": "scalar"
+    investorProfile: {
+      kind: "scalar",
     },
-    "createdAt": {
-      "kind": "scalar"
+    createdAt: {
+      kind: "scalar",
     },
-    "updatedAt": {
-      "kind": "scalar"
-    }
+    updatedAt: {
+      kind: "scalar",
+    },
   },
-  "connections": {
-    "id": {
-      "kind": "scalar"
+  connections: {
+    id: {
+      kind: "scalar",
     },
     "connector.id": {
-      "kind": "decimal"
+      kind: "decimal",
     },
     "connector.name": {
-      "kind": "scalar"
+      kind: "scalar",
     },
     "connector.type": {
-      "kind": "scalar"
+      kind: "scalar",
     },
     "connector.country": {
-      "kind": "scalar"
+      kind: "scalar",
     },
     "connector.products": {
-      "kind": "array_scalar"
+      kind: "array_scalar",
     },
     "connector.health.status": {
-      "kind": "scalar"
+      kind: "scalar",
     },
     "connector.health.stage": {
-      "kind": "scalar"
+      kind: "scalar",
     },
     "connector.health.incidents": {
-      "kind": "array",
-      "fields": {
-        "id": {
-          "kind": "scalar"
+      kind: "array",
+      fields: {
+        id: {
+          kind: "scalar",
         },
-        "title": {
-          "kind": "scalar"
+        title: {
+          kind: "scalar",
         },
-        "type": {
-          "kind": "scalar"
+        type: {
+          kind: "scalar",
         },
-        "product": {
-          "kind": "scalar"
+        product: {
+          kind: "scalar",
         },
-        "kind": {
-          "kind": "scalar"
+        kind: {
+          kind: "scalar",
         },
-        "severity": {
-          "kind": "scalar"
+        severity: {
+          kind: "scalar",
         },
-        "state": {
-          "kind": "scalar"
+        state: {
+          kind: "scalar",
         },
-        "startedAt": {
-          "kind": "scalar"
+        startedAt: {
+          kind: "scalar",
         },
-        "updatedAt": {
-          "kind": "scalar"
-        }
-      }
+        updatedAt: {
+          kind: "scalar",
+        },
+      },
     },
     "connector.health.details.connectionRateLast6Hours": {
-      "kind": "decimal"
+      kind: "decimal",
     },
     "connector.health.details.connectionsLast6Hours": {
-      "kind": "decimal"
+      kind: "decimal",
     },
     "connector.isOpenFinance": {
-      "kind": "scalar"
+      kind: "scalar",
     },
     "connector.isSandbox": {
-      "kind": "scalar"
+      kind: "scalar",
     },
     "connector.updatedAt": {
-      "kind": "scalar"
+      kind: "scalar",
     },
-    "status": {
-      "kind": "scalar"
+    status: {
+      kind: "scalar",
     },
-    "executionStatus": {
-      "kind": "scalar"
+    executionStatus: {
+      kind: "scalar",
     },
-    "createdAt": {
-      "kind": "scalar"
+    createdAt: {
+      kind: "scalar",
     },
-    "updatedAt": {
-      "kind": "scalar"
+    updatedAt: {
+      kind: "scalar",
     },
-    "lastUpdatedAt": {
-      "kind": "scalar"
+    lastUpdatedAt: {
+      kind: "scalar",
     },
     "statusDetail.accounts.lastUpdatedAt": {
-      "kind": "scalar"
+      kind: "scalar",
     },
     "statusDetail.accounts.isUpdated": {
-      "kind": "scalar"
+      kind: "scalar",
     },
     "statusDetail.accounts.warnings": {
-      "kind": "array",
-      "fields": {
-        "code": {
-          "kind": "scalar"
+      kind: "array",
+      fields: {
+        code: {
+          kind: "scalar",
         },
-        "message": {
-          "kind": "scalar"
+        message: {
+          kind: "scalar",
         },
-        "providerMessage": {
-          "kind": "scalar"
-        }
-      }
+        providerMessage: {
+          kind: "scalar",
+        },
+      },
     },
     "statusDetail.creditCards.lastUpdatedAt": {
-      "kind": "scalar"
+      kind: "scalar",
     },
     "statusDetail.creditCards.isUpdated": {
-      "kind": "scalar"
+      kind: "scalar",
     },
     "statusDetail.creditCards.warnings": {
-      "kind": "array",
-      "fields": {
-        "code": {
-          "kind": "scalar"
+      kind: "array",
+      fields: {
+        code: {
+          kind: "scalar",
         },
-        "message": {
-          "kind": "scalar"
+        message: {
+          kind: "scalar",
         },
-        "providerMessage": {
-          "kind": "scalar"
-        }
-      }
+        providerMessage: {
+          kind: "scalar",
+        },
+      },
     },
     "statusDetail.investments.lastUpdatedAt": {
-      "kind": "scalar"
+      kind: "scalar",
     },
     "statusDetail.investments.isUpdated": {
-      "kind": "scalar"
+      kind: "scalar",
     },
     "statusDetail.investments.warnings": {
-      "kind": "array",
-      "fields": {
-        "code": {
-          "kind": "scalar"
+      kind: "array",
+      fields: {
+        code: {
+          kind: "scalar",
         },
-        "message": {
-          "kind": "scalar"
+        message: {
+          kind: "scalar",
         },
-        "providerMessage": {
-          "kind": "scalar"
-        }
-      }
+        providerMessage: {
+          kind: "scalar",
+        },
+      },
     },
     "statusDetail.identity.lastUpdatedAt": {
-      "kind": "scalar"
+      kind: "scalar",
     },
     "statusDetail.identity.isUpdated": {
-      "kind": "scalar"
+      kind: "scalar",
     },
     "statusDetail.identity.warnings": {
-      "kind": "array",
-      "fields": {
-        "code": {
-          "kind": "scalar"
+      kind: "array",
+      fields: {
+        code: {
+          kind: "scalar",
         },
-        "message": {
-          "kind": "scalar"
+        message: {
+          kind: "scalar",
         },
-        "providerMessage": {
-          "kind": "scalar"
-        }
-      }
+        providerMessage: {
+          kind: "scalar",
+        },
+      },
     },
     "statusDetail.investmentsTransactions.lastUpdatedAt": {
-      "kind": "scalar"
+      kind: "scalar",
     },
     "statusDetail.investmentsTransactions.isUpdated": {
-      "kind": "scalar"
+      kind: "scalar",
     },
     "statusDetail.investmentsTransactions.warnings": {
-      "kind": "array",
-      "fields": {
-        "code": {
-          "kind": "scalar"
+      kind: "array",
+      fields: {
+        code: {
+          kind: "scalar",
         },
-        "message": {
-          "kind": "scalar"
+        message: {
+          kind: "scalar",
         },
-        "providerMessage": {
-          "kind": "scalar"
-        }
-      }
+        providerMessage: {
+          kind: "scalar",
+        },
+      },
     },
     "statusDetail.paymentData.lastUpdatedAt": {
-      "kind": "scalar"
+      kind: "scalar",
     },
     "statusDetail.paymentData.isUpdated": {
-      "kind": "scalar"
+      kind: "scalar",
     },
     "statusDetail.paymentData.warnings": {
-      "kind": "array",
-      "fields": {
-        "code": {
-          "kind": "scalar"
+      kind: "array",
+      fields: {
+        code: {
+          kind: "scalar",
         },
-        "message": {
-          "kind": "scalar"
+        message: {
+          kind: "scalar",
         },
-        "providerMessage": {
-          "kind": "scalar"
-        }
-      }
+        providerMessage: {
+          kind: "scalar",
+        },
+      },
     },
     "statusDetail.loans.lastUpdatedAt": {
-      "kind": "scalar"
+      kind: "scalar",
     },
     "statusDetail.loans.isUpdated": {
-      "kind": "scalar"
+      kind: "scalar",
     },
     "statusDetail.loans.warnings": {
-      "kind": "array",
-      "fields": {
-        "code": {
-          "kind": "scalar"
+      kind: "array",
+      fields: {
+        code: {
+          kind: "scalar",
         },
-        "message": {
-          "kind": "scalar"
+        message: {
+          kind: "scalar",
         },
-        "providerMessage": {
-          "kind": "scalar"
-        }
-      }
+        providerMessage: {
+          kind: "scalar",
+        },
+      },
     },
     "statusDetail.accountStatements.lastUpdatedAt": {
-      "kind": "scalar"
+      kind: "scalar",
     },
     "statusDetail.accountStatements.isUpdated": {
-      "kind": "scalar"
+      kind: "scalar",
     },
     "statusDetail.accountStatements.warnings": {
-      "kind": "array",
-      "fields": {
-        "code": {
-          "kind": "scalar"
+      kind: "array",
+      fields: {
+        code: {
+          kind: "scalar",
         },
-        "message": {
-          "kind": "scalar"
+        message: {
+          kind: "scalar",
         },
-        "providerMessage": {
-          "kind": "scalar"
-        }
-      }
+        providerMessage: {
+          kind: "scalar",
+        },
+      },
     },
-    "nextAutoSyncAt": {
-      "kind": "scalar"
+    nextAutoSyncAt: {
+      kind: "scalar",
     },
-    "consentExpiresAt": {
-      "kind": "scalar"
+    consentExpiresAt: {
+      kind: "scalar",
     },
-    "resourcesCollectedAt": {
-      "kind": "scalar"
+    resourcesCollectedAt: {
+      kind: "scalar",
     },
-    "hasResourcesPendingAuthorization": {
-      "kind": "scalar"
+    hasResourcesPendingAuthorization: {
+      kind: "scalar",
     },
-    "products": {
-      "kind": "array_scalar"
-    }
+    products: {
+      kind: "array_scalar",
+    },
   },
-  "resources": {
-    "resourceId": {
-      "kind": "scalar"
+  resources: {
+    resourceId: {
+      kind: "scalar",
     },
-    "type": {
-      "kind": "scalar"
+    type: {
+      kind: "scalar",
     },
-    "status": {
-      "kind": "scalar"
+    status: {
+      kind: "scalar",
     },
-    "id": {
-      "kind": "scalar"
-    }
+    id: {
+      kind: "scalar",
+    },
   },
-  "consents": {
-    "id": {
-      "kind": "scalar"
+  consents: {
+    id: {
+      kind: "scalar",
     },
-    "itemId": {
-      "kind": "scalar"
+    itemId: {
+      kind: "scalar",
     },
-    "products": {
-      "kind": "array_scalar"
+    products: {
+      kind: "array_scalar",
     },
-    "openFinancePermissionsGranted": {
-      "kind": "array_scalar"
+    openFinancePermissionsGranted: {
+      kind: "array_scalar",
     },
-    "createdAt": {
-      "kind": "scalar"
+    createdAt: {
+      kind: "scalar",
     },
-    "expiresAt": {
-      "kind": "scalar"
+    expiresAt: {
+      kind: "scalar",
     },
-    "revokedAt": {
-      "kind": "scalar"
-    }
+    revokedAt: {
+      kind: "scalar",
+    },
   },
-  "connectors": {
-    "id": {
-      "kind": "decimal"
+  connectors: {
+    id: {
+      kind: "decimal",
     },
-    "name": {
-      "kind": "scalar"
+    name: {
+      kind: "scalar",
     },
-    "type": {
-      "kind": "scalar"
+    type: {
+      kind: "scalar",
     },
-    "country": {
-      "kind": "scalar"
+    country: {
+      kind: "scalar",
     },
-    "products": {
-      "kind": "array_scalar"
+    products: {
+      kind: "array_scalar",
     },
     "health.status": {
-      "kind": "scalar"
+      kind: "scalar",
     },
     "health.stage": {
-      "kind": "scalar"
+      kind: "scalar",
     },
     "health.incidents": {
-      "kind": "array",
-      "fields": {
-        "id": {
-          "kind": "scalar"
+      kind: "array",
+      fields: {
+        id: {
+          kind: "scalar",
         },
-        "title": {
-          "kind": "scalar"
+        title: {
+          kind: "scalar",
         },
-        "type": {
-          "kind": "scalar"
+        type: {
+          kind: "scalar",
         },
-        "product": {
-          "kind": "scalar"
+        product: {
+          kind: "scalar",
         },
-        "kind": {
-          "kind": "scalar"
+        kind: {
+          kind: "scalar",
         },
-        "severity": {
-          "kind": "scalar"
+        severity: {
+          kind: "scalar",
         },
-        "state": {
-          "kind": "scalar"
+        state: {
+          kind: "scalar",
         },
-        "startedAt": {
-          "kind": "scalar"
+        startedAt: {
+          kind: "scalar",
         },
-        "updatedAt": {
-          "kind": "scalar"
-        }
-      }
+        updatedAt: {
+          kind: "scalar",
+        },
+      },
     },
     "health.details.connectionRateLast6Hours": {
-      "kind": "decimal"
+      kind: "decimal",
     },
     "health.details.connectionsLast6Hours": {
-      "kind": "decimal"
+      kind: "decimal",
     },
-    "isOpenFinance": {
-      "kind": "scalar"
+    isOpenFinance: {
+      kind: "scalar",
     },
-    "isSandbox": {
-      "kind": "scalar"
+    isSandbox: {
+      kind: "scalar",
     },
-    "updatedAt": {
-      "kind": "scalar"
-    }
+    updatedAt: {
+      kind: "scalar",
+    },
   },
-  "categories": {
-    "id": {
-      "kind": "scalar"
+  categories: {
+    id: {
+      kind: "scalar",
     },
-    "description": {
-      "kind": "scalar"
+    description: {
+      kind: "scalar",
     },
-    "descriptionTranslated": {
-      "kind": "scalar"
+    descriptionTranslated: {
+      kind: "scalar",
     },
-    "parentId": {
-      "kind": "scalar"
+    parentId: {
+      kind: "scalar",
     },
-    "parentDescription": {
-      "kind": "scalar"
-    }
+    parentDescription: {
+      kind: "scalar",
+    },
   },
-  "statements": {
-    "id": {
-      "kind": "scalar"
+  statements: {
+    id: {
+      kind: "scalar",
     },
-    "monthYear": {
-      "kind": "scalar"
-    }
-  }
+    monthYear: {
+      kind: "scalar",
+    },
+  },
 } as const satisfies Record<Resource, Record<string, ProviderField>>;
 
 export default providerFields;

@@ -137,24 +137,24 @@ export async function authenticatedFetch(
   ctx: ExecutionContext,
   api: McpHandler,
 ) {
-  const result = await tryCatch(
+  const { data, error } = await tryCatch(() =>
     oauth(api, requestOrigin(request)).fetch(request, env, ctx),
   );
-  if (result.error) {
+  if (error) {
     return Response.json(
       { error: "AUTHENTICATION_OR_REQUEST_FAILED" },
       {
-        status: failureStatus(result.error),
+        status: failureStatus(error),
         headers: { "Cache-Control": "no-store" },
       },
     );
   }
-  return result.data;
+  return data;
 }
 
 const loginCookie = "__Host-caderninho-login";
 
-export function loginRoutes() {
+function loginRoutes() {
   const app = new Hono<PortalEnv>();
   app.get("/account/login", async (c) => {
     const target = returnPath(c.req.query("returnTo"));
@@ -234,6 +234,6 @@ export function loginRoutes() {
   return app;
 }
 
-export function portalRoutes() {
+function portalRoutes() {
   return accountRoutes(loginRoutes());
 }

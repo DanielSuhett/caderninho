@@ -10,18 +10,23 @@ import {
   text,
   uniqueIndex,
 } from "drizzle-orm/sqlite-core";
-import type { z } from "zod/v4";
 
-import type {
-  OperationInput,
+import {
+  type OperationInput,
+  OperationPhase,
   OperationStatus,
-  WebhookEvent,
-} from "#contracts/operation.ts";
-import type { Resource } from "#domain/enums.ts";
-import type { LegacyRulesSchema } from "#domain/rules/convert-rules.ts";
-import type { Derived, Rules } from "#domain/rules/rules-schema.ts";
-import type { FinanceRecord, ProviderRecord } from "#domain/schemas.ts";
-import type { JsonValue } from "#shared/json.ts";
+  type WebhookEvent,
+} from "#contracts/operation.types.ts";
+import {
+  type CoverageStatus,
+  type Resource,
+  TagOrigin,
+} from "#domain/enums.ts";
+import type { FinanceRecord } from "#domain/finance.types.ts";
+import type { ProviderRecord } from "#domain/provider.types.ts";
+import { CorrectionField } from "#domain/record-correction.types.ts";
+import type { Derived, LegacyRules, Rules } from "#domain/rules/rules.types.ts";
+import type { JsonValue } from "#shared/json.types.ts";
 import type { PageCommit, Progress } from "#worker/sync/operation-storage.ts";
 
 // Mirrors 0001_personal.sql. Wrangler owns migrations; this schema does not generate DDL.
@@ -73,7 +78,7 @@ export const rule_sets = sqliteTable(
   {
     id: text("id").notNull(),
     document: text("document", { mode: "json" })
-      .$type<Rules | z.infer<typeof LegacyRulesSchema>>()
+      .$type<Rules | LegacyRules>()
       .notNull(),
     normalizer: text("normalizer").notNull(),
     created_at: text("created_at").notNull(),
@@ -260,7 +265,11 @@ export const overrides = sqliteTable(
     parent_id: text("parent_id").notNull(),
     id: text("id").notNull(),
     field: text("field", {
-      enum: ["category", "description", "ignored"],
+      enum: [
+        CorrectionField.category,
+        CorrectionField.description,
+        CorrectionField.ignored,
+      ],
     }).notNull(),
     value: text("value").notNull(),
     updated_at: text("updated_at").notNull(),
@@ -294,7 +303,9 @@ export const tags = sqliteTable(
     id: text("id").notNull(),
     key: text("key").notNull(),
     value: text("value").notNull(),
-    origin: text("origin", { enum: ["derived", "manual"] }).notNull(),
+    origin: text("origin", {
+      enum: [TagOrigin.derived, TagOrigin.manual],
+    }).notNull(),
   },
   (t) => [
     primaryKey({
@@ -328,8 +339,11 @@ export const operations = sqliteTable(
     status: text("status")
       .$type<OperationStatus>()
       .notNull()
-      .default(sql`'working'`),
-    phase: text("phase").notNull().default(sql`'queued'`),
+      .default(OperationStatus.working),
+    phase: text("phase")
+      .$type<OperationPhase>()
+      .notNull()
+      .default(OperationPhase.queued),
     cancel_requested: integer("cancel_requested").notNull().default(sql`0`),
     dispatched: integer("dispatched").notNull().default(sql`0`),
     created_at: text("created_at").notNull(),
@@ -375,7 +389,7 @@ export const coverage = sqliteTable(
     item_id: text("item_id").notNull(),
     resource: text("resource").$type<Resource>().notNull(),
     parent_id: text("parent_id").notNull().default(sql`''`),
-    status: text("status").notNull(),
+    status: text("status").$type<CoverageStatus>().notNull(),
     bootstrap_complete: integer("bootstrap_complete").notNull().default(sql`0`),
     confirmed_created_at: text("confirmed_created_at"),
     observed_at: text("observed_at"),

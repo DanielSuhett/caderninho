@@ -3,7 +3,7 @@
 import { eq, sql } from "drizzle-orm";
 import { sqliteTable, text } from "drizzle-orm/sqlite-core";
 
-import type { ProviderRecord } from "#domain/schemas.ts";
+import type { ProviderRecord } from "#domain/provider.types.ts";
 import { tryCatch } from "#shared/result.ts";
 import { authenticatedFetch } from "#worker/auth/controller.ts";
 import type { Bindings } from "#worker/bindings.ts";
@@ -81,14 +81,16 @@ export class TestWorkflow extends WorkflowEntrypoint<
 > {
   async run(event: WorkflowEvent<{ operationId: string }>, step: WorkflowStep) {
     return runOperation(
-      synchronizationDependencies(this.env),
+      {
+        ...synchronizationDependencies(this.env),
+        source: async () => new Fixture(this.env),
+      },
       event.payload.operationId,
       {
         do: (name, fn) =>
           step.do(name, { retries: { limit: 1, delay: "1 second" } }, fn),
         sleep: (name) => step.sleep(name, "3 seconds"),
       },
-      new Fixture(this.env),
     );
   }
 }
@@ -175,10 +177,8 @@ const worker = {
       });
     }
     if (path === "/webhook") {
-      const result = await tryCatch(receiveWebhook(req, env));
-      return result.error
-        ? new Response("Receipt failed", { status: 503 })
-        : result.data;
+      const { data, error } = await tryCatch(() => receiveWebhook(req, env));
+      return error ? new Response("Receipt failed", { status: 503 }) : data;
     }
     if (path === "/mcp") {
       return fetchMcp(req, env, ctx);

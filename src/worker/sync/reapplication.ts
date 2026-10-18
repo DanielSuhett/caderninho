@@ -1,6 +1,13 @@
 import { and, eq, getTableColumns, inArray, sql } from "drizzle-orm";
+import type { BatchItem } from "drizzle-orm/batch";
 
-import type { OperationInput } from "#contracts/operation.ts";
+import {
+  type OperationInput,
+  type OperationKind,
+  OperationPhase,
+  OperationStatus,
+} from "#contracts/operation.types.ts";
+import { Resource } from "#domain/enums.ts";
 import { txContext } from "#domain/rules/rules.ts";
 import { database } from "#worker/database.ts";
 import { derivedStatements } from "#worker/finance/entities.repository.ts";
@@ -21,7 +28,7 @@ import type { Steps } from "#worker/sync/service.ts";
 type Flow = {
   db: D1Database;
   op: Operation;
-  input: Extract<OperationInput, { kind: "reapply" }>;
+  input: Extract<OperationInput, { kind: typeof OperationKind.reapply }>;
   items: Pick<typeof tables.items.$inferSelect, "id" | "resources">[];
   engine: Awaited<ReturnType<typeof rulesFor>>;
   step: Steps;
@@ -36,7 +43,7 @@ export async function reapplyRules({
 }: Flow) {
   const id = op.id;
   for (const item of items) {
-    await requireResource(db, item.id, "transactions");
+    await requireResource(db, item.id, Resource.transactions);
   }
   const filter = input.filter ? compileFilter(db, input.filter) : undefined;
   await step.do("select-reapply", async () => {
@@ -55,7 +62,7 @@ export async function reapplyRules({
           .from(tables.effective_entities)
           .where(
             and(
-              eq(tables.effective_entities.resource, "transactions"),
+              eq(tables.effective_entities.resource, Resource.transactions),
               eq(tables.effective_entities.deleted, 0),
               inArray(tables.effective_entities.item_id, input.itemIds),
               filter,
@@ -64,7 +71,7 @@ export async function reapplyRules({
       )
       .onConflictDoNothing()
       .run();
-    return { phase: "selected" };
+    return { phase: OperationPhase.selected };
   });
   for (let batch = 0; ; batch++) {
     const result = await step.do(`reapply-${batch}`, async () => {
@@ -112,37 +119,34 @@ export async function reapplyRules({
         )
         .limit(20)
         .all();
-      const edits = (
-        await Promise.all(
-          selected.map(async (entity) => {
-            const derived = await engine.evaluate(txContext(entity.normalized));
-            return [
-              ...derivedStatements(db, {
-                identity: {
-                  itemId: entity.item_id,
-                  resource: entity.resource,
-                  parentId: entity.parent_id,
-                  id: entity.id,
-                },
-                rulesRevision: op.rules_revision,
-                derived,
-              }),
-              database(db)
-                .update(tables.operation_targets)
-                .set({ processed: 1 })
-                .where(
-                  and(
-                    eq(tables.operation_targets.operation_id, id),
-                    eq(tables.operation_targets.item_id, entity.item_id),
-                    eq(tables.operation_targets.resource, entity.resource),
-                    eq(tables.operation_targets.parent_id, entity.parent_id),
-                    eq(tables.operation_targets.id, entity.id),
-                  ),
-                ),
-            ];
+      const edits: BatchItem<"sqlite">[] = [];
+      for (const entity of selected) {
+        const derived = await engine.evaluate(txContext(entity.normalized));
+        edits.push(
+          ...derivedStatements(db, {
+            identity: {
+              itemId: entity.item_id,
+              resource: entity.resource,
+              parentId: entity.parent_id,
+              id: entity.id,
+            },
+            rulesRevision: op.rules_revision,
+            derived,
           }),
-        )
-      ).flat();
+          database(db)
+            .update(tables.operation_targets)
+            .set({ processed: 1 })
+            .where(
+              and(
+                eq(tables.operation_targets.operation_id, id),
+                eq(tables.operation_targets.item_id, entity.item_id),
+                eq(tables.operation_targets.resource, entity.resource),
+                eq(tables.operation_targets.parent_id, entity.parent_id),
+                eq(tables.operation_targets.id, entity.id),
+              ),
+            ),
+        );
+      }
       const progress = progressWithDefaults(
         (await stillWorking(db, id)).progress,
       );
@@ -160,7 +164,7 @@ export async function reapplyRules({
             .update(tables.operations)
             .set({
               progress: progress,
-              phase: "reapply",
+              phase: OperationPhase.reapply,
               updated_at: new Date().toISOString(),
             })
             .where(eq(tables.operations.id, id)),
@@ -175,7 +179,7 @@ export async function reapplyRules({
       return outcome;
     });
     if (result.cancelled) {
-      await finish(db, op, "cancelled");
+      await finish(db, op, OperationStatus.cancelled);
       return true;
     }
     if (result.done) {

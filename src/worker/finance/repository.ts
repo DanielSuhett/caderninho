@@ -19,11 +19,20 @@ import {
 } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 
-import type { PreviewInput, SubscriptionInput } from "#contracts/finance.ts";
-import type { Aggregate, Query } from "#contracts/queries.ts";
-import type { Resource } from "#domain/enums.ts";
+import type {
+  PreviewInput,
+  SubscriptionInput,
+} from "#contracts/finance.types.ts";
+import type { Aggregate, Query } from "#contracts/queries.types.ts";
+import {
+  Availability,
+  FaultCode,
+  Resource,
+  TagOrigin,
+  TransactionStatus,
+} from "#domain/enums.ts";
 import { assertMinor } from "#domain/exact.ts";
-import type { Filter } from "#domain/filter.ts";
+import { Field, type Filter, FilterOperator } from "#domain/filter.types.ts";
 import { metricsFor } from "#domain/finance-model.ts";
 import { database, hash } from "#worker/database.ts";
 import * as tables from "#worker/schema.ts";
@@ -68,7 +77,7 @@ function matchingTags(db: ReturnType<typeof database>) {
     eq(t.parent_id, e.parent_id),
     eq(t.id, e.id),
     or(
-      eq(t.origin, "manual"),
+      eq(t.origin, TagOrigin.manual),
       notExists(
         db
           .select({ one: sql`1` })
@@ -80,7 +89,7 @@ function matchingTags(db: ReturnType<typeof database>) {
               eq(m.parent_id, t.parent_id),
               eq(m.id, t.id),
               eq(m.key, t.key),
-              eq(m.origin, "manual"),
+              eq(m.origin, TagOrigin.manual),
             ),
           ),
       ),
@@ -117,7 +126,7 @@ export function compileFilter(db: D1Database, filter: Filter): SQL {
     }
     const value = filterValue(f);
     parameters++;
-    if (f.op === "contains") {
+    if (f.op === FilterOperator.contains) {
       if (!f.field.endsWith("description")) {
         throw new Error("contains only supports description");
       }
@@ -129,7 +138,7 @@ export function compileFilter(db: D1Database, filter: Filter): SQL {
 }
 
 function filterValue(filter: Extract<Filter, { field: string }>) {
-  if (filter.field === "amountMinor") {
+  if (filter.field === Field.amountMinor) {
     if (typeof filter.value !== "string") {
       throw new Error("Invalid amount filter");
     }
@@ -147,7 +156,7 @@ export async function authorizedItems(db: D1Database, ids?: string[]) {
     .from(tables.items)
     .where(eq(tables.items.enabled, 1));
   if (ids?.some((id) => !all.some((item) => item.id === id))) {
-    throw new Error("ITEM_NOT_AUTHORIZED");
+    throw new Error(FaultCode.ITEM_NOT_AUTHORIZED);
   }
   return ids ? all.filter((item) => ids.includes(item.id)) : all;
 }
@@ -158,14 +167,14 @@ export async function requireResource(
 ) {
   const [item] = await authorizedItems(db, [itemId]);
   if (!item) {
-    throw new Error("ITEM_NOT_AUTHORIZED");
+    throw new Error(FaultCode.ITEM_NOT_AUTHORIZED);
   }
   if (!item.resources.includes(resource)) {
     throw new Error("RESOURCE_NOT_AUTHORIZED");
   }
 }
 
-export function authorizedEntity(db: D1Database) {
+function authorizedEntity(db: D1Database) {
   return exists(
     database(db)
       .select({ one: sql`1` })
@@ -184,36 +193,50 @@ export function authorizedEntity(db: D1Database) {
       ),
   );
 }
-export async function coverageFor(db: D1Database, resource: Resource) {
-  const items = await authorizedItems(db),
-    result = [];
-  for (const item of items) {
-    if (!item.resources.includes(resource)) {
-      continue;
-    }
-    const found = await database(db)
-      .select({
+async function coverageFor(db: D1Database, resource: Resource) {
+  const items = (await authorizedItems(db)).filter((item) =>
+    item.resources.includes(resource),
+  );
+  if (!items.length) {
+    return [];
+  }
+  const found = await database(db)
+    .select({
+      itemId: tables.coverage.item_id,
+      coverage: {
         resource: tables.coverage.resource,
         parent_id: tables.coverage.parent_id,
         status: tables.coverage.status,
         bootstrap_complete: tables.coverage.bootstrap_complete,
         observed_at: tables.coverage.observed_at,
-      })
-      .from(tables.coverage)
-      .where(
-        and(
-          eq(tables.coverage.item_id, item.id),
-          eq(tables.coverage.resource, resource),
+      },
+    })
+    .from(tables.coverage)
+    .where(
+      and(
+        inArray(
+          tables.coverage.item_id,
+          items.map((item) => item.id),
         ),
-      );
-    result.push({
-      itemId: item.id,
-      coverage: found.length
-        ? found
-        : [{ resource, status: "not_synced", bootstrap_complete: 0 }],
-    });
+        eq(tables.coverage.resource, resource),
+      ),
+    );
+  const byItem = new Map<string, (typeof found)[number]["coverage"][]>();
+  for (const row of found) {
+    const coverage = byItem.get(row.itemId) ?? [];
+    coverage.push(row.coverage);
+    byItem.set(row.itemId, coverage);
   }
-  return result;
+  return items.map((item) => ({
+    itemId: item.id,
+    coverage: byItem.get(item.id) ?? [
+      {
+        resource,
+        status: Availability.not_synced,
+        bootstrap_complete: 0,
+      },
+    ],
+  }));
 }
 export async function revision(db: D1Database) {
   const row = await database(db)
@@ -239,7 +262,7 @@ export function serializedEntity<
     ...row,
     source: JSON.stringify(row.source),
     normalized: JSON.stringify(row.normalized),
-    evidence: row.evidence === null ? null : JSON.stringify(row.evidence),
+    evidence: row.evidence ? JSON.stringify(row.evidence) : null,
   };
 }
 
@@ -247,7 +270,7 @@ export async function queryEntities(
   db: D1Database,
   input: Omit<Partial<Query>, "cursor"> & { cursor?: Query["cursor"] | null },
 ) {
-  const args = { resource: "transactions" as const, limit: 50, ...input };
+  const args = { resource: Resource.transactions, limit: 50, ...input };
   const scope = await hash({
     resource: args.resource,
     filter: args.filter ?? null,
@@ -300,7 +323,7 @@ export async function aggregateEntities(
   db: D1Database,
   input: Partial<Aggregate>,
 ) {
-  const args = { resource: "transactions" as const, ...input };
+  const args = { resource: Resource.transactions, ...input };
   const before = await revision(db),
     definition = args.metric
       ? metricsFor(args.resource)[args.metric]
@@ -331,8 +354,9 @@ export async function aggregateEntities(
             authorizedEntity(db),
             args.filter ? compileFilter(db, args.filter) : undefined,
             definition?.temporal === "flow" ? eq(e.eligible, 1) : undefined,
-            definition?.temporal === "flow" && args.resource === "transactions"
-              ? eq(e.status, "POSTED")
+            definition?.temporal === "flow" &&
+              args.resource === Resource.transactions
+              ? eq(e.status, TransactionStatus.POSTED)
               : undefined,
             definition ? eq(e.ignored, 0) : undefined,
           ),
@@ -466,7 +490,7 @@ export async function previewSelection(
 ) {
   await authorizedItems(db, a.itemIds);
   const predicate = and(
-    eq(e.resource, "transactions"),
+    eq(e.resource, Resource.transactions),
     eq(e.deleted, 0),
     inArray(e.item_id, a.itemIds),
     authorizedEntity(db),
@@ -508,7 +532,7 @@ export async function subscriptionRecords(
     .from(e)
     .where(
       and(
-        eq(e.resource, "transactions"),
+        eq(e.resource, Resource.transactions),
         eq(e.deleted, 0),
         eq(e.ignored, 0),
         gte(e.transaction_date, a.from),

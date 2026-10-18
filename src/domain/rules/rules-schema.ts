@@ -2,23 +2,34 @@ import { RE2JS } from "re2js";
 import { z } from "zod/v4";
 
 import { compareDecimal, day } from "#domain/exact.ts";
+import { accents, allowed } from "#domain/rules/rule-fields.ts";
+import { compileValidatedRules } from "#domain/rules/rules.ts";
+import {
+  Comparator,
+  type Condition,
+  type Rule,
+  RuleAction,
+  RuleOperator,
+  RulePhase,
+  type Rules,
+} from "#domain/rules/rules.types.ts";
 
 const Text = z.string().max(2048);
 
 export const ActionSchema = z.discriminatedUnion("op", [
-  z.object({ op: z.literal("set_category"), value: Text }).strict(),
-  z.object({ op: z.literal("set_description"), value: Text }).strict(),
+  z.object({ op: z.literal(RuleAction.set_category), value: Text }).strict(),
+  z.object({ op: z.literal(RuleAction.set_description), value: Text }).strict(),
   z
     .object({
-      op: z.literal("set_tag"),
+      op: z.literal(RuleAction.set_tag),
       key: z.string().min(1).max(80),
       value: Text,
     })
     .strict(),
-  z.object({ op: z.literal("ignore") }).strict(),
+  z.object({ op: z.literal(RuleAction.ignore) }).strict(),
 ]);
 
-const Comparator = z.enum(["eq", "ne", "gt", "gte", "lt", "lte"]);
+const ComparatorSchema = z.enum(Comparator);
 
 const FactSchema = z.string().refine((p) => allowed(p), "Unknown fact");
 
@@ -33,21 +44,21 @@ const PredicateSchema = z.discriminatedUnion("operator", [
   z
     .object({
       fact: FactSchema,
-      operator: z.enum(["equal", "notEqual"]),
+      operator: z.enum([RuleOperator.equal, RuleOperator.notEqual]),
       value: Literal,
     })
     .strict(),
   z
     .object({
       fact: FactSchema,
-      operator: z.literal("contains"),
+      operator: z.literal(RuleOperator.contains),
       value: z.union([z.string().max(2048), z.array(Literal).max(1000)]),
     })
     .strict(),
   z
     .object({
       fact: FactSchema,
-      operator: z.literal("regex"),
+      operator: z.literal(RuleOperator.regex),
       value: z
         .string()
         .max(512)
@@ -65,10 +76,10 @@ const PredicateSchema = z.discriminatedUnion("operator", [
   z
     .object({
       fact: FactSchema,
-      operator: z.literal("decimalCompare"),
+      operator: z.literal(RuleOperator.decimalCompare),
       value: z
         .object({
-          op: Comparator,
+          op: ComparatorSchema,
           value: z.string().refine((v) => {
             try {
               compareDecimal(v, v);
@@ -85,7 +96,7 @@ const PredicateSchema = z.discriminatedUnion("operator", [
   z
     .object({
       fact: FactSchema,
-      operator: z.literal("decimalBetween"),
+      operator: z.literal(RuleOperator.decimalBetween),
       value: z.tuple([z.string(), z.string()]).refine(([a, b]) => {
         try {
           return compareDecimal(a, b) <= 0;
@@ -98,10 +109,10 @@ const PredicateSchema = z.discriminatedUnion("operator", [
   z
     .object({
       fact: FactSchema,
-      operator: z.literal("dateCompare"),
+      operator: z.literal(RuleOperator.dateCompare),
       value: z
         .object({
-          op: Comparator,
+          op: ComparatorSchema,
           value: z.string().refine((v) => {
             try {
               day(v);
@@ -117,7 +128,7 @@ const PredicateSchema = z.discriminatedUnion("operator", [
     .strict(),
 ]);
 
-export const ConditionSchema = z.union([
+const ConditionSchema: z.ZodType<Condition> = z.union([
   PredicateSchema,
   z
     .object({
@@ -142,8 +153,6 @@ export const ConditionSchema = z.union([
     .strict(),
 ]);
 
-export type Condition = z.infer<typeof ConditionSchema>;
-
 export const RuleSchema = z
   .object({
     id: z.string().min(1).max(128),
@@ -157,14 +166,14 @@ export const RuleSchema = z
     ]),
     event: z
       .object({
-        type: z.enum(["classify", "enrich"]),
+        type: z.enum(RulePhase),
         params: z
           .object({ actions: z.array(ActionSchema).min(1).max(32) })
           .strict(),
       })
       .strict(),
   })
-  .strict();
+  .strict() satisfies z.ZodType<Rule>;
 
 export const CatalogSchema = z.object({
   groups: z.array(z.object({ id: Text, name: Text }).strict()).max(1000),
@@ -185,76 +194,8 @@ export const CatalogSchema = z.object({
 export const RulesSchema = CatalogSchema.extend({
   version: z.literal(2),
   rules: z.array(RuleSchema).max(2000),
-}).strict();
+}).strict() satisfies z.ZodType<Rules>;
 
-export type Rules = z.infer<typeof RulesSchema>;
-
-export type Rule = z.infer<typeof RuleSchema>;
-
-const ConversionIssueSchema = z.object({
-  path: z.string(),
-  code: z.string(),
-  message: z.string(),
-});
-
-const RuleImportReportSchema = z.discriminatedUnion("compatible", [
-  z.object({
-    compatible: z.literal(true),
-    document: RulesSchema,
-    issues: z.array(ConversionIssueSchema),
-  }),
-  z.object({
-    compatible: z.literal(false),
-    document: z.null(),
-    issues: z.array(ConversionIssueSchema),
-  }),
-]);
-
-export type RuleImportReport = z.infer<typeof RuleImportReportSchema>;
-
-export const DerivedSchema = z.object({
-  category_id: z.string(),
-  category: z.string(),
-  category_group_id: z.string(),
-  category_group: z.string(),
-  description: z.string(),
-  tags: z.record(z.string(), z.string()),
-  ignored: z.boolean(),
-  evidence: z.array(z.object({ ruleId: z.string(), action: ActionSchema })),
-});
-
-export type Derived = z.infer<typeof DerivedSchema>;
-
-export const TransactionContextSchema = z.object({
-  id: Text,
-  account_id: Text,
-  account_name: Text,
-  description: Text,
-  counterparty_name: Text,
-  direction: Text,
-  operation: Text,
-  payment_method: Text,
-  currency: Text,
-  account_type: Text,
-  original_category: Text,
-  amount: Text,
-  amount_abs: Text,
-  date: Text,
-  installment_number: Text,
-  total_installments: Text,
-});
-
-export type TransactionContext = z.infer<typeof TransactionContextSchema>;
-
-export const fields = new Set([
-  ...Object.keys(TransactionContextSchema.shape).map((k) => `tx.${k}`),
-  ...Object.keys(DerivedSchema.shape)
-    .filter((k) => k !== "evidence")
-    .map((k) => `result.${k}`),
-]);
-
-export const allowed = (p: string) =>
-  fields.has(p) || /^result\.tags\.[a-zA-Z0-9_-]{1,80}$/.test(p);
-
-export const accents = (s: string) =>
-  s.normalize("NFD").replace(/\p{Mn}/gu, "");
+export function compileRules(input: unknown) {
+  return compileValidatedRules(RulesSchema.parse(input));
+}

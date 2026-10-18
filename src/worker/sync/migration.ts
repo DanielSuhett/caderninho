@@ -1,7 +1,13 @@
 import { and, eq, sql } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 
-import type { OperationInput } from "#contracts/operation.ts";
+import {
+  MigrationPolicy,
+  type OperationInput,
+  type OperationKind,
+  OperationStatus,
+} from "#contracts/operation.types.ts";
+import { FaultCode } from "#domain/enums.ts";
 import type { EntityPreparer } from "#worker/composition.ts";
 import { database, hash } from "#worker/database.ts";
 import type { rulesFor } from "#worker/finance/rules.repository.ts";
@@ -13,7 +19,7 @@ import type { Steps } from "#worker/sync/service.ts";
 type Flow = {
   db: D1Database;
   op: Operation;
-  input: Extract<OperationInput, { kind: "migration" }>;
+  input: Extract<OperationInput, { kind: typeof OperationKind.migration }>;
   items: Pick<typeof tables.items.$inferSelect, "id" | "resources">[];
   engine: Awaited<ReturnType<typeof rulesFor>>;
   prepare: EntityPreparer;
@@ -31,13 +37,13 @@ export async function migrateLegacy({
   const id = op.id;
   await step.do("import-legacy", async () => {
     if ((await stillWorking(db, id)).cancel_requested) {
-      await finish(db, op, "cancelled");
+      await finish(db, op, OperationStatus.cancelled);
       return { cancelled: true };
     }
     const itemId = input.itemIds[0];
     const item = items[0];
     if (!itemId || !item) {
-      throw new Error("ITEM_NOT_AUTHORIZED");
+      throw new Error(FaultCode.ITEM_NOT_AUTHORIZED);
     }
     const edits: BatchItem<"sqlite">[] = [];
     for (const row of input.migration) {
@@ -147,8 +153,8 @@ async function keepCurrentMigrationRecord(
   ) {
     return false;
   }
-  if (!policy || policy === "refuse-conflicts") {
+  if (!policy || policy === MigrationPolicy.refuse_conflicts) {
     throw new Error("MIGRATION_OVERLAP_REQUIRES_POLICY");
   }
-  return policy === "keep-current";
+  return policy === MigrationPolicy.keep_current;
 }

@@ -1,4 +1,4 @@
-import type { AccountResponse } from "#contracts/portal-contract.ts";
+import type { AccountResponse } from "#contracts/portal.types.ts";
 
 export function accountSnapshot(): AccountResponse {
   return {

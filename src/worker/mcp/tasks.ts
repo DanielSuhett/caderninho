@@ -2,46 +2,26 @@ import { Validator } from "@cfworker/json-schema";
 import { specTypeSchemas } from "@modelcontextprotocol/server";
 import { z } from "zod/v4";
 
+import { OperationStatus } from "#contracts/operation.types.ts";
 import { JsonValueSchema } from "#shared/json.ts";
 import { tryCatch } from "#shared/result.ts";
 import type { Bindings } from "#worker/bindings.ts";
 import { syncService } from "#worker/composition.ts";
-import { operationState } from "#worker/sync/repository.ts";
+import type { Task } from "#worker/mcp/protocol.types.ts";
+import { operationState, operationStates } from "#worker/sync/repository.ts";
 import schema from "#worker/vendor/ext-tasks/schema.json" with { type: "json" };
 
 // Shape of ext-tasks/schema/2026-07-28, not the legacy SDK Task aliases.
 export const EXTENSION = "io.modelcontextprotocol/tasks";
-const Base = {
-  taskId: z.string(),
-  createdAt: z.string(),
-  lastUpdatedAt: z.string(),
-  ttlMs: z.number().int().nullable(),
-  pollIntervalMs: z.number().int().optional(),
-  statusMessage: z.string().optional(),
-};
-export const TaskSchema = z.discriminatedUnion("status", [
-  z.object({ ...Base, status: z.literal("working") }),
-  z.object({ ...Base, status: z.literal("cancelled") }),
-  z.object({
-    ...Base,
-    status: z.literal("completed"),
-    result: z.record(z.string(), JsonValueSchema),
-  }),
-  z.object({
-    ...Base,
-    status: z.literal("failed"),
-    error: z.record(z.string(), JsonValueSchema),
-  }),
-]);
 export const TaskParams = z.object({ taskId: z.string() });
 export const UpdateParams = TaskParams.extend({
   inputResponses: z.record(z.string(), JsonValueSchema),
 });
-export async function task(
-  env: Bindings,
-  id: string,
-): Promise<z.infer<typeof TaskSchema>> {
-  const state = await operationState(env.DB, id);
+export async function task(env: Bindings, id: string): Promise<Task> {
+  return taskResult(await operationState(env.DB, id));
+}
+
+function taskResult(state: Awaited<ReturnType<typeof operationState>>): Task {
   const base = {
     taskId: state.id,
     createdAt: state.createdAt,
@@ -50,10 +30,10 @@ export async function task(
     ttlMs: null,
     pollIntervalMs: 5000,
   };
-  if (state.status === "completed") {
+  if (state.status === OperationStatus.completed) {
     return { ...base, status: state.status, result: state.result ?? {} };
   }
-  if (state.status === "failed") {
+  if (state.status === OperationStatus.failed) {
     return { ...base, status: state.status, error: state.error ?? {} };
   }
   return { ...base, status: state.status };
@@ -73,15 +53,12 @@ export function negotiated(input: unknown) {
         .optional(),
     })
     .safeParse(input);
-  return Boolean(
-    p.success &&
-      p.data._meta?.["io.modelcontextprotocol/clientCapabilities"]
-        ?.extensions &&
-      Object.hasOwn(
-        p.data._meta["io.modelcontextprotocol/clientCapabilities"].extensions,
-        EXTENSION,
-      ),
-  );
+  if (!p.success) {
+    return false;
+  }
+  const extensions =
+    p.data._meta?.["io.modelcontextprotocol/clientCapabilities"]?.extensions;
+  return !!extensions && Object.hasOwn(extensions, EXTENSION);
 }
 export async function cancel(env: Bindings, id: string) {
   await syncService(env).cancel(id);
@@ -100,11 +77,15 @@ export async function listen(
     keepAlive?: (lifetime: Promise<void>) => void;
   },
 ) {
-  if (ids.length < 1 || ids.length > 10 || new Set(ids).size !== ids.length) {
+  if (!ids.length || ids.length > 10 || new Set(ids).size !== ids.length) {
     throw new Error("SUBSCRIPTION_LIMIT");
   }
-  const current = await Promise.all(ids.map((t) => task(env, t)));
-  const polling = current.some((state) => state.status === "working")
+  const readTasks = async () =>
+    (await operationStates(env.DB, ids)).map(taskResult);
+  const current = await readTasks();
+  const polling = current.some(
+    (state) => state.status === OperationStatus.working,
+  )
     ? pollingEvents()
     : undefined;
   const meta = { "io.modelcontextprotocol/subscriptionId": id };
@@ -157,19 +138,18 @@ export async function listen(
     if (isClientClosed() || event.done) {
       return true;
     }
-    let allTerminal = true;
-    for (const taskId of ids) {
-      const state = await task(env, taskId);
-      if (state.status === "working") {
-        allTerminal = false;
-      }
+    const latest = await readTasks();
+    if (isClientClosed()) {
+      return true;
+    }
+    for (const state of latest) {
       queue.push({
         jsonrpc: "2.0",
         method: "notifications/tasks",
         params: { ...state, _meta: meta },
       });
     }
-    return allTerminal;
+    return latest.every((state) => state.status !== OperationStatus.working);
   }
   function flushMessage(
     controller: ReadableStreamDefaultController<Uint8Array>,
@@ -190,43 +170,40 @@ export async function listen(
         ),
       );
     }
-    if (disposed && queue.length === 0) {
+    if (disposed && !queue.length) {
       controller.close();
     }
   }
   const stream = new ReadableStream<Uint8Array>(
     {
       async pull(controller) {
-        const outcome = await tryCatch(
-          (async () => {
+        const { data: _data, error } = await tryCatch(async () => {
+          if (isClientClosed()) {
+            return;
+          }
+          if (disposed && !queue.length) {
+            controller.close();
+            return;
+          }
+          if (!queue.length) {
+            const allTerminal = await enqueueTaskUpdates();
             if (isClientClosed()) {
               return;
             }
-            if (disposed && queue.length === 0) {
-              controller.close();
-              return;
+            if (allTerminal) {
+              queue.push({
+                jsonrpc: "2.0",
+                id,
+                result: validateSubscriptionWire("SubscriptionsListenResult", {
+                  resultType: "complete",
+                }),
+              });
+              dispose();
             }
-            if (queue.length === 0) {
-              const allTerminal = await enqueueTaskUpdates();
-              if (isClientClosed()) {
-                return;
-              }
-              if (allTerminal) {
-                queue.push({
-                  jsonrpc: "2.0",
-                  id,
-                  result: validateSubscriptionWire(
-                    "SubscriptionsListenResult",
-                    { resultType: "complete" },
-                  ),
-                });
-                dispose();
-              }
-            }
-            flushMessage(controller);
-          })(),
-        );
-        if (outcome.error && !isClientClosed()) {
+          }
+          flushMessage(controller);
+        });
+        if (error && !isClientClosed()) {
           dispose();
           // Finish the SSE response with a protocol error. Erroring a response
           // stream can abort unrelated requests in the local RPC bridge.
@@ -265,7 +242,7 @@ export async function listen(
 
 // Portable wake-up source: execution stays in Workflows, authoritative state in
 // D1. A timer only drives the open SSE reader; it never performs financial work.
-export function pollingEvents(intervalMs = 5000) {
+function pollingEvents() {
   let disposed = false,
     timer: ReturnType<typeof setTimeout> | undefined,
     wake: (() => void) | undefined;
@@ -276,7 +253,7 @@ export function pollingEvents(intervalMs = 5000) {
       }
       await new Promise<void>((resolve) => {
         wake = resolve;
-        timer = setTimeout(resolve, intervalMs);
+        timer = setTimeout(resolve, 5000);
       });
       wake = undefined;
       return { done: disposed };

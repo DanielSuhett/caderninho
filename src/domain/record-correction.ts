@@ -1,52 +1,23 @@
-import { z } from "zod/v4";
-
-import { ResourceSchema } from "#domain/enums.ts";
-
-export const RecordReferenceSchema = z.object({
-  itemId: z.string().min(1),
-  resource: ResourceSchema,
-  parentId: z.string().default(""),
-  id: z.string().min(1),
-});
-
-export type RecordReference = z.infer<typeof RecordReferenceSchema>;
-
-export const CorrectionInputSchema = RecordReferenceSchema.extend({
-  field: z.enum(["category", "description", "ignored", "tag"]),
-  key: z.string().min(1).max(80).optional(),
-  value: z.string().max(2048).nullable(),
-});
-
-export type CorrectionInput = z.infer<typeof CorrectionInputSchema>;
-
-const RecordChangeSchema = z.discriminatedUnion("field", [
-  z.object({
-    field: z.literal("tag"),
-    key: z.string().min(1).max(80),
-    value: z.string().max(2048).nullable(),
-  }),
-  z.object({
-    field: z.enum(["category", "description", "ignored"]),
-    value: z.string().max(2048).nullable(),
-  }),
-]);
-
-export type RecordChange = z.infer<typeof RecordChangeSchema>;
+import {
+  CorrectionField,
+  type CorrectionInput,
+  type RecordChange,
+} from "#domain/record-correction.types.ts";
 
 export function recordChange(input: CorrectionInput): RecordChange {
-  if (input.field === "tag") {
+  if (input.field === CorrectionField.tag) {
     if (input.key === undefined) {
       throw new Error("TAG_KEY_REQUIRED");
     }
     return {
-      field: "tag",
+      field: CorrectionField.tag,
       key: input.key,
       value: input.value,
     };
   }
 
   if (
-    input.field === "ignored" &&
+    input.field === CorrectionField.ignored &&
     input.value !== null &&
     !["0", "1"].includes(input.value)
   ) {

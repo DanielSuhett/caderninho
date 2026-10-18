@@ -1,10 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import {
-  type CorrectionInput,
-  recordChange,
-} from "#domain/record-correction.ts";
+import { recordChange } from "#domain/record-correction.ts";
+import type { CorrectionInput } from "#domain/record-correction.types.ts";
 
 await test("local correction requires an explicit tag key and exact ignored flags, while null restores inheritance", () => {
   const reference = {

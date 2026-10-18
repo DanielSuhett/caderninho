@@ -52,7 +52,7 @@ entre a gravação D1 e o despacho do Workflow.
 
 Publicação de dados, derivados, cobertura, checkpoint, progresso, revisão e recibo
 ocorre no mesmo batch. Replay verifica o recibo antes de buscar a página novamente.
-Um lock da instalação serializam publicações; cancelamento preserva commits já feitos.
+Um lock da instalação serializa publicações; cancelamento preserva commits já feitos.
 Nenhuma transação SQL fica aberta durante chamadas HTTP.
 
 Dinheiro usa valores exatos e moedas separadas. Normalização e elegibilidade recebem
@@ -79,7 +79,7 @@ persistido na leitura pontual. Uma futura fonte deve adaptar os dados e capacida
 de origem, preservando precisão, identidade e cobertura; não exige uma camada
 genérica de providers antecipadamente. O payload heterogêneo continua preservado.
 
-`sync/operation-storage.ts` é dono da linha D1 e dos schemas de checkpoint/progresso.
+`src/worker/sync/operation-storage.ts` é dono da linha D1 e dos tipos de checkpoint/progresso.
 O serviço de despacho recebe apenas identidade/status da operação e consulta a
 elegibilidade na outbox. O repositório entrega o estado de leitura com resultado
 parseado; o adaptador MCP traduz esse estado para Tasks. Flags e JSON de persistência
@@ -91,57 +91,69 @@ e não confirmação de cobertura integral no wizard.
 
 `src/web/document.tsx` compõe e renderiza o documento React em HTML. Login e
 consentimento usam formulários nativos; o painel monta a aplicação pelo
-`account-entry.ts`. A landing é pré-renderizada no build e funciona sem JavaScript.
+`account-entry.ts`. A página inicial pública foi removida.
 Hono mantém as rotas, cookies, redirects e headers no Worker.
 
-`web/account/account-view.tsx` recebe apresentação e ações nomeadas.
-`use-account.ts` coordena comandos, polling, cancelamento e navegação;
+`src/web/account/account-view.tsx` recebe apresentação e ações nomeadas.
+`use-account.ts` mantém o estado React, a montagem e o polling. O controlador
+coordena comandos e cancelamento e publica o estado por uma callback para essa
+única view; `account-browser.ts` concentra os efeitos no navegador.
 `account-api.ts` valida HTTP e preserva CSRF, deadlines e ausência de retry de
 mutações. Leituras concorrentes são consolidadas; confirmar
 uma mutação invalida a leitura anterior. Desmontar cancela requisições e timers.
-Falha transitória conserva a último estado confirmado; expiração da sessão
+Falha transitória conserva o último estado confirmado; expiração da sessão
 interrompe polling. `connect-widget.ts` isola o SDK, serializa sua destruição e
-descarta eventos atrasados. Foco e apresentação pertencem à view.
+descarta eventos atrasados. A view controla a apresentação e o foco nos títulos;
+o adaptador do navegador restaura o foco ao fechar o widget.
 
 Os contratos de wizard descrevem dados. Textos e progresso visual pertencem à
 funcionalidade web; tradução de falhas pertence ao Worker. A política de conexão
 pessoal tem dono no domínio e é revalidada no servidor. O callback do widget
 nunca substitui autorização. As credenciais Pluggy são secrets da instalação; o painel não recebe nem persiste essas credenciais.
 
-O parsing e dispatch de `ToolCall` ficam em `mcp/invoke.ts`. Operações financeiras
+O parsing e dispatch de `ToolCall` ficam em `src/worker/mcp/invoke.ts`. Operações financeiras
 recebem intenções tipadas após autenticação. Correções usam política do
 domínio, mantendo autorização e alterações/revisão no repositório concreto.
 `exact.ts::assertMinor` concentra a precisão persistível; `moneyKey` mantém o
 encoding de ordenação no adaptador SQL. Não há divisão global dos modelos por
 simetria nem alteração do catálogo MCP.
 
-`npm run build` gera assets em `dist/web`, o intermediário de prerender em
-`dist/prerender.js` e o dry-run do Worker em `dist/worker`. Não publica o serviço.
+`npm run build` gera assets em `dist/web` e executa o dry-run do Worker em
+`dist/worker`. Não publica o serviço.
 
-Os contratos públicos usam Zod. Tasks seguem a revisão 2026-07-28; a JSON Schema
+Os modelos compartilhados usam interfaces e uniões em arquivos `.types.ts`,
+independentes de Zod e de schemas de validação. Os parsers de entrada permanecem
+nas fronteiras HTTP/MCP, Pluggy, configuração e importação; `satisfies z.ZodType<T>`
+verifica sua compatibilidade com os modelos. Tipos de linhas e projeções SQL
+continuam inferidos do Drizzle. Dados produzidos internamente não ganham schemas
+apenas para definir seus tipos. O catálogo de campos do provedor é TypeScript
+controlado e verificado no build.
+
+Tasks seguem a revisão 2026-07-28; a JSON Schema
 oficial e sua licença ficam em `src/worker/vendor/ext-tasks`. D1 fornece o progresso
-canônico e é a única fonte de subscriptions. O catálogo MCP de
-referência fica em `src/contracts/__tests__/fixtures/mcp-catalog.json`.
+canônico e é a única fonte de subscriptions. Os testes de wire exercitam a entrega
+do catálogo e as operações MCP; não há snapshot paralelo das declarações internas.
 
 ## Ferramentas e testes
 
-Um único `tsconfig.json` verifica fontes, scripts e testes com NodeNext e os tipos
+Um único `tsconfig.json` verifica fontes e testes com NodeNext e os tipos
 de Node, navegador e Cloudflare. Os imports `#shared/`, `#domain/`, `#contracts/`,
 `#worker/`, `#web/` e `#testing/` são definidos somente no `package.json`, com extensões
-explícitas. `scripts/check-imports.ts` verifica as fronteiras entre módulos.
+explícitas.
 
-O checker trata helpers novos das funcionalidades como aplicação, mesmo quando
+Helpers novos das funcionalidades são tratados como aplicação, mesmo quando
 não se chamam `service.ts`. Repositórios/adaptadores e os fluxos de publicação
 durável têm papéis explícitos; renomear um serviço não libera SQL ou HTTP.
 Views não importam a API, o hook nem o widget, e aplicação/persistência não importam
 envelopes MCP. Tipos de dependências concretas continuam permitidos onde escondem
-implementação. O checker não tenta julgar semântica pela presença de uma string.
+implementação.
 
 Testes unitários ficam em `__tests__` junto ao módulo. `tests/integration` contém
 fixtures e testes de D1, HTTP, OAuth e Workflows; `tests/support` contém helpers
 exclusivos de testes. `biome.json` concentra lint, formatação e organização de
-imports com regras nativas; [a migração](biome-migration.md) registra as diferenças
-de cobertura. As migrações SQL em `migrations` mantêm sua ordem.
+imports com regras nativas. Políticas sem cobertura de lint ficam nas
+[convenções de contribuição](../CONTRIBUTING.md#layout-e-typescript).
+As migrações SQL em `migrations` mantêm sua ordem.
 
 Os comandos e convenções de contribuição estão em [CONTRIBUTING.md](../CONTRIBUTING.md).
 A identidade visual está em [DESIGN.md](../DESIGN.md), e a instalação e operação em

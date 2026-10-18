@@ -1,13 +1,17 @@
 import { z } from "zod/v4";
 
+import type {
+  AccountResponse,
+  InstallationChecks,
+} from "#contracts/portal.types.ts";
 import { WizardStateSchema } from "#contracts/wizard-contract.ts";
 
-export const InstallationChecksSchema = z.object({
+const InstallationChecksSchema = z.object({
   database: z.boolean(),
   workflow: z.boolean(),
   oauth: z.boolean(),
   migrations: z.boolean(),
-});
+}) satisfies z.ZodType<InstallationChecks>;
 export const AccountResponseSchema = z.object({
   status: WizardStateSchema,
   checks: InstallationChecksSchema,
@@ -18,9 +22,7 @@ export const AccountResponseSchema = z.object({
   csrf: z.string(),
   origin: z.string(),
   checkedAt: z.string(),
-});
-export type AccountResponse = z.infer<typeof AccountResponseSchema>;
-export type InstallationChecks = z.infer<typeof InstallationChecksSchema>;
+}) satisfies z.ZodType<AccountResponse>;
 export const AccountActionSchema = z
   .object({ csrf: z.string().min(1) })
   .strict();

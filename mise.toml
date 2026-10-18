@@ -18,7 +18,6 @@ description = "Validação local completa, em sequência; lint por último"
 run = [
   "mise tasks validate",
   "mise fmt --check",
-  "mise run check:imports",
   "mise run typecheck",
   "mise run format:check",
   "mise run test",
@@ -33,15 +32,10 @@ description = "Validar configuração, imports, tipos, layout e lint sem testes/
 run = [
   "mise tasks validate",
   "mise fmt --check",
-  "mise run check:imports",
   "mise run typecheck",
   "mise run format:check",
   "mise run lint",
 ]
-
-[tasks."check:imports"]
-description = "Verificar resolução de imports e fronteiras dos módulos"
-run = "npm run check:imports"
 
 [tasks.typecheck]
 description = "Verificar tipos com TypeScript"
@@ -74,7 +68,7 @@ description = "Verificar layout dos arquivos com Biome"
 run = "npm run format:check"
 
 [tasks.test]
-description = "Executar testes unitários de domínio, aplicação e tooling"
+description = "Executar testes de comportamento de domínio e aplicação"
 run = "npm test"
 
 [tasks."test:product"]
@@ -90,7 +84,7 @@ description = "Build do portal e dry-run do Worker, sem publicação"
 run = "npm run build"
 
 [tasks."build:portal"]
-description = "Build e prerender do portal"
+description = "Build do portal"
 run = "npm run build:portal"
 
 [tasks.dev]

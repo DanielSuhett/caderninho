@@ -1,11 +1,7 @@
 import type { createAuthRepository } from "#worker/auth/repository.ts";
 
 export function adminConfigured(password: string | undefined) {
-  return (
-    typeof password === "string" &&
-    password.length >= 16 &&
-    password.length <= 256
-  );
+  return !!password && password.length >= 16 && password.length <= 256;
 }
 
 export async function verifyPassword(
@@ -63,7 +59,7 @@ export function createAuthService(
         csrf: token(),
         expires: now() + 28800000,
         version,
-        ...(prior === undefined ? {} : { prior }),
+        ...(prior !== undefined && { prior }),
       });
       return id;
     },

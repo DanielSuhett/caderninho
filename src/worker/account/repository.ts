@@ -1,6 +1,7 @@
 import { and, count, desc, eq, gt, gte, inArray, lte, sql } from "drizzle-orm";
 
-import { ResourceSchema } from "#domain/enums.ts";
+import { OperationKind } from "#contracts/operation.types.ts";
+import { Resource } from "#domain/enums.ts";
 import { tryCatch } from "#shared/result.ts";
 import type { Bindings } from "#worker/bindings.ts";
 import { database, hash } from "#worker/database.ts";
@@ -32,7 +33,7 @@ export async function assertPluggyApplication(
   }
   return fingerprint;
 }
-export function connectionStore(binding: D1Database) {
+function connectionStore(binding: D1Database) {
   const db = database(binding);
   return {
     async itemAccess(itemId: string) {
@@ -61,7 +62,11 @@ export function connectionStore(binding: D1Database) {
           .where(eq(settings.id, 1)),
         db
           .insert(items)
-          .values({ id: itemId, resources: ResourceSchema.options, enabled: 1 })
+          .values({
+            id: itemId,
+            resources: Object.values(Resource),
+            enabled: 1,
+          })
           .onConflictDoUpdate({ target: items.id, set: { enabled: 1 } }),
       ]);
     },
@@ -90,7 +95,10 @@ export async function readPortalStatus(binding: D1Database) {
       .from(operations)
       .where(
         and(
-          inArray(operations.kind, ["sync", "reconcile"]),
+          inArray(operations.kind, [
+            OperationKind.sync,
+            OperationKind.reconcile,
+          ]),
           gte(operations.created_at, config.connected_at),
         ),
       )
@@ -128,7 +136,7 @@ export async function installationReadiness(env: Bindings) {
     return { ...checks, migrations: false };
   }
   const db = database(env.DB);
-  const schema = await tryCatch(
+  const { data: _data, error } = await tryCatch(() =>
     db.batch([
       db.select().from(portal_sessions).limit(0),
       db.select().from(login_attempts).limit(0),
@@ -142,7 +150,7 @@ export async function installationReadiness(env: Bindings) {
         .limit(0),
     ]),
   );
-  return { ...checks, migrations: !schema.error };
+  return { ...checks, migrations: !error };
 }
 export function createAccountRepository(env: Bindings) {
   const db = database(env.DB);

@@ -1,21 +1,24 @@
-import type {
-  LiveBalanceInput,
-  PreviewInput,
-  RuleCommand,
-  SubscriptionInput,
-} from "#contracts/finance.ts";
-import type { Aggregate, Identity, Query } from "#contracts/queries.ts";
-import type { WizardState } from "#contracts/wizard-contract.ts";
-import { localDay } from "#domain/exact.ts";
 import {
-  type CorrectionInput,
-  type RecordChange,
-  type RecordReference,
-  recordChange,
-} from "#domain/record-correction.ts";
+  type LiveBalanceInput,
+  type PreviewInput,
+  type RuleCommand,
+  RuleCommandAction,
+  RuleImportMode,
+  type SubscriptionInput,
+} from "#contracts/finance.types.ts";
+import type { Aggregate, Identity, Query } from "#contracts/queries.types.ts";
+import type { WizardState } from "#contracts/wizard.types.ts";
+import { localDay } from "#domain/exact.ts";
+import type { ProviderRecord } from "#domain/provider.types.ts";
+import { recordChange } from "#domain/record-correction.ts";
+import type {
+  CorrectionInput,
+  RecordChange,
+  RecordReference,
+} from "#domain/record-correction.types.ts";
 import { importRules } from "#domain/rules/import-rules.ts";
-import { type Rules, txContext } from "#domain/rules/rules.ts";
-import type { ProviderRecord } from "#domain/schemas.ts";
+import { txContext } from "#domain/rules/rules.ts";
+import type { Rules } from "#domain/rules/rules.types.ts";
 import { detectSubscriptions } from "#domain/subscriptions.ts";
 import type {
   correctRecord,
@@ -82,17 +85,17 @@ export interface RuleActions {
 }
 
 export async function manageRules(actions: RuleActions, a: RuleCommand) {
-  if (a.action === "read") {
+  if (a.action === RuleCommandAction.read) {
     return a.revision ? actions.read(a.revision) : actions.list();
   }
-  if (a.action === "activate") {
+  if (a.action === RuleCommandAction.activate) {
     if (a.revision === undefined) {
       throw new Error("RULES_REVISION_REQUIRED");
     }
     return actions.activate(a.revision);
   }
   const report = importRules(a.document, a.catalog);
-  if (a.action === "validate" || !report.compatible) {
+  if (a.action === RuleCommandAction.validate || !report.compatible) {
     return report;
   }
   return actions.save(report.document, false);
@@ -109,16 +112,17 @@ export async function previewRules(
   const before = await reads.revision();
   const engine = await reads.rules();
   const { total, sample } = await reads.select(before);
-  const differences = await Promise.all(
-    sample.map(async (row) => ({
+  const differences = [];
+  for (const row of sample) {
+    differences.push({
       id: row.id,
       before: {
         category: row.effective_category,
         description: row.effective_description,
       },
       derived: await engine.evaluate(txContext(row.normalized)),
-    })),
-  );
+    });
+  }
   if (before !== (await reads.revision())) {
     throw new Error("RESTART_REQUIRED");
   }
@@ -154,12 +158,12 @@ export async function importRuleDocument(
   input: {
     document: unknown;
     catalog?: Parameters<typeof importRules>[1];
-    mode: "dry-run" | "save" | "activate";
+    mode: RuleImportMode;
   },
 ) {
   const report = importRules(input.document, input.catalog);
-  if (!report.compatible || input.mode === "dry-run") {
+  if (!report.compatible || input.mode === RuleImportMode.dry_run) {
     return report;
   }
-  return actions.save(report.document, input.mode === "activate");
+  return actions.save(report.document, input.mode === RuleImportMode.activate);
 }

@@ -1,13 +1,13 @@
 import type { PluggyClient } from "pluggy-sdk";
 import { z } from "zod/v4";
 
-import { FaultCode, type Resource } from "#domain/enums.ts";
+import { FaultCode, Resource } from "#domain/enums.ts";
 import { Fault } from "#domain/fault.ts";
 import { DEFINITIONS } from "#domain/finance-model.ts";
-import type { Credentials } from "#domain/pluggy-credentials.ts";
-import { ProviderRecordSchema } from "#domain/schemas.ts";
+import type { Credentials } from "#domain/pluggy-credentials.types.ts";
+import { ProviderRecordSchema } from "#domain/provider.schema.ts";
+import type { ProviderRecord } from "#domain/provider.types.ts";
 import { tryCatch } from "#shared/result.ts";
-import type { ConnectionSource } from "#worker/account/service.ts";
 import { PersonalPluggyClient } from "#worker/pluggy/client.adapter.ts";
 import type {
   FinancialSource,
@@ -15,21 +15,39 @@ import type {
   StepValue,
 } from "#worker/sync/service.ts";
 
-export function pluggyClient(
-  credentials: Credentials,
-  maxResponseBytes = 4000000,
-) {
-  return new PersonalPluggyClient(credentials, maxResponseBytes);
+const transportFaults = new Map<string, FaultCode>([
+  [FaultCode.UPSTREAM_REDIRECT, FaultCode.UPSTREAM_REDIRECT],
+  [FaultCode.UPSTREAM_TOO_LARGE, FaultCode.UPSTREAM_TOO_LARGE],
+  ["ETIMEDOUT", FaultCode.UPSTREAM_TIMEOUT],
+  ["ERR_BODY_PARSE_FAILURE", FaultCode.INVALID_RESPONSE],
+]);
+const httpFaults = new Map<number, FaultCode>([
+  [401, FaultCode.UPSTREAM_AUTH],
+  [403, FaultCode.UPSTREAM_FORBIDDEN],
+  [404, FaultCode.UPSTREAM_NOT_FOUND],
+  [429, FaultCode.UPSTREAM_RATE_LIMIT],
+]);
+
+function httpFaultCode(status: number | undefined): FaultCode {
+  if (!status || status < 400) {
+    return FaultCode.UPSTREAM_UNAVAILABLE;
+  }
+  return (
+    httpFaults.get(status) ??
+    (status >= 500
+      ? FaultCode.UPSTREAM_ERROR
+      : FaultCode.UPSTREAM_INVALID_REQUEST)
+  );
 }
 
 // Translate only transport metadata into public faults. Upstream bodies, URLs and credentials
 // stay inside the SDK error and never become a Fault cause, message, detail or log.
-async function sdkResult<T>(operation: Promise<T>): Promise<T> {
-  const result = await tryCatch(operation);
-  if (!result.error) {
-    return result.data;
+async function sdkResult<T>(operation: () => Promise<T>): Promise<T> {
+  const { data, error } = await tryCatch(operation);
+  if (!error) {
+    return data;
   }
-  const error = z
+  const upstream = z
     .object({
       code: z.string().optional(),
       response: z
@@ -43,32 +61,12 @@ async function sdkResult<T>(operation: Promise<T>): Promise<T> {
         })
         .optional(),
     })
-    .parse(result.error);
-  const status = error.response?.statusCode;
-  const codes: Record<number, FaultCode> = {
-    401: FaultCode.UPSTREAM_AUTH,
-    403: FaultCode.UPSTREAM_FORBIDDEN,
-    404: FaultCode.UPSTREAM_NOT_FOUND,
-    429: FaultCode.UPSTREAM_RATE_LIMIT,
-  };
-  let code: FaultCode = FaultCode.UPSTREAM_UNAVAILABLE;
-  if (error.code === "UPSTREAM_REDIRECT") {
-    code = FaultCode.UPSTREAM_REDIRECT;
-  } else if (error.code === "UPSTREAM_TOO_LARGE") {
-    code = FaultCode.UPSTREAM_TOO_LARGE;
-  } else if (error.code === "ETIMEDOUT") {
-    code = FaultCode.UPSTREAM_TIMEOUT;
-  } else if (error.code === "ERR_BODY_PARSE_FAILURE") {
-    code = FaultCode.INVALID_RESPONSE;
-  } else if (status && status >= 400) {
-    const fallback =
-      status >= 500
-        ? FaultCode.UPSTREAM_ERROR
-        : FaultCode.UPSTREAM_INVALID_REQUEST;
-    code = codes[status] ?? fallback;
-  }
-  const fault = new Fault(code);
-  const retry = error.response?.headers["retry-after"];
+    .parse(error);
+  const fault = new Fault(
+    transportFaults.get(upstream.code ?? "") ??
+      httpFaultCode(upstream.response?.statusCode),
+  );
+  const retry = upstream.response?.headers["retry-after"];
   if (typeof retry === "string") {
     const seconds = /^\d+$/.test(retry)
       ? Number(retry)
@@ -83,53 +81,53 @@ async function sdkResult<T>(operation: Promise<T>): Promise<T> {
 }
 
 export async function connectToken(credentials: Credentials, itemId?: string) {
-  const result = await tryCatch(
-    sdkResult(
-      pluggyClient(credentials, 16384).createConnectToken(itemId, {
+  const { data, error } = await tryCatch(() =>
+    sdkResult(() =>
+      new PersonalPluggyClient(credentials, 16384).createConnectToken(itemId, {
         avoidDuplicates: true,
       }),
     ),
   );
-  if (result.error) {
+  if (error) {
     if (
-      result.error instanceof Fault &&
-      (result.error.code === FaultCode.UPSTREAM_AUTH ||
-        result.error.code === FaultCode.UPSTREAM_FORBIDDEN)
+      error instanceof Fault &&
+      (error.code === FaultCode.UPSTREAM_AUTH ||
+        error.code === FaultCode.UPSTREAM_FORBIDDEN)
     ) {
-      throw result.error;
+      throw error;
     }
     throw new Error(
-      result.error instanceof Fault &&
-        result.error.code === FaultCode.UPSTREAM_RATE_LIMIT
+      error instanceof Fault && error.code === FaultCode.UPSTREAM_RATE_LIMIT
         ? "CONNECT_RATE_LIMIT"
         : "CONNECT_TOKEN_FAILED",
     );
   }
-  return z
-    .object({ accessToken: z.string().min(1).max(12000) })
-    .parse(result.data);
+  return z.object({ accessToken: z.string().min(1).max(12000) }).parse(data);
 }
 
-export const connectionSource: ConnectionSource = {
-  async readItem(credentials, itemId) {
-    const item = z
-      .object({
-        id: z.string(),
-        connector: z
-          .object({ id: z.union([z.number(), z.string()]) })
-          .optional(),
-      })
-      .parse(await sdkResult(pluggyClient(credentials).fetchItem(itemId)));
-    return {
-      id: item.id,
-      ...(item.connector ? { connector: item.connector } : {}),
-    };
-  },
-};
+export async function readItem(credentials: Credentials, itemId: string) {
+  const item = z
+    .object({
+      id: z.string(),
+      connector: z.object({ id: z.union([z.number(), z.string()]) }).optional(),
+    })
+    .parse(
+      await sdkResult(() =>
+        new PersonalPluggyClient(credentials).fetchItem(itemId),
+      ),
+    );
+  if (item.id !== itemId) {
+    throw new Error("SOURCE_SCOPE_MISMATCH");
+  }
+  return {
+    id: item.id,
+    ...(item.connector && { connector: item.connector }),
+  };
+}
 
 export async function readAccount(client: PluggyClient, accountId: string) {
   const record = ProviderRecordSchema.parse(
-    await sdkResult(client.fetchAccount(accountId)),
+    await sdkResult(() => client.fetchAccount(accountId)),
   );
   if (record.id !== accountId) {
     throw new Error("SOURCE_SCOPE_MISMATCH");
@@ -152,10 +150,10 @@ const TransactionPageSchema = PageSchema.extend({
     .max(1000),
 });
 const paged: Resource[] = [
-  "resources",
-  "investments",
-  "investment_transactions",
-  "bills",
+  Resource.resources,
+  Resource.investments,
+  Resource.investment_transactions,
+  Resource.bills,
 ];
 
 export function financialSource(client: PluggyClient): FinancialSource {
@@ -173,8 +171,8 @@ export function financialSource(client: PluggyClient): FinancialSource {
         accounts: () => client.fetchAccounts(item),
         transactions: () =>
           client.fetchTransactionsCursor(parent, {
-            ...(floor ? { createdAtFrom: floor } : {}),
-            ...(cursor ? { after: cursor } : {}),
+            ...(floor && { createdAtFrom: floor }),
+            ...(cursor && { after: cursor }),
           }),
         investments: () => client.fetchInvestments(item, undefined, options),
         investment_transactions: () =>
@@ -187,18 +185,22 @@ export function financialSource(client: PluggyClient): FinancialSource {
       };
       // SDK types describe its default date/number parser; our parser returns raw JSON.
       // Parse at this boundary instead of letting SDK models enter financial logic.
-      const raw: unknown = await sdkResult<unknown>(operations[resource]());
-      if (["connections", "identity", "connectors"].includes(resource)) {
+      const raw: unknown = await sdkResult<unknown>(operations[resource]);
+      if (
+        [Resource.connections, Resource.identity, Resource.connectors].some(
+          (candidate) => candidate === resource,
+        )
+      ) {
         const record = ProviderRecordSchema.parse(raw);
         assertRecordScope(record, { resource, item, connectorId });
         return { records: [record], next: null };
       }
       const data = (
-        resource === "transactions" ? TransactionPageSchema : PageSchema
+        resource === Resource.transactions ? TransactionPageSchema : PageSchema
       ).parse(raw);
       const records = data.results;
       assertPageScope(records, { resource, item, parent });
-      if (resource === "transactions") {
+      if (resource === Resource.transactions) {
         return {
           records,
           next: validateCursor(data.next, parent, cursor, floor),
@@ -212,12 +214,9 @@ export function financialSource(client: PluggyClient): FinancialSource {
         total < records.length ||
         (total > 0 && totalPages === 0)
       ) {
-        throw new Error("INVALID_PAGE");
+        throw new Error(FaultCode.INVALID_PAGE);
       }
-      if (
-        page < totalPages &&
-        (!paged.includes(resource) || records.length === 0)
-      ) {
+      if (page < totalPages && (!paged.includes(resource) || !records.length)) {
         throw new Error("PAGINATION_UNDOCUMENTED_OR_INCOMPLETE");
       }
       return {
@@ -227,18 +226,20 @@ export function financialSource(client: PluggyClient): FinancialSource {
       };
     },
     async ids(account, ids) {
-      if (ids.length > 500 || ids.length === 0) {
+      if (!ids.length || ids.length > 500) {
         throw new Error("IDS_LIMIT");
       }
+      const requestedIds = new Set(ids);
       const data = PageSchema.parse(
-        await sdkResult(client.fetchTransactionsCursor(account, { ids })),
+        await sdkResult(() => client.fetchTransactionsCursor(account, { ids })),
       );
       if (data.next !== null) {
         throw new Error("IDS_RESPONSE_INCOMPLETE");
       }
       if (
         data.results.some(
-          (r) => r.accountId !== account || !ids.includes(String(r.id ?? "")),
+          (r) =>
+            r.accountId !== account || !requestedIds.has(String(r.id ?? "")),
         )
       ) {
         throw new Error("IDS_SCOPE_MISMATCH");
@@ -258,7 +259,7 @@ function validateCursor(
   }
   const text = z.string().max(4096).parse(value);
   if (!text.startsWith("?") || text.includes("#")) {
-    throw new Error("INVALID_CURSOR");
+    throw new Error(FaultCode.INVALID_CURSOR);
   }
   const q = new URLSearchParams(text);
   if (
@@ -273,7 +274,7 @@ function validateCursor(
   }
   const next = q.get("after");
   if (!next || next === previous) {
-    throw new Error("CURSOR_LOOP");
+    throw new Error(FaultCode.CURSOR_LOOP);
   }
   return next;
 }
@@ -290,15 +291,15 @@ export function providerRetries(steps: Steps): Steps {
         const outcome = await steps.do(
           `${name}-attempt-${attempt}`,
           async () => {
-            const result = await tryCatch(callback());
-            if (!result.error) {
-              return { kind: "success" as const, value: result.data };
+            const { data, error } = await tryCatch(callback);
+            if (!error) {
+              return { kind: "success" as const, value: data };
             }
             if (
-              !(result.error instanceof Fault) ||
-              result.error.code !== FaultCode.UPSTREAM_RATE_LIMIT
+              !(error instanceof Fault) ||
+              error.code !== FaultCode.UPSTREAM_RATE_LIMIT
             ) {
-              throw result.error;
+              throw error;
             }
             return {
               kind: "retry" as const,
@@ -306,7 +307,7 @@ export function providerRetries(steps: Steps): Steps {
                 1,
                 Math.min(
                   86400,
-                  result.error.details?.retryAfterSeconds ?? 10 * 2 ** attempt,
+                  error.details?.retryAfterSeconds ?? 10 * 2 ** attempt,
                 ),
               ),
             };
@@ -341,10 +342,10 @@ function assertPageScope(
     records.some(
       (record) =>
         (record.itemId !== undefined && record.itemId !== item) ||
-        (def.parent === "accounts" &&
+        (def.parent === Resource.accounts &&
           record.accountId !== undefined &&
           record.accountId !== parent) ||
-        (def.parent === "investments" &&
+        (def.parent === Resource.investments &&
           record.investmentId !== undefined &&
           record.investmentId !== parent),
     )
@@ -354,7 +355,7 @@ function assertPageScope(
 }
 
 function assertRecordScope(
-  record: z.infer<typeof ProviderRecordSchema>,
+  record: ProviderRecord,
   {
     resource,
     item,
@@ -365,8 +366,8 @@ function assertRecordScope(
   >,
 ) {
   if (
-    (resource === "connections" && record.id !== item) ||
-    (resource === "connectors" && String(record.id) !== connectorId) ||
+    (resource === Resource.connections && record.id !== item) ||
+    (resource === Resource.connectors && String(record.id) !== connectorId) ||
     (record.itemId !== undefined && record.itemId !== item)
   ) {
     throw new Error("SOURCE_SCOPE_MISMATCH");

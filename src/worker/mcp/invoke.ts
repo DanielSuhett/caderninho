@@ -1,3 +1,4 @@
+import { ToolName } from "#contracts/mcp.types.ts";
 import { ToolCallSchema } from "#contracts/mcp-contract.ts";
 import type { FinancialQueries } from "#worker/finance/service.ts";
 
@@ -8,25 +9,25 @@ export async function invoke(
 ): Promise<unknown> {
   const call = ToolCallSchema.parse({ name, input });
   switch (call.name) {
-    case "caderninho_setup_status":
+    case ToolName.setup_status:
       return queries.setupStatus();
-    case "caderninho_query":
+    case ToolName.query:
       return queries.query(call.input);
-    case "caderninho_aggregate":
+    case ToolName.aggregate:
       return queries.aggregate(call.input);
-    case "caderninho_status":
+    case ToolName.status:
       return queries.readStatus();
-    case "caderninho_rules":
+    case ToolName.rules:
       return queries.manageRules(call.input);
-    case "caderninho_override":
+    case ToolName.override:
       return queries.correctRecord(call.input);
-    case "caderninho_explain":
+    case ToolName.explain:
       return queries.explainRecord(call.input);
-    case "caderninho_preview":
+    case ToolName.preview:
       return queries.previewRules(call.input);
-    case "caderninho_get_subscriptions":
+    case ToolName.get_subscriptions:
       return queries.readSubscriptions(call.input);
-    case "caderninho_live_balance": {
+    case ToolName.live_balance: {
       await queries.authorizeAccount(call.input);
       const raw = await queries.readAccount(call.input.accountId);
       return {
@@ -37,9 +38,9 @@ export async function invoke(
         bankRealtime: false,
       };
     }
-    case "caderninho_sync":
-    case "caderninho_reconcile":
-    case "caderninho_reapply":
+    case ToolName.sync:
+    case ToolName.reconcile:
+    case ToolName.reapply:
       throw new Error("DURABLE_TASK_REQUIRED");
   }
 }

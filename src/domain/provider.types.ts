@@ -1,4 +1,8 @@
-import type { MoneyInput, OptionalScalar, OptionalText } from "#domain/finance.types.ts";
+import type {
+  MoneyInput,
+  OptionalScalar,
+  OptionalText,
+} from "#domain/finance.types.ts";
 import type { JsonValue } from "#shared/json.types.ts";
 
 interface Participant {
@@ -7,8 +11,7 @@ interface Participant {
   documentNumber?: { value?: OptionalText } | null | undefined;
 }
 
-interface Connector {
-  [field: string]: unknown;
+interface ConnectorDetails {
   id?: OptionalScalar;
   name?: OptionalText;
   products?: string[] | null | undefined;
@@ -30,7 +33,7 @@ export interface ProviderRecord {
   consentExpiresAt?: OptionalText;
   products?: string[] | null | undefined;
   resourcesCollectedAt?: JsonValue | undefined;
-  connector?: Connector | null | undefined;
+  connector?: (ConnectorDetails & Record<string, unknown>) | null | undefined;
   name?: OptionalText;
   currencyCode?: OptionalText;
   date?: OptionalText;
@@ -47,14 +50,23 @@ export interface ProviderRecord {
   balance?: MoneyInput;
   availableBalance?: MoneyInput;
   automaticallyInvestedBalance?: MoneyInput;
-  merchant?: { [field: string]: unknown; name?: OptionalText } | null | undefined;
-  creditCardMetadata?: { [field: string]: unknown; billId?: OptionalText } | null | undefined;
-  paymentData?: {
-    [field: string]: unknown;
-    paymentMethod?: OptionalText;
-    payer?: Participant | null | undefined;
-    receiver?: Participant | null | undefined;
-  } | null | undefined;
+  merchant?:
+    | { [field: string]: unknown; name?: OptionalText }
+    | null
+    | undefined;
+  creditCardMetadata?:
+    | { [field: string]: unknown; billId?: OptionalText }
+    | null
+    | undefined;
+  paymentData?:
+    | {
+        [field: string]: unknown;
+        paymentMethod?: OptionalText;
+        payer?: Participant | null | undefined;
+        receiver?: Participant | null | undefined;
+      }
+    | null
+    | undefined;
 }
 
 export interface ProviderField {
@@ -71,11 +83,5 @@ export interface ItemInfo {
   consentExpiresAt?: OptionalText;
   lastUpdatedAt?: OptionalText;
   statusDetail?: Record<string, JsonValue> | null | undefined;
-  connector: Omit<Connector, string> & {
-    id?: OptionalScalar;
-    name?: OptionalText;
-    isOpenFinance?: boolean | null | undefined;
-    isSandbox?: boolean | null | undefined;
-    products?: string[] | null | undefined;
-  };
+  connector: ConnectorDetails;
 }

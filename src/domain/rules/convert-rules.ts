@@ -1,14 +1,21 @@
 import { z } from "zod/v4";
 
+import { compileValidatedRules } from "#domain/rules/rules.ts";
+import {
+  Comparator,
+  type Condition,
+  type LegacyRules,
+  type RuleImportReport,
+  RuleOperator,
+  RulePhase,
+} from "#domain/rules/rules.types.ts";
 import {
   ActionSchema,
   CatalogSchema,
-  type Condition,
-  compileValidatedRules,
   RulesSchema,
-} from "#domain/rules/rules.ts";
-import type { RuleImportReport } from "#domain/rules/rules-schema.ts";
-import { type JsonValue, JsonValueSchema } from "#shared/json.ts";
+} from "#domain/rules/rules-schema.ts";
+import { JsonValueSchema } from "#shared/json.ts";
+import type { JsonValue } from "#shared/json.types.ts";
 
 export const LegacyRulesSchema = CatalogSchema.extend({
   version: z.literal(1),
@@ -20,14 +27,14 @@ export const LegacyRulesSchema = CatalogSchema.extend({
           name: z.string().max(2048),
           priority: z.number().int().safe(),
           is_active: z.boolean().default(true),
-          stage: z.enum(["classify", "enrich"]),
+          stage: z.enum(RulePhase),
           when: JsonValueSchema,
           actions: z.array(ActionSchema).min(1).max(32),
         })
         .strict(),
     )
     .max(2000),
-}).strict();
+}).strict() satisfies z.ZodType<LegacyRules>;
 
 class ConversionError extends Error {
   readonly path: string;
@@ -149,7 +156,7 @@ function convertEquality(
 
   return {
     fact: fact(operand, path),
-    operator: op === "===" ? "equal" : "notEqual",
+    operator: op === "===" ? RuleOperator.equal : RuleOperator.notEqual,
     value: literal(value, path),
   };
 }
@@ -214,7 +221,7 @@ function convertFactPredicate(
 
     return {
       fact: fact(args[0], path),
-      operator: "contains",
+      operator: RuleOperator.contains,
       value: values.data,
     };
   }
@@ -222,7 +229,7 @@ function convertFactPredicate(
   if (op === "opf.regex" && args.length === 2) {
     return {
       fact: fact(args[0], path),
-      operator: "regex",
+      operator: RuleOperator.regex,
       value: z.string().parse(args[1]),
     };
   }
@@ -230,7 +237,7 @@ function convertFactPredicate(
   if (op === "opf.decimal_between" && args.length === 3) {
     return {
       fact: fact(args[0], path),
-      operator: "decimalBetween",
+      operator: RuleOperator.decimalBetween,
       value: [z.string().parse(args[1]), z.string().parse(args[2])],
     };
   }
@@ -241,9 +248,12 @@ function convertFactPredicate(
   ) {
     return {
       fact: fact(args[0], path),
-      operator: op === "opf.decimal_compare" ? "decimalCompare" : "dateCompare",
+      operator:
+        op === "opf.decimal_compare"
+          ? RuleOperator.decimalCompare
+          : RuleOperator.dateCompare,
       value: {
-        op: z.enum(["eq", "ne", "gt", "gte", "lt", "lte"]).parse(args[1]),
+        op: z.enum(Comparator).parse(args[1]),
         value: z.string().parse(args[2]),
       },
     };
@@ -251,26 +261,7 @@ function convertFactPredicate(
   fail(path, `Operator ${op} has no equivalent conversion`);
 }
 
-export function convertRules(input: unknown): RuleImportReport {
-  const parsed = LegacyRulesSchema.safeParse(input);
-
-  if (!parsed.success) {
-    return {
-      compatible: false,
-      document: null,
-      issues: parsed.error.issues.map((i) => ({
-        path: i.path.join("."),
-        code: "INVALID_V1",
-        message: i.message,
-      })),
-    };
-  }
-  return convertValidatedRules(parsed.data);
-}
-
-export function convertValidatedRules(
-  document: z.infer<typeof LegacyRulesSchema>,
-): RuleImportReport {
+export function convertValidatedRules(document: LegacyRules): RuleImportReport {
   const issues: { path: string; code: string; message: string }[] = [];
   const rules = [];
 

@@ -13,11 +13,16 @@ import {
   sql,
 } from "drizzle-orm";
 
-import type {
-  MigrationRequest,
-  OperationInput,
-  WebhookEvent,
-} from "#contracts/operation.ts";
+import {
+  type FinishedOperationStatus,
+  type MigrationRequest,
+  type OperationInput,
+  OperationKind,
+  OperationPhase,
+  OperationStatus,
+  type WebhookEvent,
+} from "#contracts/operation.types.ts";
+import { FaultCode, Resource, TransactionStatus } from "#domain/enums.ts";
 import { localDay } from "#domain/exact.ts";
 import { EMPTY_RULES } from "#domain/rules/rules.ts";
 import type { EntityPreparer } from "#worker/composition.ts";
@@ -110,15 +115,34 @@ export async function startOperation(
 }
 
 export async function operationState(db: D1Database, id: string) {
-  const op = await getOperation(db, id);
+  return operationSummary(await getOperation(db, id));
+}
+
+export async function operationStates(db: D1Database, ids: string[]) {
+  if (!ids.length) {
+    return [];
+  }
+  const rows = await database(db)
+    .select()
+    .from(tables.operations)
+    .where(inArray(tables.operations.id, ids));
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  const ordered = ids.map((id) => required(byId.get(id)));
+  await authorizedItems(db, [
+    ...new Set(ordered.flatMap((op) => op.input.itemIds)),
+  ]);
+  return ordered.map(operationSummary);
+}
+
+function operationSummary(op: Operation) {
   return {
     id: op.id,
     status: op.status,
     createdAt: op.created_at,
     updatedAt: op.updated_at,
     summary: `${op.phase} ${JSON.stringify(op.progress)}`,
-    ...(op.status === "completed" ? { result: op.result ?? {} } : {}),
-    ...(op.status === "failed" ? { error: op.error ?? {} } : {}),
+    ...(op.status === OperationStatus.completed && { result: op.result ?? {} }),
+    ...(op.status === OperationStatus.failed && { error: op.error ?? {} }),
   };
 }
 
@@ -146,7 +170,7 @@ export async function stillWorking(db: D1Database, id: string) {
 export async function finish(
   db: D1Database,
   op: Operation,
-  status: "completed" | "cancelled",
+  status: FinishedOperationStatus,
   isError = false,
 ) {
   await database(db).batch([
@@ -154,7 +178,7 @@ export async function finish(
       .update(tables.operations)
       .set({
         status: status,
-        phase: isError ? "error" : status,
+        phase: isError ? OperationPhase.error : status,
         result: {
           content: [
             {
@@ -171,7 +195,7 @@ export async function finish(
       .where(
         and(
           eq(tables.operations.id, op.id),
-          eq(tables.operations.status, "working"),
+          eq(tables.operations.status, OperationStatus.working),
         ),
       ),
     database(db)
@@ -199,7 +223,7 @@ export function schedulingStore(db: D1Database): SchedulingStore {
                 database(db)
                   .select({ one: sql`1` })
                   .from(tables.operations)
-                  .where(eq(tables.operations.status, "working")),
+                  .where(eq(tables.operations.status, OperationStatus.working)),
               ),
             ),
           )
@@ -214,7 +238,7 @@ export function schedulingStore(db: D1Database): SchedulingStore {
       const active = await database(db)
         .select({ id: tables.operations.id })
         .from(tables.operations)
-        .where(eq(tables.operations.status, "working"))
+        .where(eq(tables.operations.status, OperationStatus.working))
         .limit(1)
         .get();
       if (active) {
@@ -259,7 +283,7 @@ export async function compactOperations(db: D1Database, now = new Date()) {
             )
             .where(
               and(
-                ne(tables.operations.status, "working"),
+                ne(tables.operations.status, OperationStatus.working),
                 lt(tables.operations.updated_at, before),
               ),
             )
@@ -269,7 +293,7 @@ export async function compactOperations(db: D1Database, now = new Date()) {
     database(db)
       .select({ id: tables.operations.id })
       .from(tables.operations)
-      .where(eq(tables.operations.status, "working"))
+      .where(eq(tables.operations.status, OperationStatus.working))
       .limit(1),
     database(db)
       .delete(tables.page_commits)
@@ -285,7 +309,7 @@ export async function compactOperations(db: D1Database, now = new Date()) {
             )
             .where(
               and(
-                ne(tables.operations.status, "working"),
+                ne(tables.operations.status, OperationStatus.working),
                 lt(tables.operations.updated_at, before),
               ),
             )
@@ -306,7 +330,7 @@ export async function compactOperations(db: D1Database, now = new Date()) {
             )
             .where(
               and(
-                ne(tables.operations.status, "working"),
+                ne(tables.operations.status, OperationStatus.working),
                 lt(tables.operations.updated_at, before),
               ),
             )
@@ -379,7 +403,7 @@ export async function openSynchronization(
               lte(tables.entities.transaction_date, op.reference_day),
               or(
                 isNull(tables.entities.status),
-                ne(tables.entities.status, "PENDING"),
+                ne(tables.entities.status, TransactionStatus.PENDING),
               ),
             ),
           ),
@@ -388,24 +412,24 @@ export async function openSynchronization(
           .set({ revision: sql`${tables.settings.revision} + 1` })
           .where(and(eq(tables.settings.id, 1), sql`changes() > 0`)),
       ]);
-      return { phase: "matured" };
+      return { phase: OperationPhase.matured };
     },
     migrate: async (step) => {
-      if (input.kind !== "migration") {
+      if (input.kind !== OperationKind.migration) {
         throw new Error("OPERATION_KIND_MISMATCH");
       }
       const items = await authorizedItems(db, input.itemIds);
       await migrateLegacy({ db, op, input, items, engine, prepare, step });
     },
     reapply: async (step) => {
-      if (input.kind !== "reapply") {
+      if (input.kind !== OperationKind.reapply) {
         throw new Error("OPERATION_KIND_MISMATCH");
       }
       const items = await authorizedItems(db, input.itemIds);
       return reapplyRules({ db, op, input, items, engine, step });
     },
     resolveEvent: async (provider, step) => {
-      if (input.kind !== "webhook") {
+      if (input.kind !== OperationKind.webhook) {
         throw new Error("OPERATION_KIND_MISMATCH");
       }
       await authorizedItems(db, input.itemIds);
@@ -454,7 +478,7 @@ export function createSyncRepository(db: D1Database) {
           .where(
             and(
               eq(tables.operations.id, id),
-              eq(tables.operations.status, "working"),
+              eq(tables.operations.status, OperationStatus.working),
               eq(tables.operations.dispatched, 0),
             ),
           )
@@ -471,7 +495,7 @@ export function createSyncRepository(db: D1Database) {
         .where(
           and(
             eq(tables.operations.dispatched, Number(dispatched)),
-            eq(tables.operations.status, "working"),
+            eq(tables.operations.status, OperationStatus.working),
           ),
         )
         .orderBy(
@@ -509,11 +533,7 @@ export function createSyncRepository(db: D1Database) {
     },
     start: (key: string, input: OperationInput) =>
       startOperation(db, key, input),
-    async finish(
-      id: string,
-      status: "completed" | "cancelled",
-      error: boolean,
-    ) {
+    async finish(id: string, status: FinishedOperationStatus, error: boolean) {
       await finish(db, await stillWorking(db, id), status, error);
     },
     async cancel(id: string) {
@@ -524,7 +544,7 @@ export function createSyncRepository(db: D1Database) {
         .where(
           and(
             eq(tables.operations.id, id),
-            eq(tables.operations.status, "working"),
+            eq(tables.operations.status, OperationStatus.working),
           ),
         )
         .run();
@@ -541,7 +561,7 @@ export function createSyncRepository(db: D1Database) {
               database(db)
                 .select({ one: sql`1` })
                 .from(sql`json_each(${tables.items.resources})`)
-                .where(eq(sql`value`, "transactions")),
+                .where(eq(sql`value`, Resource.transactions)),
             ),
           ),
         )
@@ -567,7 +587,7 @@ export function createSyncRepository(db: D1Database) {
     async migrationOverlaps(input: MigrationRequest) {
       const [item] = await authorizedItems(db, [input.itemId]);
       if (!item) {
-        throw new Error("ITEM_NOT_AUTHORIZED");
+        throw new Error(FaultCode.ITEM_NOT_AUTHORIZED);
       }
       const allowed = item.resources;
       let overlaps = 0;

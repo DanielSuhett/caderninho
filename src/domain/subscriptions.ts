@@ -10,20 +10,18 @@ import {
 // Pure, versioned heuristics over normalized snapshot records. No API, LLM or writes.
 import { day } from "#domain/exact.ts";
 import { fail } from "#domain/fault.ts";
-import type {
-  RecurrenceResult,
-  SubscriptionCandidate,
-} from "#domain/outputs.ts";
+import type { FinanceRecord } from "#domain/finance.types.ts";
 import type {
   Cadence,
   EligibleRecurrenceRecord,
   Exclusion,
-  FinanceRecord,
   RecurrenceGroup,
   RecurrenceOptions,
-} from "#domain/schemas.ts";
+  RecurrenceResult,
+  SubscriptionCandidate,
+} from "#domain/recurrence.types.ts";
 
-export const SUBSCRIPTION_RULES = {
+const SUBSCRIPTION_RULES = {
   algorithm: "recurrence_candidates_v1" as const,
   grouping:
     "accountId + currency + name source + NFKC/whitespace/case-normalized payee; no fuzzy matching or cross-account deduplication",
@@ -104,9 +102,71 @@ const exactSum = (rows: { absoluteAmountMinor: string }[]) =>
     .reduce((total, row) => total + BigInt(row.absoluteAmountMinor), 0n)
     .toString();
 
-function cadence(rows: EligibleRecurrenceRecord[]): Cadence | null {
-  const tolerances = SUBSCRIPTION_RULES.tolerances;
+interface CadenceEvidence {
+  pairs: { days: number; months: number; dayDistance: number }[];
+  multipleInMonth: boolean;
+  occurrenceCount: number;
+  monthCount: number;
+}
 
+// First match wins: regular patterns must take precedence over irregular history.
+const cadencePatterns: {
+  periodicity: Periodicity;
+  minimumOccurrences: number;
+  matches: (evidence: CadenceEvidence) => boolean;
+}[] = [
+  {
+    periodicity: Periodicity.annual,
+    minimumOccurrences: SUBSCRIPTION_RULES.annualMinimumOccurrences,
+    matches: ({ pairs, multipleInMonth }) =>
+      !multipleInMonth &&
+      pairs.every(
+        (p) =>
+          p.months === 12 &&
+          p.dayDistance <= SUBSCRIPTION_RULES.tolerances.annualDays,
+      ),
+  },
+  {
+    periodicity: Periodicity.quarterly,
+    minimumOccurrences: SUBSCRIPTION_RULES.minimumOccurrences,
+    matches: ({ pairs, multipleInMonth }) =>
+      !multipleInMonth &&
+      pairs.every(
+        (p) =>
+          p.months === 3 &&
+          p.dayDistance <= SUBSCRIPTION_RULES.tolerances.quarterlyDays,
+      ),
+  },
+  {
+    periodicity: Periodicity.monthly,
+    minimumOccurrences: SUBSCRIPTION_RULES.minimumOccurrences,
+    matches: ({ pairs, multipleInMonth }) =>
+      !multipleInMonth &&
+      pairs.some((p) => p.months === 1) &&
+      pairs.every(
+        (p) =>
+          p.months >= 1 &&
+          p.months <= 3 &&
+          p.dayDistance <= SUBSCRIPTION_RULES.tolerances.monthlyDays,
+      ),
+  },
+  {
+    periodicity: Periodicity.weekly,
+    minimumOccurrences: SUBSCRIPTION_RULES.minimumOccurrences,
+    matches: ({ pairs }) =>
+      pairs.every(
+        (p) => Math.abs(p.days - 7) <= SUBSCRIPTION_RULES.tolerances.weeklyDays,
+      ),
+  },
+  {
+    periodicity: Periodicity.irregular,
+    minimumOccurrences: SUBSCRIPTION_RULES.minimumOccurrences,
+    matches: ({ occurrenceCount, monthCount }) =>
+      occurrenceCount >= 3 && monthCount >= 3,
+  },
+];
+
+function cadence(rows: EligibleRecurrenceRecord[]): Cadence | null {
   const dates = rows.map((row) => row.accountingDate),
     months = new Set(dates.map((date) => date.slice(0, 7)));
 
@@ -127,58 +187,30 @@ function cadence(rows: EligibleRecurrenceRecord[]): Cadence | null {
   // A zero-day interval can be multiple plans or duplicated charges; never merge it into one contract.
   const multipleInMonth = months.size < dates.length;
 
-  let pattern: Periodicity | null = null,
-    missingCycles = 0;
-
-  if (
-    !multipleInMonth &&
-    pairs.every(
-      (p) => p.months === 12 && p.dayDistance <= tolerances.annualDays,
-    )
-  ) {
-    pattern = Periodicity.annual;
-  } else if (
-    !multipleInMonth &&
-    pairs.every(
-      (p) => p.months === 3 && p.dayDistance <= tolerances.quarterlyDays,
-    )
-  ) {
-    pattern = Periodicity.quarterly;
-  } else if (
-    !multipleInMonth &&
-    pairs.some((p) => p.months === 1) &&
-    pairs.every(
-      (p) =>
-        p.months >= 1 &&
-        p.months <= 3 &&
-        p.dayDistance <= tolerances.monthlyDays,
-    )
-  ) {
-    pattern = Periodicity.monthly;
-    missingCycles = pairs.reduce((n, p) => n + p.months - 1, 0);
-  } else if (
-    pairs.every((p) => Math.abs(p.days - 7) <= tolerances.weeklyDays)
-  ) {
-    pattern = Periodicity.weekly;
-  } else if (rows.length >= 3 && months.size >= 3) {
-    pattern = Periodicity.irregular;
-  }
-
+  const evidence = {
+    pairs,
+    multipleInMonth,
+    occurrenceCount: rows.length,
+    monthCount: months.size,
+  };
+  const pattern = cadencePatterns.find((candidate) =>
+    candidate.matches(evidence),
+  );
   if (!pattern) {
     return null;
   }
-
-  const enough =
-    rows.length >=
-    (pattern === Periodicity.annual
-      ? SUBSCRIPTION_RULES.annualMinimumOccurrences
-      : SUBSCRIPTION_RULES.minimumOccurrences);
-
   return {
-    periodicity: enough ? pattern : Periodicity.insufficient_history,
-    observedPattern: pattern,
-    missingCycles,
-    multipleChargesPerMonth: multipleInMonth && pattern !== Periodicity.weekly,
+    periodicity:
+      rows.length >= pattern.minimumOccurrences
+        ? pattern.periodicity
+        : Periodicity.insufficient_history,
+    observedPattern: pattern.periodicity,
+    missingCycles:
+      pattern.periodicity === Periodicity.monthly
+        ? pairs.reduce((n, p) => n + p.months - 1, 0)
+        : 0,
+    multipleChargesPerMonth:
+      multipleInMonth && pattern.periodicity !== Periodicity.weekly,
     intervalDays: pairs.map((p) => p.days),
   };
 }
@@ -199,7 +231,11 @@ type RecurrenceEntry =
   | { reason: string }
   | { record: EligibleRecurrenceRecord; name: RecurrenceGroup["name"] };
 
-function recurrenceEntry(row: FinanceRecord, asOfDay: string): RecurrenceEntry {
+function recurrenceEntry(
+  row: FinanceRecord,
+  asOfDay: string,
+  dates: Map<FinanceRecord["accountingDate"], string | null>,
+): RecurrenceEntry {
   if (row.type !== TransactionType.DEBIT) {
     return { reason: "credit_or_refund_not_netted" };
   }
@@ -208,10 +244,16 @@ function recurrenceEntry(row: FinanceRecord, asOfDay: string): RecurrenceEntry {
     return { reason: "not_posted" };
   }
 
-  let accountingDate: string;
-  try {
-    accountingDate = day(row.accountingDate);
-  } catch {
+  let accountingDate = dates.get(row.accountingDate);
+  if (accountingDate === undefined) {
+    try {
+      accountingDate = day(row.accountingDate);
+    } catch {
+      accountingDate = null;
+    }
+    dates.set(row.accountingDate, accountingDate);
+  }
+  if (accountingDate === null) {
     return { reason: "missing_or_invalid_date" };
   }
 
@@ -627,8 +669,9 @@ function collectRecurrenceGroups({
   exclude: (row: FinanceRecord, reason: string) => void;
 }) {
   const groups = new Map<string, RecurrenceGroup>();
+  const dates = new Map<FinanceRecord["accountingDate"], string | null>();
   for (const row of rows) {
-    const entry = recurrenceEntry(row, asOfDay);
+    const entry = recurrenceEntry(row, asOfDay, dates);
     if ("reason" in entry) {
       exclude(row, entry.reason);
       continue;

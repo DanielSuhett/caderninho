@@ -1,11 +1,12 @@
-import { type Resource, TransactionStatus } from "#domain/enums.ts";
+import { Resource, TransactionStatus } from "#domain/enums.ts";
 import { accountingDay, assertMinor } from "#domain/exact.ts";
+import type { FinanceRecord } from "#domain/finance.types.ts";
 import {
-  normalizeValidatedResource,
+  normalizeResource,
   providerFieldValue,
 } from "#domain/finance-model.ts";
+import type { ProviderRecord } from "#domain/provider.types.ts";
 import providerFields from "#domain/provider-fields.ts";
-import type { FinanceRecord, ProviderRecord } from "#domain/schemas.ts";
 
 export function projectEntity({
   resource,
@@ -22,9 +23,9 @@ export function projectEntity({
 }) {
   const record =
     legacyProjection ??
-    normalizeValidatedResource(resource, raw, parent, { referenceDay });
+    normalizeResource(resource, raw, parent, { referenceDay });
 
-  if (resource === "transactions" && !legacyProjection) {
+  if (resource === Resource.transactions && !legacyProjection) {
     record.accountName = parent?.name ?? null;
   }
 
@@ -44,7 +45,7 @@ export function projectEntity({
     record.contractAmountMinor ??
     null;
 
-  const date = entityDate(record);
+  const date = record.accountingDate ?? accountingDay(record.date);
 
   const eligible =
     date !== null &&
@@ -56,12 +57,6 @@ export function projectEntity({
     amountText,
     date,
     eligible,
-    ...entityAttributes(record),
-  };
-}
-
-function entityAttributes(record: FinanceRecord) {
-  return {
     currency: record.currencyCode ?? record.totalAmountCurrencyCode ?? null,
     accountType: record.accountType ?? record.type ?? null,
     direction: record.type ?? null,
@@ -91,7 +86,7 @@ export function entityFingerprint({
   return {
     source,
     parent:
-      resource === "transactions"
+      resource === Resource.transactions
         ? {
             id: parent?.id,
             type: parent?.type,
@@ -109,7 +104,7 @@ function relevantSource(
 ) {
   const source: Record<string, unknown> = { ...raw };
 
-  if (resource !== "transactions") {
+  if (resource !== Resource.transactions) {
     delete source.updatedAt;
     delete source.createdAt;
 
@@ -139,16 +134,4 @@ function relevantSource(
   }
 
   return relevant;
-}
-
-function entityDate(record: FinanceRecord) {
-  if (record.accountingDate != null) {
-    return record.accountingDate;
-  }
-
-  if (record.date != null) {
-    return accountingDay(record.date);
-  }
-
-  return null;
 }

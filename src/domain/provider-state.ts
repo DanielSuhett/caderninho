@@ -1,22 +1,13 @@
 import { Availability, Product, Resource } from "#domain/enums.ts";
-import {
-  DEFINITIONS,
-  normalizeValidatedResource,
-} from "#domain/finance-model.ts";
-import type {
-  FinanceRecord,
-  ItemInfo,
-  ProviderRecord,
-} from "#domain/schemas.ts";
-import type { JsonValue } from "#shared/json.ts";
+import type { FinanceRecord } from "#domain/finance.types.ts";
+import { DEFINITIONS, normalizeResource } from "#domain/finance-model.ts";
+import type { ItemInfo, ProviderRecord } from "#domain/provider.types.ts";
+import type { JsonValue } from "#shared/json.types.ts";
 
 export function itemInfo(raw: ProviderRecord): ItemInfo {
-  const normalized = normalizeValidatedResource(
-    Resource.connections,
-    raw,
-    undefined,
-    { referenceDay: null },
-  );
+  const normalized = normalizeResource(Resource.connections, raw, undefined, {
+    referenceDay: null,
+  });
 
   const statusDetail = Object.fromEntries(
     Object.entries(normalized).filter(
@@ -61,7 +52,7 @@ export function productState(
 
   if (
     product &&
-    item.connector.products != null &&
+    item.connector.products &&
     !item.connector.products.includes(product) &&
     !(
       resource === Resource.accounts &&
@@ -73,7 +64,7 @@ export function productState(
 
   if (
     product &&
-    item.products != null &&
+    item.products &&
     !item.products.includes(product) &&
     !(
       resource === Resource.accounts &&

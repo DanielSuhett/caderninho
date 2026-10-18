@@ -2,11 +2,11 @@ import ky from "ky";
 import { z } from "zod/v4";
 
 import { AccountResponseSchema } from "#contracts/portal-contract.ts";
-import {
-  type WizardIssue,
-  WizardIssueSchema,
-} from "#contracts/wizard-contract.ts";
+import { WizardIssue } from "#contracts/wizard.types.ts";
+import { WizardIssueSchema } from "#contracts/wizard-contract.ts";
 import { tryCatch } from "#shared/result.ts";
+
+import type { AccountApi, CommandContext } from "./account.types.ts";
 
 export class AccountRequestError extends Error {
   readonly issue: WizardIssue;
@@ -14,11 +14,6 @@ export class AccountRequestError extends Error {
     super("Account request failed");
     this.issue = issue;
   }
-}
-
-interface CommandContext {
-  csrf: string;
-  signal: AbortSignal;
 }
 
 const TokenSchema = z.object({ accessToken: z.string().min(1) });
@@ -29,7 +24,7 @@ const FailureSchema = z.object({ issue: WizardIssueSchema });
 export function createAccountApi(
   origin = location.origin,
   fetcher: typeof fetch = fetch,
-) {
+): AccountApi {
   async function request(
     path: string,
     signal: AbortSignal,
@@ -38,7 +33,7 @@ export function createAccountApi(
     const response = await ky(new URL(`/api/account${path}`, origin), {
       method: command ? "POST" : "GET",
       headers: { Accept: "application/json" },
-      ...(command ? { json: command } : {}),
+      ...(command && { json: command }),
       signal: AbortSignal.any([
         signal,
         AbortSignal.timeout(command ? 45000 : 15000),
@@ -55,13 +50,16 @@ export function createAccountApi(
       response.type === "opaqueredirect" ||
       (response.status >= 300 && response.status < 400)
     ) {
-      throw new AccountRequestError("session");
+      throw new AccountRequestError(WizardIssue.session);
     }
     if (!response.ok) {
-      const body = await tryCatch(response.json<unknown>());
-      const failure = FailureSchema.safeParse(body.data);
+      const { data, error } = await tryCatch(() => response.json<unknown>());
+      if (error) {
+        throw new AccountRequestError(WizardIssue.unknown);
+      }
+      const failure = FailureSchema.safeParse(data);
       throw new AccountRequestError(
-        failure.success ? failure.data.issue : "unknown",
+        failure.success ? failure.data.issue : WizardIssue.unknown,
       );
     }
     return response.json<unknown>();

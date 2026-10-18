@@ -2,7 +2,8 @@ import { and, desc, eq } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 
 import { NORMALIZER } from "#domain/entity.ts";
-import { compileValidatedRules, type Rules } from "#domain/rules/rules.ts";
+import { compileValidatedRules } from "#domain/rules/rules.ts";
+import type { Rules } from "#domain/rules/rules.types.ts";
 import { database, hash, required } from "#worker/database.ts";
 import * as tables from "#worker/schema.ts";
 

@@ -5,9 +5,10 @@ import { type ReactNode, useEffect, useRef } from "react";
 import {
   type AccountActions,
   type AccountState,
-  supportPrompt,
-  syncPresentation,
-} from "./account-model.ts";
+  type LoadState,
+  LoadStatus,
+} from "./account.types.ts";
+import { supportPrompt, syncPresentation } from "./account-model.ts";
 
 const labels = ["Conectar bancos", "Conectar assistente"];
 const firstQuestion =
@@ -57,11 +58,11 @@ export function AccountView({
       <>
         <h1>Seu Caderninho.</h1>
         <p role="status">
-          {load.kind === "loading"
+          {load.kind === LoadStatus.loading
             ? "Abrindo seu painel…"
             : "Não foi possível abrir o painel."}
         </p>
-        {load.kind === "failed" && load.session ? (
+        {load.kind === LoadStatus.failed && load.session ? (
           <a href="/account/login">Entrar novamente</a>
         ) : (
           <Action onClick={actions.refresh}>Tentar novamente</Action>
@@ -180,7 +181,7 @@ export function AccountView({
             </>
           )}
           <p role="status">{verificationMessage(load, snapshot.checkedAt)}</p>
-          {load.kind === "failed" && load.session && (
+          {load.kind === LoadStatus.failed && load.session && (
             <a href="/account/login">Entrar novamente</a>
           )}
           <p role="status">{message}</p>
@@ -280,11 +281,8 @@ function checkLabel(name: string) {
   }
 }
 
-function verificationMessage(
-  load: { kind: string; session?: boolean },
-  checkedAt: string,
-) {
-  if (load.kind !== "failed") {
+function verificationMessage(load: LoadState, checkedAt: string) {
+  if (load.kind !== LoadStatus.failed) {
     return `Verificado em ${checkedAt}`;
   }
   if (load.session) {

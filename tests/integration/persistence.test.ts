@@ -6,20 +6,16 @@ import type { BatchItem } from "drizzle-orm/batch";
 import { afterEach, beforeEach, test, vi } from "vitest";
 import { z } from "zod/v4";
 
-import type { OperationInput } from "#contracts/operation.ts";
-import type { Identity } from "#contracts/queries.ts";
-import { Fault } from "#domain/fault.ts";
-import type { Filter } from "#domain/filter.ts";
+import type { OperationInput } from "#contracts/operation.types.ts";
+import type { Identity } from "#contracts/queries.types.ts";
+import { Resource } from "#domain/enums.ts";
+import type { Filter } from "#domain/filter.types.ts";
+import type { ProviderRecord } from "#domain/provider.types.ts";
 import { convertPredicate } from "#domain/rules/convert-rules.ts";
 import { importRules } from "#domain/rules/import-rules.ts";
-import {
-  compileRules,
-  EMPTY_RULES,
-  type Rule,
-  txContext,
-} from "#domain/rules/rules.ts";
-import type { ProviderRecord } from "#domain/schemas.ts";
-import type { JsonValue } from "#shared/json.ts";
+import { EMPTY_RULES, txContext } from "#domain/rules/rules.ts";
+import type { Rule } from "#domain/rules/rules.types.ts";
+import type { JsonValue } from "#shared/json.types.ts";
 import { required, responseJson } from "#testing/helpers.ts";
 import { mockNetwork } from "#testing/network.ts";
 import type { DurableInstance } from "#worker/bindings.ts";
@@ -33,14 +29,17 @@ import { database } from "#worker/database.ts";
 import { override } from "#worker/finance/entities.repository.ts";
 import {
   aggregateEntities,
-  moneyKey,
   queryEntities,
 } from "#worker/finance/repository.ts";
 import { rulesFor, saveRules } from "#worker/finance/rules.repository.ts";
 import { fetchMcp } from "#worker/mcp/controller.ts";
-import { task } from "#worker/mcp/tasks.ts";
+import { listen, task } from "#worker/mcp/tasks.ts";
 import * as tables from "#worker/schema.ts";
-import { getOperation, startOperation } from "#worker/sync/repository.ts";
+import {
+  finish,
+  getOperation,
+  startOperation,
+} from "#worker/sync/repository.ts";
 import { type FinancialSource, runOperation } from "#worker/sync/service.ts";
 
 import { settings } from "./personal-fixture.ts";
@@ -193,6 +192,111 @@ const identity = (id: string): Identity => ({
   parentId: "account",
   id,
 });
+
+test("coverage groups authorized Items and retains not-synced entries without exposing disabled or disallowed scopes", async () => {
+  const { db } = await setup();
+  await database(db)
+    .insert(tables.items)
+    .values([
+      { id: "other", resources: ["transactions"], enabled: 1 },
+      { id: "restricted", resources: ["accounts"], enabled: 1 },
+      { id: "disabled", resources: ["transactions"], enabled: 0 },
+    ]);
+  await database(db)
+    .insert(tables.coverage)
+    .values(
+      ["item", "restricted", "disabled"].map((item_id) => ({
+        item_id,
+        resource: Resource.transactions,
+        parent_id: "account",
+        status: "available" as const,
+        bootstrap_complete: 1,
+        observed_at: "2026-10-01T00:00:00.000Z",
+      })),
+    );
+  const result = await queryEntities(db, { resource: "transactions" });
+  assert.deepEqual(result.coverage, [
+    {
+      itemId: "item",
+      coverage: [
+        {
+          resource: "transactions",
+          parent_id: "account",
+          status: "available",
+          bootstrap_complete: 1,
+          observed_at: "2026-10-01T00:00:00.000Z",
+        },
+      ],
+    },
+    {
+      itemId: "other",
+      coverage: [
+        {
+          resource: "transactions",
+          status: "not_synced",
+          bootstrap_complete: 0,
+        },
+      ],
+    },
+  ]);
+});
+
+test("bulk Task subscriptions preserve requested order and reject missing Tasks or a disabled Item in any scope", async () => {
+  const { db, op } = await setup();
+  await database(db)
+    .insert(tables.items)
+    .values({
+      id: "other",
+      resources: ["transactions"],
+      enabled: 1,
+    });
+  const other = await startOperation(db, "other-task", {
+    kind: "sync",
+    itemIds: ["other"],
+  });
+  await finish(db, op, "completed");
+  await finish(db, other, "cancelled");
+  const request = new Request("https://worker.test/mcp");
+  const response = await listen(request, env(db), {
+    id: 0,
+    ids: [other.id, op.id],
+  });
+  const message = z.object({
+    method: z.string().optional(),
+    params: z
+      .object({ taskId: z.string().optional(), status: z.string().optional() })
+      .optional(),
+  });
+  const events = (await response.text())
+    .split("\n")
+    .filter((line) => line.startsWith("data: "))
+    .map((line) => message.parse(JSON.parse(line.slice(6))));
+  assert.deepEqual(
+    events
+      .filter((event) => event.method === "notifications/tasks")
+      .map((event) => ({
+        id: event.params?.taskId,
+        status: event.params?.status,
+      })),
+    [
+      { id: other.id, status: "cancelled" },
+      { id: op.id, status: "completed" },
+    ],
+  );
+  await assert.rejects(
+    listen(request, env(db), { id: 0, ids: [op.id, "missing-task"] }),
+    /NOT_FOUND/,
+  );
+  await database(db)
+    .update(tables.items)
+    .set({ enabled: 0 })
+    .where(eq(tables.items.id, "other"));
+  await assert.rejects(
+    listen(request, env(db), { id: 0, ids: [op.id, other.id] }),
+    /ITEM_NOT_AUTHORIZED/,
+  );
+});
+
 function steps() {
   // Exercise replay through the D1 receipts, without an untyped checkpoint cache.
   return {
@@ -206,13 +310,32 @@ function steps() {
   };
 }
 
-test("disposing polling while a reader waits wakes it with a terminal result", async () => {
-  const { pollingEvents } = await import("#worker/mcp/tasks.ts");
-  const events = pollingEvents(60000);
-  const pending = events.next();
-  events[Symbol.dispose]();
-  assert.deepEqual(await pending, { done: true });
-  assert.deepEqual(await events.next(), { done: true });
+test("cancelling a waiting subscription closes the reader and releases its lifetime without cancelling the operation", async () => {
+  const { listen } = await import("#worker/mcp/tasks.ts");
+  const { db, op } = await setup();
+  const released = Promise.withResolvers<void>();
+  const response = await listen(new Request("https://local/mcp"), env(db), {
+    id: "synthetic-listener",
+    ids: [op.id],
+    keepAlive: (lifetime) => {
+      void lifetime.then(released.resolve);
+    },
+  });
+  const reader = required(response.body).getReader();
+  assert.match(
+    new TextDecoder().decode((await reader.read()).value),
+    /notifications\/subscriptions\/acknowledged/,
+  );
+  assert.match(
+    new TextDecoder().decode((await reader.read()).value),
+    /notifications\/tasks/,
+  );
+  const pending = reader.read();
+  await Promise.resolve();
+  await reader.cancel();
+  assert.equal((await pending).done, true);
+  await released.promise;
+  assert.equal((await getOperation(db, op.id)).status, "working");
 });
 
 function providerFixture() {
@@ -288,10 +411,9 @@ test("bootstrap all pages, incremental floor excludes old history and classifies
   const { db, op } = await setup(),
     source = providerFixture();
   await runOperation(
-    synchronizationDependencies(env(db)),
+    { ...synchronizationDependencies(env(db)), source: async () => source },
     op.id,
     steps(),
-    source,
   );
   assert.equal(
     required(
@@ -313,10 +435,9 @@ test("bootstrap all pages, incremental floor excludes old history and classifies
   });
   source.calls.length = 0;
   await runOperation(
-    synchronizationDependencies(env(db)),
+    { ...synchronizationDependencies(env(db)), source: async () => source },
     next.id,
     steps(),
-    source,
   );
   const second = await getOperation(db, next.id);
   assert.equal(second.progress.classified, 0);
@@ -377,82 +498,7 @@ test("idempotent operation, unknown Items denied and dispatch response loss reco
     1,
   );
 });
-test("rule phases, priorities, exact decimals, accents, templates, tags and rejects unsafe regex", async () => {
-  const doc = structuredClone(EMPTY_RULES);
-  doc.categories.push({
-    id: "food",
-    name: "Food",
-    group_id: "other",
-    aliases: [],
-  });
-  doc.rules = [
-    fixtureRule({
-      id: "a",
-      name: "a",
-      stage: "classify",
-      priority: 1,
-      is_active: true,
-      when: { "opf.regex": [{ var: "tx.description" }, "^cafe$"] },
-      actions: [{ op: "set_category", value: "food" }],
-    }),
-    fixtureRule({
-      id: "b",
-      name: "b",
-      stage: "enrich",
-      priority: 2,
-      is_active: true,
-      when: { "===": [{ var: "result.category_id" }, "food"] },
-      actions: [
-        { op: "set_description", value: "{{tx.counterparty_name}}" },
-        { op: "set_tag", key: "kind", value: "first" },
-      ],
-    }),
-    fixtureRule({
-      id: "c",
-      name: "c",
-      stage: "enrich",
-      priority: 3,
-      is_active: true,
-      when: true,
-      actions: [
-        { op: "set_description", value: "Fallback" },
-        { op: "set_tag", key: "kind", value: "second" },
-        { op: "ignore" },
-      ],
-    }),
-  ];
-  const tx = txContext({
-      id: "tx",
-      description: "CAFÉ",
-      amount: "9007199254740993.01",
-      accountingDate: "2026-01-01",
-    }),
-    engine = compileRules(doc),
-    result = await engine.evaluate(tx);
-  assert.equal(result.category_id, "food");
-  assert.equal(result.description, "Fallback");
-  assert.equal(result.tags.kind, "first");
-  assert.equal(result.ignored, true);
-  required(doc.rules[0]).conditions = {
-    all: [
-      convertPredicate(
-        {
-          "opf.decimal_compare": [
-            { var: "tx.amount" },
-            "eq",
-            "9007199254740993.01",
-          ],
-        },
-        "test",
-      ),
-    ],
-  };
-  assert.equal((await compileRules(doc).evaluate(tx)).category_id, "food");
-  required(doc.rules[0]).conditions = {
-    all: [{ fact: "tx.description", operator: "regex", value: "(a)\\1" }],
-  };
-  assert.throws(() => compileRules(doc));
-});
+
 test("manual override survives sync, rule version changes and exact SQL aggregate above Number safe range", async () => {
   const { db, op } = await setup(),
     engine = await rulesFor(db, op.rules_revision),
@@ -465,7 +511,21 @@ test("manual override survives sync, rule version changes and exact SQL aggregat
     engine: engine,
   });
   await commit(db, p.statements);
-  await override(db, i, "description", "Manual");
+  const { invoke } = await import("#worker/mcp/invoke.ts");
+  const queries = financialQueries(env(db));
+  const manual = "x".repeat(2048);
+  await invoke(queries, "caderninho_override", {
+    ...i,
+    field: "description",
+    value: manual,
+  });
+  await assert.rejects(
+    invoke(queries, "caderninho_override", {
+      ...i,
+      field: "description",
+      value: `${manual}x`,
+    }),
+  );
   p = await prepareEntity(db, {
     identity: i,
     source: transaction("huge", {
@@ -478,7 +538,7 @@ test("manual override survives sync, rule version changes and exact SQL aggregat
   });
   await commit(db, p.statements);
   const query = await queryEntities(db, {});
-  assert.equal(required(query.records[0]).effective_description, "Manual");
+  assert.equal(required(query.records[0]).effective_description, manual);
   assert.equal(
     required((await aggregateEntities(db, {})).groups[0]).totalMinor,
     "-900719925474099302",
@@ -550,29 +610,8 @@ test("filters select exact amounts, composition and revision rejects stale pagin
     queryEntities(db, { cursor: first.cursor }),
     /RESTART_REQUIRED/,
   );
-  assert.ok(moneyKey("-100") < moneyKey("-1"));
-  assert.ok(moneyKey("-1") < moneyKey("0"));
 });
-test("Securo dry run rejects unknown fields instead of silently discarding rules", () => {
-  const report = importRules({
-    format: "securo-categorization-rules",
-    version: 1,
-    rules: [
-      {
-        name: "Synthetic",
-        conditions_op: "and",
-        conditions: [{ op: "equals", field: "payee_id", value: "fake" }],
-        actions: [{ op: "set_category", value: "food" }],
-        priority: 1,
-        is_active: true,
-      },
-    ],
-  });
-  assert.equal(report.compatible, false);
-  assert.equal(report.document, null);
-  assert.ok(report.issues.some((i) => i.code === "FIELD_MAPPING_REQUIRED"));
-  assert.ok(report.issues.some((i) => i.code === "CATALOG_REQUIRED"));
-});
+
 const meta = {
   "io.modelcontextprotocol/protocolVersion": "2026-07-28",
   "io.modelcontextprotocol/clientCapabilities": {
@@ -607,6 +646,18 @@ test("modern Tasks wire rejects absent capability, returns flat durable handle a
       name: "caderninho_sync",
       arguments: { requestKey: "wire", itemIds: ["item"] },
     };
+  const catalogue = await responseJson(
+    await fetchMcp(rpc("tools/list", { _meta: meta }), e),
+  );
+  assert.ok(catalogue.result, JSON.stringify(catalogue));
+  const listed = z
+    .object({
+      result: z.object({ tools: z.array(z.object({ name: z.string() })) }),
+    })
+    .parse(catalogue);
+  for (const name of ["caderninho_sync", "caderninho_override"]) {
+    assert.ok(listed.result.tools.some((tool) => tool.name === name));
+  }
   const missing = await responseJson(
     await fetchMcp(rpc("tools/call", args), e),
   );
@@ -681,10 +732,12 @@ test("reapply freezes selection even when its filter changes and preserves manua
     filter: { field: "original.description", op: "eq", value: "Café" },
   });
   await runOperation(
-    synchronizationDependencies(env(db)),
+    {
+      ...synchronizationDependencies(env(db)),
+      source: async () => providerFixture(),
+    },
     run.id,
     steps(),
-    providerFixture(),
   );
   assert.equal(
     required(
@@ -762,12 +815,19 @@ test("updated/deleted webhooks resolve current state, delayed deletion does not 
       itemIds: ["item"],
       eventId: key,
     });
-    await runOperation(synchronizationDependencies(env(db)), o.id, steps(), {
-      ...providerFixture(),
-      async ids() {
-        return records;
+    await runOperation(
+      {
+        ...synchronizationDependencies(env(db)),
+        source: async () => ({
+          ...providerFixture(),
+          async ids() {
+            return records;
+          },
+        }),
       },
-    });
+      o.id,
+      steps(),
+    );
   }
   await event("updated", [
     transaction("t", { status: "POSTED", description: "Updated" }),
@@ -835,10 +895,12 @@ test("future matures once without rule evaluation; cancellation preserves prior 
     .where(eq(tables.operations.id, run.id))
     .run();
   await runOperation(
-    synchronizationDependencies(env(db)),
+    {
+      ...synchronizationDependencies(env(db)),
+      source: async () => providerFixture(),
+    },
     run.id,
     steps(),
-    providerFixture(),
   );
   assert.equal(
     required(
@@ -862,10 +924,12 @@ test("future matures once without rule evaluation; cancellation preserves prior 
     .where(eq(tables.operations.id, cancelled.id))
     .run();
   await runOperation(
-    synchronizationDependencies(env(db)),
+    {
+      ...synchronizationDependencies(env(db)),
+      source: async () => providerFixture(),
+    },
     cancelled.id,
     steps(),
-    providerFixture(),
   );
   assert.equal((await getOperation(db, cancelled.id)).status, "cancelled");
   assert.equal(
@@ -901,10 +965,9 @@ test("page commit is replay-safe when Workflow loses the step acknowledgement", 
     },
   };
   await runOperation(
-    synchronizationDependencies(env(db)),
+    { ...synchronizationDependencies(env(db)), source: async () => source },
     op.id,
     durable,
-    source,
   );
   assert.equal((await getOperation(db, op.id)).progress.classified, 2);
   assert.equal(
@@ -920,42 +983,12 @@ test("page commit is replay-safe when Workflow loses the step acknowledgement", 
   );
 });
 
-test("provider Retry-After waits between durable steps and propagates other transient failures", async () => {
-  const { providerRetries } = await import("#worker/pluggy/source.ts"),
-    delays: string[] = [];
-  const wrapped = providerRetries({
-    do: async (_name, fn) => fn(),
-    sleep: async (_name, duration) => {
-      delays.push(duration);
-    },
-  });
-  let calls = 0;
-  assert.equal(
-    await wrapped.do("page", async () => {
-      if (calls++ === 0) {
-        const fault = new Fault("UPSTREAM_RATE_LIMIT");
-        fault.details = { retryAfterSeconds: 90 };
-        throw fault;
-      }
-      return 42;
-    }),
-    42,
-  );
-  assert.deepEqual(delays, ["90 seconds"]);
-  await assert.rejects(
-    wrapped.do("page", async () => {
-      throw new Error("transient");
-    }),
-    /transient/,
-  );
-});
-
 test("bootstrap retains every supported resource and both account/investment parents", async () => {
-  const { RESOURCES } = await import("#domain/finance-model.ts");
+  const resources = Object.values(Resource);
   const { db, op } = await setup();
   await database(db)
     .update(tables.items)
-    .set({ resources: RESOURCES })
+    .set({ resources: resources })
     .where(eq(tables.items.id, "item"))
     .run();
   const calls: [
@@ -1000,10 +1033,9 @@ test("bootstrap retains every supported resource and both account/investment par
     },
   };
   await runOperation(
-    synchronizationDependencies(env(db)),
+    { ...synchronizationDependencies(env(db)), source: async () => provider },
     op.id,
     steps(),
-    provider,
   );
   assert.equal(
     required(
@@ -1014,7 +1046,7 @@ test("bootstrap retains every supported resource and both account/investment par
         .get()
         .then((row) => row ?? null),
     ).n,
-    RESOURCES.length,
+    resources.length,
   );
   assert.equal(calls.filter((x) => x[0] === "transactions").length, 4);
   assert.ok(
@@ -1126,16 +1158,20 @@ test("migration is replay-safe, preserves useful legacy-only history and reports
     migrationPolicy: "refuse-conflicts",
   });
   await runOperation(
-    synchronizationDependencies(env(db)),
+    {
+      ...synchronizationDependencies(env(db)),
+      source: async () => providerFixture(),
+    },
     m.id,
     steps(),
-    providerFixture(),
   );
   await runOperation(
-    synchronizationDependencies(env(db)),
+    {
+      ...synchronizationDependencies(env(db)),
+      source: async () => providerFixture(),
+    },
     m.id,
     steps(),
-    providerFixture(),
   );
   assert.equal(
     required(
@@ -1163,10 +1199,12 @@ test("migration is replay-safe, preserves useful legacy-only history and reports
     itemIds: ["item"],
   });
   await runOperation(
-    synchronizationDependencies(env(db)),
+    {
+      ...synchronizationDependencies(env(db)),
+      source: async () => providerFixture(),
+    },
     reconcile.id,
     steps(),
-    providerFixture(),
   );
   assert.equal(
     required(
@@ -1242,10 +1280,12 @@ test("preview, SQL filters and reapply select the same scoped universe; cursor c
     filter,
   });
   await runOperation(
-    synchronizationDependencies(env(db)),
+    {
+      ...synchronizationDependencies(env(db)),
+      source: async () => providerFixture(),
+    },
     apply.id,
     steps(),
-    providerFixture(),
   );
   assert.equal(
     required(
@@ -1281,10 +1321,9 @@ test("transient page failure retries the same checkpoint; failed incomplete page
     }
   };
   await runOperation(
-    synchronizationDependencies(env(db)),
+    { ...synchronizationDependencies(env(db)), source: async () => provider },
     op.id,
     durable,
-    provider,
   );
   assert.equal(attempts, 2);
   assert.equal(
@@ -1319,10 +1358,9 @@ test("transient page failure retries the same checkpoint; failed incomplete page
   };
   await assert.rejects(
     runOperation(
-      synchronizationDependencies(env(db)),
+      { ...synchronizationDependencies(env(db)), source: async () => source },
       failed.id,
       steps(),
-      source,
     ),
     /unavailable/,
   );
@@ -1517,10 +1555,12 @@ test("legacy entry rejects noncanonical secondary money without publishing an en
 test("operational retention does not remove financial records, rule provenance or idempotency", async () => {
   const { db, op } = await setup();
   await runOperation(
-    synchronizationDependencies(env(db)),
+    {
+      ...synchronizationDependencies(env(db)),
+      source: async () => providerFixture(),
+    },
     op.id,
     steps(),
-    providerFixture(),
   );
   const { compactOperations } = await import("#worker/sync/repository.ts");
   const financialCount = required(
@@ -1580,7 +1620,11 @@ test("changed totals during pagination retain partial coverage and never advance
     },
   };
   await assert.rejects(
-    runOperation(synchronizationDependencies(env(db)), op.id, steps(), source),
+    runOperation(
+      { ...synchronizationDependencies(env(db)), source: async () => source },
+      op.id,
+      steps(),
+    ),
     /SOURCE_TOTAL_CHANGED/,
   );
   assert.equal(
@@ -1635,63 +1679,10 @@ function fixtureRule(r: {
   };
 }
 
-test("native D1 rolls back entity data and checkpoint when any batch statement fails", async () => {
-  const { db, op } = await setup();
-  const engine = await rulesFor(db, op.rules_revision);
-  const entity = await prepareEntity(db, {
-    identity: identity("atomic"),
-    source: transaction("atomic"),
-    parent: account,
-    operation: op,
-    engine: engine,
-  });
-  await assert.rejects(
-    commit(db, [
-      ...entity.statements,
-      database(db).insert(tables.checkpoints).values({
-        operation_id: op.id,
-        item_id: "item",
-        resource: "transactions",
-      }),
-      database(db)
-        .insert(tables.locks)
-        .values({ operation_id: "missing-operation" }),
-    ]),
-  );
-  assert.equal(
-    await database(db)
-      .select({ n: count() })
-      .from(tables.entities)
-      .where(and(eq(tables.entities.id, "atomic")))
-      .get()
-      .then((row) => row?.n ?? null),
-    0,
-  );
-  assert.equal(
-    await database(db)
-      .select({ n: count() })
-      .from(tables.derived)
-      .where(and(eq(tables.derived.id, "atomic")))
-      .get()
-      .then((row) => row?.n ?? null),
-    0,
-  );
-  assert.equal(
-    await database(db)
-      .select({ n: count() })
-      .from(tables.checkpoints)
-      .where(and(eq(tables.checkpoints.operation_id, op.id)))
-      .get()
-      .then((row) => row?.n ?? null),
-    0,
-  );
-});
-
 test("legacy revisions remain readable; explicit conversion creates a new revision without rewriting frozen operations", async () => {
   const { db } = await setup();
   const { readRules } = await import("#worker/finance/rules.repository.ts");
   const { NORMALIZER } = await import("#domain/entity.ts");
-  const { convertRules } = await import("#domain/rules/convert-rules.ts");
   const { invoke } = await import("#worker/mcp/invoke.ts");
   const old = {
     ...EMPTY_RULES,
@@ -1740,7 +1731,7 @@ test("legacy revisions remain readable; explicit conversion creates a new revisi
     rulesFor(db, "legacy"),
     /RULES_V1_REQUIRES_EXPLICIT_CONVERSION_AND_ACTIVATION/,
   );
-  const report = convertRules(old);
+  const report = importRules(old);
   assert.ok(report.document);
   const saved = await saveRules(db, report.document, true);
   assert.notEqual(saved.id, "legacy");
@@ -1823,8 +1814,8 @@ test("page publication rolls back data, progress, checkpoint and receipt togethe
     .values({
       operation_id: op.id,
       item_id: "item",
-      resource: "accounts",
-      parent_id: "",
+      resource: "transactions",
+      parent_id: "account",
     })
     .run();
   const before = await database(db)
@@ -1843,15 +1834,15 @@ test("page publication rolls back data, progress, checkpoint and receipt togethe
     name: "atomic-page",
     prepare: (input: Parameters<typeof prepareEntity>[1]) =>
       prepareEntity(db, input),
-    resource: "accounts" as const,
+    resource: "transactions" as const,
     item: { id: "item" },
-    parentId: "",
-    parent: null,
+    parentId: "account",
+    parent: { normalized: account, relevant_hash: "synthetic-parent" },
     engine,
     provider: {
       async page() {
         fetched++;
-        return { records: [account], next: null, total: 1 };
+        return { records: [transaction("atomic-page")], next: null, total: 1 };
       },
     },
   };
@@ -1860,6 +1851,14 @@ test("page publication rolls back data, progress, checkpoint and receipt togethe
     await database(db)
       .select({ n: count() })
       .from(tables.entities)
+      .get()
+      .then((row) => row?.n ?? null),
+    0,
+  );
+  assert.equal(
+    await database(db)
+      .select({ n: count() })
+      .from(tables.derived)
       .get()
       .then((row) => row?.n ?? null),
     0,

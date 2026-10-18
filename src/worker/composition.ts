@@ -1,13 +1,14 @@
-import type { Identity } from "#contracts/queries.ts";
-import { PluggyCredentialsSchema } from "#domain/pluggy-credentials.ts";
-import type { Rules } from "#domain/rules/rules.ts";
-import type { FinanceRecord, ProviderRecord } from "#domain/schemas.ts";
+import type { Identity } from "#contracts/queries.types.ts";
+import type { FinanceRecord } from "#domain/finance.types.ts";
+import type { ProviderRecord } from "#domain/provider.types.ts";
+import type { Rules } from "#domain/rules/rules.types.ts";
 import {
   assertPluggyApplication,
   createAccountRepository,
   installationReadiness,
 } from "#worker/account/repository.ts";
 import { createAccountService } from "#worker/account/service.ts";
+import { revokeAssistantGrants } from "#worker/auth/grants.adapter.ts";
 import { createAuthRepository } from "#worker/auth/repository.ts";
 import { createAuthService } from "#worker/auth/service.ts";
 import type { Bindings } from "#worker/bindings.ts";
@@ -41,13 +42,7 @@ import {
   previewRules,
   readSubscriptions,
 } from "#worker/finance/service.ts";
-import {
-  connectionSource,
-  connectToken,
-  financialSource,
-  pluggyClient,
-  readAccount,
-} from "#worker/pluggy/source.ts";
+import { createPluggyAccess } from "#worker/pluggy/access.adapter.ts";
 import type { Operation } from "#worker/sync/operation-storage.ts";
 import {
   createSyncRepository,
@@ -63,11 +58,11 @@ import {
 export function synchronizationDependencies(
   env: Bindings,
 ): SynchronizationDependencies {
+  const pluggy = pluggyAccess(env);
   return {
     open: (id) =>
       openSynchronization(env.DB, id, (input) => prepareEntity(env.DB, input)),
-    source: async () =>
-      financialSource(pluggyClient(await configuredCredentials(env))),
+    source: () => pluggy.financialSource(),
   };
 }
 
@@ -99,11 +94,11 @@ export function prepareEntity(
       operationId: input.operation.id,
       referenceDay: input.operation.reference_day,
       rulesRevision: input.operation.rules_revision,
-      renormalize: input.operation.input.renormalize === true,
+      renormalize: input.operation.input.renormalize ?? false,
       observedAt: input.observedAt ?? new Date().toISOString(),
-      ...(input.legacyProjection === undefined
-        ? {}
-        : { legacyProjection: input.legacyProjection }),
+      ...(input.legacyProjection && {
+        legacyProjection: input.legacyProjection,
+      }),
     },
   );
 }
@@ -113,6 +108,7 @@ export type EntityPreparer = (
 ) => ReturnType<typeof prepareEntity>;
 
 export function financialQueries(env: Bindings): FinancialQueries {
+  const pluggy = pluggyAccess(env);
   return {
     setupStatus: () => accountService(env).wizardState(),
     query: (input) => queryEntities(env.DB, input),
@@ -144,8 +140,7 @@ export function financialQueries(env: Bindings): FinancialQueries {
         call,
       ),
     authorizeAccount: (input) => authorizeAccount(env.DB, input),
-    readAccount: async (accountId) =>
-      readAccount(pluggyClient(await configuredCredentials(env)), accountId),
+    readAccount: (accountId) => pluggy.readAccount(accountId),
     now: () => new Date().toISOString(),
   };
 }
@@ -153,14 +148,8 @@ export function financialQueries(env: Bindings): FinancialQueries {
 export function accountService(env: Bindings) {
   return createAccountService({
     repository: createAccountRepository(env),
-    source: connectionSource,
-    credentials: () => configuredCredentials(env),
-    configured: () =>
-      PluggyCredentialsSchema.safeParse({
-        clientId: env.PLUGGY_CLIENT_ID,
-        clientSecret: env.PLUGGY_CLIENT_SECRET,
-      }).success,
-    connectToken,
+    source: pluggyAccess(env).account,
+    disconnectAssistants: () => revokeAssistantGrants(env.OAUTH_PROVIDER),
     installation: () => installationReadiness(env),
     now: () => new Date(),
   });
@@ -204,14 +193,11 @@ export function syncService(env: Bindings) {
   });
 }
 
-async function configuredCredentials(env: Bindings) {
-  const parsed = PluggyCredentialsSchema.safeParse({
+function pluggyAccess(env: Bindings) {
+  return createPluggyAccess({
     clientId: env.PLUGGY_CLIENT_ID,
     clientSecret: env.PLUGGY_CLIENT_SECRET,
+    authorizeApplication: (clientId) =>
+      assertPluggyApplication(env.DB, clientId),
   });
-  if (!parsed.success) {
-    throw new Error("PLUGGY_ACCOUNT_NOT_CONFIGURED");
-  }
-  await assertPluggyApplication(env.DB, parsed.data.clientId);
-  return parsed.data;
 }

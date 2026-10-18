@@ -1,6 +1,8 @@
 import { and, eq, sql } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 
+import { OperationPhase } from "#contracts/operation.types.ts";
+import { FaultCode, Resource } from "#domain/enums.ts";
 import type { EntityPreparer } from "#worker/composition.ts";
 import { database, required } from "#worker/database.ts";
 import { authorizedItems } from "#worker/finance/repository.ts";
@@ -42,7 +44,7 @@ export async function publishResolved(
       .where(
         and(
           eq(tables.entities.item_id, item),
-          eq(tables.entities.resource, "accounts"),
+          eq(tables.entities.resource, Resource.accounts),
           eq(tables.entities.id, account),
         ),
       )
@@ -55,14 +57,16 @@ export async function publishResolved(
   );
   progress.pages++;
   progress.received += records.length;
+  const receivedIds = new Set<string>();
   for (const record of records) {
     if (typeof record.id !== "string") {
       throw new Error("SOURCE_ID_MISSING");
     }
+    receivedIds.add(record.id);
     const prepared = await prepare({
       identity: {
         itemId: item,
-        resource: "transactions",
+        resource: Resource.transactions,
         parentId: account,
         id: record.id,
       },
@@ -72,13 +76,7 @@ export async function publishResolved(
       engine: engine,
     });
     edits.push(...prepared.statements);
-    if (prepared.state === "new") {
-      progress.new++;
-    } else if (prepared.state === "changed") {
-      progress.changed++;
-    } else {
-      progress.unchanged++;
-    }
+    progress[prepared.state]++;
     progress.classified += prepared.classified;
   }
   edits.push(
@@ -86,13 +84,13 @@ export async function publishResolved(
       .update(tables.operations)
       .set({
         progress: progress,
-        phase: "resolve-changes",
+        phase: OperationPhase.resolve_changes,
         updated_at: new Date().toISOString(),
       })
       .where(eq(tables.operations.id, op.id)),
   );
   for (const id of ids) {
-    if (!records.some((r) => r.id === id)) {
+    if (!receivedIds.has(id)) {
       edits.push(
         database(db)
           .update(tables.entities)
@@ -100,7 +98,7 @@ export async function publishResolved(
           .where(
             and(
               eq(tables.entities.item_id, item),
-              eq(tables.entities.resource, "transactions"),
+              eq(tables.entities.resource, Resource.transactions),
               eq(tables.entities.parent_id, account),
               eq(tables.entities.id, id),
             ),
@@ -177,7 +175,7 @@ export async function resolveEvent(
         const page = payload.transactionIds
           ? { records: await provider.ids(e.account_id, ids), next: null }
           : await provider.page({
-              resource: "transactions",
+              resource: Resource.transactions,
               item: e.item_id,
               parent: e.account_id,
               cursor: previous,
@@ -224,7 +222,7 @@ export async function resolveEvent(
       .set({ processed_at: new Date().toISOString() })
       .where(eq(tables.inbox.event_id, eventId))
       .run();
-    return { phase: "event-resolved" };
+    return { phase: OperationPhase.event_resolved };
   });
   return false;
 }
@@ -252,6 +250,6 @@ async function assertEventCursor(
       )
       .get()
   ) {
-    throw new Error("CURSOR_LOOP");
+    throw new Error(FaultCode.CURSOR_LOOP);
   }
 }

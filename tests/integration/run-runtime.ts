@@ -76,11 +76,11 @@ async function start() {
     if (task.child.exitCode !== null || task.child.signalCode !== null) {
       break;
     }
-    const ready = await tryCatch(
+    const { data, error } = await tryCatch(() =>
       fetch(base, { signal: AbortSignal.timeout(1000) }),
     );
-    if (!ready.error) {
-      await ready.data.body?.cancel();
+    if (!error) {
+      await data.body?.cancel();
       return task;
     }
     await new Promise((r) => setTimeout(r, 500));
@@ -89,87 +89,85 @@ async function start() {
   throw new Error(`Runtime not ready: ${logs}`);
 }
 const worker = await start();
-const checked = await tryCatch(
-  (async () => {
-    await fetch(`${base}/setup`, { method: "POST" });
-    const meta = {
-      "io.modelcontextprotocol/protocolVersion": "2026-07-28",
-      "io.modelcontextprotocol/clientCapabilities": {
-        extensions: { "io.modelcontextprotocol/tasks": {} },
-      },
-    };
-    const rpc = async (
-      method: string,
-      params: { name?: string; taskId?: string; arguments?: object },
-    ) =>
-      responseJson(
-        await fetch(`${base}/mcp`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Accept: "application/json, text/event-stream",
-            "Mcp-Method": method,
-            "Mcp-Name": params.name ?? params.taskId ?? "",
-            "Mcp-Protocol-Version": "2026-07-28",
-          },
-          body: JSON.stringify({
-            jsonrpc: "2.0",
-            id: 1,
-            method,
-            params: { ...params, _meta: meta },
-          }),
+const { data: _data, error } = await tryCatch(async () => {
+  await fetch(`${base}/setup`, { method: "POST" });
+  const meta = {
+    "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+    "io.modelcontextprotocol/clientCapabilities": {
+      extensions: { "io.modelcontextprotocol/tasks": {} },
+    },
+  };
+  const rpc = async (
+    method: string,
+    params: { name?: string; taskId?: string; arguments?: object },
+  ) =>
+    responseJson(
+      await fetch(`${base}/mcp`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json, text/event-stream",
+          "Mcp-Method": method,
+          "Mcp-Name": params.name ?? params.taskId ?? "",
+          "Mcp-Protocol-Version": "2026-07-28",
+        },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: 1,
+          method,
+          params: { ...params, _meta: meta },
         }),
-      );
-    const started = await rpc("tools/call", {
-      name: "caderninho_sync",
-      arguments: {
-        requestKey: "restart-test",
-        itemIds: ["11111111-1111-4111-8111-111111111111"],
-      },
-    });
-    const taskId = required(required(started.result).taskId);
-    let partial = false;
-    for (let i = 0; i < 30; i++) {
-      const t = await rpc("tasks/get", { taskId });
-      if (
-        required(t.result).status === "working" &&
-        required(required(t.result).statusMessage).startsWith("transactions")
-      ) {
-        partial = true;
-        break;
-      }
-      await new Promise((r) => setTimeout(r, 100));
-    }
-    assert.ok(
-      partial,
-      "observe a committed page while workflow is still executing",
+      }),
     );
-    // Disconnect all HTTP clients while the native Workflow continues. Stopping
-    // the complete Wrangler process also kills its emulated Workflow service;
-    // that emulator restart limitation is documented separately.
-    let terminal: Awaited<ReturnType<typeof responseJson>>["result"];
-    for (let i = 0; i < 40; i++) {
-      const t = await rpc("tasks/get", { taskId });
-      if (required(t.result).status !== "working") {
-        terminal = t.result;
-        break;
-      }
-      await new Promise((r) => setTimeout(r, 500));
+  const started = await rpc("tools/call", {
+    name: "caderninho_sync",
+    arguments: {
+      requestKey: "restart-test",
+      itemIds: ["11111111-1111-4111-8111-111111111111"],
+    },
+  });
+  const taskId = required(required(started.result).taskId);
+  let partial = false;
+  for (let i = 0; i < 30; i++) {
+    const t = await rpc("tasks/get", { taskId });
+    if (
+      required(t.result).status === "working" &&
+      required(required(t.result).statusMessage).startsWith("transactions")
+    ) {
+      partial = true;
+      break;
     }
-    assert.equal(terminal?.status, "completed");
-    assert.equal(required(terminal.result).isError, false);
-    console.log(
-      "PASS: native Workflow continues without a connected subscriber, same durable Task",
-    );
-    await command(["tests/integration/runtime-check.ts"], {
-      PRODUCT_TEST_URL: base,
-    });
-  })(),
-);
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  assert.ok(
+    partial,
+    "observe a committed page while workflow is still executing",
+  );
+  // Disconnect all HTTP clients while the native Workflow continues. Stopping
+  // the complete Wrangler process also kills its emulated Workflow service;
+  // that emulator restart limitation is documented separately.
+  let terminal: Awaited<ReturnType<typeof responseJson>>["result"];
+  for (let i = 0; i < 40; i++) {
+    const t = await rpc("tasks/get", { taskId });
+    if (required(t.result).status !== "working") {
+      terminal = t.result;
+      break;
+    }
+    await new Promise((r) => setTimeout(r, 500));
+  }
+  assert.equal(terminal?.status, "completed");
+  assert.equal(required(terminal.result).isError, false);
+  console.log(
+    "PASS: native Workflow continues without a connected subscriber, same durable Task",
+  );
+  await command(["tests/integration/runtime-check.ts"], {
+    PRODUCT_TEST_URL: base,
+  });
+});
 await worker.stop();
-if (checked.error) {
+if (error) {
   console.error("Synthetic runtime diagnostic:", logs);
-  throw checked.error;
+  throw error;
 }
 // Restore only into a new, isolated local database. Never reuse the source state.
 const restored = await mkdtemp(join(tmpdir(), "caderninho-restore-test-"));

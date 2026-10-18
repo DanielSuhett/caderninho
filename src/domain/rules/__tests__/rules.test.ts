@@ -2,15 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { exactJSON } from "#domain/exact.ts";
-import { convertRules } from "#domain/rules/convert-rules.ts";
+import { FinanceRecordSchema } from "#domain/finance.schema.ts";
 import { importRules, parseRuleJson } from "#domain/rules/import-rules.ts";
-import {
-  compileRules,
-  EMPTY_RULES,
-  RuleSchema,
-  txContext,
-} from "#domain/rules/rules.ts";
-import { FinanceRecordSchema } from "#domain/schemas.ts";
+import { EMPTY_RULES, txContext } from "#domain/rules/rules.ts";
+import { compileRules, RuleSchema } from "#domain/rules/rules-schema.ts";
 import { required } from "#testing/helpers.ts";
 
 const tx = (description = "CAFÉ") =>
@@ -94,6 +89,15 @@ await test("rule import diagnostics retain a navigable source path for nested un
         issue.code === "FIELD_MAPPING_REQUIRED",
     ),
   );
+  const missingCatalog = importRules({
+    format: "securo-categorization-rules",
+    version: 1,
+    rules: [],
+  });
+  assert.equal(missingCatalog.document, null);
+  assert.ok(
+    missingCatalog.issues.some((issue) => issue.code === "CATALOG_REQUIRED"),
+  );
   const invalid = importRules({
     format: "securo-categorization-rules",
     version: 1,
@@ -123,7 +127,7 @@ await test("explicit v1 conversion preserves equivalent boolean combinations and
   });
 
   const before = JSON.stringify(source),
-    report = convertRules(source);
+    report = importRules(source);
 
   assert.equal(report.compatible, true);
   assert.ok(report.document);
@@ -137,7 +141,7 @@ await test("explicit v1 conversion preserves equivalent boolean combinations and
 });
 
 await test("conversion rejects unsupported nested expressions with an exact path and no partial output", () => {
-  const report = convertRules(
+  const report = importRules(
     legacy({ and: [true, { map: [true, true, false] }] }),
   );
 
@@ -151,7 +155,7 @@ await test("conversion rejects unsupported nested expressions with an exact path
     { and: [] },
     { "==": [{ var: "tx.amount" }, 1] },
   ]) {
-    assert.equal(convertRules(legacy(when)).compatible, false);
+    assert.equal(importRules(legacy(when)).compatible, false);
   }
 });
 
@@ -164,7 +168,7 @@ await test("equal priorities preserve document order, derived facts update and c
     aliases: [],
   });
   doc.rules = [
-    RuleSchema.parse({
+    {
       id: "classify",
       name: "Classify",
       priority: 1,
@@ -176,8 +180,8 @@ await test("equal priorities preserve document order, derived facts update and c
         type: "classify",
         params: { actions: [{ op: "set_category", value: "food" }] },
       },
-    }),
-    RuleSchema.parse({
+    },
+    {
       id: "classify-second",
       name: "Second classifier",
       priority: 1,
@@ -187,8 +191,8 @@ await test("equal priorities preserve document order, derived facts update and c
         type: "classify",
         params: { actions: [{ op: "set_category", value: "uncategorized" }] },
       },
-    }),
-    RuleSchema.parse({
+    },
+    {
       id: "tag",
       name: "Tag",
       priority: 1,
@@ -200,8 +204,8 @@ await test("equal priorities preserve document order, derived facts update and c
         type: "enrich",
         params: { actions: [{ op: "set_tag", key: "kind", value: "food" }] },
       },
-    }),
-    RuleSchema.parse({
+    },
+    {
       id: "description",
       name: "Description",
       priority: 1,
@@ -211,10 +215,17 @@ await test("equal priorities preserve document order, derived facts update and c
       },
       event: {
         type: "enrich",
-        params: { actions: [{ op: "set_description", value: "First" }] },
+        params: {
+          actions: [
+            { op: "set_description", value: "{{tx.counterparty_name}}" },
+            { op: "set_description", value: "First" },
+            { op: "set_tag", key: "kind", value: "later" },
+            { op: "ignore" },
+          ],
+        },
       },
-    }),
-    RuleSchema.parse({
+    },
+    {
       id: "fallback",
       name: "Fallback",
       priority: 1,
@@ -224,7 +235,7 @@ await test("equal priorities preserve document order, derived facts update and c
         type: "enrich",
         params: { actions: [{ op: "set_description", value: "Second" }] },
       },
-    }),
+    },
   ];
 
   const engine = compileRules(doc),
@@ -235,15 +246,21 @@ await test("equal priorities preserve document order, derived facts update and c
 
   assert.equal(a.description, "First");
   assert.equal(a.tags.kind, "food");
+  assert.equal(a.ignored, true);
   assert.equal(b.description, "Second");
   assert.deepEqual(b.tags, {});
+  assert.equal(b.ignored, false);
   assert.deepEqual(
     a.evidence.map((e) => e.ruleId),
-    ["classify", "tag", "description"],
+    ["classify", "tag", "description", "description"],
   );
   assert.deepEqual(
     b.evidence.map((e) => e.ruleId),
     ["classify-second", "fallback"],
+  );
+  assert.deepEqual(
+    await Promise.all([engine.evaluate(tx()), engine.evaluate(tx("Other"))]),
+    [a, b],
   );
 });
 
@@ -260,6 +277,7 @@ await test("schemas reject arbitrary paths, dynamic facts, unsafe priorities and
     { fact: "tx.secret", operator: "equal", value: "x" },
     { fact: "tx.description", operator: "equal", value: { fact: "database" } },
     { fact: "tx.description", path: "$.x", operator: "equal", value: "x" },
+    { fact: "tx.description", operator: "regex", value: "(a)\\1" },
     { fact: "tx.amount", operator: "decimalBetween", value: ["2", "1"] },
     {
       fact: "tx.date",
@@ -312,7 +330,7 @@ await test("lossless JSON rejects malformed numeric tokens and preserves financi
 });
 
 await test("false conversion and short-circuit conditions never execute an unreachable exact predicate", async () => {
-  const converted = convertRules(legacy(false));
+  const converted = importRules(legacy(false));
   assert.ok(converted.document);
   assert.equal(
     (await compileRules(converted.document).evaluate(tx())).description,
@@ -320,7 +338,7 @@ await test("false conversion and short-circuit conditions never execute an unrea
   );
   const doc = structuredClone(EMPTY_RULES);
   doc.rules = [
-    RuleSchema.parse({
+    {
       id: "short",
       name: "Short",
       priority: 1,
@@ -339,7 +357,7 @@ await test("false conversion and short-circuit conditions never execute an unrea
         type: "enrich",
         params: { actions: [{ op: "set_description", value: "Short" }] },
       },
-    }),
+    },
   ];
   assert.equal(
     (await compileRules(doc).evaluate(txContext({ id: "missing-date" })))
@@ -347,7 +365,7 @@ await test("false conversion and short-circuit conditions never execute an unrea
     "Short",
   );
 
-  const conditional = convertRules(
+  const conditional = importRules(
     legacy({
       if: [
         true,

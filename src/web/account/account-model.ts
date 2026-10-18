@@ -1,28 +1,26 @@
-import type { AccountResponse } from "#contracts/portal-contract.ts";
-import type { WizardIssue, WizardState } from "#contracts/wizard-contract.ts";
+import {
+  type WizardIssue,
+  type WizardState,
+  WizardSyncState,
+} from "#contracts/wizard.types.ts";
 import { PERSONAL_CONNECTOR_ID } from "#domain/connection-policy.ts";
 
-export type LoadState =
-  | { kind: "loading" }
-  | { kind: "ready" }
-  | { kind: "failed"; session: boolean };
-export interface AccountState {
-  snapshot: AccountResponse | undefined;
-  load: LoadState;
-  step: number;
-  message: string;
-  busy: boolean;
-}
-export interface AccountActions {
-  refresh: () => void;
-  selectStep: (step: number) => void;
-  connectItem: (itemId?: string) => void;
-  pauseSync: () => void;
-  resumeSync: () => void;
-  requestSync: () => void;
-  disconnectAssistants: () => void;
-  logout: () => void;
-  copy: (value: string) => void;
+import { type AccountState, LoadStatus } from "./account.types.ts";
+
+export function pollingDelay({ snapshot, load }: AccountState) {
+  if (load.kind === LoadStatus.failed && load.session) {
+    return undefined;
+  }
+  if (!snapshot?.status.connected || snapshot.status.paused) {
+    return undefined;
+  }
+  if (
+    snapshot.status.sync !== WizardSyncState.waiting &&
+    snapshot.status.sync !== WizardSyncState.working
+  ) {
+    return undefined;
+  }
+  return load.kind === LoadStatus.failed ? 30000 : 5000;
 }
 
 export const WIZARD_ISSUES: Record<
@@ -71,21 +69,21 @@ export const WIZARD_ISSUES: Record<
   },
 };
 export function syncPresentation(state: WizardState) {
-  if (state.sync === "error") {
+  if (state.sync === WizardSyncState.error) {
     return {
       title: "A cópia precisa de atenção",
       detail:
         "Uma etapa falhou. Seus dados já salvos foram preservados. Use o diagnóstico abaixo para investigar.",
     };
   }
-  if (state.sync === "cancelled") {
+  if (state.sync === WizardSyncState.cancelled) {
     return {
       title: "Importação cancelada",
       detail:
         "Seus dados já salvos foram preservados. Abra sua conta para solicitar uma nova sincronização.",
     };
   }
-  if (state.paused && state.sync !== "working") {
+  if (state.paused && state.sync !== WizardSyncState.working) {
     return {
       title: "Próximas sincronizações pausadas",
       detail:
@@ -93,9 +91,8 @@ export function syncPresentation(state: WizardState) {
     };
   }
   if (
-    state.sync === "completed" &&
-    (state.coverage.total === 0 ||
-      state.coverage.complete !== state.coverage.total)
+    state.sync === WizardSyncState.completed &&
+    (!state.coverage.total || state.coverage.complete !== state.coverage.total)
   ) {
     return {
       title: "Importação com cobertura parcial",
@@ -103,7 +100,7 @@ export function syncPresentation(state: WizardState) {
         "Confira os recursos indisponíveis no diagnóstico antes de usar totais financeiros.",
     };
   }
-  if (state.sync === "completed") {
+  if (state.sync === WizardSyncState.completed) {
     return {
       title: "Importação concluída",
       detail:

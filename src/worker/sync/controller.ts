@@ -18,8 +18,10 @@ export async function receiveWebhook(request: Request, env: Bindings) {
     new Uint8Array(
       await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s)),
     );
-  const a = await digest(supplied),
-    b = await digest(env.WEBHOOK_SECRET);
+  const [a, b] = await Promise.all([
+    digest(supplied),
+    digest(env.WEBHOOK_SECRET),
+  ]);
   let diff = 0;
   const expected = new DataView(b.buffer, b.byteOffset, b.byteLength);
   for (const [index, value] of a.entries()) {

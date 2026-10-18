@@ -2,6 +2,7 @@ import ky from "ky";
 import { PluggyClient } from "pluggy-sdk";
 import { z } from "zod/v4";
 
+import { FaultCode } from "#domain/enums.ts";
 import { exactJSON } from "#domain/exact.ts";
 import { tryCatch } from "#shared/result.ts";
 
@@ -13,16 +14,14 @@ type QueryParameters = Record<
 function transportError(code: string, response?: Response) {
   return Object.assign(new Error(code), {
     code,
-    ...(response
-      ? {
-          response: {
-            statusCode: response.status,
-            headers: {
-              "retry-after": response.headers.get("Retry-After") ?? "",
-            },
-          },
-        }
-      : {}),
+    ...(response && {
+      response: {
+        statusCode: response.status,
+        headers: {
+          "retry-after": response.headers.get("Retry-After") ?? "",
+        },
+      },
+    }),
   });
 }
 
@@ -93,10 +92,10 @@ export class PersonalPluggyClient extends PluggyClient {
     apiKey?: string,
   ): Promise<T> {
     const deadline = AbortSignal.timeout(this.timeoutMs);
-    const result = await tryCatch(
+    const { data, error } = await tryCatch(() =>
       ky(`https://api.pluggy.ai/${endpoint}`, {
         method,
-        ...(body === undefined ? {} : { json: body }),
+        ...(body && { json: body }),
         headers: apiKey ? { "X-API-KEY": apiKey } : {},
         signal: deadline,
         timeout: false,
@@ -107,16 +106,16 @@ export class PersonalPluggyClient extends PluggyClient {
         fetch: (input, init) => this.fetchResponse(input, init, deadline),
       }).json<T>(),
     );
-    if (result.error) {
+    if (error) {
       if (deadline.aborted) {
         throw transportError("ETIMEDOUT");
       }
-      if (result.error instanceof SyntaxError) {
+      if (error instanceof SyntaxError) {
         throw transportError("ERR_BODY_PARSE_FAILURE");
       }
-      throw result.error;
+      throw error;
     }
-    return result.data;
+    return data;
   }
   private async fetchResponse(
     input: Parameters<typeof fetch>[0],
@@ -128,17 +127,17 @@ export class PersonalPluggyClient extends PluggyClient {
       this.cachedKey = "";
     }
     if (!response.ok) {
-      void tryCatch(response.body?.cancel() ?? Promise.resolve());
+      void cancelBody(response.body);
       throw transportError(
         response.status >= 300 && response.status < 400
-          ? "UPSTREAM_REDIRECT"
+          ? FaultCode.UPSTREAM_REDIRECT
           : "UPSTREAM_HTTP_ERROR",
         response,
       );
     }
     if (Number(response.headers.get("Content-Length")) > this.maximum) {
-      void tryCatch(response.body?.cancel() ?? Promise.resolve());
-      throw transportError("UPSTREAM_TOO_LARGE");
+      void cancelBody(response.body);
+      throw transportError(FaultCode.UPSTREAM_TOO_LARGE);
     }
     const bytes = await readLimitedBody(response.body, deadline, this.maximum);
     const headers = new Headers(response.headers);
@@ -146,6 +145,14 @@ export class PersonalPluggyClient extends PluggyClient {
     headers.delete("Content-Length");
     return new Response(bytes, { status: response.status, headers });
   }
+}
+
+// Cancellation must not replace the original HTTP, size or timeout failure.
+async function cancelBody(
+  body: Pick<ReadableStream<Uint8Array>, "cancel"> | null,
+) {
+  const { data, error } = await tryCatch(() => body?.cancel());
+  return error ? undefined : data;
 }
 
 async function readLimitedBody(
@@ -158,7 +165,7 @@ async function readLimitedBody(
   let size = 0;
   if (reader) {
     const abort = () => {
-      void tryCatch(reader.cancel());
+      void cancelBody(reader);
     };
     deadline.addEventListener("abort", abort, { once: true });
     if (deadline.aborted) {
@@ -172,8 +179,8 @@ async function readLimitedBody(
         }
         size += chunk.value.byteLength;
         if (size > maximum) {
-          void tryCatch(reader.cancel());
-          throw transportError("UPSTREAM_TOO_LARGE");
+          void cancelBody(reader);
+          throw transportError(FaultCode.UPSTREAM_TOO_LARGE);
         }
         chunks.push(chunk.value);
       }

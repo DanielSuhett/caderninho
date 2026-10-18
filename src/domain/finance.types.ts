@@ -1,19 +1,23 @@
-import type { Classification, ProvenanceOrigin, Resource } from "#domain/enums.ts";
+import type {
+  Classification,
+  ProvenanceOrigin,
+  Resource,
+} from "#domain/enums.ts";
 import type { JsonValue } from "#shared/json.types.ts";
 
 export type MoneyInput = string | number | null | undefined;
 export type OptionalText = string | null | undefined;
 export type OptionalScalar = string | number | boolean | null | undefined;
 
-export interface Provenance {
+export type Provenance = {
   origin: ProvenanceOrigin;
   sourceField: string;
-}
+};
 
-export interface PrecisionWarning {
+export type PrecisionWarning = {
   field: string;
   code: string;
-}
+};
 
 export interface FinanceRecord {
   [field: string]: JsonValue | undefined;

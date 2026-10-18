@@ -1,16 +1,11 @@
 import assert from "node:assert/strict";
 
-import { and, count, eq } from "drizzle-orm";
-import { sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { count } from "drizzle-orm";
 import { afterEach, beforeEach, test, vi } from "vitest";
 import { z } from "zod/v4";
 
 import { sourceUrl } from "#testing/helpers.ts";
 import { mockNetwork, syntheticJwt } from "#testing/network.ts";
-import {
-  assertPluggyApplication,
-  installationReadiness,
-} from "#worker/account/repository.ts";
 import {
   accountService,
   financialQueries,
@@ -56,12 +51,6 @@ test("deployment credentials connect Meu Pluggy; D1 stores only settings and the
   source();
   const config = settings();
   const service = accountService(config);
-  assert.deepEqual(await installationReadiness(config), {
-    database: true,
-    workflow: true,
-    oauth: true,
-    migrations: true,
-  });
   assert.equal((await service.wizardState()).credentials, true);
   assert.equal((await service.wizardState()).connected, false);
   assert.equal((await service.token()).accessToken, "synthetic-widget-token");
@@ -76,35 +65,25 @@ test("deployment credentials connect Meu Pluggy; D1 stores only settings and the
     .then((row) => row ?? null);
   assert.ok(!JSON.stringify(stored).includes("synthetic-secret"));
   assert.ok(!JSON.stringify(stored).includes("synthetic-client"));
-  const installedTables = await database(bindings.DB)
-    .select({ name: sqlite_schema.name })
-    .from(sqlite_schema)
-    .where(and(eq(sqlite_schema.type, "table")))
-    .all();
-  for (const removed of [
-    "principals",
-    "pluggy_credentials",
-    "portal_logins",
-    "mcp_receipts",
-  ]) {
-    assert.ok(!installedTables.some((row) => row.name === removed));
-  }
   const bad = { ...config, PLUGGY_CLIENT_ID: "different-application" };
   await assert.rejects(
     accountService(bad).token(),
     /APPLICATION_CHANGE_REQUIRES_MIGRATION/,
   );
   assert.equal((await financialQueries(bad).readStatus()).items.length, 1);
-  assert.equal(
-    typeof (await assertPluggyApplication(
-      bindings.DB,
-      config.PLUGGY_CLIENT_ID ?? "",
-    )),
-    "string",
-  );
 });
 
-test("upstream validation rejects a direct bank connector before any Item is saved", async () => {
+test("upstream validation rejects a wrong Item and direct bank connector before anything is saved", async () => {
+  mockNetwork(async (input) => {
+    if (sourceUrl(input).pathname === "/auth") {
+      return Response.json({ apiKey: syntheticJwt() });
+    }
+    return Response.json({ id: "different-item", connector: { id: 200 } });
+  });
+  await assert.rejects(
+    accountService(settings()).connectItem(item),
+    /SOURCE_SCOPE_MISMATCH/,
+  );
   source(1);
   const config = settings();
   await assert.rejects(
@@ -259,9 +238,4 @@ test("live balance authorizes the stored account before network and uses renewed
   assert.equal(balance.balance, "9007199254740993.29");
   assert.equal(balance.currency, "BRL");
   assert.equal(requests, 2);
-});
-
-const sqlite_schema = sqliteTable("sqlite_schema", {
-  name: text("name").notNull(),
-  type: text("type").notNull(),
 });

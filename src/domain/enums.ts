@@ -16,6 +16,17 @@ export const Resource = {
 
 export type Resource = (typeof Resource)[keyof typeof Resource];
 
+export const EntityChange = {
+  new: "new",
+  changed: "changed",
+  unchanged: "unchanged",
+} as const;
+
+export const TagOrigin = {
+  derived: "derived",
+  manual: "manual",
+} as const;
+
 export const FaultCode = {
   ACCOUNTS_INCOMPLETE: "ACCOUNTS_INCOMPLETE",
   ACCOUNT_NOT_IN_SNAPSHOT: "ACCOUNT_NOT_IN_SNAPSHOT",
@@ -81,7 +92,8 @@ export const FaultCode = {
   QUERY_CACHED_ONLY: "QUERY_CACHED_ONLY",
   QUERY_LIMIT: "QUERY_LIMIT",
   REAL_CONNECTION_REQUIRED: "REAL_CONNECTION_REQUIRED",
-  RECORD_NOT_AUTHORIZED_OR_NOT_IN_SNAPSHOT: "RECORD_NOT_AUTHORIZED_OR_NOT_IN_SNAPSHOT",
+  RECORD_NOT_AUTHORIZED_OR_NOT_IN_SNAPSHOT:
+    "RECORD_NOT_AUTHORIZED_OR_NOT_IN_SNAPSHOT",
   RESOURCE_NOT_ALLOWED: "RESOURCE_NOT_ALLOWED",
   RESUME_ARGUMENT_CONFLICT: "RESUME_ARGUMENT_CONFLICT",
   RESUME_NOT_AUTHORIZED: "RESUME_NOT_AUTHORIZED",
@@ -126,14 +138,16 @@ export const TransactionType = {
   CREDIT: "CREDIT",
 } as const;
 
-export type TransactionType = (typeof TransactionType)[keyof typeof TransactionType];
+export type TransactionType =
+  (typeof TransactionType)[keyof typeof TransactionType];
 
 export const TransactionStatus = {
   POSTED: "POSTED",
   PENDING: "PENDING",
 } as const;
 
-export type TransactionStatus = (typeof TransactionStatus)[keyof typeof TransactionStatus];
+export type TransactionStatus =
+  (typeof TransactionStatus)[keyof typeof TransactionStatus];
 
 export const Availability = {
   available: "available",
@@ -149,6 +163,18 @@ export const Availability = {
 
 export type Availability = (typeof Availability)[keyof typeof Availability];
 
+export const CoverageStatus = {
+  available: "available",
+  empty: "empty",
+  partial: "partial",
+  unavailable: "unavailable",
+  not_authorized: "not_authorized",
+  unsupported: "unsupported",
+  not_enabled: "not_enabled",
+} as const;
+export type CoverageStatus =
+  (typeof CoverageStatus)[keyof typeof CoverageStatus];
+
 export const Classification = {
   unknown: "unknown",
   own_transfer: "own_transfer",
@@ -160,7 +186,8 @@ export const Classification = {
   consumption_evidence: "consumption_evidence",
 } as const;
 
-export type Classification = (typeof Classification)[keyof typeof Classification];
+export type Classification =
+  (typeof Classification)[keyof typeof Classification];
 
 export const RecurrenceClassification = {
   possible_subscription: "possible_subscription",
@@ -168,7 +195,8 @@ export const RecurrenceClassification = {
   recurring_payment: "recurring_payment",
 } as const;
 
-export type RecurrenceClassification = (typeof RecurrenceClassification)[keyof typeof RecurrenceClassification];
+export type RecurrenceClassification =
+  (typeof RecurrenceClassification)[keyof typeof RecurrenceClassification];
 
 export const Periodicity = {
   weekly: "weekly",
@@ -187,7 +215,8 @@ export const RecurrenceStrength = {
   strong: "strong",
 } as const;
 
-export type RecurrenceStrength = (typeof RecurrenceStrength)[keyof typeof RecurrenceStrength];
+export type RecurrenceStrength =
+  (typeof RecurrenceStrength)[keyof typeof RecurrenceStrength];
 
 export const PaymentMethod = {
   PIX: "PIX",
@@ -205,7 +234,8 @@ export const ProvenanceOrigin = {
   provider_via_pluggy: "provider_via_pluggy",
 } as const;
 
-export type ProvenanceOrigin = (typeof ProvenanceOrigin)[keyof typeof ProvenanceOrigin];
+export type ProvenanceOrigin =
+  (typeof ProvenanceOrigin)[keyof typeof ProvenanceOrigin];
 
 export const Product = {
   ACCOUNTS: "ACCOUNTS",

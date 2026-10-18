@@ -1,6 +1,6 @@
 # Identidade visual do Caderninho
 
-Direção aprovada pelo usuário: landing técnica escura, composição centrada, tipografia ampla e foco em apresentação e instalação. Esta é a referência para todas as telas próprias do produto: landing, conexão Pluggy, gestão e consentimento OAuth.
+Direção visual das telas próprias do produto: conexão Pluggy, gestão e consentimento OAuth.
 
 ## Produto e público
 
@@ -29,7 +29,7 @@ Títulos de uma cor. Sem palavra isolada em laranja, etiquetas em caixa alta ou 
 
 ## Composição
 
-Landing: largura máxima 1120 px, hero centrado, sequência de instalação e perguntas frequentes alinhadas à esquerda. A apresentação é estática e funciona sem JavaScript. Telas operacionais: largura máxima 850 px, formulários alinhados à esquerda. Margens móveis entre 18 e 24 px. Espaçamento cria hierarquia antes de bordas e fundos.
+Telas operacionais: largura máxima 850 px, formulários alinhados à esquerda. Margens móveis entre 18 e 24 px. Espaçamento cria hierarquia antes de bordas e fundos.
 
 Superfícies só para agrupar trabalho relacionado. Raios: 10 px nos grupos; 6 px nos controles; 4 px nos badges. Sem brilhos, gradientes, sombras decorativas, texturas, avatares fictícios ou grids de cards para preencher espaço. Numeração apenas para sequências reais.
 
@@ -37,7 +37,7 @@ Superfícies só para agrupar trabalho relacionado. Raios: 10 px nos grupos; 6 p
 
 - `src/web/design.tsx`: tokens, fonte e estilos compartilhados; incluir `DesignHead` uma vez no head e `data-mode="dark"` no HTML.
 - `src/web/ui.tsx`: adaptadores SSR dos componentes Kumo. Botão principal laranja com texto escuro; secundário sobre superfície escura. O adaptador usa a variante neutra Kumo para evitar o gradiente e o texto branco obrigatório da variante primary, mantendo suas semânticas e estados.
-- `src/web/portal-view.tsx`: shell operacional compartilhado. Landing mantém composição própria, usando os mesmos tokens e controles. O painel em `account.tsx` usa estado React e Kumo; `consent-view.tsx` exporta o formulário React renderizado no servidor. A landing é HTML estático pré-renderizado, sem bundle de navegador.
+- `src/web/portal-view.tsx`: shell operacional compartilhado. O painel em `src/web/account/account-view.tsx` usa React e Kumo; `src/web/consent-view.tsx` exporta o formulário React renderizado no servidor.
 - Fonte copiada para assets no build, CSP `font-src 'self'`; nenhum carregamento de fonte externa. Sem JavaScript para identidade visual.
 - Botões, inputs e summaries com alvos de pelo menos 44 px, preferencialmente 48 px. Foco visível, labels associados, estados disabled legíveis. Cor nunca é a única indicação.
 
@@ -53,16 +53,14 @@ Revisar desktop e celular, teclado, contraste, quebra de código/IDs e estado de
 
 Decisões de implementação e evidências ficam em `.localdocs`, ignorado pelo Git. Este `DESIGN.md` é o contrato visual solicitado explicitamente pelo usuário.
 
-## Apresentação e instalação
+## Telas da aplicação
 
-A landing apresenta o projeto pessoal, o caminho de instalação e os limites de privacidade.
-O CTA principal abre o formulário nativo da Cloudflare; a entrada da instância vai para `/account`. O README concentra a instalação; o guia de uso explica manutenção e recuperação.
+A instalação é documentada no README; o guia de uso explica manutenção e recuperação.
 Não inclui simuladores, reprodução automática, exemplos bancários interativos nem motor de
 regras no navegador. A lógica financeira continua no domínio e no Worker.
 
 A cor de ação usa o token `kumo-brand` (#f6821f) da biblioteca oficial Kumo.
 Preserve fonte local, foco visível e navegação por teclado em desktop e celular.
-O conteúdo público não consulta bancos nem representa status de infraestrutura.
 
 ## Playground da instância
 

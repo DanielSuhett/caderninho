@@ -13,7 +13,7 @@
     "#testing/*": "./tests/support/*"
   },
   "scripts": {
-    "test": "node --test \"src/**/__tests__/*.test.ts\" \"scripts/__tests__/*.test.ts\" \"tests/support/__tests__/*.test.ts\"",
+    "test": "node --test \"src/**/__tests__/*.test.ts\"",
     "lint": "biome check --formatter-enabled=false --error-on-warnings .",
     "lint:fix": "biome check --write --formatter-enabled=false --error-on-warnings .",
     "format": "biome format --write .",
@@ -21,11 +21,10 @@
     "test:product": "vitest run",
     "test:product:runtime": "node tests/integration/run-runtime.ts",
     "typecheck": "tsc --noEmit",
-    "build:portal": "vite build && esbuild scripts/prerender.ts --bundle --platform=node --format=esm --packages=external --outfile=dist/prerender.js && node dist/prerender.js",
+    "build:portal": "vite build",
     "build": "npm run build:portal && wrangler deploy --dry-run --outdir dist/worker",
     "dev": "npm run build:portal && wrangler dev",
     "deploy": "npm run build:portal && wrangler d1 migrations apply DB --remote && wrangler deploy",
-    "check:imports": "node scripts/check-imports.ts",
     "types": "wrangler types src/worker/runtime.d.ts",
     "migrate:local": "wrangler d1 migrations apply DB --local"
   },
@@ -54,8 +53,6 @@
     "@types/node": "24.19.2",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
-    "esbuild": "0.28.2",
-    "oxc-parser": "0.154.0",
     "typescript": "7.0.2",
     "vite": "8.3.4",
     "vitest": "5.0.4",

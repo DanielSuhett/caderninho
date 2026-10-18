@@ -37,7 +37,7 @@ export async function responseJson(response: Response) {
   return EnvelopeSchema.parse(await response.json());
 }
 export function required<T>(value: T): NonNullable<T> {
-  assert.ok(value !== null && value !== undefined, "expected a present value");
+  assert.ok(value != null, "expected a present value");
   return value;
 }
 export const sourceUrl = (input: Parameters<typeof fetch>[0]) =>

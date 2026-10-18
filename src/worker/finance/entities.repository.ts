@@ -1,11 +1,15 @@
 import { and, eq, sql } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 
-import type { Identity } from "#contracts/queries.ts";
+import type { Identity } from "#contracts/queries.types.ts";
 import type { projectEntity } from "#domain/entity.ts";
-import type { RecordChange } from "#domain/record-correction.ts";
-import type { Derived } from "#domain/rules/rules.ts";
-import type { ProviderRecord } from "#domain/schemas.ts";
+import { Resource, TagOrigin } from "#domain/enums.ts";
+import type { ProviderRecord } from "#domain/provider.types.ts";
+import {
+  CorrectionField,
+  type RecordChange,
+} from "#domain/record-correction.types.ts";
+import type { Derived } from "#domain/rules/rules.types.ts";
 import { database } from "#worker/database.ts";
 import {
   moneyKey,
@@ -67,7 +71,7 @@ export function derivedStatements(
           eq(tables.tags.resource, identity.resource),
           eq(tables.tags.parent_id, identity.parentId),
           eq(tables.tags.id, identity.id),
-          eq(tables.tags.origin, "derived"),
+          eq(tables.tags.origin, TagOrigin.derived),
         ),
       ),
   ];
@@ -80,7 +84,7 @@ export function derivedStatements(
         id: identity.id,
         key: tag,
         value: value,
-        origin: "derived",
+        origin: TagOrigin.derived,
       }),
     );
   }
@@ -217,7 +221,7 @@ function entityValues({
 export async function override(
   db: D1Database,
   i: Identity,
-  field: "category" | "description" | "ignored",
+  field: Exclude<CorrectionField, typeof CorrectionField.tag>,
   value: string | null,
 ) {
   await requireResource(db, i.itemId, i.resource);
@@ -229,7 +233,7 @@ export async function override(
   if (!exists) {
     throw new Error("NOT_FOUND");
   }
-  if (field === "category" && value !== null) {
+  if (field === CorrectionField.category && value !== null) {
     const category = await database(db)
       .select({
         id: tables.categories.id,
@@ -304,7 +308,7 @@ export async function correctRecord(
   change: RecordChange,
 ) {
   const a = { ...identity, ...change };
-  if (a.field === "tag") {
+  if (a.field === CorrectionField.tag) {
     await requireResource(db, a.itemId, a.resource);
     const key = a.key;
     const edit =
@@ -318,7 +322,7 @@ export async function correctRecord(
                 eq(tables.tags.parent_id, a.parentId),
                 eq(tables.tags.id, a.id),
                 eq(tables.tags.key, key),
-                eq(tables.tags.origin, "manual"),
+                eq(tables.tags.origin, TagOrigin.manual),
               ),
             )
         : database(db)
@@ -330,7 +334,7 @@ export async function correctRecord(
               id: a.id,
               key: key,
               value: a.value,
-              origin: "manual",
+              origin: TagOrigin.manual,
             })
             .onConflictDoUpdate({
               target: [
@@ -413,7 +417,7 @@ export async function authorizeAccount(
   db: D1Database,
   a: { itemId: string; accountId: string },
 ) {
-  await requireResource(db, a.itemId, "accounts");
+  await requireResource(db, a.itemId, Resource.accounts);
   if (
     !(await database(db)
       .select({ id: tables.entities.id })
@@ -421,7 +425,7 @@ export async function authorizeAccount(
       .where(
         and(
           eq(tables.entities.item_id, a.itemId),
-          eq(tables.entities.resource, "accounts"),
+          eq(tables.entities.resource, Resource.accounts),
           eq(tables.entities.id, a.accountId),
         ),
       )

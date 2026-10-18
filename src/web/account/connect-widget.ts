@@ -3,13 +3,7 @@ import type { PluggyConnect } from "pluggy-connect-sdk";
 import { PERSONAL_CONNECTOR_ID } from "#domain/connection-policy.ts";
 import { tryCatch } from "#shared/result.ts";
 
-interface WidgetRequest {
-  accessToken: string;
-  itemId: string | undefined;
-  onSuccess(itemId: string): void;
-  onError(): void;
-  onClose(): void;
-}
+import type { ConnectRequest, ConnectWidget } from "./account.types.ts";
 
 type Widget = Pick<PluggyConnect, "init" | "destroy">;
 type WidgetModule = {
@@ -22,7 +16,7 @@ type WidgetModule = {
 // cover an SDK import or initialization that resolves after disposal.
 export function createConnectWidget(
   load: () => Promise<WidgetModule> = () => import("pluggy-connect-sdk"),
-) {
+): ConnectWidget {
   let current: Widget | undefined;
   let generation = 0;
   let cleanup: Promise<void> = Promise.resolve();
@@ -36,12 +30,14 @@ export function createConnectWidget(
       }
     });
     // A failed teardown is reported to its caller without poisoning later opens.
-    cleanup = tryCatch(pending).then(() => {});
+    cleanup = tryCatch(pending).then(({ data, error }) =>
+      error ? undefined : data,
+    );
     await pending;
   };
   return {
     destroy,
-    async open(request: WidgetRequest) {
+    async open(request: ConnectRequest) {
       const closing = destroy();
       const version = generation;
       await closing;
@@ -58,7 +54,7 @@ export function createConnectWidget(
         connectorIds: [PERSONAL_CONNECTOR_ID],
         selectedConnectorId: PERSONAL_CONNECTOR_ID,
         language: "pt",
-        ...(request.itemId === undefined ? {} : { updateItem: request.itemId }),
+        ...(request.itemId !== undefined && { updateItem: request.itemId }),
         onSuccess: (result) => {
           if (version === generation) {
             request.onSuccess(result.item.id);
@@ -76,13 +72,13 @@ export function createConnectWidget(
         },
       });
       current = instance;
-      const initialized = await tryCatch(instance.init());
+      const { data: _data, error } = await tryCatch(() => instance.init());
       if (version !== generation) {
         return;
       }
-      if (initialized.error) {
+      if (error) {
         await destroy();
-        throw initialized.error;
+        throw error;
       }
     },
   };

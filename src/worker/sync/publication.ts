@@ -1,7 +1,8 @@
 import { and, eq, ne, sql } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 
-import type { Resource } from "#domain/enums.ts";
+import { OperationKind } from "#contracts/operation.types.ts";
+import { CoverageStatus, FaultCode, Resource } from "#domain/enums.ts";
 import { tryCatch } from "#shared/result.ts";
 import type { EntityPreparer } from "#worker/composition.ts";
 import { database, hash, required } from "#worker/database.ts";
@@ -124,7 +125,7 @@ export async function publishPage({
   }
   // Empty initial accounts still get a creation watermark fixed at operation
   // start. It is inclusive and only advanced after complete pagination.
-  if (resource === "transactions" && !maximum && !page.next) {
+  if (resource === Resource.transactions && !maximum && !page.next) {
     maximum = op.created_at;
   }
   if (!page.next) {
@@ -152,8 +153,10 @@ export async function publishPage({
   );
   if (
     !page.next &&
-    (input.kind === "reconcile" ||
-      !["transactions", "investment_transactions"].includes(resource))
+    (input.kind === OperationKind.reconcile ||
+      ![Resource.transactions, Resource.investment_transactions].some(
+        (candidate) => candidate === resource,
+      ))
   ) {
     edits.push(
       database(db)
@@ -237,7 +240,7 @@ async function fetchSourcePage(
 ) {
   const id = op.id;
   let connectorId: string | undefined;
-  if (resource === "connectors") {
+  if (resource === Resource.connectors) {
     const connection = required(
       await database(db)
         .select({ source: tables.entities.source })
@@ -245,7 +248,7 @@ async function fetchSourcePage(
         .where(
           and(
             eq(tables.entities.item_id, item.id),
-            eq(tables.entities.resource, "connections"),
+            eq(tables.entities.resource, Resource.connections),
           ),
         )
         .get()
@@ -256,7 +259,7 @@ async function fetchSourcePage(
     }
     connectorId = String(connection.connector.id);
   }
-  const fetched = await tryCatch(
+  const { data, error } = await tryCatch(() =>
     provider.page({
       resource: resource,
       item: item.id,
@@ -266,14 +269,14 @@ async function fetchSourcePage(
       connectorId: connectorId,
     }),
   );
-  if (fetched.error) {
+  if (error) {
     const code =
-      "code" in fetched.error ? String(fetched.error.code) : "UPSTREAM_ERROR";
-    let state = "partial";
-    if (code === "UPSTREAM_FORBIDDEN") {
-      state = "not_authorized";
-    } else if (code === "UPSTREAM_NOT_FOUND") {
-      state = "unavailable";
+      "code" in error ? String(error.code) : FaultCode.UPSTREAM_ERROR;
+    let state: CoverageStatus = CoverageStatus.partial;
+    if (code === FaultCode.UPSTREAM_FORBIDDEN) {
+      state = CoverageStatus.not_authorized;
+    } else if (code === FaultCode.UPSTREAM_NOT_FOUND) {
+      state = CoverageStatus.unavailable;
     }
     await database(db)
       .insert(tables.coverage)
@@ -292,7 +295,10 @@ async function fetchSourcePage(
         set: { status: sql`excluded.status` },
       })
       .run();
-    if (state === "not_authorized" || state === "unavailable") {
+    if (
+      state === CoverageStatus.not_authorized ||
+      state === CoverageStatus.unavailable
+    ) {
       await database(db)
         .update(tables.operations)
         .set({
@@ -302,9 +308,9 @@ async function fetchSourcePage(
         .run();
       return null;
     }
-    throw fetched.error;
+    throw error;
   }
-  return fetched.data;
+  return data;
 }
 
 async function preparePageRecords({
@@ -361,15 +367,9 @@ async function preparePageRecords({
       collected++;
     }
     edits.push(...prepared.statements);
-    if (prepared.state === "new") {
-      progress.new++;
-    } else if (prepared.state === "changed") {
-      progress.changed++;
-    } else {
-      progress.unchanged++;
-    }
+    progress[prepared.state]++;
     progress.classified += prepared.classified;
-    if (resource === "transactions") {
+    if (resource === Resource.transactions) {
       maximum = latestCreatedAt(maximum, record.createdAt);
     }
   }
@@ -434,7 +434,7 @@ async function assertPageContinuation(
       )
       .get())
   ) {
-    throw new Error("CURSOR_LOOP");
+    throw new Error(FaultCode.CURSOR_LOOP);
   }
 }
 
@@ -455,11 +455,11 @@ function coverageStatement(
     parentSignature: string | null;
   } & Pick<PublicationInput, "item" | "resource" | "parentId">,
 ) {
-  let coverageState = "empty";
+  let coverageState: CoverageStatus = CoverageStatus.empty;
   if (page.next) {
-    coverageState = "partial";
+    coverageState = CoverageStatus.partial;
   } else if (page.records.length || cp.page) {
-    coverageState = "available";
+    coverageState = CoverageStatus.available;
   }
   return database(db)
     .insert(tables.coverage)

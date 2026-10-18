@@ -1,42 +1,24 @@
 import { Engine } from "json-rules-engine";
 import { RE2JS } from "re2js";
-import { z } from "zod/v4";
 
+import { FaultCode } from "#domain/enums.ts";
 import { compareDecimal, day } from "#domain/exact.ts";
+import { fail } from "#domain/fault.ts";
+import type { FinanceRecord } from "#domain/finance.types.ts";
+import { accents, allowed, fields } from "#domain/rules/rule-fields.ts";
 import {
-  ActionSchema,
-  accents,
-  allowed,
-  CatalogSchema,
+  type Action,
+  Comparator,
   type Condition,
-  ConditionSchema,
   type Derived,
-  DerivedSchema,
-  fields,
   type Rule,
-  RuleSchema,
+  RuleAction,
+  RuleOperator,
+  RulePhase,
   type Rules,
-  RulesSchema,
   type TransactionContext,
-  TransactionContextSchema,
-} from "#domain/rules/rules-schema.ts";
-import type { FinanceRecord } from "#domain/schemas.ts";
-import type { JsonValue } from "#shared/json.ts";
-
-export {
-  ActionSchema,
-  CatalogSchema,
-  type Condition,
-  ConditionSchema,
-  type Derived,
-  DerivedSchema,
-  type Rule,
-  RuleSchema,
-  type Rules,
-  RulesSchema,
-  type TransactionContext,
-  TransactionContextSchema,
-};
+} from "#domain/rules/rules.types.ts";
+import type { JsonValue } from "#shared/json.types.ts";
 
 type Context = { tx: TransactionContext; result: Derived };
 
@@ -62,17 +44,17 @@ function lookup(c: Context, p: string): JsonValue {
 
 function compare(n: number, op: string) {
   switch (op) {
-    case "eq":
+    case Comparator.eq:
       return n === 0;
-    case "ne":
+    case Comparator.ne:
       return n !== 0;
-    case "gt":
+    case Comparator.gt:
       return n > 0;
-    case "gte":
+    case Comparator.gte:
       return n >= 0;
-    case "lt":
+    case Comparator.lt:
       return n < 0;
-    case "lte":
+    case Comparator.lte:
       return n <= 0;
     default:
       throw new Error(`Unknown comparator: ${op}`);
@@ -127,35 +109,48 @@ function engineCondition(c: Condition, priority = 1): EngineCondition {
   return { ...c, priority };
 }
 
-function operators(engine: Engine) {
+function decimalFact(value: JsonValue) {
+  if (typeof value !== "string") {
+    fail(FaultCode.INVALID_ARGUMENT);
+  }
+  return value;
+}
+
+function operators(engine: Engine, expressions: Map<string, RE2JS>) {
+  engine.addOperator(RuleOperator.regex, (x: JsonValue, pattern: string) => {
+    if (typeof x !== "string") {
+      return false;
+    }
+    let expression = expressions.get(pattern);
+    if (!expression) {
+      expression = RE2JS.compile(accents(pattern), RE2JS.CASE_INSENSITIVE);
+      expressions.set(pattern, expression);
+    }
+    return expression.matcher(accents(x)).find();
+  });
   engine.addOperator(
-    "regex",
-    (x: JsonValue, pattern: string) =>
-      typeof x === "string" &&
-      RE2JS.compile(accents(pattern), RE2JS.CASE_INSENSITIVE)
-        .matcher(accents(x))
-        .find(),
-  );
-  engine.addOperator(
-    "contains",
+    RuleOperator.contains,
     (x: JsonValue, values: string | JsonValue[]) =>
       typeof values === "string"
         ? typeof x === "string" && values.includes(x)
         : values.includes(x),
   );
   engine.addOperator(
-    "decimalCompare",
+    RuleOperator.decimalCompare,
     (x: JsonValue, v: { op: string; value: string }) =>
-      compare(compareDecimal(z.string().parse(x), v.value), v.op),
+      compare(compareDecimal(decimalFact(x), v.value), v.op),
   );
   engine.addOperator(
-    "decimalBetween",
-    (x: JsonValue, v: [string, string]) =>
-      compareDecimal(z.string().parse(x), v[0]) >= 0 &&
-      compareDecimal(z.string().parse(x), v[1]) <= 0,
+    RuleOperator.decimalBetween,
+    (x: JsonValue, v: [string, string]) => {
+      const amount = decimalFact(x);
+      return (
+        compareDecimal(amount, v[0]) >= 0 && compareDecimal(amount, v[1]) <= 0
+      );
+    },
   );
   engine.addOperator(
-    "dateCompare",
+    RuleOperator.dateCompare,
     (x: JsonValue, v: { op: string; value: string }) => {
       const d = day(x);
 
@@ -170,10 +165,6 @@ function operators(engine: Engine) {
       return compare(order, v.op);
     },
   );
-}
-
-export function compileRules(input: unknown) {
-  return compileValidatedRules(RulesSchema.parse(input));
 }
 
 export function compileValidatedRules(doc: Rules) {
@@ -236,6 +227,28 @@ export function compileValidatedRules(doc: Rules) {
     // Stable sort retains document order for equal public priorities.
     .sort((a, b) => a.priority - b.priority);
 
+  const phases = [RulePhase.classify, RulePhase.enrich].map((phase) => {
+    const active = rules.filter(
+      (rule) => rule.is_active && rule.event.type === phase,
+    );
+    const facts = new Set(fields);
+    return {
+      phase,
+      facts,
+      rules: active.map((rule, index) => {
+        collectFacts(rule.conditions, facts);
+        return {
+          id: rule.id,
+          conditions: { all: [engineCondition(rule.conditions)] },
+          event: rule.event,
+          priority: active.length - index,
+        };
+      }),
+    };
+  });
+  // The validated document bounds this cache; no transaction state is shared.
+  const expressions = new Map<string, RE2JS>();
+
   async function evaluate(tx: TransactionContext): Promise<Derived> {
     const result: Derived = {
       category_id: "",
@@ -247,6 +260,7 @@ export function compileValidatedRules(doc: Rules) {
       ignored: false,
       evidence: [],
     };
+    const context = { tx, result };
 
     function setCategory(id: string) {
       const cat = cats.get(id);
@@ -277,34 +291,32 @@ export function compileValidatedRules(doc: Rules) {
 
     const applied = { category: false, description: false };
 
-    for (const phase of ["classify", "enrich"]) {
+    for (const stage of phases) {
+      if (!stage.rules.length) {
+        continue;
+      }
       const engine = new Engine();
-      operators(engine);
+      operators(engine, expressions);
 
-      for (const field of fields) {
-        engine.addFact(field, () => lookup({ tx, result }, field), {
+      for (const field of stage.facts) {
+        engine.addFact(field, () => lookup(context, field), {
           cache: false,
         });
       }
 
-      const ordered = rules.filter(
-        (rule) => rule.is_active && rule.event.type === phase,
-      );
-
-      for (const [index, rule] of ordered.entries()) {
-        tagFacts(engine, rule.conditions, { tx, result });
+      for (const rule of stage.rules) {
         engine.addRule({
-          conditions: { all: [engineCondition(rule.conditions)] },
+          conditions: rule.conditions,
           event: rule.event,
-          priority: ordered.length - index,
+          priority: rule.priority,
           onSuccess: () => {
             for (const action of rule.event.params.actions) {
-              if (applyAction(action, { tx, result }, applied, setCategory)) {
+              if (applyAction(action, context, applied, setCategory)) {
                 result.evidence.push({ ruleId: rule.id, action });
               }
             }
 
-            if (phase === "classify" && applied.category) {
+            if (stage.phase === RulePhase.classify && applied.category) {
               engine.stop();
             }
           },
@@ -321,12 +333,12 @@ export function compileValidatedRules(doc: Rules) {
 }
 
 function applyAction(
-  action: z.infer<typeof ActionSchema>,
+  action: Action,
   context: Context,
   applied: { category: boolean; description: boolean },
   setCategory: (id: string) => void,
 ): boolean {
-  if (action.op === "set_category") {
+  if (action.op === RuleAction.set_category) {
     if (applied.category) {
       return false;
     }
@@ -334,7 +346,7 @@ function applyAction(
     applied.category = true;
   }
 
-  if (action.op === "set_description") {
+  if (action.op === RuleAction.set_description) {
     if (applied.description) {
       return false;
     }
@@ -346,7 +358,7 @@ function applyAction(
     applied.description = true;
   }
 
-  if (action.op === "set_tag") {
+  if (action.op === RuleAction.set_tag) {
     if (Object.hasOwn(context.result.tags, action.key)) {
       return false;
     }
@@ -358,7 +370,7 @@ function applyAction(
     });
   }
 
-  if (action.op === "ignore") {
+  if (action.op === RuleAction.ignore) {
     context.result.ignored = true;
   }
   return true;
@@ -385,15 +397,18 @@ function validateRuleActions(
   cats: Map<string, Rules["categories"][number]>,
 ) {
   for (const a of r.event.params.actions) {
-    if ((a.op === "set_category") !== (r.event.type === "classify")) {
+    if (
+      (a.op === RuleAction.set_category) !==
+      (r.event.type === RulePhase.classify)
+    ) {
       throw new Error(`Invalid phase: ${r.id}`);
     }
 
-    if (a.op === "set_category" && !cats.has(a.value)) {
+    if (a.op === RuleAction.set_category && !cats.has(a.value)) {
       throw new Error(`Unknown category: ${r.id}`);
     }
 
-    if (a.op === "set_description") {
+    if (a.op === RuleAction.set_description) {
       for (const m of a.value.matchAll(/\{\{\s*([^}]+?)\s*\}\}/g)) {
         const field = m[1];
 
@@ -405,28 +420,22 @@ function validateRuleActions(
   }
 }
 
-function tagFacts(
-  engine: Engine,
-  condition: Condition,
-  context: Context,
-): void {
+function collectFacts(condition: Condition, facts: Set<string>): void {
   if ("fact" in condition && !fields.has(condition.fact)) {
-    engine.addFact(condition.fact, () => lookup(context, condition.fact), {
-      cache: false,
-    });
+    facts.add(condition.fact);
   }
   if ("all" in condition) {
     for (const child of condition.all) {
-      tagFacts(engine, child, context);
+      collectFacts(child, facts);
     }
   }
   if ("any" in condition) {
     for (const child of condition.any) {
-      tagFacts(engine, child, context);
+      collectFacts(child, facts);
     }
   }
   if ("not" in condition) {
-    tagFacts(engine, condition.not, context);
+    collectFacts(condition.not, facts);
   }
 }
 

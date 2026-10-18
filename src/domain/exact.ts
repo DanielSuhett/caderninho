@@ -3,8 +3,9 @@ import { parse } from "lossless-json";
 import { z } from "zod/v4";
 
 import { FaultCode } from "#domain/enums.ts";
-import { fail, parseDomain } from "#domain/fault.ts";
-import type { MoneyInput } from "#domain/schemas.ts";
+import { fail } from "#domain/fault.ts";
+import type { MoneyInput } from "#domain/finance.types.ts";
+import { parseDomain } from "#domain/validation.ts";
 import { JsonValueSchema } from "#shared/json.ts";
 
 export { fail };
@@ -23,7 +24,7 @@ export function exactJSON(text: string) {
 }
 
 export function decimal(value: MoneyInput) {
-  if (value === null || value === undefined) {
+  if (value == null) {
     return null;
   }
   const s = String(value);
@@ -41,7 +42,7 @@ export function decimal(value: MoneyInput) {
 }
 
 export function minor(value: MoneyInput, currency: string) {
-  if (value === undefined || value === null) {
+  if (value == null) {
     return null;
   }
 

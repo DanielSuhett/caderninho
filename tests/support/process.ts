@@ -20,40 +20,36 @@ export function spawnManaged(args: string[], options: SpawnOptions = {}) {
     });
   });
   // Observe rejection immediately, even while the caller polls readiness.
-  const outcome = tryCatch(finished);
+  const completion = tryCatch(finished);
   let stopping: Promise<void> | undefined;
   async function kill(signal: NodeJS.Signals) {
     const pid = child.pid;
     if (!pid) {
       return;
     }
-    const result = await tryCatch(
-      Promise.resolve().then(() => {
-        if (process.platform === "win32") {
-          child.kill(signal);
-        } else {
-          process.kill(-pid, signal);
-        }
-      }),
-    );
-    if (
-      result.error &&
-      !("code" in result.error && result.error.code === "ESRCH")
-    ) {
-      throw result.error;
+    const { data: _data, error } = await tryCatch(() => {
+      if (process.platform === "win32") {
+        child.kill(signal);
+      } else {
+        process.kill(-pid, signal);
+      }
+    });
+    if (error && !("code" in error && error.code === "ESRCH")) {
+      throw error;
     }
   }
   async function shutdown() {
     await kill("SIGTERM");
     const timer = setTimeout(() => {
-      void tryCatch(kill("SIGKILL")).then((result) => {
-        if (result.error) {
-          console.error(result.error.message);
+      void tryCatch(() => kill("SIGKILL")).then(({ data: _data, error }) => {
+        if (error) {
+          console.error(error.message);
         }
       });
     }, 3000);
     try {
-      await outcome;
+      const { data, error } = await completion;
+      return error ? undefined : data;
     } finally {
       clearTimeout(timer);
       await kill("SIGKILL");
@@ -67,9 +63,9 @@ export function spawnManaged(args: string[], options: SpawnOptions = {}) {
   }
   function onSignal(code: number) {
     process.exitCode = code;
-    void tryCatch(stop()).then((result) => {
-      if (result.error) {
-        console.error(result.error.message);
+    void tryCatch(stop).then(({ data: _data, error }) => {
+      if (error) {
+        console.error(error.message);
       }
     });
   }
@@ -77,7 +73,7 @@ export function spawnManaged(args: string[], options: SpawnOptions = {}) {
   const interrupt = () => onSignal(130);
   process.once("SIGTERM", terminate);
   process.once("SIGINT", interrupt);
-  void outcome.then(() => {
+  void completion.then(({ data: _data, error: _error }) => {
     process.off("SIGTERM", terminate);
     process.off("SIGINT", interrupt);
   });
@@ -85,10 +81,11 @@ export function spawnManaged(args: string[], options: SpawnOptions = {}) {
     child,
     stop,
     async wait() {
-      const result = await outcome;
-      if (result.error) {
-        throw result.error;
+      const { data, error } = await completion;
+      if (error) {
+        throw error;
       }
+      return data;
     },
   };
 }

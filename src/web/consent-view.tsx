@@ -1,21 +1,12 @@
-import { z } from "zod/v4";
-
+import type { ConsentDetails } from "#web/consent.types.ts";
 import { Portal } from "#web/portal-view.tsx";
 import { UiButton } from "#web/ui.tsx";
-
-export const ConsentDetailsSchema = z.object({
-  clientName: z.string(),
-  clientDomain: z.string().nullish(),
-  redirectHost: z.string(),
-  redirectIsLoopback: z.boolean(),
-  scope: z.array(z.string()),
-});
 
 export function Consent({
   details,
   handle,
 }: {
-  details: z.infer<typeof ConsentDetailsSchema>;
+  details: ConsentDetails;
   handle: string;
 }) {
   return (
@@ -57,10 +48,7 @@ export function Consent({
   );
 }
 
-export function consentPage(
-  details: z.infer<typeof ConsentDetailsSchema>,
-  handle: string,
-) {
+export function consentPage(details: ConsentDetails, handle: string) {
   return (
     <Portal>
       <Consent

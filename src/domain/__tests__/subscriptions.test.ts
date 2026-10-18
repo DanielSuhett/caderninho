@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import type { FinanceRecord } from "#domain/finance.types.ts";
 import { normalizeResource } from "#domain/finance-model.ts";
-import type { FinanceRecord } from "#domain/schemas.ts";
 import { detectSubscriptions } from "#domain/subscriptions.ts";
-import type { JsonValue } from "#shared/json.ts";
+import type { JsonValue } from "#shared/json.types.ts";
 import { required } from "#testing/helpers.ts";
 
 const period = { from: "2026-07-01", to: "2026-09-30", currency: "BRL" };
@@ -15,7 +15,7 @@ function tx(
   amount: string | null = "10.00",
   extra: Record<string, JsonValue> & { accountId?: string } = {},
 ) {
-  const accountId = extra.accountId ?? "card-synthetic";
+  const accountId: string = extra.accountId ?? "card-synthetic";
 
   return normalizeResource(
     "transactions",

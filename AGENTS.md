@@ -2,8 +2,11 @@
 
 ## Como escrever código
 
-- Prefira TypeScript ESM estrito, tipos inferidos de schemas Zod (`z.infer`) e
-  tabelas/projeções Drizzle. Sem `any`, casts para convencer o compilador,
+- Prefira TypeScript ESM estrito e modelos reutilizáveis em arquivos `.types.ts`,
+  com interfaces e uniões independentes de Zod. Mantenha schemas nas fronteiras
+  que validam entradas em runtime, compatíveis com os tipos via `satisfies`.
+  Use tipos inferidos de tabelas/projeções Drizzle. Sem `any`, casts para convencer
+  o compilador,
   non-null assertions ou supressões; `as const` é permitido.
 - Valide entradas externas com Zod na fronteira. Confie nos contratos internos e
   nas escritas controladas; não repita parses, `typeof` ou guardas estruturais em
@@ -11,11 +14,32 @@
 - Use entradas nomeadas, campos conhecidos e early returns. Toda cláusula tem
   chaves. Evite ternários aninhados, regras de negócio e extração dinâmica inline.
   Trate ausências reais; omita opcionais ausentes em vez de passar `undefined`.
+- Use truthiness para objetos opcionais, flags e coleções vazias. Use `!!` quando
+  o resultado precisa ser booleano e `condição && { campos }` em spreads opcionais.
+  Preserve `0`, `false` e `""` válidos: para ausência, use `== null`, `??` ou a
+  comparação explícita com o sentinel definido pelo contrato.
+- Prefira enums para conjuntos fechados de valores do produto. Siga o padrão
+  existente de objetos `as const` e uniões derivadas, compatível com TypeScript
+  executável no Node. Reutilize-os em schemas, tipos e consumidores; mantenha
+  nomes de propriedades, textos livres e valores abertos de terceiros como strings.
 - Mantenha funções relacionadas próximas. Extraia para isolar I/O, políticas ou
   repetição relevante; não crie um helper por booleano, camadas genéricas ou DI
   container. Remova código substituído e abstrações sem uso.
-- Recupere falhas assíncronas com `tryCatch` e seu `Result` discriminado;
-  normalize valores capturados para `Error`. Catches síncronos de parse são válidos.
+- Use Strategy com funções quando variantes compartilham um contrato e tabelas
+  para correspondências fixas. Use `Record` completo para enums e `Map` para
+  chaves abertas. Explicite a prioridade de decisões concorrentes; mantenha
+  `switch` quando ele preserva o narrowing de uma união discriminada.
+- É obrigatório usar `tryCatch` para tratar falhas assíncronas. Desestruture sempre
+  as propriedades `{ data, error }`; use `error` como discriminante antes de
+  consumir `data`. Aliases são permitidos para colisões de escopo e campos sem uso
+  (`data: _data`), preservando o lint. Passe a operação como função para capturar
+  também lançamentos síncronos; promises já criadas podem entrar diretamente.
+  Await direto propaga ao chamador; recuperações ficam na fronteira responsável.
+  Normalize falhas para `Error`. Catches síncronos de parse e `try/finally` para
+  liberar recursos são válidos. Documente recuperações best effort.
+- Meça gargalos com dados sintéticos antes de otimizar loops. Agrupe leituras
+  independentes e reutilize trabalho estático; `Promise.all` não paraleliza CPU
+  JavaScript. Preserve limites de concorrência, ordem dos steps e batches atômicos.
 
 ## Limites do projeto
 
@@ -39,8 +63,9 @@
 3. Faça mudanças pequenas e verificáveis. Durante a edição, execute
    `mise run check:quick`; mantenha testes de comportamento relevantes.
 4. Use `mise run lint:fix` e `mise run format`; revise o diff e garanta convergência.
-   Biome cuida de lint, layout e imports. Prefira regras nativas, documente lacunas
-   e corrija a causa dos diagnósticos; não desative regras nem use `--unsafe` global.
+   Biome cuida de lint, layout e imports. Use regras nativas, documente lacunas
+   e corrija a causa dos diagnósticos; não crie plugins próprios para reproduzir
+   regras indisponíveis, desative regras ou use `--unsafe` global.
 5. Antes de entregar código, execute `mise run check`. Informe o que passou e
    qualquer pendência. Testes locais e build dry-run não comprovam deploy ou OAuth
    real. Mudanças só de documentação dispensam repetir a suíte.

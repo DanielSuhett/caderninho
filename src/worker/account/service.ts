@@ -1,51 +1,44 @@
-import type { InstallationChecks } from "#contracts/portal-contract.ts";
-import type { WizardState } from "#contracts/wizard-contract.ts";
+import { OperationPhase, OperationStatus } from "#contracts/operation.types.ts";
+import type { InstallationChecks } from "#contracts/portal.types.ts";
+import { type WizardState, WizardSyncState } from "#contracts/wizard.types.ts";
 import {
   isPersonalConnector,
   MAX_PERSONAL_CONNECTIONS,
 } from "#domain/connection-policy.ts";
-import type { Credentials } from "#domain/pluggy-credentials.ts";
+import type { AccountSource } from "#worker/account/account.types.ts";
 import type {
   createAccountRepository,
   readPortalStatus,
 } from "#worker/account/repository.ts";
-
-export interface ConnectionSource {
-  readItem(
-    credentials: Credentials,
-    itemId: string,
-  ): Promise<{ id: string; connector?: { id: number | string } }>;
-}
 
 export function wizardState(
   evidence: Awaited<ReturnType<typeof readPortalStatus>>,
   configured: boolean,
 ): WizardState {
   const { config, latest, items, coverage } = evidence;
-  let sync: WizardState["sync"] = "waiting";
-  if (latest?.phase === "error" || latest?.status === "failed") {
-    sync = "error";
+  const connected = !!items.length;
+  let sync: WizardState["sync"] = WizardSyncState.waiting;
+  if (
+    latest?.phase === OperationPhase.error ||
+    latest?.status === OperationStatus.failed
+  ) {
+    sync = WizardSyncState.error;
   } else if (latest) {
     sync = latest.status;
   }
   return {
     credentials: configured,
-    connected: items.length > 0,
+    connected,
     sync,
     coverage: { total: coverage.total, complete: coverage.complete ?? 0 },
-    paused: config.sync_enabled === 0 && items.length > 0,
+    paused: config.sync_enabled === 0 && connected,
   };
 }
 
 interface AccountDependencies {
   repository: ReturnType<typeof createAccountRepository>;
-  source: ConnectionSource;
-  configured(): boolean;
-  credentials(): Promise<Credentials>;
-  connectToken(
-    credentials: Credentials,
-    itemId?: string,
-  ): Promise<{ accessToken: string }>;
+  source: AccountSource;
+  disconnectAssistants(): Promise<void>;
   installation(): Promise<InstallationChecks>;
   now(): Date;
 }
@@ -58,7 +51,7 @@ export function createAccountService(deps: AccountDependencies) {
         deps.installation(),
       ]);
       return {
-        status: wizardState(evidence, deps.configured()),
+        status: wizardState(evidence, deps.source.configured),
         checks,
         items: evidence.items,
         latest: evidence.latest,
@@ -66,24 +59,24 @@ export function createAccountService(deps: AccountDependencies) {
       };
     },
     async wizardState() {
-      return wizardState(await deps.repository.status(), deps.configured());
+      return wizardState(
+        await deps.repository.status(),
+        deps.source.configured,
+      );
     },
     async connectItem(itemId: string) {
-      const credentials = await deps.credentials();
+      const application = await deps.source.application();
       const access = await deps.repository.connection.itemAccess(itemId);
       if (access.count >= MAX_PERSONAL_CONNECTIONS && !access.exists) {
         throw new Error("ITEM_LIMIT");
       }
-      const item = await deps.source.readItem(credentials, itemId);
+      const item = await application.readItem(itemId);
       if (!isPersonalConnector(item.connector?.id)) {
         throw new Error("MEU_PLUGGY_REQUIRED");
       }
-      if (item.id !== itemId) {
-        throw new Error("SOURCE_SCOPE_MISMATCH");
-      }
       await deps.repository.connection.connect(
         itemId,
-        credentials.clientId,
+        application.clientId,
         deps.now().toISOString(),
       );
     },
@@ -91,13 +84,14 @@ export function createAccountService(deps: AccountDependencies) {
       if (itemId) {
         await deps.repository.authorizeItems([itemId]);
       }
-      return deps.connectToken(await deps.credentials(), itemId);
+      return (await deps.source.application()).token(itemId);
     },
     pause: () => deps.repository.pause(),
     async resume() {
-      await deps.credentials();
+      await deps.source.application();
       await deps.repository.resume(deps.now().toISOString());
     },
     requestSync: () => deps.repository.requestSync(deps.now()),
+    disconnectAssistants: () => deps.disconnectAssistants(),
   };
 }

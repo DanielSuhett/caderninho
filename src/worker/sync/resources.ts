@@ -1,7 +1,17 @@
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 
-import type { OperationInput } from "#contracts/operation.ts";
-import type { Resource } from "#domain/enums.ts";
+import {
+  type OperationInput,
+  OperationKind,
+  OperationPhase,
+  OperationStatus,
+} from "#contracts/operation.types.ts";
+import {
+  AccountType,
+  CoverageStatus,
+  Resource,
+  TransactionStatus,
+} from "#domain/enums.ts";
 import { DEFINITIONS } from "#domain/finance-model.ts";
 import { itemInfo, productState } from "#domain/provider-state.ts";
 import type { EntityPreparer } from "#worker/composition.ts";
@@ -16,19 +26,19 @@ import { finish, stillWorking } from "#worker/sync/repository.ts";
 import type { FinancialSource, Steps } from "#worker/sync/service.ts";
 
 const resourceOrder: Resource[] = [
-  "connections",
-  "consents",
-  "resources",
-  "connectors",
-  "categories",
-  "accounts",
-  "investments",
-  "loans",
-  "identity",
-  "transactions",
-  "bills",
-  "investment_transactions",
-  "statements",
+  Resource.connections,
+  Resource.consents,
+  Resource.resources,
+  Resource.connectors,
+  Resource.categories,
+  Resource.accounts,
+  Resource.investments,
+  Resource.loans,
+  Resource.identity,
+  Resource.transactions,
+  Resource.bills,
+  Resource.investment_transactions,
+  Resource.statements,
 ];
 type ResourceSyncInput = {
   db: D1Database;
@@ -119,14 +129,18 @@ async function synchronizeItemResource(
         .all()
     : [null];
   for (const parent of parents) {
-    if (resource === "bills" && parent && parent.normalized.type !== "CREDIT") {
+    if (
+      resource === Resource.bills &&
+      parent &&
+      parent.normalized.type !== AccountType.CREDIT
+    ) {
       continue;
     }
     const parentId = parent?.id ?? "";
     // Revisit investment movements only for a changed/new parent or reconciliation.
     if (
-      resource === "investment_transactions" &&
-      input.kind === "sync" &&
+      resource === Resource.investment_transactions &&
+      input.kind === OperationKind.sync &&
       (await investmentParentUnchanged(db, {
         itemId: item.id,
         parentId,
@@ -152,14 +166,14 @@ async function synchronizeItemResource(
           )
           .get()) ?? null;
       const floor =
-        resource === "transactions" &&
-        input.kind === "sync" &&
+        resource === Resource.transactions &&
+        input.kind === OperationKind.sync &&
         coverage?.bootstrap_complete
           ? coverage.confirmed_created_at
           : null;
       if (
-        resource === "transactions" &&
-        input.kind === "sync" &&
+        resource === Resource.transactions &&
+        input.kind === OperationKind.sync &&
         coverage?.bootstrap_complete &&
         !floor
       ) {
@@ -171,7 +185,7 @@ async function synchronizeItemResource(
           item_id: item.id,
           resource: resource,
           parent_id: parentId,
-          status: "partial",
+          status: CoverageStatus.partial,
         })
         .onConflictDoUpdate({
           target: [
@@ -179,7 +193,7 @@ async function synchronizeItemResource(
             tables.coverage.resource,
             tables.coverage.parent_id,
           ],
-          set: { status: "partial" },
+          set: { status: CoverageStatus.partial },
         })
         .run();
       await database(db)
@@ -194,7 +208,7 @@ async function synchronizeItemResource(
         })
         .onConflictDoNothing()
         .run();
-      return { phase: "checkpoint" };
+      return { phase: OperationPhase.checkpoint };
     });
     for (let pageIndex = 0; ; pageIndex++) {
       const name = `page-${item.id}-${resource}-${parentId}-${pageIndex}`;
@@ -213,7 +227,7 @@ async function synchronizeItemResource(
         });
       });
       if (result.cancelled) {
-        await finish(db, op, "cancelled");
+        await finish(db, op, OperationStatus.cancelled);
         return true;
       }
       if (result.done) {
@@ -240,13 +254,13 @@ async function investmentParentUnchanged(
     .where(
       and(
         eq(tables.coverage.item_id, itemId),
-        eq(tables.coverage.resource, "investment_transactions"),
+        eq(tables.coverage.resource, Resource.investment_transactions),
         eq(tables.coverage.parent_id, parentId),
         eq(tables.coverage.bootstrap_complete, 1),
       ),
     )
     .get();
-  return previous !== undefined && previous.parent_signature === signature;
+  return previous?.parent_signature === signature;
 }
 
 async function recordUnavailableResource(
@@ -255,7 +269,7 @@ async function recordUnavailableResource(
   resource: Resource,
   step: Steps,
 ) {
-  if (resource === "connections") {
+  if (resource === Resource.connections) {
     return false;
   }
   const source = await database(db)
@@ -264,7 +278,7 @@ async function recordUnavailableResource(
     .where(
       and(
         eq(tables.entities.item_id, itemId),
-        eq(tables.entities.resource, "connections"),
+        eq(tables.entities.resource, Resource.connections),
       ),
     )
     .get()
@@ -279,7 +293,7 @@ async function recordUnavailableResource(
     .where(
       and(
         eq(tables.entities.item_id, itemId),
-        eq(tables.entities.resource, "consents"),
+        eq(tables.entities.resource, Resource.consents),
         eq(tables.entities.deleted, 0),
       ),
     )
@@ -349,15 +363,15 @@ async function resolvePendingTransactions(
                 tables.entities.item_id,
                 items.map((x) => x.id),
               ),
-              eq(tables.entities.resource, "transactions"),
-              eq(tables.entities.status, "PENDING"),
+              eq(tables.entities.resource, Resource.transactions),
+              eq(tables.entities.status, TransactionStatus.PENDING),
               eq(tables.entities.deleted, 0),
             ),
           ),
       )
       .onConflictDoNothing()
       .run();
-    return { phase: "pending-selected" };
+    return { phase: OperationPhase.pending_selected };
   });
   for (let batch = 0; ; batch++) {
     const outcome = await step.do(`pending-${batch}`, async () => {
@@ -442,7 +456,7 @@ async function resolvePendingTransactions(
       return { done: false, cancelled: false };
     });
     if (outcome.cancelled) {
-      await finish(db, op, "cancelled");
+      await finish(db, op, OperationStatus.cancelled);
       return true;
     }
     if (outcome.done) {

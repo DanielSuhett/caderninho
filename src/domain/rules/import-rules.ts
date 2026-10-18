@@ -5,24 +5,36 @@ import {
   convertValidatedRules,
   LegacyRulesSchema,
 } from "#domain/rules/convert-rules.ts";
+import type {
+  SecuroCondition,
+  SecuroPackage,
+  SecuroRule,
+} from "#domain/rules/rule-import.types.ts";
+import { compileValidatedRules } from "#domain/rules/rules.ts";
+import {
+  Comparator,
+  RuleAction,
+  type Condition as RuleCondition,
+  type RuleImportReport,
+  RuleOperator,
+  RulePhase,
+  type Rules,
+} from "#domain/rules/rules.types.ts";
 import {
   compileRules,
-  compileValidatedRules,
-  type Condition as RuleCondition,
   RuleSchema,
-  type Rules,
   RulesSchema,
-} from "#domain/rules/rules.ts";
-import type { RuleImportReport } from "#domain/rules/rules-schema.ts";
-import { type JsonValue, JsonValueSchema } from "#shared/json.ts";
+} from "#domain/rules/rules-schema.ts";
+import { JsonValueSchema } from "#shared/json.ts";
+import type { JsonValue } from "#shared/json.types.ts";
 
-const Condition = z
+const SecuroConditionSchema: z.ZodType<SecuroCondition> = z
   .object({
     op: z.string(),
     field: z.string().optional(),
     value: JsonValueSchema.optional(),
     get conditions() {
-      return z.array(Condition).optional();
+      return z.array(SecuroConditionSchema).optional();
     },
   })
   .strict();
@@ -37,7 +49,7 @@ const Package = z
           id: z.string().optional(),
           name: z.string(),
           conditions_op: z.enum(["and", "or"]),
-          conditions: z.array(Condition).min(1),
+          conditions: z.array(SecuroConditionSchema).min(1),
           actions: z.array(
             z
               .object({
@@ -53,7 +65,7 @@ const Package = z
         .strict(),
     ),
   })
-  .strict();
+  .strict() satisfies z.ZodType<SecuroPackage>;
 
 const fieldMap: Record<string, string> = {
   description: "tx.description",
@@ -174,7 +186,7 @@ function literal(
 }
 
 function condition(
-  c: z.infer<typeof Condition>,
+  c: SecuroCondition,
   path: string,
   issues: ConversionIssue[],
 ): RuleCondition {
@@ -198,10 +210,13 @@ function condition(
     return equality(field, c.value, path, issues);
   }
 
-  if (c.op === "gte" || c.op === "lte") {
+  if (c.op === Comparator.gte || c.op === Comparator.lte) {
     return {
       fact: field,
-      operator: field === "tx.date" ? "dateCompare" : "decimalCompare",
+      operator:
+        field === "tx.date"
+          ? RuleOperator.dateCompare
+          : RuleOperator.decimalCompare,
       value: { op: c.op, value: literal(c.value, path, issues) },
     };
   }
@@ -209,7 +224,7 @@ function condition(
   if (c.op === "regex") {
     return {
       fact: field,
-      operator: "regex",
+      operator: RuleOperator.regex,
       value: literal(c.value, path, issues),
     };
   }
@@ -222,7 +237,7 @@ function condition(
 
     return {
       fact: field,
-      operator: "regex",
+      operator: RuleOperator.regex,
       value: (c.op === "starts_with" ? "^" : "") + text,
     };
   }
@@ -241,8 +256,8 @@ function equality(
   if (field === "tx.amount") {
     return {
       fact: field,
-      operator: "decimalCompare",
-      value: { op: "eq", value: literal(input, path, issues) },
+      operator: RuleOperator.decimalCompare,
+      value: { op: Comparator.eq, value: literal(input, path, issues) },
     };
   }
 
@@ -251,7 +266,7 @@ function equality(
     .safeParse(input ?? null);
 
   if (value.success) {
-    return { fact: field, operator: "equal", value: value.data };
+    return { fact: field, operator: RuleOperator.equal, value: value.data };
   }
   issues.push({
     path,
@@ -263,7 +278,7 @@ function equality(
 }
 
 function groupCondition(
-  c: z.infer<typeof Condition>,
+  c: SecuroCondition,
   path: string,
   issues: ConversionIssue[],
 ): RuleCondition {
@@ -284,10 +299,7 @@ function groupCondition(
   return c.op === "and" ? { all: children } : { any: children };
 }
 
-function convertPackageRules(
-  source: z.infer<typeof Package>["rules"],
-  issues: ConversionIssue[],
-) {
+function convertPackageRules(source: SecuroRule[], issues: ConversionIssue[]) {
   const rules: Rules["rules"] = [];
   for (const [index, r] of source.entries()) {
     const children = r.conditions.map((c, i) =>
@@ -297,11 +309,11 @@ function convertPackageRules(
     const conditions =
       r.conditions_op === "and" ? { all: children } : { any: children };
 
-    for (const stage of ["classify", "enrich"] as const) {
+    for (const stage of [RulePhase.classify, RulePhase.enrich] as const) {
       const actions = r.actions.filter((a) =>
-        stage === "classify"
-          ? a.op === "set_category"
-          : a.op !== "set_category",
+        stage === RulePhase.classify
+          ? a.op === RuleAction.set_category
+          : a.op !== RuleAction.set_category,
       );
 
       if (!actions.length) {

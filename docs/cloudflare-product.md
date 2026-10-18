@@ -156,18 +156,9 @@ as operações vinculadas ao formato antigo antes da troca de runtime.
 na importação, literais `value` são texto exato e prioridades/versões continuam
 números inteiros seguros. O leitor limitado do SDK atende MCP e importações.
 
-```sh
-# Local, sem acesso à rede ou ativação:
-node scripts/import-rules.ts --file /private/rules.json --catalog /private/catalog.json
-# Converter v1 para um novo arquivo privado, sem sobrescrever ou ativar:
-node scripts/import-rules.ts --file /private/rules-v1.json --output /private/rules-v2.json
-# Somente após relatório e ativação solicitada; token em CADERNINHO_TOKEN:
-node scripts/import-rules.ts --file /private/rules.json --catalog /private/catalog.json --endpoint https://finance.example.com --activate
-```
-
 `/mcp/rules/import` é autenticado, aceita dry-run/save/activate, limita 1 MiB e usa a
-mesma validação de domínio. Arquivos locais são lidos somente pelo script; o Worker
-recebe o documento enviado explicitamente ao endpoint autenticado.
+mesma validação de domínio. O Worker recebe o documento enviado explicitamente ao
+endpoint autenticado.
 
 Preview recebe os mesmos itemIds e filtro da reaplicação e mostra quantidade selecionada exata e amostra de diferenças derivadas,
 não a quantidade total de registros que mudariam. Reapply materializa a seleção,
@@ -236,32 +227,6 @@ remove no máximo 200 checkpoints de páginas e 200 alvos de operações termina
 mais de 30 dias, limpa até 200 checkpoints por recurso, compacta os payloads de migração de até 200 operações (preservando hash idempotente) e limpa payload de até 200 eventos processados antigos; preserva
 IDs de deduplicação. Não apaga entidades financeiras ou revisões de regras.
 
-## Migração do R2 e corte
-
-Exporte **todos** os manifests snapshots e objetos collections úteis, mantendo
-os caminhos das chaves R2 dentro de um diretório privado. Uma cópia do último
-snapshot não substitui o inventário. O script não acessa nem remove o bucket.
-
-```sh
-node scripts/migrate-r2.ts --directory /private/export --item ITEM_ID
-# Após revisar overlaps, --overlap newest escolhe readAt mais recente;
-# empate divergente exige resolução manual em uma cópia do export.
-node scripts/migrate-r2.ts --directory /private/export --item ITEM_ID --overlap newest --endpoint https://finance.example.com
-# Apply é separado do dry-run e sempre explícito:
-node scripts/migrate-r2.ts --directory /private/export --item ITEM_ID --overlap newest --endpoint https://finance.example.com --apply --policy keep-current
-```
-
-Cada lote de até vinte registros torna-se uma operação durável idempotente. Consulte
-as operações retornadas via MCP, confirme conclusão e compare contagens/totais por
-moeda, conta, período e recurso antes do corte. Policies refuse-conflicts (padrão),
-keep-current e prefer-bundle são explícitas; conflitos são rechecados sob lock.
-Overlaps não viram novas cópias. Formato legado v1 não reconhecido é recusado; o
-conversor cobre snapshots multi-recurso schema v2 deste repositório.
-
-R2 armazenava projeções: a importação marca `legacy-projection-v1`, preserva registro
-e chave de origem e **não inventa payload original que não foi salvo**. Não marca
-bootstrap integral. Uma coleta posterior substitui a projeção pela origem quando
-esse ID ainda existe. Histórico legado ausente na API permanece preservado.
 
 Depois de comparação e aprovação do corte: pare imports da instalação anterior, faça
 backup D1 e aponte o cliente para um único MCP. Rollback é voltar o endpoint ao
