@@ -93,7 +93,7 @@ Use `mise run check:quick` durante a edição e `mise run check` na entrega.
 
 ### Medição local de 18/10/2026
 
-A comparação executou o diagnóstico HTTP do commit `042ad0b` e a fronteira nova
+A comparação executou o diagnóstico HTTP do commit `042ad0b` e a fronteira de `e1ac524`
 no mesmo Worker Miniflare, com Pino em `warn` e destino em memória. Cada request
 do harness executou 1.000 diagnósticos sequenciais, com status, duração e ID
 sintéticos fixos. Uma rodada aqueceu o runtime; a tabela apresenta a mediana de
@@ -102,9 +102,9 @@ ingestão nativa.
 
 | Cenário | Eventos por 100, antes → depois | Bytes por 100, antes → depois | Spans por 100, antes → depois | Host/IPC por 1.000, antes → depois |
 | --- | --- | --- | --- | --- |
-| HTTP 200 | 0 → 0 | 0 → 0 | 0 → 100 | 1,42 → 12,02 ms |
-| HTTP 401 esperado | 100 → 0 | 16.700 → 0 | 0 → 100 | 2,40 → 11,26 ms |
-| HTTP 500 inesperado | 100 → 100 | 16.500 → 25.300 | 0 → 100 | 2,45 → 15,48 ms |
+| HTTP 200 | 0 → 0 | 0 → 0 | 0 → 100 | 1,42 → 12,75 ms |
+| HTTP 401 esperado | 100 → 0 | 16.700 → 0 | 0 → 100 | 2,41 → 12,24 ms |
+| HTTP 500 inesperado | 100 → 100 | 16.500 → 25.300 | 0 → 100 | 2,56 → 15,46 ms |
 
 A instrumentação acrescentou custo local e campos aos erros. Eliminou os 100
 warnings esperados e preservou os 100 diagnósticos de erro, agora com evento,
