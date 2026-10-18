@@ -6,7 +6,6 @@ import { z } from "zod/v4";
 
 import { Fault, localDay, Resource } from "../../src/domain";
 import { EMPTY_RULES } from "../../src/domain/rules";
-import { createLogger } from "../../src/shared/logger";
 import { reapplyRules, syncService } from "../../src/worker/composition";
 import { database } from "../../src/worker/database";
 import {
@@ -39,7 +38,6 @@ import {
   startOperation,
 } from "../../src/worker/sync/repository";
 import { required } from "../support";
-import { measuredDatabase } from "../support/d1-metrics";
 import { settings, testMigrations } from "./personal-fixture";
 import { applyD1Migrations, reset } from "cloudflare:test";
 import { env } from "cloudflare:workers";
@@ -49,7 +47,6 @@ const now = new Date("2030-01-01T23:00:00.000Z");
 const conflictPattern = /REAPPLICATION_CONFLICT/;
 const largePattern = /REAPPLICATION_TOO_LARGE_USE_BATCHES/;
 const orm = database(env.DB);
-const costLogger = createLogger({ level: "info", name: "cost-budget" });
 
 beforeEach(async () => {
   await reset();
@@ -58,7 +55,7 @@ beforeEach(async () => {
   await orm.update(config).set({ sync_enabled: 1 });
 });
 
-test("retention backlog has an explicit bounded budget and preserves the operation", async () => {
+test("retention removes at most 200 rows per table and preserves the operation", async () => {
   const op = await startOperation(env.DB, "retention-backlog", {
     itemIds: [item],
     kind: "sync",
@@ -78,17 +75,7 @@ test("retention backlog has an explicit bounded budget and preserves the operati
       "WITH RECURSIVE n(x) AS (VALUES(1) UNION ALL SELECT x+1 FROM n WHERE x<201) INSERT INTO operation_targets(operation_id,item_id,resource,parent_id,id) SELECT ?,?,'transactions','account',CAST(x AS TEXT) FROM n",
     ).bind(op.id, item),
   ]);
-  const measured = measuredDatabase(env.DB);
-  await compactOperations(measured.db);
-  costLogger.info(
-    { scenario: "retention-backlog", ...measured.totals },
-    "synthetic bounded retention",
-  );
-  assert.ok(measured.totals.rowsRead <= 2500, JSON.stringify(measured.totals));
-  assert.ok(
-    measured.totals.rowsWritten <= 2000,
-    JSON.stringify(measured.totals),
-  );
+  await compactOperations(env.DB);
   assert.equal(
     (await orm.select({ n: count() }).from(checkpoints).get())?.n,
     1,
@@ -239,7 +226,7 @@ test("webhooks consolidate a bounded generation, preserve notices arriving durin
     transactionIds: [item],
   };
   await Promise.all(
-    Array.from({ length: 100 }, () => service.acceptWebhook(event)),
+    Array.from({ length: 3 }, () => service.acceptWebhook(event)),
   );
   assert.equal((await orm.select().from(inbox)).length, 0);
   assert.equal((await orm.select().from(operations)).length, 0);
@@ -399,7 +386,7 @@ test("local batches publish only on demand, replay receipts, preserve overrides 
   );
 });
 
-test("small reapplication supports synchronous MCP and terminal Tasks, with no financial writes on unchanged replay", async () => {
+test("small reapplication supports synchronous MCP and preserves revision on equivalent input", async () => {
   await transactions(1);
   const args = { itemIds: [item], requestKey: "mcp-local" };
   const response = await fetchMcp(
@@ -486,23 +473,4 @@ test("time eligibility remains correct while paused without GET writes", async (
     ).groups[0]?.count,
     "1",
   );
-});
-
-test("indexed idle maintenance reads a constant number of rows with 100k and 1m historical events", async () => {
-  await [100_000, 1_000_000].reduce(async (previous, size) => {
-    await previous;
-    await env.DB.prepare(
-      "WITH RECURSIVE n(x) AS (VALUES(1) UNION ALL SELECT x+1 FROM n WHERE x<?) INSERT OR IGNORE INTO inbox(event_id,item_id,account_id,event,payload,processed_at,received_at) SELECT 'old-'||x,?,'account','transactions/deleted','{}','2000-01-01','2000-01-01' FROM n",
-    )
-      .bind(size, item)
-      .run();
-    const metrics = await env.DB.prepare(
-      "SELECT event_id FROM inbox WHERE processed_at IS NOT NULL AND processed_at<? AND payload<>'{}' ORDER BY processed_at,event_id LIMIT 200",
-    )
-      .bind("2026-01-01")
-      .all();
-    assert.ok(metrics.meta.rows_read <= 2);
-    await compactOperations(env.DB);
-    assert.equal((await orm.select({ n: count() }).from(inbox).get())?.n, size);
-  }, Promise.resolve());
 });

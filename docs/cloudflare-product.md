@@ -267,8 +267,6 @@ remove até 200 registros de cada tabela técnica (`checkpoints`, `page_commits`
 até 200 payloads antigos da inbox sem revisitar os já vazios. IDs, resumos, regras,
 payloads de migração e recibos locais permanecem. Capacidade: uma operação e até
 200 linhas por tabela/dia; backlog grande pode exigir manutenção explícita.
-A [auditoria anterior](auditoria-d1.md) registra a mitigação horária substituída.
-O [aceite de custo mínimo](specs/custo-minimo/aceite.md) registra os limites atuais.
 
 
 Depois de comparação e aprovação do corte: pare imports da instalação anterior, faça

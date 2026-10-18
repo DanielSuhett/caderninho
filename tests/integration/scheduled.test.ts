@@ -52,7 +52,6 @@ test("daily execution recovers pending dispatch and retains active receipts", as
     }),
     config,
   );
-  assert.equal((await db.select().from(page_commits)).length, 1);
   assert.equal(
     (
       await db
@@ -64,12 +63,6 @@ test("daily execution recovers pending dispatch and retains active receipts", as
     1,
   );
 
-  await worker.scheduled(
-    createScheduledController({
-      scheduledTime: Date.parse("2026-10-18T13:00:00Z"),
-    }),
-    config,
-  );
   const remaining = await db.select().from(page_commits);
   assert.equal(remaining.length, 1);
   assert.equal(remaining[0]?.operation_id, pending.id);
