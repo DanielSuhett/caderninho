@@ -14,24 +14,26 @@ description = "Instalar dependências exatamente como no package-lock.json"
 run = "npm ci"
 
 [tasks.check]
-description = "Validação local completa, em sequência; lint por último"
+description = "Validar tipos, lint, testes, build e runtime local em sequência"
 run = [
   "mise tasks validate",
   "mise fmt --check",
+  "mise run types:check",
   "mise run typecheck",
   "mise run format:check",
+  "mise run lint",
   "mise run test",
   "mise run test:product",
   "mise run build",
   "mise run test:product:runtime",
-  "mise run lint",
 ]
 
 [tasks."check:quick"]
-description = "Validar configuração, imports, tipos, layout e lint sem testes/build"
+description = "Validar configuração, tipos gerados, imports, layout e lint"
 run = [
   "mise tasks validate",
   "mise fmt --check",
+  "mise run types:check",
   "mise run typecheck",
   "mise run format:check",
   "mise run lint",
@@ -58,6 +60,10 @@ description = "Emitir todos os diagnósticos em JSON no stdout"
 run = "npm run --silent lint -- --max-diagnostics=none --reporter=json"
 output = "interleave"
 quiet = true
+
+[tasks."lint:doctor"]
+description = "Diagnosticar a instalação do Ultracite e do Biome"
+run = "npx ultracite doctor"
 
 [tasks.format]
 description = "Formatar arquivos com Biome e a configuração do mise"
@@ -94,6 +100,10 @@ run = "npm run dev"
 [tasks.types]
 description = "Regenerar src/worker/runtime.d.ts com Wrangler"
 run = "npm run types"
+
+[tasks."types:check"]
+description = "Verificar tipos do Wrangler sem modificar o arquivo gerado"
+run = "npm run types -- --check"
 
 [tasks."migrate:local"]
 description = "Aplicar migrações somente no D1 local"

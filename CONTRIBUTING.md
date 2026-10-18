@@ -33,11 +33,15 @@ o mise fornece o ambiente e as sequências de validação.
 | Validar uma entrega local | `mise run check` |
 | Corrigir lint e layout | `mise run lint:fix` e `mise run format` |
 | Ver todos os diagnósticos | `mise run lint:all` ou `mise run --quiet lint:json` |
+| Verificar tipos gerados sem reescrever | `mise run types:check` |
+| Diagnosticar Ultracite e Biome | `mise run lint:doctor` |
 | Abrir o ambiente local | `mise run dev` |
 
 Consulte `mise tasks ls` para todas as tasks. Para comandos avulsos, use
 `mise exec -- <comando>`. Os checks executam em sequência e param na primeira
 falha; não instalam dependências, corrigem arquivos ou publicam o projeto.
+O check rápido e o completo verificam os tipos gerados; lint e tipos rodam antes
+dos testes e do build. `lint:doctor` é um diagnóstico explícito da instalação.
 `types` regenera os bindings e `migrate:local` aplica migrações apenas no D1 local.
 Para manter a geração igual à CI, `types` lê os nomes de secrets do arquivo
 versionado `.dev.vars.example`, sem consultar o `.dev.vars` local.
@@ -48,6 +52,9 @@ com `nvm use`, execute `npm ci` e os comandos de `package.json`.
 
 A CI executa os checks com dados sintéticos, SQLite e workerd locais. Não faz
 deploy nem consulta bancos reais. Build dry-run e execução local são provas distintas.
+
+O [relatório visual da sessão de 18/10/2026](docs/visuals/sessao-arquitetura-2026-10-18.html)
+registra as refatorações, evidências e arquivos alterados naquele ciclo.
 
 ## Layout e TypeScript
 
