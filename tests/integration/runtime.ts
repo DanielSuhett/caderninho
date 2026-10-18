@@ -95,7 +95,7 @@ const worker = {
     if (path === "/auth-probe")
       return authenticatedFetch(
         new Request("https://synthetic.example.com/mcp", req),
-        { ...env, PUBLIC_ORIGIN: "https://synthetic.example.com" },
+        env,
         ctx,
         async () => new Response("unexpected-auth", { status: 599 }),
       );
@@ -106,17 +106,11 @@ const worker = {
       await env.DB.exec(
         "CREATE TRIGGER IF NOT EXISTS fixture_fail BEFORE INSERT ON inbox WHEN NEW.event_id='synthetic-force-failure' BEGIN SELECT RAISE(ABORT,'synthetic storage failure'); END;",
       );
-      await env.DB.batch([
-        statement(
-          env.DB,
-          "INSERT OR IGNORE INTO principals(id) VALUES('alice'),('bob')",
-        ),
-        statement(
-          env.DB,
-          "INSERT OR IGNORE INTO items VALUES('alice',?,'[\"accounts\",\"transactions\"]',1)",
-          item,
-        ),
-      ]);
+      await statement(
+        env.DB,
+        `INSERT OR IGNORE INTO items VALUES(?,'["accounts","transactions"]',1)`,
+        item,
+      ).run();
       for (const [key, id] of [
         ["first", "33333333-3333-4333-8333-333333333333"],
         ["second", "44444444-4444-4444-8444-444444444444"],
@@ -168,19 +162,7 @@ const worker = {
         ? new Response("Receipt failed", { status: 503 })
         : result.data;
     }
-    if (path === "/mcp")
-      return fetchMcp(
-        req,
-        {
-          ...env,
-          TASK_EVENT_SOURCE:
-            req.headers.get("X-Test-Event-Source") === "workflow"
-              ? "workflow"
-              : "d1",
-        },
-        req.headers.get("X-Test-Principal") === "bob" ? "bob" : "alice",
-        ctx,
-      );
+    if (path === "/mcp") return fetchMcp(req, env, ctx);
     return new Response("Not found", { status: 404 });
   },
 };

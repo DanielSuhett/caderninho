@@ -12,7 +12,6 @@ const StoredRulesSchema = z.union([RulesSchema, LegacyRulesSchema]);
 
 export async function saveRules(
   db: D1Database,
-  principal: string,
   input: unknown,
   activate = false,
 ) {
@@ -24,7 +23,6 @@ export async function saveRules(
       database(db)
         .insert(tables.rule_sets)
         .values({
-          principal: principal,
           id: id,
           document: JSON.stringify(document),
           normalizer: NORMALIZER,
@@ -40,7 +38,6 @@ export async function saveRules(
         database(db)
           .insert(tables.category_groups)
           .values({
-            principal: principal,
             revision: id,
             id: g.id,
             name: g.name,
@@ -55,7 +52,6 @@ export async function saveRules(
         database(db)
           .insert(tables.categories)
           .values({
-            principal: principal,
             revision: id,
             id: c.id,
             group_id: c.group_id,
@@ -71,7 +67,6 @@ export async function saveRules(
           database(db)
             .insert(tables.aliases)
             .values({
-              principal: principal,
               revision: id,
               alias: alias,
               category_id: c.id,
@@ -87,7 +82,6 @@ export async function saveRules(
         database(db)
           .insert(tables.rules)
           .values({
-            principal: principal,
             revision: id,
             id: rule.id,
             position: r,
@@ -107,29 +101,20 @@ export async function saveRules(
     database(db)
       .update(tables.rule_sets)
       .set({ ready: 1 })
-      .where(
-        and(
-          eq(tables.rule_sets.principal, principal),
-          eq(tables.rule_sets.id, id),
-        ),
-      ),
+      .where(eq(tables.rule_sets.id, id)),
   ).run();
   if (activate)
     await preparedStatement(
       db,
       database(db)
-        .update(tables.principals)
+        .update(tables.settings)
         .set({ active_rules: id })
-        .where(eq(tables.principals.id, principal)),
+        .where(eq(tables.settings.id, 1)),
     ).run();
   return { id, rules: document.rules.length, activated: activate };
 }
 
-async function ruleRevision(
-  db: D1Database,
-  principal: string,
-  revision: string,
-) {
+async function ruleRevision(db: D1Database, revision: string) {
   return z.object({ document: z.string(), normalizer: z.string() }).parse(
     await preparedStatement(
       db,
@@ -140,31 +125,19 @@ async function ruleRevision(
         })
         .from(tables.rule_sets)
         .where(
-          and(
-            eq(tables.rule_sets.principal, principal),
-            eq(tables.rule_sets.id, revision),
-            eq(tables.rule_sets.ready, 1),
-          ),
+          and(eq(tables.rule_sets.id, revision), eq(tables.rule_sets.ready, 1)),
         ),
     ).first(),
   );
 }
 
-export async function readRules(
-  db: D1Database,
-  principal: string,
-  revision: string,
-) {
-  const row = await ruleRevision(db, principal, revision);
+export async function readRules(db: D1Database, revision: string) {
+  const row = await ruleRevision(db, revision);
   return StoredRulesSchema.parse(parseJson(row.document));
 }
 
-export async function rulesFor(
-  db: D1Database,
-  principal: string,
-  revision: string,
-) {
-  const row = await ruleRevision(db, principal, revision);
+export async function rulesFor(db: D1Database, revision: string) {
+  const row = await ruleRevision(db, revision);
   const document = StoredRulesSchema.parse(parseJson(row.document));
   if (document.version === 1)
     throw new Error("RULES_V1_REQUIRES_EXPLICIT_CONVERSION_AND_ACTIVATION");
@@ -173,7 +146,7 @@ export async function rulesFor(
   return compileRules(document);
 }
 
-export async function listRules(db: D1Database, principal: string) {
+export async function listRules(db: D1Database) {
   return (
     await preparedStatement(
       db,
@@ -184,23 +157,18 @@ export async function listRules(db: D1Database, principal: string) {
           normalizer: tables.rule_sets.normalizer,
         })
         .from(tables.rule_sets)
-        .where(eq(tables.rule_sets.principal, principal))
         .orderBy(desc(tables.rule_sets.created_at)),
     ).all()
   ).results;
 }
-export async function activateRules(
-  db: D1Database,
-  principal: string,
-  revision: string,
-) {
-  await rulesFor(db, principal, revision);
+export async function activateRules(db: D1Database, revision: string) {
+  await rulesFor(db, revision);
   await preparedStatement(
     db,
     database(db)
-      .update(tables.principals)
+      .update(tables.settings)
       .set({ active_rules: revision })
-      .where(eq(tables.principals.id, principal)),
+      .where(eq(tables.settings.id, 1)),
   ).run();
   return { activated: revision, historicalReclassification: false };
 }

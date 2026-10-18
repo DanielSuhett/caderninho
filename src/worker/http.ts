@@ -8,7 +8,7 @@ const invalidRequests = new Set([
   "EMPTY_FORM",
   "FORM_TOO_LARGE",
   "DUPLICATE_FORM_FIELD",
-  "CONSENT_REQUIRED",
+  "SESSION_REQUIRED",
   "UNKNOWN_ACTION",
 ]);
 export function failureStatus(error: Error): 400 | 500 {
@@ -48,4 +48,15 @@ export async function boundedForm(request: Request) {
   for (const name of form.keys())
     if (form.getAll(name).length !== 1) throw new Error("DUPLICATE_FORM_FIELD");
   return form;
+}
+
+export function requestOrigin(request: Request) {
+  const url = new URL(request.url);
+  if (
+    url.protocol !== "https:" &&
+    url.hostname !== "localhost" &&
+    url.hostname !== "127.0.0.1"
+  )
+    throw new Error("HTTPS_REQUIRED");
+  return url.origin;
 }

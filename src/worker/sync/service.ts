@@ -47,7 +47,6 @@ export interface Steps {
 }
 export interface SynchronizationSession {
   operation: OperationHandle & {
-    principal: string;
     kind: OperationInput["kind"];
   };
   cancelled(): Promise<boolean>;
@@ -62,7 +61,7 @@ export interface SynchronizationSession {
 }
 export interface SynchronizationDependencies {
   open(id: string): Promise<SynchronizationSession>;
-  source(principal: string): Promise<FinancialSource>;
+  source(): Promise<FinancialSource>;
 }
 
 export async function runOperation(
@@ -85,8 +84,7 @@ export async function runOperation(
   const execution = await tryCatch(
     (async () => {
       let scoped: Promise<FinancialSource> | undefined;
-      const resolveSource = () =>
-        (scoped ??= dependencies.source(op.principal));
+      const resolveSource = () => (scoped ??= dependencies.source());
       const source: FinancialSource = suppliedProvider ?? {
         page: async (...args) => (await resolveSource()).page(...args),
         ids: async (...args) => (await resolveSource()).ids(...args),
@@ -124,15 +122,14 @@ export async function runOperation(
   }
 }
 
-export interface DueAccount {
-  principal: string;
+export interface DueSchedule {
   next_sync_at: string;
   reconcile_after: string;
 }
 export interface SchedulingStore {
-  due(now: string): Promise<DueAccount[]>;
+  due(now: string): Promise<DueSchedule | null>;
   enqueue(
-    account: DueAccount,
+    account: DueSchedule,
     kind: "sync" | "reconcile",
     next: string,
     reconcileAfter: string,
@@ -144,24 +141,22 @@ export async function scheduleSync(
   now: Date,
 ) {
   const due = await store.due(now.toISOString());
-  for (const account of due) {
-    const result = await tryCatch(
-      (async () => {
-        const reconcile = account.reconcile_after <= now.toISOString();
-        const op = await store.enqueue(
-          account,
-          reconcile ? "reconcile" : "sync",
-          new Date(now.getTime() + 86400000).toISOString(),
-          reconcile
-            ? new Date(now.getTime() + 7 * 86400000).toISOString()
-            : account.reconcile_after,
-        );
-        if (op) await dispatch(op);
-      })(),
-    );
-    // Each failed account remains recoverable through the durable outbox.
-    if (result.error) continue;
-  }
+  if (!due) return;
+  // A failed dispatch is recoverable through the durable outbox.
+  await tryCatch(
+    (async () => {
+      const reconcile = due.reconcile_after <= now.toISOString();
+      const op = await store.enqueue(
+        due,
+        reconcile ? "reconcile" : "sync",
+        new Date(now.getTime() + 86400000).toISOString(),
+        reconcile
+          ? new Date(now.getTime() + 7 * 86400000).toISOString()
+          : due.reconcile_after,
+      );
+      if (op) await dispatch(op);
+    })(),
+  );
 }
 
 export function createSyncService(
@@ -197,20 +192,16 @@ export function createSyncService(
           );
       }
       for (const event of await repository.inbox()) {
-        const op = await repository.start(
-          event.principal,
-          "webhook:" + event.event_id,
-          {
-            kind: "webhook",
-            itemIds: [event.item_id],
-            eventId: event.event_id,
-          },
-        );
+        const op = await repository.start("webhook:" + event.event_id, {
+          kind: "webhook",
+          itemIds: [event.item_id],
+          eventId: event.event_id,
+        });
         await repository.linkEvent(event.event_id, op.id);
         await tryCatch(dispatch(op));
       }
     },
-    cancel: (principal: string, id: string) => repository.cancel(principal, id),
+    cancel: (id: string) => repository.cancel(id),
     async acceptWebhook(event: WebhookEvent) {
       if (
         event.event === "transactions/created" &&
@@ -224,8 +215,8 @@ export function createSyncService(
         throw new Error("MISSING_TRANSACTION_IDS");
       return repository.acceptWebhook(event, now().toISOString());
     },
-    async migrate(principal: string, input: MigrationRequest) {
-      const overlaps = await repository.migrationOverlaps(principal, input);
+    async migrate(input: MigrationRequest) {
+      const overlaps = await repository.migrationOverlaps(input);
       if (!input.apply)
         return {
           status: 200 as const,
@@ -242,7 +233,6 @@ export function createSyncService(
           body: { error: "MIGRATION_OVERLAP_REQUIRES_POLICY", overlaps },
         };
       const op = await repository.start(
-        principal,
         "migration:" + (await repository.fingerprint(input)),
         {
           kind: "migration",

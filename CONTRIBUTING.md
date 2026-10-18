@@ -55,7 +55,7 @@ subprocessos em falhas, SIGINT e SIGTERM.
 ## Escopo dos PRs
 
 - Descreva o comportamento resultante e a validação obtida.
-- Preserve precisão monetária, isolamento por principal/Item e campos da Pluggy.
+- Preserve precisão monetária, validação de Item/conta e campos da Pluggy.
 - Use schemas Zod para modelos e `tryCatch` para recuperação assíncrona.
 - Não inclua secrets, dados bancários ou exportações privadas em código e logs.
 - Separe merge, deploy, migração real e verificação no cliente MCP.

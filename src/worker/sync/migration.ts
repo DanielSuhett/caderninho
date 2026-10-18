@@ -40,7 +40,6 @@ export async function migrateLegacy({
     const edits: D1PreparedStatement[] = [];
     for (const row of input.migration ?? []) {
       const identity = {
-        principal: op.principal,
         itemId,
         resource: row.resource,
         parentId: row.parentId,
@@ -58,7 +57,6 @@ export async function migrateLegacy({
             .from(tables.migration_imports)
             .where(
               and(
-                eq(tables.migration_imports.principal, op.principal),
                 eq(tables.migration_imports.source_key, row.sourceKey),
                 eq(tables.migration_imports.source_hash, digest),
               ),
@@ -76,7 +74,6 @@ export async function migrateLegacy({
           .from(tables.entities)
           .where(
             and(
-              eq(tables.entities.principal, op.principal),
               eq(tables.entities.item_id, itemId),
               eq(tables.entities.resource, row.resource),
               eq(tables.entities.parent_id, row.parentId),
@@ -117,7 +114,6 @@ export async function migrateLegacy({
           database(db)
             .insert(tables.migration_imports)
             .values({
-              principal: op.principal,
               source_key: row.sourceKey,
               source_hash: digest,
               imported_at: new Date().toISOString(),
@@ -132,9 +128,9 @@ export async function migrateLegacy({
         preparedStatement(
           db,
           database(db)
-            .update(tables.principals)
-            .set({ revision: sql`${tables.principals.revision} + 1` })
-            .where(eq(tables.principals.id, op.principal)),
+            .update(tables.settings)
+            .set({ revision: sql`${tables.settings.revision} + 1` })
+            .where(eq(tables.settings.id, 1)),
         ),
       ]);
     return { imported: input.migration?.length ?? 0 };

@@ -6,25 +6,38 @@ import { wizardState } from "#worker/account/service.ts";
 
 await test("financial failure overrides transport completion and setup never equates partial coverage to complete", () => {
   const evidence = {
-    status: { config: { enabled: 1 }, items: [{ id: "synthetic-item" }] },
+    config: { sync_enabled: 1, connected_at: "today" },
+    items: [{ id: "synthetic-item" }],
     coverage: { total: 4, complete: 1 },
-    latest: { status: "completed", phase: "error" },
+    latest: { status: "completed", phase: "error", updated_at: "now" },
   };
-  assert.equal(wizardState(evidence).sync, "error");
-  assert.deepEqual(wizardState(evidence).coverage, { total: 4, complete: 1 });
-  assert.equal(wizardState({ ...evidence, latest: null }).sync, "waiting");
+  assert.equal(wizardState(evidence, true).sync, "error");
+  assert.deepEqual(wizardState(evidence, true).coverage, {
+    total: 4,
+    complete: 1,
+  });
   assert.equal(
-    wizardState({
-      ...evidence,
-      latest: { status: "cancelled", phase: "cancelled" },
-    }).sync,
+    wizardState({ ...evidence, latest: null }, true).sync,
+    "waiting",
+  );
+  assert.equal(
+    wizardState(
+      {
+        ...evidence,
+        latest: { status: "cancelled", phase: "cancelled", updated_at: "now" },
+      },
+      true,
+    ).sync,
     "cancelled",
   );
   assert.equal(
-    wizardState({
-      ...evidence,
-      status: { ...evidence.status, config: { enabled: 0 } },
-    }).paused,
+    wizardState(
+      {
+        ...evidence,
+        config: { ...evidence.config, sync_enabled: 0 },
+      },
+      true,
+    ).paused,
     true,
   );
   for (const code of [

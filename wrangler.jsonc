@@ -15,7 +15,6 @@
       "/mcp",
       "/mcp/*",
       "/authorize",
-      "/callback",
       "/oauth/*",
       "/token",
       "/register",
@@ -40,11 +39,7 @@
     },
   ],
   "triggers": { "crons": ["* * * * *"] },
-  "vars": {
-    "TASK_EVENT_SOURCE": "d1",
-    // Installation-specific values come from Worker secrets (see .dev.vars.example).
-    // Existing installations can retain PUBLIC_ORIGIN/OWNER_ID as dashboard vars.
-  },
+  "version_metadata": { "binding": "CF_VERSION_METADATA" },
   "keep_vars": true,
   "observability": {
     "enabled": true,

@@ -32,7 +32,6 @@ export async function publishResolved(
         .from(tables.entities)
         .where(
           and(
-            eq(tables.entities.principal, op.principal),
             eq(tables.entities.item_id, item),
             eq(tables.entities.resource, "accounts"),
             eq(tables.entities.id, account),
@@ -50,7 +49,6 @@ export async function publishResolved(
     const prepared = await prepareEntity(
       db,
       {
-        principal: op.principal,
         itemId: item,
         resource: "transactions",
         parentId: account,
@@ -90,7 +88,6 @@ export async function publishResolved(
             .set({ deleted: 1 })
             .where(
               and(
-                eq(tables.entities.principal, op.principal),
                 eq(tables.entities.item_id, item),
                 eq(tables.entities.resource, "transactions"),
                 eq(tables.entities.parent_id, account),
@@ -105,9 +102,9 @@ export async function publishResolved(
       preparedStatement(
         db,
         database(db)
-          .update(tables.principals)
-          .set({ revision: sql`${tables.principals.revision} + 1` })
-          .where(eq(tables.principals.id, op.principal)),
+          .update(tables.settings)
+          .set({ revision: sql`${tables.settings.revision} + 1` })
+          .where(eq(tables.settings.id, 1)),
       ),
     ]);
 }
@@ -131,12 +128,7 @@ export async function resolveEvent(
         database(db)
           .select()
           .from(tables.inbox)
-          .where(
-            and(
-              eq(tables.inbox.event_id, eventId),
-              eq(tables.inbox.principal, op.principal),
-            ),
-          ),
+          .where(eq(tables.inbox.event_id, eventId)),
       ).first(),
     );
   const payload = z
@@ -173,7 +165,7 @@ export async function resolveEvent(
             .parse(parseJson(z.string().parse(saved)));
         if ((await stillWorking(db, op.id)).cancel_requested)
           return { done: true, cancelled: true, next: null };
-        await authorizedItems(db, op.principal, [e.item_id]);
+        await authorizedItems(db, [e.item_id]);
         const ids =
           payload.transactionIds?.slice(batch * 20, (batch + 1) * 20) ?? [];
         if (!payload.transactionIds && !payload.transactionsCreatedAtFrom)

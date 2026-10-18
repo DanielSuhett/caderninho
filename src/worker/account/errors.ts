@@ -2,7 +2,13 @@ import type { WizardIssue } from "#contracts/wizard-contract.ts";
 
 export function wizardIssue(error: Error): WizardIssue {
   const code = "code" in error ? String(error.code) : error.message;
-  if (["UPSTREAM_AUTH", "UPSTREAM_FORBIDDEN"].includes(code))
+  if (
+    [
+      "UPSTREAM_AUTH",
+      "UPSTREAM_FORBIDDEN",
+      "PLUGGY_ACCOUNT_NOT_CONFIGURED",
+    ].includes(code)
+  )
     return "credentials";
   if (code === "APPLICATION_CHANGE_REQUIRES_MIGRATION") return "application";
   if (["UPSTREAM_RATE_LIMIT", "CONNECT_RATE_LIMIT"].includes(code))

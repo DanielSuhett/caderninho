@@ -68,7 +68,7 @@ export function compileFilter(input: unknown) {
       return "(" + f.or.map((x) => walk(x, depth + 1)).join(" OR ") + ")";
     if ("tag" in f) {
       params.push(f.tag, f.value);
-      return `EXISTS(SELECT 1 FROM tags t WHERE t.principal=e.principal AND t.item_id=e.item_id AND t.resource=e.resource AND t.parent_id=e.parent_id AND t.id=e.id AND t.key=? AND t.value=? AND (t.origin='manual' OR NOT EXISTS(SELECT 1 FROM tags m WHERE m.principal=t.principal AND m.item_id=t.item_id AND m.resource=t.resource AND m.parent_id=t.parent_id AND m.id=t.id AND m.key=t.key AND m.origin='manual')))`;
+      return `EXISTS(SELECT 1 FROM tags t WHERE t.item_id=e.item_id AND t.resource=e.resource AND t.parent_id=e.parent_id AND t.id=e.id AND t.key=? AND t.value=? AND (t.origin='manual' OR NOT EXISTS(SELECT 1 FROM tags m WHERE m.item_id=t.item_id AND m.resource=t.resource AND m.parent_id=t.parent_id AND m.id=t.id AND m.key=t.key AND m.origin='manual')))`;
     }
     let value: string | number =
       typeof f.value === "boolean" ? Number(f.value) : f.value;
@@ -86,11 +86,7 @@ export function compileFilter(input: unknown) {
   return { sql: walk(filter, 0), params };
 }
 
-export async function authorizedItems(
-  db: D1Database,
-  principal: string,
-  ids?: string[],
-) {
+export async function authorizedItems(db: D1Database, ids?: string[]) {
   const all = await rows(
     preparedStatement(
       db,
@@ -101,12 +97,7 @@ export async function authorizedItems(
           enabled: tables.items.enabled,
         })
         .from(tables.items)
-        .where(
-          and(
-            eq(tables.items.principal, principal),
-            eq(tables.items.enabled, 1),
-          ),
-        ),
+        .where(eq(tables.items.enabled, 1)),
     ),
     ItemSchema,
   );
@@ -117,22 +108,17 @@ export async function authorizedItems(
 
 export async function requireResource(
   db: D1Database,
-  principal: string,
   itemId: string,
   resource: string,
 ) {
-  const [item] = await authorizedItems(db, principal, [itemId]);
+  const [item] = await authorizedItems(db, [itemId]);
   if (!item) throw new Error("ITEM_NOT_AUTHORIZED");
   if (!z.array(z.string()).parse(parseJson(item.resources)).includes(resource))
     throw new Error("RESOURCE_NOT_AUTHORIZED");
 }
 
-export async function coverageFor(
-  db: D1Database,
-  principal: string,
-  resource: string,
-) {
-  const items = await authorizedItems(db, principal),
+export async function coverageFor(db: D1Database, resource: string) {
+  const items = await authorizedItems(db),
     result = [];
   for (const item of items) {
     if (
@@ -152,7 +138,6 @@ export async function coverageFor(
         .from(tables.coverage)
         .where(
           and(
-            eq(tables.coverage.principal, principal),
             eq(tables.coverage.item_id, item.id),
             eq(tables.coverage.resource, resource),
           ),
@@ -168,25 +153,21 @@ export async function coverageFor(
   return result;
 }
 
-export async function revision(db: D1Database, principal: string) {
+export async function revision(db: D1Database) {
   return z
     .number()
     .parse(
       await preparedStatement(
         db,
         database(db)
-          .select({ revision: tables.principals.revision })
-          .from(tables.principals)
-          .where(eq(tables.principals.id, principal)),
+          .select({ revision: tables.settings.revision })
+          .from(tables.settings)
+          .where(eq(tables.settings.id, 1)),
       ).first("revision"),
     );
 }
 
-export async function queryEntities(
-  db: D1Database,
-  principal: string,
-  input: unknown,
-) {
+export async function queryEntities(db: D1Database, input: unknown) {
   const args = QuerySchema.parse(input);
   const scope = await hash({
     resource: args.resource,
@@ -194,23 +175,21 @@ export async function queryEntities(
   });
   if (args.cursor && args.cursor.scope !== scope)
     throw new Error("CURSOR_SCOPE_MISMATCH");
-  const before = await revision(db, principal);
+  const before = await revision(db);
   if (args.cursor && args.cursor.revision !== before)
     throw new Error("RESTART_REQUIRED");
   const f = args.filter ? compileFilter(args.filter) : { sql: "1", params: [] };
-  const predicate = `e.principal=? AND e.resource=? AND e.deleted=0 AND EXISTS(SELECT 1 FROM items i WHERE i.principal=e.principal AND i.id=e.item_id AND i.enabled=1 AND EXISTS(SELECT 1 FROM json_each(i.resources) r WHERE r.value=e.resource)) AND (${f.sql})`;
+  const predicate = `e.resource=? AND e.deleted=0 AND EXISTS(SELECT 1 FROM items i WHERE i.id=e.item_id AND i.enabled=1 AND EXISTS(SELECT 1 FROM json_each(i.resources) r WHERE r.value=e.resource)) AND (${f.sql})`;
   const result = await statement(
     db,
-    `SELECT e.*,(SELECT json_group_object(t.key,t.value) FROM tags t WHERE t.principal=e.principal AND t.item_id=e.item_id AND t.resource=e.resource AND t.parent_id=e.parent_id AND t.id=e.id AND (t.origin='manual' OR NOT EXISTS(SELECT 1 FROM tags m WHERE m.principal=t.principal AND m.item_id=t.item_id AND m.resource=t.resource AND m.parent_id=t.parent_id AND m.id=t.id AND m.key=t.key AND m.origin='manual'))) AS effective_tags FROM effective_entities e WHERE ${predicate} ORDER BY item_id,parent_id,id LIMIT ? OFFSET ?`,
-    principal,
+    `SELECT e.*,(SELECT json_group_object(t.key,t.value) FROM tags t WHERE t.item_id=e.item_id AND t.resource=e.resource AND t.parent_id=e.parent_id AND t.id=e.id AND (t.origin='manual' OR NOT EXISTS(SELECT 1 FROM tags m WHERE m.item_id=t.item_id AND m.resource=t.resource AND m.parent_id=t.parent_id AND m.id=t.id AND m.key=t.key AND m.origin='manual'))) AS effective_tags FROM effective_entities e WHERE ${predicate} ORDER BY item_id,parent_id,id LIMIT ? OFFSET ?`,
     args.resource,
     ...f.params,
     args.limit + 1,
     args.cursor?.offset ?? 0,
   ).all();
-  const coverage = await coverageFor(db, principal, args.resource);
-  if ((await revision(db, principal)) !== before)
-    throw new Error("RESTART_REQUIRED");
+  const coverage = await coverageFor(db, args.resource);
+  if ((await revision(db)) !== before) throw new Error("RESTART_REQUIRED");
   return {
     revision: before,
     coverage,
@@ -226,13 +205,9 @@ export async function queryEntities(
   };
 }
 
-export async function aggregateEntities(
-  db: D1Database,
-  principal: string,
-  input: unknown,
-) {
+export async function aggregateEntities(db: D1Database, input: unknown) {
   const args = AggregateSchema.parse(input),
-    before = await revision(db, principal);
+    before = await revision(db);
   const f = args.filter ? compileFilter(args.filter) : { sql: "1", params: [] };
   const definition = args.metric
     ? metricsFor(args.resource)[args.metric]
@@ -257,14 +232,12 @@ export async function aggregateEntities(
   );
   const result = await statement(
     db,
-    `WITH selected AS (SELECT e.currency,${measure} AS measure FROM effective_entities e WHERE e.principal=? AND e.resource=? AND e.deleted=0 AND EXISTS(SELECT 1 FROM items i WHERE i.principal=e.principal AND i.id=e.item_id AND i.enabled=1 AND EXISTS(SELECT 1 FROM json_each(i.resources) r WHERE r.value=e.resource)) AND (${f.sql})${temporal}${definition ? " AND e.ignored=0" : ""}) SELECT currency,CAST(COUNT(*) AS TEXT) AS count,CAST(COUNT(measure) AS TEXT) AS known,${limbs.join(",")} FROM selected GROUP BY currency`,
-    principal,
+    `WITH selected AS (SELECT e.currency,${measure} AS measure FROM effective_entities e WHERE e.resource=? AND e.deleted=0 AND EXISTS(SELECT 1 FROM items i WHERE i.id=e.item_id AND i.enabled=1 AND EXISTS(SELECT 1 FROM json_each(i.resources) r WHERE r.value=e.resource)) AND (${f.sql})${temporal}${definition ? " AND e.ignored=0" : ""}) SELECT currency,CAST(COUNT(*) AS TEXT) AS count,CAST(COUNT(measure) AS TEXT) AS known,${limbs.join(",")} FROM selected GROUP BY currency`,
     args.resource,
     ...f.params,
   ).all();
-  const coverage = await coverageFor(db, principal, args.resource);
-  if ((await revision(db, principal)) !== before)
-    throw new Error("RESTART_REQUIRED");
+  const coverage = await coverageFor(db, args.resource);
+  if ((await revision(db)) !== before) throw new Error("RESTART_REQUIRED");
   return {
     revision: before,
     coverage,
@@ -295,35 +268,23 @@ export async function aggregateEntities(
   };
 }
 
-export async function readStatus(db: D1Database, principal: string) {
+export async function readStatus(db: D1Database) {
   return {
-    items: await authorizedItems(db, principal),
+    items: await authorizedItems(db),
     coverage: (
       await preparedStatement(
         db,
         database(db)
           .select(getTableColumns(tables.coverage))
           .from(tables.coverage)
-          .innerJoin(
-            tables.items,
-            and(
-              eq(tables.items.principal, tables.coverage.principal),
-              eq(tables.items.id, tables.coverage.item_id),
-            ),
-          )
-          .where(
-            and(
-              eq(tables.coverage.principal, principal),
-              eq(tables.items.enabled, 1),
-            ),
-          ),
+          .innerJoin(tables.items, eq(tables.items.id, tables.coverage.item_id))
+          .where(eq(tables.items.enabled, 1)),
       ).all()
     ).results,
     operations: (
       await statement(
         db,
-        "SELECT o.id,o.status,o.phase,o.progress,o.created_at,o.dispatched FROM operations o WHERE o.principal=? AND NOT EXISTS(SELECT 1 FROM json_each(o.input,'$.itemIds') ids WHERE NOT EXISTS(SELECT 1 FROM items i WHERE i.id=ids.value AND i.principal=o.principal AND i.enabled=1)) ORDER BY o.created_at DESC LIMIT 50",
-        principal,
+        "SELECT o.id,o.status,o.phase,o.progress,o.created_at,o.dispatched FROM operations o WHERE NOT EXISTS(SELECT 1 FROM json_each(o.input,'$.itemIds') ids WHERE NOT EXISTS(SELECT 1 FROM items i WHERE i.id=ids.value AND i.enabled=1)) ORDER BY o.created_at DESC LIMIT 50",
       ).all()
     ).results,
     backlog: await preparedStatement(
@@ -331,12 +292,7 @@ export async function readStatus(db: D1Database, principal: string) {
       database(db)
         .select({ pending: sql`COUNT(*)` })
         .from(tables.inbox)
-        .where(
-          and(
-            eq(tables.inbox.principal, principal),
-            isNull(tables.inbox.processed_at),
-          ),
-        ),
+        .where(isNull(tables.inbox.processed_at)),
     ).first(),
     limitation:
       "Webhooks can be lost; eventId is not a sequence. Explicit reconciliation is required for known or suspected gaps.",
@@ -345,17 +301,15 @@ export async function readStatus(db: D1Database, principal: string) {
 
 export async function previewSelection(
   db: D1Database,
-  principal: string,
   a: PreviewInput,
   before: number,
 ) {
   const f = a.filter ? compileFilter(a.filter) : { sql: "1", params: [] };
-  await authorizedItems(db, principal, a.itemIds);
-  const q = `FROM effective_entities e WHERE principal=? AND resource='transactions' AND deleted=0 AND item_id IN (${a.itemIds.map(() => "?").join(",")}) AND EXISTS(SELECT 1 FROM items i WHERE i.principal=e.principal AND i.id=e.item_id AND i.enabled=1 AND EXISTS(SELECT 1 FROM json_each(i.resources) r WHERE r.value=e.resource)) AND (${f.sql})`;
+  await authorizedItems(db, a.itemIds);
+  const q = `FROM effective_entities e WHERE resource='transactions' AND deleted=0 AND item_id IN (${a.itemIds.map(() => "?").join(",")}) AND EXISTS(SELECT 1 FROM items i WHERE i.id=e.item_id AND i.enabled=1 AND EXISTS(SELECT 1 FROM json_each(i.resources) r WHERE r.value=e.resource)) AND (${f.sql})`;
   const total = await statement(
       db,
       "SELECT COUNT(*) AS count " + q,
-      principal,
       ...a.itemIds,
       ...f.params,
     ).first("count"),
@@ -364,7 +318,6 @@ export async function previewSelection(
       "SELECT id,normalized,effective_category,effective_description " +
         q +
         " ORDER BY item_id,parent_id,id LIMIT ?",
-      principal,
       ...a.itemIds,
       ...f.params,
       a.limit,
@@ -387,14 +340,12 @@ export async function previewSelection(
 
 export async function subscriptionRecords(
   db: D1Database,
-  principal: string,
   a: SubscriptionInput,
 ) {
-  const before = await revision(db, principal);
+  const before = await revision(db);
   const selected = await statement(
     db,
-    "SELECT normalized,effective_description,effective_category FROM effective_entities e WHERE principal=? AND resource='transactions' AND deleted=0 AND ignored=0 AND transaction_date BETWEEN ? AND ? AND currency=? AND EXISTS(SELECT 1 FROM items i WHERE i.principal=e.principal AND i.id=e.item_id AND i.enabled=1 AND EXISTS(SELECT 1 FROM json_each(i.resources) r WHERE r.value=e.resource)) LIMIT 10001",
-    principal,
+    "SELECT normalized,effective_description,effective_category FROM effective_entities e WHERE resource='transactions' AND deleted=0 AND ignored=0 AND transaction_date BETWEEN ? AND ? AND currency=? AND EXISTS(SELECT 1 FROM items i WHERE i.id=e.item_id AND i.enabled=1 AND EXISTS(SELECT 1 FROM json_each(i.resources) r WHERE r.value=e.resource)) LIMIT 10001",
     a.from,
     a.to,
     a.currency,

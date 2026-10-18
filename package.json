@@ -27,8 +27,7 @@
     "deploy": "npm run build:portal && wrangler d1 migrations apply DB --remote && wrangler deploy",
     "check:imports": "node scripts/check-imports.ts",
     "types": "wrangler types src/worker/runtime.d.ts",
-    "migrate:local": "wrangler d1 migrations apply DB --local",
-    "postinstall": "patch-package --error-on-fail"
+    "migrate:local": "wrangler d1 migrations apply DB --local"
   },
   "dependencies": {
     "@cfworker/json-schema": "4.1.1",
@@ -41,7 +40,6 @@
     "json-rules-engine": "7.3.1",
     "ky": "2.2.0",
     "lossless-json": "4.3.1",
-    "patch-package": "8.0.1",
     "pluggy-connect-sdk": "2.14.2",
     "pluggy-sdk": "0.92.0",
     "re2js": "2.8.6",
@@ -80,29 +78,14 @@
       "OAUTH_KV": {
         "description": "Autorizações OAuth privadas desta instalação. Criado pelo botão."
       },
-      "PUBLIC_ORIGIN": {
-        "description": "Endereço HTTPS exato do Worker, sem caminho. Ex.: https://meu-caderninho.minha-conta.workers.dev. Use o mesmo nome do Worker escolhido neste formulário."
+      "ADMIN_PASSWORD": {
+        "description": "Escolha uma senha pessoal de 16 a 256 caracteres para abrir seu painel. Guarde-a no seu gerenciador de senhas."
       },
-      "GITHUB_CLIENT_ID": {
-        "description": "Client ID do seu OAuth App GitHub, se usar login GitHub. Callback: endereço HTTPS do Worker seguido de /callback."
+      "PLUGGY_CLIENT_ID": {
+        "description": "Client ID da sua aplicação no [painel Pluggy](https://dashboard.pluggy.ai/). Use a mesma aplicação das suas conexões pessoais."
       },
-      "GITHUB_CLIENT_SECRET": {
-        "description": "Secret do seu OAuth App GitHub. Não é o secret da Pluggy; este será validado no wizard após o login."
-      },
-      "WEBHOOK_SECRET": {
-        "description": "Secret aleatório independente. Só será usado se você habilitar webhooks na Pluggy depois."
-      },
-      "CREDENTIAL_KEY": {
-        "description": "Chave aleatória de 32 bytes em base64. Protege suas credenciais Pluggy; preserve em atualizações e backups."
-      },
-      "OWNER_GITHUB_ID": {
-        "description": "ID numérico do GitHub do proprietário, somente para instalações com GitHub OAuth. Preserve em atualizações."
-      },
-      "OWNER_ID": {
-        "description": "UUID exclusivo desta instalação. Consulte os formatos no README e preserve em atualizações."
-      },
-      "ADMIN_KEY_SHA256": {
-        "description": "SHA-256 em hexadecimal da chave administrativa de 64 caracteres hexadecimais. Cole o hash; guarde a chave para entrar em /account."
+      "PLUGGY_CLIENT_SECRET": {
+        "description": "Client Secret da mesma aplicação no [painel Pluggy](https://dashboard.pluggy.ai/). Será guardado como secret deste Worker."
       }
     }
   }

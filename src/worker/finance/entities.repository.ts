@@ -21,7 +21,6 @@ import type { Operation } from "#worker/sync/operation-storage.ts";
 
 export const StoredSchema = z
   .object({
-    principal: z.string(),
     item_id: z.string(),
     resource: ResourceSchema,
     parent_id: z.string(),
@@ -59,7 +58,6 @@ export function derivedStatements(
       database(db)
         .insert(tables.derived)
         .values({
-          principal: i.principal,
           item_id: i.itemId,
           resource: i.resource,
           parent_id: i.parentId,
@@ -74,7 +72,6 @@ export function derivedStatements(
         })
         .onConflictDoUpdate({
           target: [
-            tables.derived.principal,
             tables.derived.item_id,
             tables.derived.resource,
             tables.derived.parent_id,
@@ -97,7 +94,6 @@ export function derivedStatements(
         .delete(tables.tags)
         .where(
           and(
-            eq(tables.tags.principal, i.principal),
             eq(tables.tags.item_id, i.itemId),
             eq(tables.tags.resource, i.resource),
             eq(tables.tags.parent_id, i.parentId),
@@ -112,7 +108,6 @@ export function derivedStatements(
       preparedStatement(
         db,
         database(db).insert(tables.tags).values({
-          principal: i.principal,
           item_id: i.itemId,
           resource: i.resource,
           parent_id: i.parentId,
@@ -185,7 +180,6 @@ export async function prepareEntity(
       .from(tables.entities)
       .where(
         and(
-          eq(tables.entities.principal, i.principal),
           eq(tables.entities.item_id, i.itemId),
           eq(tables.entities.resource, i.resource),
           eq(tables.entities.parent_id, i.parentId),
@@ -220,7 +214,6 @@ export async function prepareEntity(
             })
             .where(
               and(
-                eq(tables.entities.principal, i.principal),
                 eq(tables.entities.item_id, i.itemId),
                 eq(tables.entities.resource, i.resource),
                 eq(tables.entities.parent_id, i.parentId),
@@ -242,7 +235,6 @@ export async function prepareEntity(
   });
   const { record, amountText, date, eligible } = projection;
   const value = {
-    principal: i.principal,
     item_id: i.itemId,
     resource: i.resource,
     parent_id: i.parentId,
@@ -283,7 +275,6 @@ export async function prepareEntity(
         .values(value)
         .onConflictDoUpdate({
           target: [
-            tables.entities.principal,
             tables.entities.item_id,
             tables.entities.resource,
             tables.entities.parent_id,
@@ -316,7 +307,7 @@ export async function override(
   field: "category" | "description" | "ignored",
   value: string | null,
 ) {
-  await requireResource(db, i.principal, i.itemId, i.resource);
+  await requireResource(db, i.itemId, i.resource);
   const exists = await preparedStatement(
     db,
     database(db)
@@ -324,7 +315,6 @@ export async function override(
       .from(tables.entities)
       .where(
         and(
-          eq(tables.entities.principal, i.principal),
           eq(tables.entities.item_id, i.itemId),
           eq(tables.entities.resource, i.resource),
           eq(tables.entities.parent_id, i.parentId),
@@ -347,18 +337,13 @@ export async function override(
         })
         .from(tables.categories)
         .innerJoin(
-          tables.principals,
+          tables.settings,
           and(
-            eq(tables.principals.id, tables.categories.principal),
-            eq(tables.principals.active_rules, tables.categories.revision),
+            eq(tables.settings.id, 1),
+            eq(tables.settings.active_rules, tables.categories.revision),
           ),
         )
-        .where(
-          and(
-            eq(tables.categories.principal, i.principal),
-            eq(tables.categories.id, value),
-          ),
-        ),
+        .where(eq(tables.categories.id, value)),
     ).first();
     if (!category) throw new Error("UNKNOWN_CATEGORY");
     value = JSON.stringify(category);
@@ -371,7 +356,6 @@ export async function override(
             .delete(tables.overrides)
             .where(
               and(
-                eq(tables.overrides.principal, i.principal),
                 eq(tables.overrides.item_id, i.itemId),
                 eq(tables.overrides.resource, i.resource),
                 eq(tables.overrides.parent_id, i.parentId),
@@ -385,7 +369,6 @@ export async function override(
           database(db)
             .insert(tables.overrides)
             .values({
-              principal: i.principal,
               item_id: i.itemId,
               resource: i.resource,
               parent_id: i.parentId,
@@ -396,7 +379,6 @@ export async function override(
             })
             .onConflictDoUpdate({
               target: [
-                tables.overrides.principal,
                 tables.overrides.item_id,
                 tables.overrides.resource,
                 tables.overrides.parent_id,
@@ -414,9 +396,9 @@ export async function override(
     preparedStatement(
       db,
       database(db)
-        .update(tables.principals)
-        .set({ revision: sql`${tables.principals.revision} + 1` })
-        .where(eq(tables.principals.id, i.principal)),
+        .update(tables.settings)
+        .set({ revision: sql`${tables.settings.revision} + 1` })
+        .where(eq(tables.settings.id, 1)),
     ),
   ]);
 }
@@ -427,9 +409,8 @@ export async function correctRecord(
   change: RecordChange,
 ) {
   const a = { ...identity, ...change };
-  const { principal } = identity;
   if (a.field === "tag") {
-    await requireResource(db, principal, a.itemId, a.resource);
+    await requireResource(db, a.itemId, a.resource);
     const key = a.key;
     const edit =
       a.value === null
@@ -439,7 +420,6 @@ export async function correctRecord(
               .delete(tables.tags)
               .where(
                 and(
-                  eq(tables.tags.principal, principal),
                   eq(tables.tags.item_id, a.itemId),
                   eq(tables.tags.resource, a.resource),
                   eq(tables.tags.parent_id, a.parentId),
@@ -454,7 +434,6 @@ export async function correctRecord(
             database(db)
               .insert(tables.tags)
               .values({
-                principal: principal,
                 item_id: a.itemId,
                 resource: a.resource,
                 parent_id: a.parentId,
@@ -465,7 +444,6 @@ export async function correctRecord(
               })
               .onConflictDoUpdate({
                 target: [
-                  tables.tags.principal,
                   tables.tags.item_id,
                   tables.tags.resource,
                   tables.tags.parent_id,
@@ -481,9 +459,9 @@ export async function correctRecord(
       preparedStatement(
         db,
         database(db)
-          .update(tables.principals)
-          .set({ revision: sql`${tables.principals.revision} + 1` })
-          .where(eq(tables.principals.id, principal)),
+          .update(tables.settings)
+          .set({ revision: sql`${tables.settings.revision} + 1` })
+          .where(eq(tables.settings.id, 1)),
       ),
     ]);
   } else await override(db, a, a.field, a.value);
@@ -491,8 +469,7 @@ export async function correctRecord(
 }
 
 export async function explainRecord(db: D1Database, a: Identity) {
-  const { principal } = a;
-  await requireResource(db, principal, a.itemId, a.resource);
+  await requireResource(db, a.itemId, a.resource);
   return ExplanationSchema.parse({
     tags: (
       await preparedStatement(
@@ -506,7 +483,6 @@ export async function explainRecord(db: D1Database, a: Identity) {
           .from(tables.tags)
           .where(
             and(
-              eq(tables.tags.principal, principal),
               eq(tables.tags.item_id, a.itemId),
               eq(tables.tags.resource, a.resource),
               eq(tables.tags.parent_id, a.parentId),
@@ -522,7 +498,6 @@ export async function explainRecord(db: D1Database, a: Identity) {
         .from(tables.effective_entities)
         .where(
           and(
-            eq(tables.effective_entities.principal, principal),
             eq(tables.effective_entities.item_id, a.itemId),
             eq(tables.effective_entities.resource, a.resource),
             eq(tables.effective_entities.parent_id, a.parentId),
@@ -541,7 +516,6 @@ export async function explainRecord(db: D1Database, a: Identity) {
           .from(tables.overrides)
           .where(
             and(
-              eq(tables.overrides.principal, principal),
               eq(tables.overrides.item_id, a.itemId),
               eq(tables.overrides.resource, a.resource),
               eq(tables.overrides.parent_id, a.parentId),
@@ -555,10 +529,9 @@ export async function explainRecord(db: D1Database, a: Identity) {
 
 export async function authorizeAccount(
   db: D1Database,
-  principal: string,
   a: { itemId: string; accountId: string },
 ) {
-  await requireResource(db, principal, a.itemId, "accounts");
+  await requireResource(db, a.itemId, "accounts");
   if (
     !(await preparedStatement(
       db,
@@ -567,7 +540,6 @@ export async function authorizeAccount(
         .from(tables.entities)
         .where(
           and(
-            eq(tables.entities.principal, principal),
             eq(tables.entities.item_id, a.itemId),
             eq(tables.entities.resource, "accounts"),
             eq(tables.entities.id, a.accountId),

@@ -56,9 +56,9 @@ beforeEach(async () => {
 });
 afterEach(() => vi.unstubAllGlobals());
 
-test("D1 queries, local corrections and task progress remain available without Pluggy or vault credentials", async () => {
+test("D1 queries, local corrections and task progress remain available without Pluggy credentials", async () => {
   const { db, op } = await setup();
-  const engine = await rulesFor(db, "alice", op.rules_revision);
+  const engine = await rulesFor(db, op.rules_revision);
   await db.batch(
     (
       await prepareEntity(
@@ -76,7 +76,7 @@ test("D1 queries, local corrections and task progress remain available without P
     upstream++;
     throw new Error("Pluggy unavailable");
   });
-  const queries = financialQueries(env(db), "alice");
+  const queries = financialQueries(env(db));
   assert.equal(
     (await queries.query({ resource: "transactions", limit: 50 })).records
       .length,
@@ -87,9 +87,9 @@ test("D1 queries, local corrections and task progress remain available without P
       .groups[0]?.totalMinor,
     "1001",
   );
-  const { principal: _principal, ...reference } = identity("offline");
+  const reference = identity("offline");
   const before = await db
-    .prepare("SELECT revision FROM principals WHERE id='alice'")
+    .prepare("SELECT revision FROM settings WHERE id=1")
     .first("revision");
   await queries.correctRecord({
     ...reference,
@@ -107,11 +107,11 @@ test("D1 queries, local corrections and task progress remain available without P
   assert.equal(explanation.tags[0]?.origin, "manual");
   assert.equal(
     await db
-      .prepare("SELECT revision FROM principals WHERE id='alice'")
+      .prepare("SELECT revision FROM settings WHERE id=1")
       .first("revision"),
     Number(before) + 2,
   );
-  const publicTask = await task(env(db), "alice", op.id);
+  const publicTask = await task(env(db), op.id);
   assert.equal(publicTask.status, "working");
   for (const field of [
     "input_hash",
@@ -121,8 +121,9 @@ test("D1 queries, local corrections and task progress remain available without P
   ])
     assert.ok(!JSON.stringify(publicTask).includes(field));
   await assert.rejects(
-    financialQueries(env(db), "bob").correctRecord({
+    financialQueries(env(db)).correctRecord({
       ...reference,
+      itemId: "unknown-item",
       field: "description",
       value: "forged",
     }),
@@ -161,16 +162,15 @@ const transaction = (id: string, extra: Partial<ProviderRecord> = {}) => ({
 async function setup() {
   const db = bindings.DB;
   await db.exec(
-    `INSERT INTO principals(id) VALUES('alice'),('bob');INSERT INTO items VALUES('alice','item','["accounts","transactions"]',1);INSERT INTO items VALUES('bob','other','["accounts"]',1);`,
+    `INSERT INTO items VALUES('item','["accounts","transactions"]',1);`,
   );
-  const op = await startOperation(db, "alice", "first", {
+  const op = await startOperation(db, "first", {
     kind: "sync",
     itemIds: ["item"],
   });
   return { db, op };
 }
 const identity = (id: string): Identity => ({
-  principal: "alice",
   itemId: "item",
   resource: "transactions",
   parentId: "account",
@@ -243,9 +243,6 @@ function instance(id: string): DurableInstance {
     async status() {
       return { status: "running" };
     },
-    async subscribe() {
-      throw new Error("Unexpected native subscription in SQL unit test");
-    },
   };
 }
 // Synthetic binding boundary: these unit tests exercise DB and FINANCE; runtime tests separately verify rejection of forged OAuth identity headers.
@@ -281,10 +278,10 @@ test("bootstrap all pages, incremental floor excludes old history and classifies
     ).n,
     2,
   );
-  const first = await getOperation(db, "alice", op.id);
+  const first = await getOperation(db, op.id);
   assert.equal(first.status, "completed");
   assert.equal(JSON.parse(first.progress).classified, 2);
-  const next = await startOperation(db, "alice", "second", {
+  const next = await startOperation(db, "second", {
     kind: "sync",
     itemIds: ["item"],
   });
@@ -295,7 +292,7 @@ test("bootstrap all pages, incremental floor excludes old history and classifies
     steps(),
     source,
   );
-  const second = await getOperation(db, "alice", next.id);
+  const second = await getOperation(db, next.id);
   assert.equal(JSON.parse(second.progress).classified, 0);
   assert.equal(
     required(source.calls.find((c) => c.resource === "transactions")).floor,
@@ -312,20 +309,20 @@ test("bootstrap all pages, incremental floor excludes old history and classifies
     2,
   );
 });
-test("idempotent operation, foreign principal denied and dispatch response loss recovered", async () => {
+test("idempotent operation, unknown Items denied and dispatch response loss recovered", async () => {
   const { db, op } = await setup();
   assert.equal(
     (
-      await startOperation(db, "alice", "first", {
+      await startOperation(db, "first", {
         kind: "sync",
         itemIds: ["item"],
       })
     ).id,
     op.id,
   );
-  await assert.rejects(getOperation(db, "bob", op.id));
+  await assert.rejects(getOperation(db, "unknown-operation"));
   await assert.rejects(
-    startOperation(db, "bob", "bad", { kind: "sync", itemIds: ["item"] }),
+    startOperation(db, "bad", { kind: "sync", itemIds: ["other"] }),
   );
   let creates = 0;
   await syncService({
@@ -429,7 +426,7 @@ test("rule phases, priorities, exact decimals, accents, templates, tags and reje
 });
 test("manual override survives sync, rule version changes and exact SQL aggregate above Number safe range", async () => {
   const { db, op } = await setup(),
-    engine = await rulesFor(db, "alice", op.rules_revision),
+    engine = await rulesFor(db, op.rules_revision),
     i = identity("huge");
   let p = await prepareEntity(
     db,
@@ -453,10 +450,10 @@ test("manual override survives sync, rule version changes and exact SQL aggregat
     engine,
   );
   await db.batch(p.statements);
-  const query = await queryEntities(db, "alice", {});
+  const query = await queryEntities(db, {});
   assert.equal(required(query.records[0]).effective_description, "Manual");
   assert.equal(
-    required((await aggregateEntities(db, "alice", {})).groups[0]).totalMinor,
+    required((await aggregateEntities(db, {})).groups[0]).totalMinor,
     "-900719925474099302",
   );
   const rules = structuredClone(EMPTY_RULES);
@@ -471,7 +468,7 @@ test("manual override survives sync, rule version changes and exact SQL aggregat
       actions: [{ op: "set_description", value: "New rules" }],
     }),
   );
-  await saveRules(db, "alice", rules, true);
+  await saveRules(db, rules, true);
   const unchanged = await prepareEntity(
     db,
     i,
@@ -486,14 +483,13 @@ test("manual override survives sync, rule version changes and exact SQL aggregat
   assert.equal(unchanged.classified, 0);
   await override(db, i, "description", null);
   assert.equal(
-    required((await queryEntities(db, "alice", {})).records[0])
-      .effective_description,
+    required((await queryEntities(db, {})).records[0]).effective_description,
     "Changed",
   );
 });
 test("filters select exact amounts, composition and revision rejects stale pagination", async () => {
   const { db, op } = await setup(),
-    engine = await rulesFor(db, "alice", op.rules_revision);
+    engine = await rulesFor(db, op.rules_revision);
   for (const [id, amount] of [
     ["a", "-10.01"],
     ["b", "-20.02"],
@@ -516,19 +512,15 @@ test("filters select exact amounts, composition and revision rejects stale pagin
       { field: "currency", op: "eq", value: "BRL" },
     ],
   };
+  assert.equal((await queryEntities(db, { filter })).records.length, 1);
   assert.equal(
-    (await queryEntities(db, "alice", { filter })).records.length,
-    1,
-  );
-  assert.equal(
-    required((await aggregateEntities(db, "alice", { filter })).groups[0])
-      .totalMinor,
+    required((await aggregateEntities(db, { filter })).groups[0]).totalMinor,
     "-2002",
   );
-  const first = await queryEntities(db, "alice", { limit: 1 });
+  const first = await queryEntities(db, { limit: 1 });
   await override(db, identity("a"), "description", "edited");
   await assert.rejects(
-    queryEntities(db, "alice", { cursor: first.cursor }),
+    queryEntities(db, { cursor: first.cursor }),
     /RESTART_REQUIRED/,
   );
   assert.ok(moneyKey("-100") < moneyKey("-1"));
@@ -581,7 +573,7 @@ const rpc = (
     },
     body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
   });
-test("modern Tasks wire rejects absent capability, returns flat durable handle and authorizes get/update/cancel", async () => {
+test("modern Tasks wire rejects absent capability, returns flat durable handle and validates get/update/cancel", async () => {
   const { db } = await setup(),
     e = env(db),
     args = {
@@ -589,21 +581,24 @@ test("modern Tasks wire rejects absent capability, returns flat durable handle a
       arguments: { requestKey: "wire", itemIds: ["item"] },
     };
   const missing = await responseJson(
-    await fetchMcp(rpc("tools/call", args), e, "alice"),
+    await fetchMcp(rpc("tools/call", args), e),
   );
   assert.equal(required(missing.error).code, -32021);
   const created = await responseJson(
-    await fetchMcp(rpc("tools/call", { ...args, _meta: meta }), e, "alice"),
+    await fetchMcp(rpc("tools/call", { ...args, _meta: meta }), e),
   );
   assert.equal(required(created.result).resultType, "task");
   assert.equal(required(created.result).task, undefined);
   const taskId = required(required(created.result).taskId);
   const get = await responseJson(
-    await fetchMcp(rpc("tasks/get", { taskId, _meta: meta }), e, "alice"),
+    await fetchMcp(rpc("tasks/get", { taskId, _meta: meta }), e),
   );
   assert.equal(required(get.result).taskId, taskId);
   const forbidden = await responseJson(
-    await fetchMcp(rpc("tasks/get", { taskId, _meta: meta }), e, "bob"),
+    await fetchMcp(
+      rpc("tasks/get", { taskId: "unknown-task", _meta: meta }),
+      e,
+    ),
   );
   assert.ok(forbidden.error);
   const update = await responseJson(
@@ -614,18 +609,17 @@ test("modern Tasks wire rejects absent capability, returns flat durable handle a
         _meta: meta,
       }),
       e,
-      "alice",
     ),
   );
   assert.deepEqual(update.result, { resultType: "complete" });
   const cancel = await responseJson(
-    await fetchMcp(rpc("tasks/cancel", { taskId, _meta: meta }), e, "alice"),
+    await fetchMcp(rpc("tasks/cancel", { taskId, _meta: meta }), e),
   );
   assert.deepEqual(cancel.result, { resultType: "complete" });
 });
 test("reapply freezes selection even when its filter changes and preserves manual overrides", async () => {
   const { db, op } = await setup(),
-    engine = await rulesFor(db, "alice", op.rules_revision);
+    engine = await rulesFor(db, op.rules_revision);
   for (let n = 0; n < 43; n++)
     await db.batch(
       (
@@ -652,8 +646,8 @@ test("reapply freezes selection even when its filter changes and preserves manua
       actions: [{ op: "set_description", value: "Changed" }],
     }),
   );
-  await saveRules(db, "alice", rules, true);
-  const run = await startOperation(db, "alice", "reapply", {
+  await saveRules(db, rules, true);
+  const run = await startOperation(db, "reapply", {
     kind: "reapply",
     itemIds: ["item"],
     filter: { field: "original.description", op: "eq", value: "Café" },
@@ -683,19 +677,18 @@ test("reapply freezes selection even when its filter changes and preserves manua
     "Manual",
   );
   assert.equal(
-    JSON.parse((await getOperation(db, "alice", run.id)).progress).classified,
+    JSON.parse((await getOperation(db, run.id)).progress).classified,
     43,
   );
 });
 test("updated/deleted webhooks resolve current state, delayed deletion does not erase reappearance", async () => {
   const { db, op } = await setup(),
-    engine = await rulesFor(db, "alice", op.rules_revision);
+    engine = await rulesFor(db, op.rules_revision);
   await db.batch(
     (
       await prepareEntity(
         db,
         {
-          principal: "alice",
           itemId: "item",
           resource: "accounts",
           parentId: "",
@@ -723,11 +716,10 @@ test("updated/deleted webhooks resolve current state, delayed deletion does not 
   async function event(key: string, records: ProviderRecord[]) {
     await db
       .prepare(
-        "INSERT INTO inbox(event_id,principal,item_id,account_id,event,payload,received_at) VALUES(?,?,?,?,?,?,?)",
+        "INSERT INTO inbox(event_id,item_id,account_id,event,payload,received_at) VALUES(?,?,?,?,?,?)",
       )
       .bind(
         key,
-        "alice",
         "item",
         "account",
         "transactions/deleted",
@@ -735,7 +727,7 @@ test("updated/deleted webhooks resolve current state, delayed deletion does not 
         new Date().toISOString(),
       )
       .run();
-    const o = await startOperation(db, "alice", key, {
+    const o = await startOperation(db, key, {
       kind: "webhook",
       itemIds: ["item"],
       eventId: key,
@@ -772,13 +764,13 @@ test("updated/deleted webhooks resolve current state, delayed deletion does not 
 });
 test("future matures once without rule evaluation; cancellation preserves prior commits", async () => {
   const { db, op } = await setup(),
-    engine = await rulesFor(db, "alice", op.rules_revision);
+    engine = await rulesFor(db, op.rules_revision);
   const future = transaction("future", { date: "2099-01-01T00:00:00.000Z" });
   await db.batch(
     (await prepareEntity(db, identity("future"), future, account, op, engine))
       .statements,
   );
-  const run = await startOperation(db, "alice", "mature", {
+  const run = await startOperation(db, "mature", {
     kind: "reapply",
     itemIds: ["item"],
     filter: { field: "account", op: "eq", value: "nonexistent" },
@@ -802,10 +794,10 @@ test("future matures once without rule evaluation; cancellation preserves prior 
     1,
   );
   assert.equal(
-    JSON.parse((await getOperation(db, "alice", run.id)).progress).classified,
+    JSON.parse((await getOperation(db, run.id)).progress).classified,
     0,
   );
-  const cancelled = await startOperation(db, "alice", "cancelled", {
+  const cancelled = await startOperation(db, "cancelled", {
     kind: "sync",
     itemIds: ["item"],
   });
@@ -819,10 +811,7 @@ test("future matures once without rule evaluation; cancellation preserves prior 
     steps(),
     providerFixture(),
   );
-  assert.equal(
-    (await getOperation(db, "alice", cancelled.id)).status,
-    "cancelled",
-  );
+  assert.equal((await getOperation(db, cancelled.id)).status, "cancelled");
   assert.equal(
     required(
       await db
@@ -859,7 +848,7 @@ test("page commit is replay-safe when Workflow loses the step acknowledgement", 
     source,
   );
   assert.equal(
-    JSON.parse((await getOperation(db, "alice", op.id)).progress).classified,
+    JSON.parse((await getOperation(db, op.id)).progress).classified,
     2,
   );
   assert.equal(
@@ -981,7 +970,7 @@ test("bootstrap retains every supported resource and both account/investment par
 
 test("exact metrics retain BANK/CREDIT signs and ignore manual tags without erasing source", async () => {
   const { db, op } = await setup(),
-    engine = await rulesFor(db, "alice", op.rules_revision);
+    engine = await rulesFor(db, op.rules_revision);
   for (const [id, type, amount, parent] of [
     ["bank", "DEBIT", "-10", account],
     ["card", "DEBIT", "10", { ...account, type: "CREDIT" }],
@@ -999,36 +988,34 @@ test("exact metrics retain BANK/CREDIT signs and ignore manual tags without eras
       ).statements,
     );
   }
-  const gross = await aggregateEntities(db, "alice", { metric: "amount" }),
-    flow = await aggregateEntities(db, "alice", { metric: "cashFlow" });
+  const gross = await aggregateEntities(db, { metric: "amount" }),
+    flow = await aggregateEntities(db, { metric: "cashFlow" });
   assert.equal(required(gross.groups[0]).totalMinor, "2000");
   assert.equal(required(flow.groups[0]).totalMinor, "-1000");
   const { invoke } = await import("#worker/mcp/invoke.ts");
-  await invoke(financialQueries(env(db), "alice"), "caderninho_override", {
+  await invoke(financialQueries(env(db)), "caderninho_override", {
     ...identity("bank"),
-    principal: undefined,
     field: "tag",
     key: "project",
     value: "personal",
   });
   assert.equal(
     (
-      await queryEntities(db, "alice", {
+      await queryEntities(db, {
         filter: { tag: "project", value: "personal" },
       })
     ).records.length,
     1,
   );
-  await invoke(financialQueries(env(db), "alice"), "caderninho_override", {
+  await invoke(financialQueries(env(db)), "caderninho_override", {
     ...identity("bank"),
-    principal: undefined,
     field: "tag",
     key: "project",
     value: null,
   });
   assert.equal(
     (
-      await queryEntities(db, "alice", {
+      await queryEntities(db, {
         filter: { tag: "project", value: "personal" },
       })
     ).records.length,
@@ -1064,7 +1051,7 @@ test("migration is replay-safe, preserves useful legacy-only history and reports
       },
     },
   ];
-  const m = await startOperation(db, "alice", "migration-one", {
+  const m = await startOperation(db, "migration-one", {
     kind: "migration",
     itemIds: ["item"],
     migration,
@@ -1096,15 +1083,10 @@ test("migration is replay-safe, preserves useful legacy-only history and reports
     ).normalizer,
     "legacy-projection-v1",
   );
-  const reconcile = await startOperation(
-    db,
-    "alice",
-    "reconcile-after-migration",
-    {
-      kind: "reconcile",
-      itemIds: ["item"],
-    },
-  );
+  const reconcile = await startOperation(db, "reconcile-after-migration", {
+    kind: "reconcile",
+    itemIds: ["item"],
+  });
   await runOperation(
     synchronizationDependencies(env(db)),
     reconcile.id,
@@ -1123,7 +1105,7 @@ test("migration is replay-safe, preserves useful legacy-only history and reports
 
 test("preview, SQL filters and reapply select the same scoped universe; cursor cannot change filter", async () => {
   const { db, op } = await setup(),
-    engine = await rulesFor(db, "alice", op.rules_revision);
+    engine = await rulesFor(db, op.rules_revision);
   for (let n = 0; n < 4; n++)
     await db.batch(
       (
@@ -1149,7 +1131,7 @@ test("preview, SQL filters and reapply select the same scoped universe; cursor c
       actions: [{ op: "set_description", value: "Changed" }],
     }),
   ];
-  const revision = (await saveRules(db, "alice", doc, true)).id,
+  const revision = (await saveRules(db, doc, true)).id,
     filter = FilterSchema.parse({
       field: "amountMinor",
       op: "lte",
@@ -1159,23 +1141,23 @@ test("preview, SQL filters and reapply select the same scoped universe; cursor c
   const preview = z
     .object({ selected: z.number(), differences: z.array(z.json()) })
     .parse(
-      await invoke(financialQueries(env(db), "alice"), "caderninho_preview", {
+      await invoke(financialQueries(env(db)), "caderninho_preview", {
         itemIds: ["item"],
         revision,
         filter,
       }),
     );
-  const query = await queryEntities(db, "alice", { filter, limit: 1 });
+  const query = await queryEntities(db, { filter, limit: 1 });
   assert.equal(preview.selected, 3);
   assert.equal(preview.differences.length, 3);
   await assert.rejects(
-    queryEntities(db, "alice", {
+    queryEntities(db, {
       filter: { field: "amountMinor", op: "lte", value: "-100" },
       cursor: query.cursor,
     }),
     /CURSOR_SCOPE/,
   );
-  const apply = await startOperation(db, "alice", "preview-apply", {
+  const apply = await startOperation(db, "preview-apply", {
     kind: "reapply",
     itemIds: ["item"],
     filter,
@@ -1237,7 +1219,7 @@ test("transient page failure retries the same checkpoint; failed incomplete page
     ).bootstrap_complete,
     1,
   );
-  const failed = await startOperation(db, "alice", "incomplete", {
+  const failed = await startOperation(db, "incomplete", {
     kind: "reconcile",
     itemIds: ["item"],
   });
@@ -1266,8 +1248,7 @@ test("transient page failure retries the same checkpoint; failed incomplete page
     "partial",
   );
   assert.equal(
-    JSON.parse((await getOperation(db, "alice", failed.id)).result ?? "null")
-      .isError,
+    JSON.parse((await getOperation(db, failed.id)).result ?? "null").isError,
     true,
   );
   assert.equal(
@@ -1284,13 +1265,13 @@ test("transient page failure retries the same checkpoint; failed incomplete page
 
 test("irrelevant provider fields do not trigger rules; explicit normalization backfill does", async () => {
   const { db, op } = await setup(),
-    engine = await rulesFor(db, "alice", op.rules_revision),
+    engine = await rulesFor(db, op.rules_revision),
     raw = transaction("stable");
   await db.batch(
     (await prepareEntity(db, identity("stable"), raw, account, op, engine))
       .statements,
   );
-  const next = await startOperation(db, "alice", "stable", {
+  const next = await startOperation(db, "stable", {
     kind: "sync",
     itemIds: ["item"],
   });
@@ -1309,7 +1290,7 @@ test("irrelevant provider fields do not trigger rules; explicit normalization ba
   );
   assert.equal(unchanged.classified, 0);
   assert.equal(unchanged.state, "unchanged");
-  const forced = await startOperation(db, "alice", "backfill", {
+  const forced = await startOperation(db, "backfill", {
     kind: "reconcile",
     itemIds: ["item"],
     renormalize: true,
@@ -1344,14 +1325,14 @@ test("operational retention does not remove financial records, rule provenance o
   );
   assert.equal(
     (
-      await startOperation(db, "alice", "first", {
+      await startOperation(db, "first", {
         kind: "sync",
         itemIds: ["item"],
       })
     ).id,
     op.id,
   );
-  assert.ok(await rulesFor(db, "alice", op.rules_revision));
+  assert.ok(await rulesFor(db, op.rules_revision));
 });
 
 test("changed totals during pagination retain partial coverage and never advance complete checkpoint", async () => {
@@ -1409,7 +1390,7 @@ function fixtureRule(r: {
 
 test("native D1 rolls back entity data and checkpoint when any batch statement fails", async () => {
   const { db, op } = await setup();
-  const engine = await rulesFor(db, "alice", op.rules_revision);
+  const engine = await rulesFor(db, op.rules_revision);
   const entity = await prepareEntity(
     db,
     identity("atomic"),
@@ -1427,8 +1408,8 @@ test("native D1 rolls back entity data and checkpoint when any batch statement f
         )
         .bind(op.id, "item", "transactions"),
       db
-        .prepare("INSERT INTO locks(principal,operation_id) VALUES(?,?)")
-        .bind("alice", "missing-operation"),
+        .prepare("INSERT INTO locks(operation_id) VALUES(?)")
+        .bind("missing-operation"),
     ]),
   );
   assert.equal(
@@ -1476,37 +1457,34 @@ test("legacy revisions remain readable; explicit conversion creates a new revisi
   const serialized = JSON.stringify(old);
   await db
     .prepare(
-      "INSERT INTO rule_sets(principal,id,document,normalizer,created_at,ready) VALUES(?,?,?,?,?,1)",
+      "INSERT INTO rule_sets(id,document,normalizer,created_at,ready) VALUES(?,?,?,?,1)",
     )
-    .bind("alice", "legacy", serialized, NORMALIZER, new Date().toISOString())
+    .bind("legacy", serialized, NORMALIZER, new Date().toISOString())
     .run();
   await db
-    .prepare("UPDATE principals SET active_rules='legacy' WHERE id='alice'")
+    .prepare("UPDATE settings SET active_rules='legacy' WHERE id=1")
     .run();
-  const frozen = await startOperation(db, "alice", "legacy-operation", {
+  const frozen = await startOperation(db, "legacy-operation", {
     kind: "sync",
     itemIds: ["item"],
   });
-  assert.deepEqual(await readRules(db, "alice", "legacy"), old);
+  assert.deepEqual(await readRules(db, "legacy"), old);
   assert.deepEqual(
-    await invoke(financialQueries(env(db), "alice"), "caderninho_rules", {
+    await invoke(financialQueries(env(db)), "caderninho_rules", {
       action: "read",
       revision: "legacy",
     }),
     old,
   );
   await assert.rejects(
-    rulesFor(db, "alice", "legacy"),
+    rulesFor(db, "legacy"),
     /RULES_V1_REQUIRES_EXPLICIT_CONVERSION_AND_ACTIVATION/,
   );
   const report = convertRules(old);
   assert.ok(report.document);
-  const saved = await saveRules(db, "alice", report.document, true);
+  const saved = await saveRules(db, report.document, true);
   assert.notEqual(saved.id, "legacy");
-  assert.equal(
-    (await getOperation(db, "alice", frozen.id)).rules_revision,
-    "legacy",
-  );
+  assert.equal((await getOperation(db, frozen.id)).rules_revision, "legacy");
   assert.equal(
     await db
       .prepare("SELECT document FROM rule_sets WHERE id='legacy'")
@@ -1514,11 +1492,8 @@ test("legacy revisions remain readable; explicit conversion creates a new revisi
     serialized,
   );
   assert.equal(
-    (
-      await (
-        await rulesFor(db, "alice", saved.id)
-      ).evaluate(txContext({ id: "x" }))
-    ).description,
+    (await (await rulesFor(db, saved.id)).evaluate(txContext({ id: "x" })))
+      .description,
     "Legacy",
   );
 });
@@ -1545,7 +1520,6 @@ test("HTTP conversion defaults to dry run and oversized import bodies fail befor
       body: JSON.stringify({ document: old }),
     }),
     env(db),
-    "alice",
   );
   assert.equal(response.status, 200);
   const report = z
@@ -1566,113 +1540,15 @@ test("HTTP conversion defaults to dry run and oversized import bodies fail befor
         body: " ".repeat(1048577),
       }),
       env(db),
-      "alice",
     ),
     /BODY_LIMIT/,
   );
 });
 
-test("Hono OAuth consent requires owner session, escapes client text and preserves consent redirects", async () => {
-  const { db } = await setup();
-  const { oauth } = await import("#worker/auth/controller.ts");
-  const { createExecutionContext } = await import("cloudflare:test");
-  const config = {
-    ...env(db),
-    OWNER_GITHUB_ID: "123",
-    OAUTH_KV: bindings.OAUTH_KV,
-    PUBLIC_ORIGIN: "https://local",
-    GITHUB_CLIENT_ID: "synthetic-app",
-    GITHUB_CLIENT_SECRET: "synthetic-secret",
-  };
-  const { hash, statement } = await import("#worker/database.ts");
-  await db.exec("INSERT INTO principals(id) VALUES('github:123')");
-  await statement(
-    db,
-    "INSERT INTO portal_sessions(id,principal,csrf,expires) VALUES(?,?,?,?)",
-    await hash("synthetic-session"),
-    "github:123",
-    "synthetic-csrf",
-    Date.now() + 60000,
-  ).run();
-  const ownerCookie = "__Host-caderninho=synthetic-session";
-  const provider = oauth(config, async () => new Response("verified"));
-  const request = (path: string, options?: RequestInit) =>
-    provider.fetch(
-      new Request("https://local" + path, options),
-      config,
-      createExecutionContext(),
-    );
-  const registered = await request("/oauth/register", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      client_name: "<script>synthetic</script>",
-      redirect_uris: ["http://localhost:8123/callback"],
-      token_endpoint_auth_method: "none",
-      grant_types: ["authorization_code"],
-      response_types: ["code"],
-    }),
-  });
-  assert.equal(registered.status, 201);
-  const client = z
-    .object({ client_id: z.string() })
-    .parse(await registered.json());
-  const authorize =
-    "/authorize?" +
-    new URLSearchParams({
-      response_type: "code",
-      client_id: client.client_id,
-      redirect_uri: "http://localhost:8123/callback",
-      scope: "finance",
-      code_challenge: "a".repeat(43),
-      code_challenge_method: "S256",
-      state: "synthetic-state",
-    });
-  async function consent(decision: string) {
-    const page = await request(authorize, { headers: { Cookie: ownerCookie } });
-    assert.equal(page.status, 200);
-    assert.match(page.headers.get("Content-Type") ?? "", /text\/html/);
-    const body = await page.text();
-    assert.ok(body.includes("&lt;script&gt;synthetic&lt;/script&gt;"));
-    assert.ok(!body.includes("<script>synthetic</script>"));
-    const handle = z
-      .string()
-      .parse(body.match(/name="handle" value="([^"]+)"/)?.[1]);
-    const cookie = page.headers
-      .getSetCookie()
-      .map((v) => v.split(";")[0])
-      .join("; ");
-    assert.ok(cookie);
-    return request("/authorize", {
-      method: "POST",
-      headers: {
-        Cookie: cookie + "; " + ownerCookie,
-        Origin: "https://local",
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body: new URLSearchParams({ handle, decision }),
-    });
-  }
-  const denied = await consent("deny");
-  assert.equal(denied.status, 302);
-  const target = new URL(z.string().parse(denied.headers.get("Location")));
-  assert.equal(target.origin, "http://localhost:8123");
-  assert.equal(target.searchParams.get("error"), "access_denied");
-  assert.equal(target.searchParams.get("state"), "synthetic-state");
-  assert.ok(denied.headers.get("Set-Cookie"));
-  const approved = await consent("approve");
-  assert.equal(approved.status, 302);
-  const callback = new URL(z.string().parse(approved.headers.get("Location")));
-  assert.equal(callback.origin, "http://localhost:8123");
-  assert.ok(callback.searchParams.get("code"));
-  assert.equal(callback.searchParams.get("state"), "synthetic-state");
-  assert.ok(approved.headers.get("Set-Cookie"));
-});
-
 test("page publication rolls back data, progress, checkpoint and receipt together, then replays once", async () => {
   const { publishPage } = await import("#worker/sync/publication.ts");
   const { db, op } = await setup();
-  const engine = await rulesFor(db, "alice", op.rules_revision);
+  const engine = await rulesFor(db, op.rules_revision);
   await db
     .prepare(
       "INSERT INTO checkpoints(operation_id,item_id,resource,parent_id) VALUES(?,?,'accounts','')",

@@ -249,22 +249,22 @@ export function landingPage() {
               <li>
                 <h3>Instale na sua Cloudflare</h3>
                 <p>
-                  Preencha os campos no botão Cloudflare seguindo as instruções
-                  do README.
+                  Escolha uma senha e informe Client ID e Client Secret da
+                  Pluggy no botão Cloudflare. Veja as instruções do README.
                 </p>
               </li>
               <li>
-                <h3>Conecte sua Pluggy</h3>
+                <h3>Conecte seus bancos</h3>
                 <p>
-                  Valide suas credenciais no painel privado e conecte os bancos
-                  pelo widget oficial.
+                  Entre no painel com sua senha e importe as conexões do Meu
+                  Pluggy.
                 </p>
               </li>
               <li>
                 <h3>Autorize seu cliente MCP</h3>
                 <p>
-                  Conclua a primeira importação e conecte o endereço{" "}
-                  <code>/mcp</code> por OAuth.
+                  Copie o endereço <code>/mcp</code> e conecte seu assistente
+                  por OAuth.
                 </p>
               </li>
             </ol>
@@ -277,10 +277,9 @@ export function landingPage() {
             <details>
               <summary>Onde ficam os dados e as credenciais?</summary>
               <p>
-                Na sua Cloudflare. As credenciais Pluggy ficam criptografadas no
-                D1; a chave de proteção é um secret do Worker. O runtime precisa
-                descriptografá-las para sincronizar. O criador do projeto não
-                recebe acesso administrativo à sua conta.
+                Na sua Cloudflare. As credenciais Pluggy ficam nos secrets do
+                seu Worker. O runtime usa essas credenciais para sincronizar. O
+                criador do projeto não recebe acesso administrativo à sua conta.
               </p>
               <p>
                 Os resultados consultados pelo MCP ficam disponíveis ao cliente
@@ -310,10 +309,8 @@ export function landingPage() {
             Projeto pessoal de{" "}
             <a href="https://github.com/DanielSuhett">DanielSuhett</a>
           </p>
-          <a href="https://github.com/DanielSuhett/caderninho">
-            Repositório
-          </a>
-          <a href="https://github.com/DanielSuhett/caderninho#instale-na-sua-cloudflare">
+          <a href="https://github.com/DanielSuhett/caderninho">Repositório</a>
+          <a href="https://github.com/DanielSuhett/caderninho#começar">
             Instruções de instalação
           </a>
         </footer>

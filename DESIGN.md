@@ -45,7 +45,7 @@ Superfícies só para agrupar trabalho relacionado. Raios: 10 px nos grupos; 6 p
 
 CTAs descrevem o destino: “Instalar na minha Cloudflare” abre o formulário nativo da Cloudflare; “Entrar nesta instância” vai para `/account`. Exemplos MCP exibem nomes e argumentos do contrato real. Identificar recortes de respostas; não representar exemplos como conexões ou resultados reais.
 
-Manter validações, proteção CSRF, campos ocultos e decisões OAuth ao alterar a apresentação. Telas GitHub e widget Pluggy são de terceiros; não aplicar CSS do produto dentro delas.
+Manter validações, proteção CSRF, campos ocultos e decisões OAuth ao alterar a apresentação. O widget Pluggy é de terceiros; não aplicar CSS do produto dentro delas.
 
 ## Verificação
 
@@ -56,7 +56,7 @@ Decisões de implementação e evidências ficam em `.localdocs`, ignorado pelo 
 ## Apresentação e instalação
 
 A landing apresenta o projeto pessoal, o caminho de instalação e os limites de privacidade.
-O CTA principal abre o formulário nativo da Cloudflare; a entrada da instância vai para `/account`. As instruções de configuração e recuperação ficam no README.
+O CTA principal abre o formulário nativo da Cloudflare; a entrada da instância vai para `/account`. O README concentra a instalação; o guia de uso explica manutenção e recuperação.
 Não inclui simuladores, reprodução automática, exemplos bancários interativos nem motor de
 regras no navegador. A lógica financeira continua no domínio e no Worker.
 
@@ -66,7 +66,7 @@ O conteúdo público não consulta bancos nem representa status de infraestrutur
 
 ## Playground da instância
 
-`/account` reúne onboarding e manutenção. Uma trilha de cinco missões indica evidências reais; o painel exibe uma missão de cada vez. A origem e o ambiente ficam visíveis. A distribuição e a recuperação de acesso são documentadas no README.
+`/account` reúne onboarding e manutenção. Dois passos, Bancos e Assistente, concentram a configuração; o progresso da cópia aparece junto dos bancos. A origem e o ambiente ficam visíveis. A distribuição e a recuperação de acesso são documentadas no README.
 
 Use Hanken, os tokens existentes e controles Kumo. A trilha fica à esquerda no desktop e permite rolagem horizontal no celular. A seleção usa laranja persistente; transição breve de posição respeita reduced-motion. Atualizações de status preservam os elementos e alteram apenas texto/valor. Não adicionar flashes, terminais fictícios, medalhas ou progresso baseado em tempo.
 

@@ -1,14 +1,14 @@
-import { PluggyClient } from "pluggy-sdk";
+import type { PluggyClient } from "pluggy-sdk";
 import { z } from "zod/v4";
 
-import type { Credentials } from "#contracts/wizard-contract.ts";
 import { type Resource, FaultCode } from "#domain/enums.ts";
-import { exactJSON } from "#domain/exact.ts";
 import { Fault } from "#domain/fault.ts";
 import { DEFINITIONS } from "#domain/finance-model.ts";
+import type { Credentials } from "#domain/pluggy-credentials.ts";
 import { ProviderRecordSchema } from "#domain/schemas.ts";
 import { tryCatch } from "#shared/result.ts";
 import type { ConnectionSource } from "#worker/account/service.ts";
+import { PersonalPluggyClient } from "#worker/pluggy/client.adapter.ts";
 import type {
   FinancialSource,
   Steps,
@@ -19,16 +19,7 @@ export function pluggyClient(
   credentials: Credentials,
   maxResponseBytes = 4000000,
 ) {
-  return new PluggyClient({
-    ...credentials,
-    maxResponseBytes,
-    logErrors: false,
-    requestOptions: {
-      parseJson: exactJSON,
-      timeout: { request: 15000 },
-      retry: 0,
-    },
-  });
+  return new PersonalPluggyClient(credentials, maxResponseBytes);
 }
 
 // Translate only transport metadata into public faults. Upstream bodies, URLs and credentials
@@ -115,9 +106,6 @@ export async function connectToken(credentials: Credentials, itemId?: string) {
 }
 
 export const connectionSource: ConnectionSource = {
-  async validateCredentials(credentials) {
-    await connectToken(credentials);
-  },
   async readItem(credentials, itemId) {
     const item = z
       .object({

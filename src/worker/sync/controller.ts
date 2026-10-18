@@ -3,13 +3,9 @@ import type { Bindings } from "#worker/bindings.ts";
 import { syncService } from "#worker/composition.ts";
 import { boundedJson } from "#worker/http.ts";
 
-export async function migrationHttp(
-  request: Request,
-  env: Bindings,
-  principal: string,
-) {
+export async function migrationHttp(request: Request, env: Bindings) {
   const input = MigrationRequestSchema.parse(await boundedJson(request));
-  const result = await syncService(env).migrate(principal, input);
+  const result = await syncService(env).migrate(input);
   // A domain operation handle, not an unnegotiated MCP CreateTaskResult.
   return Response.json(result.body, { status: result.status });
 }

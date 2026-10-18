@@ -76,7 +76,7 @@ export async function publishPage({
       .parse(parseJson(z.string().parse(committed)));
   if ((await stillWorking(db, id)).cancel_requested)
     return { done: true, cancelled: true };
-  await authorizedItems(db, op.principal, [item.id]);
+  await authorizedItems(db, [item.id]);
   const cp = CheckpointSchema.parse(
     await preparedStatement(
       db,
@@ -104,7 +104,6 @@ export async function publishPage({
           .from(tables.entities)
           .where(
             and(
-              eq(tables.entities.principal, op.principal),
               eq(tables.entities.item_id, item.id),
               eq(tables.entities.resource, "connections"),
             ),
@@ -143,7 +142,6 @@ export async function publishPage({
       database(db)
         .insert(tables.coverage)
         .values({
-          principal: op.principal,
           item_id: item.id,
           resource: resource,
           parent_id: parentId,
@@ -151,7 +149,6 @@ export async function publishPage({
         })
         .onConflictDoUpdate({
           target: [
-            tables.coverage.principal,
             tables.coverage.item_id,
             tables.coverage.resource,
             tables.coverage.parent_id,
@@ -210,7 +207,6 @@ export async function publishPage({
     const prepared = await prepareEntity(
       db,
       {
-        principal: op.principal,
         itemId: item.id,
         resource,
         parentId,
@@ -278,7 +274,6 @@ export async function publishPage({
           .set({ deleted: 1 })
           .where(
             and(
-              eq(tables.entities.principal, op.principal),
               eq(tables.entities.item_id, item.id),
               eq(tables.entities.resource, resource),
               eq(tables.entities.parent_id, parentId),
@@ -296,8 +291,7 @@ export async function publishPage({
   edits.push(
     statement(
       db,
-      "INSERT INTO coverage(principal,item_id,resource,parent_id,status,bootstrap_complete,confirmed_created_at,observed_at,parent_signature) VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(principal,item_id,resource,parent_id) DO UPDATE SET status=excluded.status,bootstrap_complete=MAX(coverage.bootstrap_complete,excluded.bootstrap_complete),confirmed_created_at=CASE WHEN excluded.bootstrap_complete=1 THEN excluded.confirmed_created_at ELSE coverage.confirmed_created_at END,observed_at=excluded.observed_at,parent_signature=CASE WHEN excluded.bootstrap_complete=1 THEN excluded.parent_signature ELSE coverage.parent_signature END",
-      op.principal,
+      "INSERT INTO coverage(item_id,resource,parent_id,status,bootstrap_complete,confirmed_created_at,observed_at,parent_signature) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(item_id,resource,parent_id) DO UPDATE SET status=excluded.status,bootstrap_complete=MAX(coverage.bootstrap_complete,excluded.bootstrap_complete),confirmed_created_at=CASE WHEN excluded.bootstrap_complete=1 THEN excluded.confirmed_created_at ELSE coverage.confirmed_created_at END,observed_at=excluded.observed_at,parent_signature=CASE WHEN excluded.bootstrap_complete=1 THEN excluded.parent_signature ELSE coverage.parent_signature END",
       item.id,
       resource,
       parentId,
@@ -324,9 +318,9 @@ export async function publishPage({
     preparedStatement(
       db,
       database(db)
-        .update(tables.principals)
-        .set({ revision: sql`${tables.principals.revision} + 1` })
-        .where(eq(tables.principals.id, op.principal)),
+        .update(tables.settings)
+        .set({ revision: sql`${tables.settings.revision} + 1` })
+        .where(eq(tables.settings.id, 1)),
     ),
     preparedStatement(
       db,

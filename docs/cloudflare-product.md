@@ -1,98 +1,36 @@
-# Caderninho instalável: D1, Workflows e MCP Tasks
+# Referência técnica do Caderninho
 
-O produto executa em `src/worker`, com domínio compartilhado em `src/domain`.
-A configuração de produção é `wrangler.jsonc` na raiz. O painel fica em `src/web`;
-a raiz inteira é necessária para instalar ou desenvolver o produto.
+Uma instalação pessoal usa um Worker, D1, KV, Workflows e assets. O painel React/Kumo
+fica em `/account`; o MCP remoto usa OAuth em `/mcp`.
 
-## Instalação na própria conta
+A [instalação](../README.md#começar) e o [guia de uso](usage.md) concentram as instruções
+para o proprietário. A versão pessoal inicia com banco novo e uma única migração
+inicial. Não aplica conversão nem descarte de bancos da arquitetura anterior.
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/DanielSuhett/caderninho)
+## Configuração e acesso
 
-O botão usa a raiz inteira do repositório: `src/worker` depende de `src/domain` e não
-é um template isolado para um botão apontando à subpasta. Escolha a branch que
-contém a versão desejada antes de instalar; mudanças locais não alteram o código
-usado pelo botão.
+`ADMIN_PASSWORD`, `PLUGGY_CLIENT_ID` e `PLUGGY_CLIENT_SECRET` são secrets do Worker.
+O formulário não coleta UUID, hash administrativo ou chave de cofre. A aplicação
+não armazena credenciais Pluggy no D1. A origem vem do URL da requisição entregue
+pela Cloudflare, com HTTPS em produção; headers de identidade não autenticam.
 
-1. Clique no botão **Deploy to Cloudflare** acima. O formulário da própria Cloudflare permite configurar o projeto, os recursos e as secrets. A Cloudflare copia o repositório público para sua conta GitHub/GitLab.
-2. Confirme o nome do Worker e configure `OWNER_ID`, `PUBLIC_ORIGIN`, `ADMIN_KEY_SHA256`, `CREDENTIAL_KEY` e `WEBHOOK_SECRET` com seus valores. Os dois primeiros também são coletados como secrets para dispensar edição de arquivos. `PUBLIC_ORIGIN` deve ser a URL HTTPS da instalação. Guarde sua chave administrativa separadamente: ela não é o hash nem um token MCP. Os formatos e comandos estão no [README](../README.md#instale-na-sua-cloudflare).
-3. Mantenha a raiz do projeto, o build `npm run build` e o deploy `npm run deploy`. O botão prevê provisionar D1/KV; o deploy declara `FINANCE`/`FinanceWorkflow` e aplica as migrações pelo binding `DB`. O comando de migração não cria D1 por conta própria: no terminal, provisione/vincule o banco antes. A combinação do botão, migrações e Workflow ainda precisa ser validada em uma conta Cloudflare nova. O build inclui somente assets e dry-run, sem publicar.
-4. Após o deploy, abra `/account` e entre com a chave administrativa que você guardou. As cinco missões verificam sua instalação, validam suas próprias credenciais Pluggy e conectam Meu Pluggy pelo widget oficial. **Não configure secrets Pluggy globais nem cadastre Items diretamente por SQL.** `/account/setup` preserva links antigos. `WEBHOOK_SECRET` fica preparado para webhooks opcionais; a agenda funciona sem cadastrá-los na Pluggy.
-5. Acompanhe a primeira importação e conecte `/mcp` em um cliente com OAuth, escopo `finance` e, quando necessário, `offline_access`. Confira cobertura antes de usar totais. Sync diário e reconciliação semanal respeitam a atualização da origem.
+O painel usa sessão de oito horas, CSRF, cookies HttpOnly/Secure/SameSite e limite
+atômico de dez tentativas de login por minuto. A sessão guarda o ID da versão do
+Worker; um novo deploy invalida as sessões anteriores. O OAuth oficial mantém seus
+grants em KV, com subject interno `owner`. A ação de desconectar assistentes revoga
+todos esses grants e exige novo consentimento para conexões futuras.
 
-### Pendências antes de recomendar instalações de terceiros
+D1 mantém uma configuração da instalação: revisão financeira, regras ativas,
+agenda e hash do Client ID. A primeira conexão vincula a aplicação Pluggy. Mudança
+do Client ID é recusada antes de novos acessos ao provedor; consultas locais
+continuam disponíveis. O segredo da mesma aplicação pode ser renovado na Cloudflare.
 
-O código-fonte público não confirma que o provisionamento está pronto para contas novas.
-Antes de recomendar instalações de terceiros, conclua estes itens da auditoria:
-
-1. Isolar recursos por instalação. `wrangler.jsonc` ainda fixa D1 como `caderninho` e
-   Workflow como `caderninho-finance`; mudar só o Worker não garante isolamento.
-   Preserve os identificadores e recursos de instalações existentes.
-2. Validar o primeiro deploy real pelo botão: provisionamento de D1, aplicação de migrações,
-   criação do Workflow, entrada no painel e autorização MCP numa conta nova.
-
-URLs de preview permanecem desabilitadas por `preview_urls: false`, como informado no
-README. Habilitar previews requer configuração e validação próprias.
-
-As limitações do botão estão na [documentação Cloudflare](https://developers.cloudflare.com/workers/platform/deploy-buttons/#limitations).
-A configuração de [Workflows](https://developers.cloudflare.com/workers/wrangler/configuration/#workflows)
-deve ser conferida antes de definir nomes por instalação. Esses itens não autorizam
-publicação, deploy, migração real ou alteração de recursos existentes.
-
-### Atualizações e instalações existentes
-
-Não gere nova identidade ou chave de cofre para atualizar. Preserve `OWNER_ID` ou
-`OWNER_GITHUB_ID`, `CREDENTIAL_KEY` e o domínio já configurado. As variáveis existentes
-no painel são preservadas por `keep_vars`; instalações novas coletam os valores pelo
-formulário de secrets. GitHub permanece opcional com `GITHUB_CLIENT_ID`,
-`GITHUB_CLIENT_SECRET` e callback `/callback`.
-
-Os valores obrigatórios e a recuperação da chave administrativa estão no
-[README](../README.md#instale-na-sua-cloudflare). Não troque a identidade ou a chave
-do cofre para recuperar somente o login.
-
-Fontes: [Deploy to Cloudflare](https://developers.cloudflare.com/workers/platform/deploy-buttons/),
-[provisionamento Wrangler](https://developers.cloudflare.com/workers/wrangler/configuration/#automatic-provisioning)
-e [migrações D1](https://developers.cloudflare.com/workers/wrangler/commands/d1/#d1-migrations-apply).
-
-A landing é estática e abre o botão Cloudflare diretamente. O painel privado fica em `/account`.
-As páginas usam Kumo, com recursos servidos pela própria instalação. O checklist
-verifica configuração e estrutura D1; não comprova OAuth, banco ou cliente MCP reais.
-A aplicação não cobra assinatura, mas os limites/custos das contas Cloudflare e
-Pluggy continuam aplicáveis. Cada proprietário controla a instalação; o criador
-não recebe acesso administrativo padrão. Isso não equivale a E2EE contra os
-provedores que processam os dados.
-
-### Recuperar e atualizar
-
-Em `/account`, pause ou retome a agenda e solicite captura manual. Falhas preservam
-os dados já confirmados; consulte cobertura antes de usar valores. Para renovar
-Client Secret, volte à etapa 2 e use a mesma aplicação. Uma aplicação diferente
-exige migração explícita; não reaproveitar seus Items silenciosamente.
-
-Para trocar a chave do cofre sem perder acesso: guarde backup e a chave antiga,
-configure a antiga como `CREDENTIAL_PREVIOUS_KEY`, configure a nova chave aleatória
-como `CREDENTIAL_KEY` e use **Proteger credenciais com a chave atual** em `/account`.
-Após sucesso, remova a chave anterior do Worker. Guarde-a junto dos backups antigos;
-eles continuam dependendo dela. Não digite essas chaves no portal ou no assistente.
-
-Antes de atualizar, exporte D1 para armazenamento privado e guarde separadamente
-secrets e configuração. O SQL exportado contém dados financeiros em claro; não o
-adicione ao Git. Restaure primeiro em um banco novo e isolado, com cron e acessos
-externos desativados. Backup D1 não inclui secrets, grants KV ou estado nativo dos
-Workflows: restabeleça configuração, invalide sessões restauradas e refaça OAuth.
-Nunca substitua o banco ativo antes de conferir cobertura e operações pendentes.
-O teste `test:product:runtime` verifica exportação/restauração de D1 sintético local;
-recuperação completa de infraestrutura real continua uma validação separada.
-
-O OAuth usa `@cloudflare/workers-oauth-provider` mantido pela Cloudflare, com
-registro de cliente, consentimento, PKCE, sessão do dono e principal verificado
-pela identidade configurada da instalação. Headers de identidade fornecidos pelo cliente
-não autenticam a entrada pública.
-A identidade é por request. Revogar `items.enabled` impede novas leituras da Task,
-resultado, cancelamento, stream e dados; a execução revalida a autorização em
-fronteiras de publicação. O banco é privado por instalação e cada tabela financeira
-é isolada por principal/Item. Os testes com headers sintéticos estão **somente**
-em `tests/integration/runtime.ts`, nunca no entrypoint de produção.
+O botão provisiona D1/KV; o deploy aplica migrações por `DB` e declara o Workflow.
+A instalação completa em conta nova, incluindo permissões, precisa de validação
+real separada. Previews ficam desabilitados. Fontes: [botão Cloudflare](https://developers.cloudflare.com/workers/platform/deploy-buttons/)
+e [secrets](https://developers.cloudflare.com/workers/configuration/secrets/).
+`WEBHOOK_SECRET` é opcional e só deve ser configurado ao habilitar webhooks; sem ele,
+o endpoint recusa recebimentos. A agenda funciona sem webhooks.
 
 ## Primeira carga e manutenção
 
@@ -264,15 +202,10 @@ Last-Event-ID não é usado. Até dez Tasks por escuta, cinco minutos por conex�
 backpressure com fila limitada. Desconexão libera fontes/timers e não cancela a
 operação. Reconexão cria nova assinatura e recupera estado corrente.
 
-**D1 é a fonte padrão de progresso**, conforme decisão do usuário. Cada subscriber
-consulta estados autorizados a cada cinco segundos (inclui consultas de autorização
-por Task); isso tem custo de leituras, não de reprocessamento financeiro.
-`TASK_EVENT_SOURCE=workflow` habilita WorkflowInstance.subscribe como sinal interno;
-D1 continua sendo a autoridade do estado e um polling de segurança cobre ausência/falha do stream nativo. A abertura nativa tem timeout de dois segundos; falha mantém D1. O cursor eventId dessa API não é MCP.
-Não há broker/DO adicional. A execução financeira não depende de Promise solta/waitUntil. O lifecycle da escuta usa waitUntil exclusivamente para manter a resposta SSE e liberar recursos.
-
-O teste wire em workerd verifica D1 e a opção nativa, dois subscribers, desconexão,
-reconexão terminal e isolamento. Isso **não prova suporte nativo no ChatGPT**.
+D1 é a única fonte de progresso. Cada subscriber consulta o estado a cada cinco
+segundos; o timer do SSE não executa trabalho financeiro. O teste wire em workerd
+verifica dois subscribers, desconexão e reconexão terminal. Isso não comprova suporte
+nativo no ChatGPT ou Claude.
 Clientes sem negociação recebem erro de capability, nunca CreateTaskResult indevido;
 consultas pequenas/status continuam disponíveis. A implementação não oferece um
 segundo executor para contornar essa limitação do cliente.
@@ -282,7 +215,7 @@ segundo executor para contornar essa limitação do cliente.
 A operação D1 e a criação do Workflow não formam uma transação. A operação canônica
 é o outbox e tem identidade idempotente; cron recupera dispatched=0. Resposta de
 create perdida é resolvida consultando a instância pelo mesmo ID. Cron também
-finaliza operações cujo Workflow terminou com erro, liberando a fila por principal.
+finaliza operações cujo Workflow terminou com erro, liberando a fila da instalação.
 Lock persistente serializa sync, eventos, migração e reapply; não expira enquanto
 um executor possa publicar. Não existe transação SQL atravessando HTTP.
 
@@ -340,7 +273,7 @@ Remoção de R2 é uma operação separada, posterior ao corte e à aprovação 
 
 O Worker usa bindings D1/KV/Workflows e `cloudflare:workers`. Execução Node/SQLite
 genérica ou em outro runtime exige validação específica. Checks locais não comprovam
-primeiro deploy pelo botão, login GitHub, eventos reais Pluggy ou suporte de Tasks
+primeiro deploy pelo botão, login com senha, eventos reais Pluggy ou suporte de Tasks
 em clientes MCP externos.
 
 Desconectar um subscriber não equivale a reiniciar o executor. Encerrar o Wrangler
@@ -360,5 +293,4 @@ Drizzle define o modelo D1 em `src/worker/schema.ts`; statements e checkpoints
 compartilham batches nativos. As migrações SQL ficam em `migrations`.
 
 Consulte [a arquitetura](adr-modular-monolith.md) para as fronteiras entre módulos,
-[CONTRIBUTING.md](../CONTRIBUTING.md) para os checks e
-[a documentação do patch Pluggy](../patches/README.md) antes de atualizar o SDK.
+[CONTRIBUTING.md](../CONTRIBUTING.md) para os checks. O adapter de transporte preserva os métodos do SDK Pluggy com Fetch, parsing exato, deadlines, limites de bytes e recusa de redirects; não modifica node_modules.

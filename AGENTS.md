@@ -7,7 +7,8 @@ scripts contains tooling; tools/oxlint contains lint rules and their provenance.
 Use the Node 24 line in .nvmrc (nvm use) and npm ci at the repository root.
 engine-strict rejects unsupported Node versions. package.json owns all dependencies
 and commands; package-lock.json is the only lockfile. wrangler.jsonc is the single
-production deployment configuration. Migration files retain their existing order.
+production deployment configuration. The single initial migration targets a new, personal installation; never apply it
+to a database from the former multi-user schema.
 
 Worker code is grouped by feature: account, auth, finance, sync and mcp. Each
 feature keeps controllers, services and concrete repositories together. Controllers
@@ -17,7 +18,7 @@ implementations, bindings or HTTP/runtime code. Controllers cannot import SQL,
 database helpers or the D1 schema. composition.ts binds dependencies per request
 or operation, without global private state, decorators or a DI container.
 sync retains cohesive durable persistence flows beside its service/repository;
-preserve their step names and atomic batches. Pluggy client/vault and shared
+preserve their step names and atomic batches. Pluggy client and shared
 database, schema and HTTP helpers stay outside the feature modules.
 
 Application helpers inside account/auth/finance/sync keep service boundaries even
@@ -33,7 +34,7 @@ in account-api.ts and SDK lifecycle in connect-widget.ts; use-account.ts owns
 coordination, cancellation and polling. Preserve earlier evidence on transient
 failure, reject stale responses and stop polling on session expiry/unmount.
 Pluggy remains an injected ingestion/live-read adapter: local queries, corrections
-and operation progress must continue to work without upstream/vault availability.
+and operation progress must continue to work without upstream availability.
 
 Unit tests belong in __tests__ next to the modules they cover. Worker integration
 and runtime fixtures belong in tests/integration.
@@ -71,12 +72,12 @@ using native package imports plus explicit relative paths.
 - Async recovery uses tryCatch and its discriminated Result union. Normalize caught
   values to Error; synchronous parse catches are allowed. Unknown belongs only at
   input/transport/storage boundaries and must be parsed before consumption.
-- Authentication uses maintained Cloudflare OAuth, with identity bound per request.
+- Authentication uses maintained Cloudflare OAuth, with verified access bound per request.
   Never trust user-authored identity headers or share private tool results between
   requests. Synthetic identity headers belong only in tests/integration/runtime.ts.
 - Queries read D1. Never coordinate imports from a question. Workflow checkpoints
   commit with data. Tasks use official 2026-07-28 schemas, not experimental Tasks
-  2025. D1 is the default progress source; native Workflow subscribe is optional.
+  2025. D1 is the only progress source; native Workflow subscriptions are not used.
 - R2 is only a migration source. Preserve real data and history. Use synthetic
   storage/network fixtures; never commit private bank data, secrets or exports.
 - No deployment, real-data migration, merge or remote data removal without a

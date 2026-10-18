@@ -69,7 +69,6 @@ export async function synchronizeResources({
             .from(tables.entities)
             .where(
               and(
-                eq(tables.entities.principal, op.principal),
                 eq(tables.entities.item_id, item.id),
                 eq(tables.entities.resource, "connections"),
               ),
@@ -89,7 +88,6 @@ export async function synchronizeResources({
                 .from(tables.entities)
                 .where(
                   and(
-                    eq(tables.entities.principal, op.principal),
                     eq(tables.entities.item_id, item.id),
                     eq(tables.entities.resource, "consents"),
                     eq(tables.entities.deleted, 0),
@@ -113,7 +111,6 @@ export async function synchronizeResources({
                 database(db)
                   .insert(tables.coverage)
                   .values({
-                    principal: op.principal,
                     item_id: item.id,
                     resource: resource,
                     parent_id: "",
@@ -121,7 +118,6 @@ export async function synchronizeResources({
                   })
                   .onConflictDoUpdate({
                     target: [
-                      tables.coverage.principal,
                       tables.coverage.item_id,
                       tables.coverage.resource,
                       tables.coverage.parent_id,
@@ -144,7 +140,6 @@ export async function synchronizeResources({
                 .from(tables.entities)
                 .where(
                   and(
-                    eq(tables.entities.principal, op.principal),
                     eq(tables.entities.item_id, item.id),
                     eq(tables.entities.resource, def.parent),
                     eq(tables.entities.deleted, 0),
@@ -176,7 +171,6 @@ export async function synchronizeResources({
               .from(tables.coverage)
               .where(
                 and(
-                  eq(tables.coverage.principal, op.principal),
                   eq(tables.coverage.item_id, item.id),
                   eq(tables.coverage.resource, resource),
                   eq(tables.coverage.parent_id, parentId),
@@ -208,7 +202,6 @@ export async function synchronizeResources({
                     .from(tables.coverage)
                     .where(
                       and(
-                        eq(tables.coverage.principal, op.principal),
                         eq(tables.coverage.item_id, item.id),
                         eq(tables.coverage.resource, resource),
                         eq(tables.coverage.parent_id, parentId),
@@ -234,7 +227,6 @@ export async function synchronizeResources({
               database(db)
                 .insert(tables.coverage)
                 .values({
-                  principal: op.principal,
                   item_id: item.id,
                   resource: resource,
                   parent_id: parentId,
@@ -242,7 +234,6 @@ export async function synchronizeResources({
                 })
                 .onConflictDoUpdate({
                   target: [
-                    tables.coverage.principal,
                     tables.coverage.item_id,
                     tables.coverage.resource,
                     tables.coverage.parent_id,
@@ -296,9 +287,8 @@ export async function synchronizeResources({
   await step.do("select-pending", async () => {
     await statement(
       db,
-      `INSERT OR IGNORE INTO operation_targets SELECT ?,item_id,resource,parent_id,id,0 FROM entities WHERE principal=? AND item_id IN (${items.map(() => "?").join(",")}) AND resource='transactions' AND status='PENDING' AND deleted=0`,
+      `INSERT OR IGNORE INTO operation_targets SELECT ?,item_id,resource,parent_id,id,0 FROM entities WHERE item_id IN (${items.map(() => "?").join(",")}) AND resource='transactions' AND status='PENDING' AND deleted=0`,
       id,
-      op.principal,
       ...items.map((x) => x.id),
     ).run();
     return { phase: "pending-selected" };
@@ -358,7 +348,7 @@ export async function synchronizeResources({
           (x) => x.item_id === first.item_id && x.parent_id === first.parent_id,
         ),
         ids = group.map((x) => x.id);
-      await authorizedItems(db, op.principal, [first.item_id]);
+      await authorizedItems(db, [first.item_id]);
       const records = await provider.ids(first.parent_id, ids);
       await publishResolved(
         db,

@@ -3,7 +3,6 @@ import { z } from "zod/v4";
 
 import { AccountResponseSchema } from "#contracts/portal-contract.ts";
 import {
-  type Credentials,
   type WizardIssue,
   WizardIssueSchema,
 } from "#contracts/wizard-contract.ts";
@@ -23,7 +22,6 @@ interface CommandContext {
 }
 
 const TokenSchema = z.object({ accessToken: z.string().min(1) });
-const NextSchema = z.object({ next: z.string() });
 const AcceptedSchema = z.object({ ok: z.literal(true) });
 const FailureSchema = z.object({ issue: WizardIssueSchema });
 
@@ -35,7 +33,7 @@ export function createAccountApi(
   async function request(
     path: string,
     signal: AbortSignal,
-    command?: { csrf: string; fields: Record<string, string> },
+    command?: { csrf: string; itemId?: string },
   ) {
     const response = await ky(new URL("/api/account" + path, origin), {
       method: command ? "POST" : "GET",
@@ -70,45 +68,32 @@ export function createAccountApi(
   const command = (
     action: string,
     context: CommandContext,
-    fields: Record<string, string> = {},
-  ) => request("/" + action, context.signal, { csrf: context.csrf, fields });
+    fields: { itemId?: string } = {},
+  ) => request("/" + action, context.signal, { csrf: context.csrf, ...fields });
   const maintain = async (
     action: string,
     context: CommandContext,
-    fields?: Record<string, string>,
+    fields?: { itemId?: string },
   ) => {
     AcceptedSchema.parse(await command(action, context, fields));
   };
   return {
-    async read(signal: AbortSignal, cursor?: string) {
-      return AccountResponseSchema.parse(
-        await request(
-          cursor ? "?cursor=" + encodeURIComponent(cursor) : "",
-          signal,
-        ),
-      );
-    },
-    async saveCredentials(context: CommandContext, credentials: Credentials) {
-      NextSchema.parse(
-        await command("wizard/credentials", context, {
-          ...credentials,
-          consent: "yes",
-        }),
-      );
+    async read(signal: AbortSignal) {
+      return AccountResponseSchema.parse(await request("", signal));
     },
     async connectToken(context: CommandContext, itemId?: string) {
       return TokenSchema.parse(
-        await command("wizard/token", context, itemId ? { itemId } : {}),
+        await command("connect-token", context, itemId ? { itemId } : {}),
       );
     },
     async connectItem(context: CommandContext, itemId: string) {
-      NextSchema.parse(await command("wizard/item", context, { itemId }));
+      AcceptedSchema.parse(await command("items", context, { itemId }));
     },
     pauseSync: (context: CommandContext) => maintain("pause", context),
     resumeSync: (context: CommandContext) => maintain("resume", context),
     requestSync: (context: CommandContext) => maintain("sync", context),
-    rotateKey: (context: CommandContext) => maintain("rotate-key", context),
-    revokeAccess: (context: CommandContext, grantId: string) =>
-      maintain("revoke", context, { grantId }),
+    disconnectAssistants: (context: CommandContext) =>
+      maintain("disconnect-assistants", context),
+    logout: (context: CommandContext) => maintain("logout", context),
   };
 }

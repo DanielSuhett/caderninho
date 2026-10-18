@@ -5,18 +5,18 @@ main {
   color: var(--muted);
   overflow-wrap: anywhere;
 }
-.mission-layout {
+.setup-layout {
   display: grid;
   grid-template-columns: 230px minmax(0, 1fr);
   gap: 48px;
   margin: 32px 0;
 }
-.mission-layout nav {
+.setup-layout nav {
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
-.mission-layout nav button {
+.setup-layout nav button {
   text-align: left;
   padding: 12px;
   min-height: 48px;
@@ -24,18 +24,15 @@ main {
   background: transparent;
   color: var(--text);
 }
-.mission-layout nav button[aria-current] {
+.setup-layout nav button[aria-current] {
   border-color: var(--accent);
   background: var(--surface);
 }
-.mission-layout nav small {
-  display: block;
-  color: var(--muted);
-}
-.mission-layout section {
+
+.setup-layout section {
   min-width: 0;
 }
-.mission-layout h2:focus {
+.setup-layout h2:focus {
   outline: 2px solid var(--accent);
   outline-offset: 6px;
 }
@@ -49,42 +46,21 @@ label {
 input {
   max-width: 100%;
 }
-article {
-  border-top: 1px solid var(--line);
-  padding: 16px 0;
-}
-progress {
-  width: 100%;
-  height: 4px;
-  appearance: none;
-  border: 0;
-  background: var(--line);
-  accent-color: var(--accent);
-}
-progress::-webkit-progress-bar {
-  background: var(--line);
-}
-progress::-webkit-progress-value {
-  background: var(--accent);
-}
-progress::-moz-progress-bar {
-  background: var(--accent);
-}
 @media (max-width: 720px) {
-  .mission-layout {
+  .setup-layout {
     grid-template-columns: 1fr;
     gap: 24px;
   }
-  .mission-layout nav {
+  .setup-layout nav {
     flex-direction: row;
     overflow-x: auto;
   }
-  .mission-layout nav button {
+  .setup-layout nav button {
     min-width: 160px;
   }
 }
 @media (prefers-reduced-motion: no-preference) {
-  .mission-layout nav button {
+  .setup-layout nav button {
     transition:
       background-color 240ms,
       border-color 240ms;

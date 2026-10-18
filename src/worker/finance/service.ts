@@ -63,13 +63,11 @@ export function correctFinancialRecord(
     identity: Identity,
     change: RecordChange,
   ) => ReturnType<typeof correctRecord>,
-  principal: string,
   input: CorrectionInput,
 ) {
   const change = recordChange(input);
   return persist(
     {
-      principal,
       itemId: input.itemId,
       resource: input.resource,
       parentId: input.parentId,

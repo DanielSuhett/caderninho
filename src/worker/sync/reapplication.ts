@@ -45,17 +45,15 @@ export async function reapplyRules({
   step,
 }: Flow) {
   const id = op.id;
-  for (const item of items)
-    await requireResource(db, op.principal, item.id, "transactions");
+  for (const item of items) await requireResource(db, item.id, "transactions");
   const filter = input.filter
     ? compileFilter(input.filter)
     : { sql: "1", params: [] };
   await step.do("select-reapply", async () => {
     await statement(
       db,
-      `INSERT OR IGNORE INTO operation_targets(operation_id,item_id,resource,parent_id,id) SELECT ?,e.item_id,e.resource,e.parent_id,e.id FROM effective_entities e WHERE e.principal=? AND e.resource='transactions' AND e.deleted=0 AND e.item_id IN (${input.itemIds.map(() => "?").join(",")}) AND (${filter.sql})`,
+      `INSERT OR IGNORE INTO operation_targets(operation_id,item_id,resource,parent_id,id) SELECT ?,e.item_id,e.resource,e.parent_id,e.id FROM effective_entities e WHERE e.resource='transactions' AND e.deleted=0 AND e.item_id IN (${input.itemIds.map(() => "?").join(",")}) AND (${filter.sql})`,
       id,
-      op.principal,
       ...input.itemIds,
       ...filter.params,
     ).run();
@@ -82,12 +80,11 @@ export async function reapplyRules({
           .parse(parseJson(z.string().parse(saved)));
       if ((await stillWorking(db, id)).cancel_requested)
         return { done: true, cancelled: true };
-      await authorizedItems(db, op.principal, input.itemIds);
+      await authorizedItems(db, input.itemIds);
       const selected = await rows(
         statement(
           db,
-          "SELECT e.* FROM entities e JOIN operation_targets t ON t.item_id=e.item_id AND t.resource=e.resource AND t.parent_id=e.parent_id AND t.id=e.id WHERE e.principal=? AND t.operation_id=? AND t.processed=0 ORDER BY t.item_id,t.parent_id,t.id LIMIT 20",
-          op.principal,
+          "SELECT e.* FROM entities e JOIN operation_targets t ON t.item_id=e.item_id AND t.resource=e.resource AND t.parent_id=e.parent_id AND t.id=e.id WHERE t.operation_id=? AND t.processed=0 ORDER BY t.item_id,t.parent_id,t.id LIMIT 20",
           id,
         ),
         StoredSchema,
@@ -98,7 +95,6 @@ export async function reapplyRules({
             ...derivedStatements(
               db,
               {
-                principal: op.principal,
                 itemId: r.item_id,
                 resource: r.resource,
                 parentId: r.parent_id,
@@ -136,9 +132,9 @@ export async function reapplyRules({
         preparedStatement(
           db,
           database(db)
-            .update(tables.principals)
-            .set({ revision: sql`${tables.principals.revision} + 1` })
-            .where(eq(tables.principals.id, op.principal)),
+            .update(tables.settings)
+            .set({ revision: sql`${tables.settings.revision} + 1` })
+            .where(eq(tables.settings.id, 1)),
         ),
         preparedStatement(
           db,

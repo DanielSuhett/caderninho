@@ -25,12 +25,8 @@ export async function readSession<E extends { Bindings: Bindings }>(
 }
 export async function createSession<E extends { Bindings: Bindings }>(
   c: Context<E>,
-  principal: string,
-  version = "",
 ) {
   const id = await authService(c.env).createSession(
-    principal,
-    version,
     getCookie(c, sessionCookie),
   );
   setCookie(c, sessionCookie, id, { ...cookieOptions, maxAge: 28800 });

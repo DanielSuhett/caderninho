@@ -129,7 +129,7 @@ await test("Oxc checks static, dynamic, reexported and type-only architectural e
     ],
     [
       "src/web/account/account-view.tsx",
-      'import { missionStates } from "./account-model.ts";',
+      'import { syncPresentation } from "./account-model.ts";',
     ],
   ] as const)
     assert.deepEqual(await checkImports(join(projectRoot, file), source), []);

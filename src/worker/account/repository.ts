@@ -2,179 +2,124 @@ import { z } from "zod/v4";
 
 import { ResourceSchema } from "#domain/enums.ts";
 import { tryCatch } from "#shared/result.ts";
-import type { ConnectionStore } from "#worker/account/service.ts";
-import { installationChecks as checksFor } from "#worker/auth/service.ts";
 import type { Bindings } from "#worker/bindings.ts";
 import { hash, statement } from "#worker/database.ts";
 import { authorizedItems } from "#worker/finance/repository.ts";
-import { credentialsFor, sealCredentials } from "#worker/pluggy/credentials.ts";
 
-export function connectionStore(
-  env: Bindings,
-  principal: string,
-): ConnectionStore {
-  const credentialStatement = async (
-    credentials: { clientId: string; clientSecret: string },
-    now: string,
-    connected: boolean,
-  ) =>
-    statement(
-      env.DB,
-      connected
-        ? "INSERT INTO pluggy_credentials(principal,client_id_hash,envelope,enabled,next_sync_at,updated_at) VALUES(?,?,?,1,?,?) ON CONFLICT(principal) DO UPDATE SET client_id_hash=excluded.client_id_hash,envelope=excluded.envelope,enabled=1,next_sync_at=excluded.next_sync_at,updated_at=excluded.updated_at"
-        : "INSERT INTO pluggy_credentials(principal,client_id_hash,envelope,enabled,next_sync_at,updated_at) VALUES(?,?,?,0,?,?) ON CONFLICT(principal) DO UPDATE SET client_id_hash=excluded.client_id_hash,envelope=excluded.envelope,updated_at=excluded.updated_at",
-      principal,
-      await hash(credentials.clientId),
-      await sealCredentials(env.CREDENTIAL_KEY, principal, {
-        clientId: credentials.clientId,
-        clientSecret: credentials.clientSecret,
-      }),
-      now,
-      now,
+export async function assertPluggyApplication(
+  db: D1Database,
+  clientId: string,
+) {
+  const configured = z
+    .object({ client_id_hash: z.string().nullable() })
+    .parse(
+      await statement(
+        db,
+        "SELECT client_id_hash FROM settings WHERE id=1",
+      ).first(),
     );
+  const fingerprint = await hash(clientId);
+  if (configured.client_id_hash && configured.client_id_hash !== fingerprint)
+    throw new Error("APPLICATION_CHANGE_REQUIRES_MIGRATION");
+  return fingerprint;
+}
+
+export function connectionStore(db: D1Database) {
   return {
-    async currentClientId() {
-      const previous = await statement(
-        env.DB,
-        "SELECT envelope FROM pluggy_credentials WHERE principal=?",
-        principal,
-      ).first();
-      return previous
-        ? (await credentialsFor(env, principal, false)).clientId
-        : null;
-    },
-    async itemAccess(itemId) {
+    async itemAccess(itemId: string) {
       const count = z.coerce
         .number()
         .parse(
-          await statement(
-            env.DB,
-            "SELECT COUNT(*) AS n FROM items WHERE principal=?",
-            principal,
-          ).first("n"),
+          await statement(db, "SELECT COUNT(*) AS n FROM items").first("n"),
         );
-      const existing = await statement(
-        env.DB,
-        "SELECT id FROM items WHERE principal=? AND id=?",
-        principal,
-        itemId,
-      ).first();
-      return { count, exists: Boolean(existing) };
+      return {
+        count,
+        exists: Boolean(
+          await statement(
+            db,
+            "SELECT id FROM items WHERE id=?",
+            itemId,
+          ).first(),
+        ),
+      };
     },
-    async saveCredentials(credentials, now) {
-      await (await credentialStatement(credentials, now, false)).run();
-    },
-    async connect(connection, now) {
-      await env.DB.batch([
+    async connect(itemId: string, clientId: string, now: string) {
+      await db.batch([
         statement(
-          env.DB,
-          "INSERT INTO items(principal,id,resources,enabled) VALUES(?,?,?,1) ON CONFLICT(principal,id) DO UPDATE SET enabled=1",
-          principal,
-          connection.itemId,
+          db,
+          "UPDATE settings SET client_id_hash=?,sync_enabled=1,next_sync_at=?,connected_at=? WHERE id=1",
+          await hash(clientId),
+          now,
+          now,
+        ),
+        statement(
+          db,
+          "INSERT INTO items(id,resources,enabled) VALUES(?,?,1) ON CONFLICT(id) DO UPDATE SET enabled=1",
+          itemId,
           JSON.stringify(ResourceSchema.options),
         ),
-        await credentialStatement(connection, now, true),
       ]);
     },
   };
 }
 
-export async function readPortalStatus(db: D1Database, principal: string) {
-  const config = await statement(
-    db,
-    "SELECT enabled,next_sync_at,updated_at FROM pluggy_credentials WHERE principal=?",
-    principal,
-  ).first();
-  const latest = await statement(
-    db,
-    "SELECT status,phase,updated_at FROM operations WHERE principal=? ORDER BY created_at DESC LIMIT 1",
-    principal,
-  ).first();
-  const items = await statement(
-    db,
-    "SELECT id FROM items WHERE principal=? AND enabled=1 ORDER BY id LIMIT 10",
-    principal,
-  ).all();
-  return {
-    config: z
-      .object({
-        enabled: z.number(),
-        next_sync_at: z.string(),
-        updated_at: z.string(),
-      })
-      .nullable()
-      .parse(config),
-    latest: z
-      .object({ status: z.string(), phase: z.string(), updated_at: z.string() })
-      .nullable()
-      .parse(latest),
-    items: z.array(z.object({ id: z.string() })).parse(items.results),
-  };
-}
-
-export async function wizardEvidence(db: D1Database, principal: string) {
-  const status = await readPortalStatus(db, principal);
-  const coverage = await statement(
-    db,
-    "SELECT COUNT(*) AS total, SUM(CASE WHEN status IN ('available','empty') AND bootstrap_complete=1 THEN 1 ELSE 0 END) AS complete FROM coverage WHERE principal=?",
-    principal,
-  ).first();
-  const checked = z
-    .object({ total: z.number(), complete: z.number().nullable() })
-    .parse(coverage);
-  // An earlier successful import cannot confirm a newly attached Item. Ignore
-  // unrelated operations and imports started before the connection changed.
+export async function readPortalStatus(db: D1Database) {
+  const config = z
+    .object({ sync_enabled: z.number(), connected_at: z.string() })
+    .parse(
+      await statement(
+        db,
+        "SELECT sync_enabled,connected_at FROM settings WHERE id=1",
+      ).first(),
+    );
   const latest = z
-    .object({ status: z.string(), phase: z.string() })
+    .object({ status: z.string(), phase: z.string(), updated_at: z.string() })
     .nullable()
     .parse(
       await statement(
         db,
-        "SELECT status,phase FROM operations WHERE principal=? AND kind IN ('sync','reconcile') AND created_at>=? ORDER BY created_at DESC LIMIT 1",
-        principal,
-        status.config?.updated_at ?? "",
+        "SELECT status,phase,updated_at FROM operations WHERE kind IN ('sync','reconcile') AND created_at>=? ORDER BY created_at DESC LIMIT 1",
+        config.connected_at,
       ).first(),
     );
-  return { status, coverage: checked, latest };
+  const items = z
+    .array(z.object({ id: z.string() }))
+    .parse(
+      (
+        await statement(
+          db,
+          "SELECT id FROM items WHERE enabled=1 ORDER BY id",
+        ).all()
+      ).results,
+    );
+  const coverage = z
+    .object({ total: z.number(), complete: z.number().nullable() })
+    .parse(
+      await statement(
+        db,
+        "SELECT COUNT(*) AS total,SUM(CASE WHEN status IN ('available','empty') AND bootstrap_complete=1 THEN 1 ELSE 0 END) AS complete FROM coverage",
+      ).first(),
+    );
+  return { config, latest, items, coverage };
 }
 
-export function installationChecks(env: Bindings, origin: string) {
-  return checksFor(
-    {
-      ...env,
-      database: Boolean(env.DB),
-      workflow: Boolean(env.FINANCE),
-      oauth: Boolean(env.OAUTH_KV),
-    },
-    origin,
-  );
-}
-export async function installationReadiness(
-  env: Bindings,
-  currentOrigin: string,
-) {
-  const checks = installationChecks(env, currentOrigin);
+export async function installationReadiness(env: Bindings) {
+  const checks = {
+    database: Boolean(env.DB),
+    workflow: Boolean(env.FINANCE),
+    oauth: Boolean(env.OAUTH_KV),
+  };
   if (!checks.database) return { ...checks, migrations: false };
-  // Exercise the columns needed by login, scheduling and queries. No private rows
-  // are returned; LIMIT 0 still fails if a migration has not created the schema.
   const schema = await tryCatch(
     env.DB.batch([
+      env.DB.prepare(
+        "SELECT id,csrf,expires,auth_version FROM portal_sessions LIMIT 0",
+      ),
       env.DB.prepare("SELECT id,attempts,expires FROM login_attempts LIMIT 0"),
       env.DB.prepare(
-        "SELECT id,principal,client_id,received_at FROM mcp_receipts LIMIT 0",
+        "SELECT id,sync_enabled,next_sync_at,manual_sync_after,reconcile_after,client_id_hash,connected_at FROM settings LIMIT 0",
       ),
-      env.DB.prepare(
-        "SELECT id,browser_hash,verifier,expires FROM portal_logins LIMIT 0",
-      ),
-      env.DB.prepare(
-        "SELECT id,principal,csrf,expires,auth_version FROM portal_sessions LIMIT 0",
-      ),
-      env.DB.prepare(
-        "SELECT principal,envelope,enabled,next_sync_at,manual_sync_after,reconcile_after FROM pluggy_credentials LIMIT 0",
-      ),
-      env.DB.prepare(
-        "SELECT principal,status,bootstrap_complete FROM coverage LIMIT 0",
-      ),
+      env.DB.prepare("SELECT status,bootstrap_complete FROM coverage LIMIT 0"),
     ]),
   );
   return {
@@ -183,39 +128,34 @@ export async function installationReadiness(
   };
 }
 
-export function createAccountRepository(env: Bindings, principal: string) {
+export function createAccountRepository(env: Bindings) {
   return {
-    connection: connectionStore(env, principal),
-    status: () => readPortalStatus(env.DB, principal),
-    evidence: () => wizardEvidence(env.DB, principal),
-    authorizeItems: (ids: string[]) => authorizedItems(env.DB, principal, ids),
+    connection: connectionStore(env.DB),
+    status: () => readPortalStatus(env.DB),
+    authorizeItems: (ids: string[]) => authorizedItems(env.DB, ids),
     async pause() {
       await statement(
         env.DB,
-        "UPDATE pluggy_credentials SET enabled=0 WHERE principal=?",
-        principal,
+        "UPDATE settings SET sync_enabled=0 WHERE id=1",
       ).run();
     },
     async resume(now: string) {
       await statement(
         env.DB,
-        "UPDATE pluggy_credentials SET enabled=1,next_sync_at=? WHERE principal=? AND enabled=0",
+        "UPDATE settings SET sync_enabled=1,next_sync_at=? WHERE id=1 AND sync_enabled=0",
         now,
-        principal,
       ).run();
     },
     async requestSync(now: Date) {
-      // Coalesce requests until the cron can create one operation per account.
-      const requested = await statement(
+      const result = await statement(
         env.DB,
-        "UPDATE pluggy_credentials SET next_sync_at=?,manual_sync_after=? WHERE principal=? AND enabled=1 AND manual_sync_after<=? AND next_sync_at>?",
+        "UPDATE settings SET next_sync_at=?,manual_sync_after=? WHERE id=1 AND sync_enabled=1 AND manual_sync_after<=? AND next_sync_at>?",
         now.toISOString(),
         new Date(now.getTime() + 900000).toISOString(),
-        principal,
         now.toISOString(),
         now.toISOString(),
       ).run();
-      return Boolean(requested.meta.changes);
+      return result.meta.changes === 1;
     },
   };
 }

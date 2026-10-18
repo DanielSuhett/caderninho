@@ -33,8 +33,15 @@ módulo.
 
 Os fluxos `publication`, `resources`, `events`, `reapplication` e `migration`
 permanecem em `sync`, com seus steps e batches atômicos. `workflow.ts` é a entrada
-Cloudflare. O cliente Pluggy e o cofre ficam em `pluggy`; `database.ts`, `schema.ts`,
+Cloudflare. O cliente Pluggy, sua configuração e o adapter Fetch ficam em `pluggy`; `database.ts`, `schema.ts`,
 `http.ts` e `bindings.ts` são compartilhados entre funcionalidades.
+
+## Instalação pessoal
+
+Uma pessoa e uma aplicação Pluggy usam cada instalação. Não há cadastro de usuários,
+identidade configurável, login GitHub ou cofre próprio. Os três secrets vêm do deploy.
+O banco inicia com uma única configuração e não contém colunas de tenant. A migração
+inicial exige banco novo; não converte a arquitetura anterior.
 
 ## Persistência e finanças
 
@@ -45,7 +52,7 @@ entre a gravação D1 e o despacho do Workflow.
 
 Publicação de dados, derivados, cobertura, checkpoint, progresso, revisão e recibo
 ocorre no mesmo batch. Replay verifica o recibo antes de buscar a página novamente.
-Locks por principal serializam publicações; cancelamento preserva commits já feitos.
+Um lock da instalação serializam publicações; cancelamento preserva commits já feitos.
 Nenhuma transação SQL fica aberta durante chamadas HTTP.
 
 Dinheiro usa valores exatos e moedas separadas. Normalização e elegibilidade recebem
@@ -53,7 +60,7 @@ a data de referência explicitamente. Regras ativadas não reescrevem o históri
 reaplicação; overrides permanecem separados da origem e dos derivados. Revisões de
 leitura invalidam cursores durante publicação.
 
-Cada requisição vincula sua identidade autenticada. `live_balance` autoriza a conta
+Cada requisição privada valida a sessão ou o grant OAuth. `live_balance` autoriza a conta
 antes de consultar a Pluggy com as credenciais do proprietário. R2 é somente fonte
 de migração explícita; o histórico importado conserva sua origem.
 
@@ -61,13 +68,13 @@ de migração explícita; o histórico importado conserva sua origem.
 
 Pluggy é o adaptador de ingestão e leitura pontual, não a base de consultas do
 produto. Consulta, agregação, correção local, explicação, reaplicação de regras e
-progresso das operações usam D1, sem executar o cliente ou acessar rede/cofre Pluggy.
+progresso das operações usam D1, sem executar o cliente ou acessar rede Pluggy.
 Isso permite usar o histórico importado durante uma indisponibilidade da origem;
 não transforma informação antiga em saldo atual. Cobertura e falha permanecem
 explícitas. Novos dados, validação de conexão e `live_balance` dependem da origem.
 
 `FinancialSource` recebe o adaptador por operação e só o resolve quando necessário.
-Não há fallback silencioso para outra instituição, credencial global ou saldo
+Não há fallback silencioso para outra instituição, credencial de outra aplicação ou saldo
 persistido na leitura pontual. Uma futura fonte deve adaptar os dados e capacidades
 de origem, preservando precisão, identidade e cobertura; não exige uma camada
 genérica de providers antecipadamente. O payload heterogêneo continua preservado.
@@ -90,20 +97,19 @@ Hono mantém as rotas, cookies, redirects e headers no Worker.
 `web/account/account-view.tsx` recebe apresentação e ações nomeadas.
 `use-account.ts` coordena comandos, polling, cancelamento e navegação;
 `account-api.ts` valida HTTP e preserva CSRF, deadlines e ausência de retry de
-mutações. Leituras concorrentes são consolidadas; trocar de cursor ou confirmar
+mutações. Leituras concorrentes são consolidadas; confirmar
 uma mutação invalida a leitura anterior. Desmontar cancela requisições e timers.
-Falha transitória conserva a evidência da mesma página; expiração da sessão
+Falha transitória conserva a último estado confirmado; expiração da sessão
 interrompe polling. `connect-widget.ts` isola o SDK, serializa sua destruição e
-descarta eventos atrasados. Foco e estado dos formulários pertencem à view.
+descarta eventos atrasados. Foco e apresentação pertencem à view.
 
 Os contratos de wizard descrevem dados. Textos e progresso visual pertencem à
 funcionalidade web; tradução de falhas pertence ao Worker. A política de conexão
 pessoal tem dono no domínio e é revalidada no servidor. O callback do widget
-nunca substitui autorização. A troca HTTP de identidade GitHub fica no adaptador
-`auth/github.adapter.ts`, fora do serviço de sessões.
+nunca substitui autorização. As credenciais Pluggy são secrets da instalação; o painel não recebe nem persiste essas credenciais.
 
 O parsing e dispatch de `ToolCall` ficam em `mcp/invoke.ts`. Operações financeiras
-recebem intenções tipadas e identidade autenticada. Correções usam política do
+recebem intenções tipadas após autenticação. Correções usam política do
 domínio, mantendo autorização e alterações/revisão no repositório concreto.
 `exact.ts::assertMinor` concentra a precisão persistível; `moneyKey` mantém o
 encoding de ordenação no adaptador SQL. Não há divisão global dos modelos por
@@ -114,7 +120,7 @@ simetria nem alteração do catálogo MCP.
 
 Os contratos públicos usam Zod. Tasks seguem a revisão 2026-07-28; a JSON Schema
 oficial e sua licença ficam em `src/worker/vendor/ext-tasks`. D1 fornece o progresso
-canônico; a subscription nativa de Workflow é um sinal opcional. O catálogo MCP de
+canônico e é a única fonte de subscriptions. O catálogo MCP de
 referência fica em `src/contracts/__tests__/fixtures/mcp-catalog.json`.
 
 ## Ferramentas e testes

@@ -1,13 +1,12 @@
 import assert from "node:assert/strict";
 
-import { PluggyClient } from "pluggy-sdk";
 import { afterEach, beforeEach, test, vi } from "vitest";
 import { z } from "zod/v4";
 
-import { exactJSON } from "#domain/exact.ts";
 import { Fault } from "#domain/fault.ts";
 import { required, sourceUrl } from "#testing/helpers.ts";
 import { mockNetwork, syntheticJwt } from "#testing/network.ts";
+import { PersonalPluggyClient } from "#worker/pluggy/client.adapter.ts";
 import {
   providerRetries,
   connectToken,
@@ -34,7 +33,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-test("SDK/Got in workerd preserve numeric lexemes and date strings on auth, reads and mutations", async () => {
+test("SDK/Fetch in workerd preserve numeric lexemes and date strings on auth, reads and mutations", async () => {
   const urls: URL[] = [];
   mockNetwork(async (input) => {
     const url = sourceUrl(input);
@@ -57,19 +56,6 @@ test("SDK/Got in workerd preserve numeric lexemes and date strings on auth, read
     .parse(await sdk.createConnectToken());
   assert.equal(mutation.quantity, "1.234567890123456789");
   assert.equal(urls.filter((url) => url.pathname === "/auth").length, 1);
-  const customOrigin = "https://pluggy.synthetic.invalid";
-  mockNetwork(async (input) => {
-    const url = sourceUrl(input);
-    assert.equal(url.origin, customOrigin);
-    return url.pathname === "/auth" ? auth() : Response.json({ id: "account" });
-  });
-  const custom = new PluggyClient({
-    ...credentials,
-    baseUrl: customOrigin,
-    logErrors: false,
-    requestOptions: { retry: 0 },
-  });
-  assert.equal((await custom.fetchAccount("account")).id, "account");
 });
 
 test("tokens are reused only inside a client and invalidated after a 401 without hidden retries", async () => {
@@ -224,7 +210,7 @@ test("byte limits stop streaming reads regardless of missing or dishonest Conten
   }
 });
 
-test("Got request timeout covers a stalled response body and does not retry", async () => {
+test("Fetch request timeout covers a stalled response body and does not retry", async () => {
   let calls = 0;
   mockNetwork(async (input) => {
     calls++;
@@ -237,17 +223,7 @@ test("Got request timeout covers a stalled response body and does not retry", as
       }),
     );
   });
-  const sdk = new PluggyClient({
-    ...credentials,
-    baseUrl: origin,
-    maxResponseBytes: 4000000,
-    logErrors: false,
-    requestOptions: {
-      parseJson: exactJSON,
-      timeout: { request: 30 },
-      retry: 0,
-    },
-  });
+  const sdk = new PersonalPluggyClient(credentials, 4000000, 30);
   await assert.rejects(readAccount(sdk, "account"), /UPSTREAM_TIMEOUT/);
   assert.equal(calls, 2);
 });

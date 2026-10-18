@@ -11,26 +11,40 @@ import {
   check,
 } from "drizzle-orm/sqlite-core";
 
-// Mirrors 0001_financial.sql. Wrangler owns migrations; this schema does not generate DDL.
-export const principals = sqliteTable(
-  "principals",
+// Mirrors 0001_personal.sql. Wrangler owns migrations; this schema does not generate DDL.
+export const settings = sqliteTable(
+  "settings",
   {
-    id: text("id"),
+    id: integer("id").notNull().default(1),
+    sync_enabled: integer("sync_enabled").notNull().default(0),
+    client_id_hash: text("client_id_hash"),
+    connected_at: text("connected_at")
+      .notNull()
+      .default(sql`'1970-01-01T00:00:00.000Z'`),
+    next_sync_at: text("next_sync_at")
+      .notNull()
+      .default(sql`'1970-01-01T00:00:00.000Z'`),
+    manual_sync_after: text("manual_sync_after")
+      .notNull()
+      .default(sql`'1970-01-01T00:00:00.000Z'`),
+    reconcile_after: text("reconcile_after")
+      .notNull()
+      .default(sql`'1970-01-01T00:00:00.000Z'`),
     revision: integer("revision")
       .notNull()
       .default(sql`0`),
     active_rules: text("active_rules"),
-    created_at: text("created_at")
-      .notNull()
-      .default(sql`strftime('%Y-%m-%dT%H:%M:%fZ','now')`),
   },
-  (t) => [primaryKey({ columns: [t.id] })],
+  (t) => [
+    primaryKey({ columns: [t.id] }),
+    check("settings_singleton", sql`id=1`),
+    check("settings_sync_enabled", sql`sync_enabled IN (0,1)`),
+  ],
 );
 
 export const items = sqliteTable(
   "items",
   {
-    principal: text("principal").notNull(),
     id: text("id").notNull(),
     resources: text("resources").notNull(),
     enabled: integer("enabled")
@@ -38,9 +52,7 @@ export const items = sqliteTable(
       .default(sql`1`),
   },
   (t) => [
-    primaryKey({ columns: [t.principal, t.id] }),
-    foreignKey({ columns: [t.principal], foreignColumns: [principals.id] }),
-    uniqueIndex("items_id_unique").on(t.id),
+    primaryKey({ columns: [t.id] }),
     check("items_resources_check", sql`json_valid(resources)`),
   ],
 );
@@ -48,7 +60,6 @@ export const items = sqliteTable(
 export const rule_sets = sqliteTable(
   "rule_sets",
   {
-    principal: text("principal").notNull(),
     id: text("id").notNull(),
     document: text("document").notNull(),
     normalizer: text("normalizer").notNull(),
@@ -58,8 +69,7 @@ export const rule_sets = sqliteTable(
       .default(sql`0`),
   },
   (t) => [
-    primaryKey({ columns: [t.principal, t.id] }),
-    foreignKey({ columns: [t.principal], foreignColumns: [principals.id] }),
+    primaryKey({ columns: [t.id] }),
     check("rule_sets_document_check", sql`json_valid(document)`),
   ],
 );
@@ -67,16 +77,15 @@ export const rule_sets = sqliteTable(
 export const category_groups = sqliteTable(
   "category_groups",
   {
-    principal: text("principal").notNull(),
     revision: text("revision").notNull(),
     id: text("id").notNull(),
     name: text("name").notNull(),
   },
   (t) => [
-    primaryKey({ columns: [t.principal, t.revision, t.id] }),
+    primaryKey({ columns: [t.revision, t.id] }),
     foreignKey({
-      columns: [t.principal, t.revision],
-      foreignColumns: [rule_sets.principal, rule_sets.id],
+      columns: [t.revision],
+      foreignColumns: [rule_sets.id],
     }),
   ],
 );
@@ -84,21 +93,16 @@ export const category_groups = sqliteTable(
 export const categories = sqliteTable(
   "categories",
   {
-    principal: text("principal").notNull(),
     revision: text("revision").notNull(),
     id: text("id").notNull(),
     group_id: text("group_id").notNull(),
     name: text("name").notNull(),
   },
   (t) => [
-    primaryKey({ columns: [t.principal, t.revision, t.id] }),
+    primaryKey({ columns: [t.revision, t.id] }),
     foreignKey({
-      columns: [t.principal, t.revision, t.group_id],
-      foreignColumns: [
-        category_groups.principal,
-        category_groups.revision,
-        category_groups.id,
-      ],
+      columns: [t.revision, t.group_id],
+      foreignColumns: [category_groups.revision, category_groups.id],
     }),
   ],
 );
@@ -106,20 +110,15 @@ export const categories = sqliteTable(
 export const aliases = sqliteTable(
   "aliases",
   {
-    principal: text("principal").notNull(),
     revision: text("revision").notNull(),
     alias: text("alias").notNull(),
     category_id: text("category_id").notNull(),
   },
   (t) => [
-    primaryKey({ columns: [t.principal, t.revision, t.alias] }),
+    primaryKey({ columns: [t.revision, t.alias] }),
     foreignKey({
-      columns: [t.principal, t.revision, t.category_id],
-      foreignColumns: [
-        categories.principal,
-        categories.revision,
-        categories.id,
-      ],
+      columns: [t.revision, t.category_id],
+      foreignColumns: [categories.revision, categories.id],
     }),
   ],
 );
@@ -127,7 +126,6 @@ export const aliases = sqliteTable(
 export const rules = sqliteTable(
   "rules",
   {
-    principal: text("principal").notNull(),
     revision: text("revision").notNull(),
     id: text("id").notNull(),
     position: integer("position").notNull(),
@@ -137,10 +135,10 @@ export const rules = sqliteTable(
     definition: text("definition").notNull(),
   },
   (t) => [
-    primaryKey({ columns: [t.principal, t.revision, t.id] }),
+    primaryKey({ columns: [t.revision, t.id] }),
     foreignKey({
-      columns: [t.principal, t.revision],
-      foreignColumns: [rule_sets.principal, rule_sets.id],
+      columns: [t.revision],
+      foreignColumns: [rule_sets.id],
     }),
     check("rules_definition_check", sql`json_valid(definition)`),
   ],
@@ -149,7 +147,6 @@ export const rules = sqliteTable(
 export const entities = sqliteTable(
   "entities",
   {
-    principal: text("principal").notNull(),
     item_id: text("item_id").notNull(),
     resource: text("resource").notNull(),
     parent_id: text("parent_id")
@@ -185,34 +182,23 @@ export const entities = sqliteTable(
   },
   (t) => [
     primaryKey({
-      columns: [t.principal, t.item_id, t.resource, t.parent_id, t.id],
+      columns: [t.item_id, t.resource, t.parent_id, t.id],
     }),
     foreignKey({
-      columns: [t.principal, t.item_id],
-      foreignColumns: [items.principal, items.id],
+      columns: [t.item_id],
+      foreignColumns: [items.id],
     }),
-    index("entity_category").on(t.principal, t.resource, t.original_category),
-    index("entity_amount").on(
-      t.principal,
-      t.resource,
-      t.currency,
-      t.amount_key,
-    ),
+    index("entity_category").on(t.resource, t.original_category),
+    index("entity_amount").on(t.resource, t.currency, t.amount_key),
     index("entity_future")
-      .on(t.principal, t.transaction_date, t.id)
+      .on(t.transaction_date, t.id)
       .where(sql`eligible=0 AND deleted=0`),
     index("entity_pending")
-      .on(t.principal, t.item_id, t.parent_id, t.id)
+      .on(t.item_id, t.parent_id, t.id)
       .where(sql`resource='transactions' AND status='PENDING' AND deleted=0`),
-    index("entity_status").on(t.principal, t.resource, t.status, t.id),
-    index("entity_account").on(
-      t.principal,
-      t.item_id,
-      t.resource,
-      t.parent_id,
-      t.id,
-    ),
-    index("entity_date").on(t.principal, t.resource, t.transaction_date, t.id),
+    index("entity_status").on(t.resource, t.status, t.id),
+    index("entity_account").on(t.item_id, t.resource, t.parent_id, t.id),
+    index("entity_date").on(t.resource, t.transaction_date, t.id),
     check("entities_source_check", sql`json_valid(source)`),
     check("entities_normalized_check", sql`json_valid(normalized)`),
   ],
@@ -221,7 +207,6 @@ export const entities = sqliteTable(
 export const derived = sqliteTable(
   "derived",
   {
-    principal: text("principal").notNull(),
     item_id: text("item_id").notNull(),
     resource: text("resource").notNull(),
     parent_id: text("parent_id").notNull(),
@@ -236,23 +221,22 @@ export const derived = sqliteTable(
   },
   (t) => [
     primaryKey({
-      columns: [t.principal, t.item_id, t.resource, t.parent_id, t.id],
+      columns: [t.item_id, t.resource, t.parent_id, t.id],
     }),
     foreignKey({
-      columns: [t.principal, t.rules_revision],
-      foreignColumns: [rule_sets.principal, rule_sets.id],
+      columns: [t.rules_revision],
+      foreignColumns: [rule_sets.id],
     }),
     foreignKey({
-      columns: [t.principal, t.item_id, t.resource, t.parent_id, t.id],
+      columns: [t.item_id, t.resource, t.parent_id, t.id],
       foreignColumns: [
-        entities.principal,
         entities.item_id,
         entities.resource,
         entities.parent_id,
         entities.id,
       ],
     }),
-    index("derived_category").on(t.principal, t.category_id, t.group_id, t.id),
+    index("derived_category").on(t.category_id, t.group_id, t.id),
     check("derived_evidence_check", sql`json_valid(evidence)`),
   ],
 );
@@ -260,7 +244,6 @@ export const derived = sqliteTable(
 export const overrides = sqliteTable(
   "overrides",
   {
-    principal: text("principal").notNull(),
     item_id: text("item_id").notNull(),
     resource: text("resource").notNull(),
     parent_id: text("parent_id").notNull(),
@@ -271,12 +254,11 @@ export const overrides = sqliteTable(
   },
   (t) => [
     primaryKey({
-      columns: [t.principal, t.item_id, t.resource, t.parent_id, t.id, t.field],
+      columns: [t.item_id, t.resource, t.parent_id, t.id, t.field],
     }),
     foreignKey({
-      columns: [t.principal, t.item_id, t.resource, t.parent_id, t.id],
+      columns: [t.item_id, t.resource, t.parent_id, t.id],
       foreignColumns: [
-        entities.principal,
         entities.item_id,
         entities.resource,
         entities.parent_id,
@@ -293,7 +275,6 @@ export const overrides = sqliteTable(
 export const tags = sqliteTable(
   "tags",
   {
-    principal: text("principal").notNull(),
     item_id: text("item_id").notNull(),
     resource: text("resource").notNull(),
     parent_id: text("parent_id").notNull(),
@@ -304,27 +285,18 @@ export const tags = sqliteTable(
   },
   (t) => [
     primaryKey({
-      columns: [
-        t.principal,
-        t.item_id,
-        t.resource,
-        t.parent_id,
-        t.id,
-        t.key,
-        t.origin,
-      ],
+      columns: [t.item_id, t.resource, t.parent_id, t.id, t.key, t.origin],
     }),
     foreignKey({
-      columns: [t.principal, t.item_id, t.resource, t.parent_id, t.id],
+      columns: [t.item_id, t.resource, t.parent_id, t.id],
       foreignColumns: [
-        entities.principal,
         entities.item_id,
         entities.resource,
         entities.parent_id,
         entities.id,
       ],
     }),
-    index("tags_lookup").on(t.principal, t.key, t.value, t.origin, t.id),
+    index("tags_lookup").on(t.key, t.value, t.origin, t.id),
     check("tags_origin_check", sql`origin IN ('derived','manual')`),
   ],
 );
@@ -333,7 +305,7 @@ export const operations = sqliteTable(
   "operations",
   {
     id: text("id"),
-    principal: text("principal").notNull(),
+
     request_key: text("request_key").notNull(),
     kind: text("kind").notNull(),
     input: text("input").notNull(),
@@ -363,16 +335,12 @@ export const operations = sqliteTable(
   (t) => [
     primaryKey({ columns: [t.id] }),
     foreignKey({
-      columns: [t.principal, t.rules_revision],
-      foreignColumns: [rule_sets.principal, rule_sets.id],
+      columns: [t.rules_revision],
+      foreignColumns: [rule_sets.id],
     }),
-    foreignKey({ columns: [t.principal], foreignColumns: [principals.id] }),
-    index("operations_owner").on(t.principal, t.created_at),
+    index("operations_created").on(t.created_at),
     index("operations_dispatch").on(t.dispatched, t.status, t.created_at),
-    uniqueIndex("operations_principal_request_key_unique").on(
-      t.principal,
-      t.request_key,
-    ),
+    uniqueIndex("operations_request_key_unique").on(t.request_key),
     check("operations_input_check", sql`json_valid(input)`),
   ],
 );
@@ -380,13 +348,14 @@ export const operations = sqliteTable(
 export const locks = sqliteTable(
   "locks",
   {
-    principal: text("principal"),
+    id: integer("id").notNull().default(1),
+
     operation_id: text("operation_id").notNull(),
   },
   (t) => [
-    primaryKey({ columns: [t.principal] }),
+    primaryKey({ columns: [t.id] }),
+    check("locks_singleton", sql`id=1`),
     foreignKey({ columns: [t.operation_id], foreignColumns: [operations.id] }),
-    foreignKey({ columns: [t.principal], foreignColumns: [principals.id] }),
     uniqueIndex("locks_operation_id_unique").on(t.operation_id),
   ],
 );
@@ -394,7 +363,6 @@ export const locks = sqliteTable(
 export const coverage = sqliteTable(
   "coverage",
   {
-    principal: text("principal").notNull(),
     item_id: text("item_id").notNull(),
     resource: text("resource").notNull(),
     parent_id: text("parent_id")
@@ -409,10 +377,10 @@ export const coverage = sqliteTable(
     parent_signature: text("parent_signature"),
   },
   (t) => [
-    primaryKey({ columns: [t.principal, t.item_id, t.resource, t.parent_id] }),
+    primaryKey({ columns: [t.item_id, t.resource, t.parent_id] }),
     foreignKey({
-      columns: [t.principal, t.item_id],
-      foreignColumns: [items.principal, items.id],
+      columns: [t.item_id],
+      foreignColumns: [items.id],
     }),
   ],
 );
@@ -489,7 +457,7 @@ export const inbox = sqliteTable(
   "inbox",
   {
     event_id: text("event_id"),
-    principal: text("principal").notNull(),
+
     item_id: text("item_id").notNull(),
     account_id: text("account_id").notNull(),
     event: text("event").notNull(),
@@ -501,8 +469,8 @@ export const inbox = sqliteTable(
   (t) => [
     primaryKey({ columns: [t.event_id] }),
     foreignKey({
-      columns: [t.principal, t.item_id],
-      foreignColumns: [items.principal, items.id],
+      columns: [t.item_id],
+      foreignColumns: [items.id],
     }),
     foreignKey({ columns: [t.operation_id], foreignColumns: [operations.id] }),
     index("inbox_dispatch").on(t.operation_id, t.received_at),
@@ -513,16 +481,14 @@ export const inbox = sqliteTable(
 export const migration_imports = sqliteTable(
   "migration_imports",
   {
-    principal: text("principal").notNull(),
     source_key: text("source_key").notNull(),
     source_hash: text("source_hash").notNull(),
     imported_at: text("imported_at").notNull(),
   },
-  (t) => [primaryKey({ columns: [t.principal, t.source_key, t.source_hash] })],
+  (t) => [primaryKey({ columns: [t.source_key, t.source_hash] })],
 );
 
 export const effective_entities = sqliteView("effective_entities", {
-  principal: text("principal"),
   item_id: text("item_id"),
   resource: text("resource"),
   parent_id: text("parent_id"),

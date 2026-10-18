@@ -65,12 +65,8 @@ routes.post("/webhook", async (c) => {
 routes.all("*", (c) => {
   // Hono forwards the native Workers context; its portable interface omits Workers extensions.
   const ctx = c.executionCtx as ExecutionContext;
-  return authenticatedFetch(
-    c.req.raw,
-    c.env,
-    ctx,
-    (request, bindings, principal) =>
-      fetchMcp(request, bindings, principal, ctx),
+  return authenticatedFetch(c.req.raw, c.env, ctx, (request, bindings) =>
+    fetchMcp(request, bindings, ctx),
   );
 });
 const worker = {

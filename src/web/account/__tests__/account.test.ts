@@ -8,11 +8,7 @@ import {
   AccountRequestError,
   createAccountApi,
 } from "#web/account/account-api.ts";
-import {
-  missionStates,
-  preserveEvidence,
-  supportPrompt,
-} from "#web/account/account-model.ts";
+import { supportPrompt } from "#web/account/account-model.ts";
 import { createConnectWidget } from "#web/account/connect-widget.ts";
 
 await test("account commands preserve CSRF, validate responses and never retry an uncertain mutation", async () => {
@@ -28,15 +24,10 @@ await test("account commands preserve CSRF, validate responses and never retry a
     );
   });
   const signal = new AbortController().signal;
-  assert.deepEqual(await api.read(signal, "a&b"), accountSnapshot());
-  assert.equal(
-    new URL(requests[0]?.url ?? "").searchParams.get("cursor"),
-    "a&b",
-  );
+  assert.deepEqual(await api.read(signal), accountSnapshot());
   await api.pauseSync({ csrf: "synthetic-csrf", signal });
   assert.deepEqual(await requests[1]?.json(), {
     csrf: "synthetic-csrf",
-    fields: {},
   });
   await assert.rejects(
     api.requestSync({ csrf: "synthetic-csrf", signal }),
@@ -72,23 +63,13 @@ await test("expired session, redirected login and malformed account response can
   await assert.rejects(api.read(new AbortController().signal));
 });
 
-await test("temporary authorization failure preserves evidence without inventing coverage or diagnostic identifiers", () => {
-  const previous = accountSnapshot();
-  const next = accountSnapshot();
-  next.data.clients = [];
-  next.data.status.clientsAvailable = false;
-  next.data.status.authorized = 0;
-  next.data.status.received = 0;
-  next.data.status.wizard.sync = "error";
-  const retained = preserveEvidence(next, previous);
-  assert.deepEqual(retained.data.clients, previous.data.clients);
-  assert.equal(retained.data.status.clientsAvailable, false);
-  assert.equal(retained.data.status.wizard.sync, "error");
-  assert.equal(missionStates(retained.data.status)[3], false);
-  assert.equal(missionStates(retained.data.status)[4], true);
-  assert.ok(
-    !supportPrompt(retained.data.status.wizard).includes("synthetic-grant"),
-  );
+await test("diagnostic contains only safe state and never claims complete coverage", () => {
+  const snapshot = accountSnapshot();
+  snapshot.status.sync = "error";
+  const prompt = supportPrompt(snapshot.status);
+  assert.ok(prompt.includes('"complete":1'));
+  assert.ok(!prompt.includes(snapshot.origin));
+  assert.ok(!prompt.includes(snapshot.csrf));
 });
 
 await test("widget ignores late SDK loading and stale events after replacement or disposal", async () => {

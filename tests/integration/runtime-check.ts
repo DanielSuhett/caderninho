@@ -19,7 +19,6 @@ async function rpc(
     arguments?: object;
     notifications?: object;
   },
-  principal = "alice",
 ) {
   const response = await fetch(base + "/mcp", {
     method: "POST",
@@ -29,8 +28,6 @@ async function rpc(
       "Mcp-Method": method,
       "Mcp-Name": params.name ?? params.taskId ?? "",
       "Mcp-Protocol-Version": "2026-07-28",
-      "X-Test-Principal": principal,
-      "X-Test-Event-Source": process.env.TASK_EVENT_SOURCE ?? "d1",
     },
     body: JSON.stringify({
       jsonrpc: "2.0",
@@ -81,7 +78,9 @@ async function subscriber() {
 const first = await subscriber(),
   second = await subscriber();
 await first.reader.cancel(); // Only the listener ends.
-const denied = await responseJson(await rpc("tasks/get", { taskId }, "bob"));
+const denied = await responseJson(
+  await rpc("tasks/get", { taskId: "unknown-task" }),
+);
 assert.ok(denied.error);
 let terminal;
 for (let i = 0; i < 30; i++) {
@@ -126,7 +125,7 @@ const aggregate = z
   );
 assert.equal(required(aggregate.groups[0]).totalMinor, "-1801439850948198602");
 console.log(
-  "PASS: durable Workflow, D1, two subscribers, disconnect, terminal reconnect, principal isolation",
+  "PASS: durable Workflow, D1, two subscribers, disconnect, terminal reconnect isolation",
 );
 
 const unauth = await fetch(base + "/auth-probe", {

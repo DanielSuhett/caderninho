@@ -49,7 +49,6 @@ export const FilterSchema = z.union([
 export type Filter = z.infer<typeof FilterSchema>;
 
 export const IdentitySchema = z.object({
-  principal: z.string().min(1),
   ...RecordReferenceSchema.shape,
 });
 export type Identity = z.infer<typeof IdentitySchema>;

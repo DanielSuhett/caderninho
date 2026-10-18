@@ -1,158 +1,38 @@
 import assert from "node:assert/strict";
 
-import {
-  applyD1Migrations,
-  createExecutionContext,
-  reset,
-} from "cloudflare:test";
+import { applyD1Migrations, reset } from "cloudflare:test";
 import { env as bindings } from "cloudflare:workers";
 import { beforeEach, test } from "vitest";
 import { z } from "zod/v4";
 
 import { AccountResponseSchema } from "#contracts/portal-contract.ts";
 import { required } from "#testing/helpers.ts";
-import { portalRoutes, oauth } from "#worker/auth/controller.ts";
-import { oauthSubject } from "#worker/auth/repository.ts";
-import {
-  pkceChallenge,
-  ownerPrincipal,
-  adminKeyDigest,
-} from "#worker/auth/service.ts";
-import type { Bindings } from "#worker/bindings.ts";
-import { statement } from "#worker/database.ts";
 
-const origin = "https://caderninho.test";
-const key = "a".repeat(64);
-const owner = "00000000-0000-4000-8000-000000000001";
-// The provider injects OAUTH_PROVIDER on the first request; never stub that helper.
-async function config() {
-  const settings: Omit<Bindings, "OAUTH_PROVIDER"> = {
-    DB: bindings.DB,
-    OAUTH_KV: bindings.OAUTH_KV,
-    FINANCE: {
-      async create() {
-        throw new Error("Not used by access tests");
-      },
-      async get() {
-        throw new Error("Not used by access tests");
-      },
-    },
-    GITHUB_CLIENT_ID: "",
-    GITHUB_CLIENT_SECRET: "",
-    WEBHOOK_SECRET: "synthetic",
-    PUBLIC_ORIGIN: origin,
-    OWNER_ID: owner,
-    ADMIN_KEY_SHA256: await adminKeyDigest(key),
-  };
-  return settings as Bindings;
-}
-const cookies = (response: Response) =>
-  response.headers
-    .getSetCookie()
-    .map((value) => value.split(";")[0])
-    .join("; ");
+import {
+  command,
+  cookies,
+  fixture,
+  login,
+  origin,
+  password,
+  settings,
+} from "./personal-fixture.ts";
+
 beforeEach(async () => {
   await reset();
   await applyD1Migrations(bindings.DB, bindings.TEST_MIGRATIONS);
 });
-async function login(settings: Bindings, supplied = key) {
-  const app = portalRoutes();
-  const page = await app.request(origin + "/account/access", {}, settings);
-  const csrf = z
-    .string()
-    .parse((await page.text()).match(/name="csrf" value="([^"]+)"/)?.[1]);
-  return app.request(
-    origin + "/account/access",
-    {
-      method: "POST",
-      headers: {
-        Cookie: cookies(page),
-        Origin: origin,
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body: new URLSearchParams({ csrf, key: supplied }),
-    },
-    settings,
-  );
-}
-test("admin login is provisioned, rate limited, origin protected and rotated sessions fail closed", async () => {
-  const settings = await config();
-  assert.equal(
-    ownerPrincipal({ ...settings, OWNER_GITHUB_ID: "123" }),
-    "github:123",
-  );
-  assert.equal(
-    ownerPrincipal({ ...settings, OWNER_GITHUB_ID: "invalid" }),
-    null,
-  );
-  const withoutOwner = { ...settings };
-  delete withoutOwner.OWNER_ID;
-  assert.equal((await login(withoutOwner)).status, 401);
-  const app = portalRoutes();
-  assert.equal(
-    (
-      await app.request(
-        origin + "/account/access",
-        {
-          method: "POST",
-          body: "key=" + key,
-          headers: { Origin: "https://evil.test" },
-        },
-        settings,
-      )
-    ).status,
-    403,
-  );
-  assert.equal((await login(settings, "b".repeat(64))).status, 401);
-  const accepted = await login(settings);
-  assert.equal(accepted.status, 303);
-  assert.match(accepted.headers.get("Set-Cookie") ?? "", /HttpOnly/);
-  assert.match(accepted.headers.get("Set-Cookie") ?? "", /Secure/);
-  const headers = { Cookie: cookies(accepted) };
-  assert.equal(
-    (await app.request(origin + "/api/account", { headers }, settings)).status,
-    200,
-  );
-  assert.equal(
-    (
-      await app.request(
-        origin + "/api/account",
-        { headers },
-        { ...settings, ADMIN_KEY_SHA256: await adminKeyDigest("c".repeat(64)) },
-      )
-    ).status,
-    401,
-  );
-  for (let i = 0; i < 7; i++) await login(settings, "b".repeat(64));
-  const limited = await login(settings);
-  assert.equal(limited.status, 429);
-  assert.equal(limited.headers.get("Retry-After"), "60");
-});
-test("GitHub owners keep their stored principal when adding admin access", async () => {
-  const settings = { ...(await config()), OWNER_GITHUB_ID: "123" };
-  assert.equal((await login(settings)).status, 303);
-  assert.equal(
-    await statement(settings.DB, "SELECT principal FROM portal_sessions").first(
-      "principal",
-    ),
-    "github:123",
-  );
-});
-test("OAuth with admin session completes PKCE, records grant-specific receipt and revokes only that grant", async () => {
-  const settings = await config();
-  const session = cookies(await login(settings));
-  const provider = oauth(settings, async () => Response.json({ ok: true }));
-  const request = (path: string, options?: RequestInit) =>
-    provider.fetch(
-      new Request(origin + path, options),
-      settings,
-      createExecutionContext(),
-    );
-  const registered = await request("/oauth/register", {
+
+async function grant(
+  app: ReturnType<typeof fixture>,
+  ownerCookie: string,
+  name = "Synthetic assistant",
+) {
+  const registered = await app.request("/oauth/register", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      client_name: "Synthetic client",
+      client_name: name,
       redirect_uris: ["http://localhost:8123/callback"],
       token_endpoint_auth_method: "none",
       grant_types: ["authorization_code", "refresh_token"],
@@ -163,102 +43,187 @@ test("OAuth with admin session completes PKCE, records grant-specific receipt an
   const client = z
     .object({ client_id: z.string() })
     .parse(await registered.json());
-  const verifier = "synthetic-verifier-" + "a".repeat(48);
-  const params = new URLSearchParams({
-    response_type: "code",
-    client_id: client.client_id,
-    redirect_uri: "http://localhost:8123/callback",
-    scope: "finance",
-    resource: origin + "/mcp",
-    code_challenge: await pkceChallenge(verifier),
-    code_challenge_method: "S256",
-    state: "synthetic",
+  const verifier = "a".repeat(64);
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(verifier),
+  );
+  const challenge = btoa(String.fromCharCode(...new Uint8Array(digest)))
+    .replaceAll("=", "")
+    .replaceAll("+", "-")
+    .replaceAll("/", "_");
+  const authorize =
+    "/authorize?" +
+    new URLSearchParams({
+      response_type: "code",
+      client_id: client.client_id,
+      redirect_uri: "http://localhost:8123/callback",
+      scope: "finance offline_access",
+      code_challenge: challenge,
+      code_challenge_method: "S256",
+      state: "synthetic-state",
+    });
+  const anonymous = await app.request(authorize);
+  assert.equal(anonymous.status, 302);
+  assert.match(anonymous.headers.get("Location") ?? "", /account\/login/);
+  const consent = await app.request(authorize, {
+    headers: { Cookie: ownerCookie },
   });
-  assert.equal((await request("/authorize?" + params)).status, 302);
-  const consent = await request("/authorize?" + params, {
-    headers: { Cookie: session },
-  });
-  assert.equal(consent.status, 200, await consent.clone().text());
+  assert.equal(consent.status, 200);
+  const html = await consent.text();
+  assert.ok(!html.includes("<script>synthetic</script>"));
   const handle = z
     .string()
-    .parse((await consent.text()).match(/name="handle" value="([^"]+)"/)?.[1]);
-  const approve = () =>
-    request("/authorize", {
-      method: "POST",
-      headers: {
-        Cookie: session + "; " + cookies(consent),
-        Origin: origin,
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body: new URLSearchParams({ handle, decision: "approve" }),
-    });
-  const approved = await approve();
-  assert.equal(approved.status, 302, await approved.clone().text());
-  const code = new URL(
-    z.string().parse(approved.headers.get("Location")),
-  ).searchParams.get("code");
-  const exchanged = await request("/oauth/token", {
+    .parse(html.match(/name="handle" value="([^"]+)"/)?.[1]);
+  const approved = await app.request("/authorize", {
+    method: "POST",
+    headers: {
+      Cookie: ownerCookie + "; " + cookies(consent),
+      Origin: origin,
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: new URLSearchParams({ handle, decision: "approve" }),
+  });
+  assert.equal(approved.status, 302);
+  const code = required(
+    new URL(required(approved.headers.get("Location"))).searchParams.get(
+      "code",
+    ),
+  );
+  const response = await app.request("/oauth/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
       grant_type: "authorization_code",
-      code: z.string().parse(code),
       client_id: client.client_id,
+      code,
       redirect_uri: "http://localhost:8123/callback",
       code_verifier: verifier,
-      resource: origin + "/mcp",
     }),
   });
-  assert.equal(exchanged.status, 200, await exchanged.clone().text());
-  const tokens = z
-    .object({ access_token: z.string() })
-    .parse(await exchanged.json());
-  assert.equal(
-    await statement(
-      settings.DB,
-      "SELECT count(*) AS n FROM mcp_receipts",
-    ).first("n"),
-    0,
+  assert.equal(response.status, 200);
+  return z.object({ access_token: z.string() }).parse(await response.json())
+    .access_token;
+}
+
+test("only the password opens private routes; missing configuration fails closed", async () => {
+  const app = fixture();
+  assert.equal((await app.request("/account")).status, 302);
+  assert.equal((await app.request("/api/account")).status, 401);
+  assert.equal((await login(app, "wrong-synthetic-password")).status, 401);
+  const authenticated = await login(app);
+  assert.equal(authenticated.status, 303);
+  const cookie = cookies(authenticated);
+  assert.match(cookie, /__Host-caderninho=/);
+  const flags = authenticated.headers.getSetCookie().join(";");
+  for (const flag of ["HttpOnly", "Secure", "SameSite=Lax"])
+    assert.ok(flags.includes(flag));
+  const state = AccountResponseSchema.parse(
+    await (
+      await app.request("/api/account", { headers: { Cookie: cookie } })
+    ).json(),
   );
-  const call = () =>
-    request("/mcp", {
-      method: "POST",
-      headers: { Authorization: "Bearer " + tokens.access_token },
-      body: "{}",
-    });
-  const called = await call();
-  assert.equal(called.status, 200, await called.clone().text());
-  assert.equal(
-    await statement(settings.DB, "SELECT client_id FROM mcp_receipts").first(
-      "client_id",
-    ),
-    client.client_id,
-  );
-  const account = await request("/api/account", {
-    headers: { Cookie: session },
-  });
-  const accountData = AccountResponseSchema.parse(await account.json());
-  assert.equal(accountData.data.status.received, 1);
-  const grant = await settings.OAUTH_PROVIDER.listUserGrants(
-    oauthSubject("instance:" + owner),
-  );
-  const id = z.string().parse(required(grant.items[0])?.id);
-  const csrf = z
-    .string()
-    .parse(
-      await statement(settings.DB, "SELECT csrf FROM portal_sessions").first(
-        "csrf",
-      ),
-    );
-  const revoked = await request("/account/revoke", {
+  assert.equal(state.status.credentials, true);
+  for (const secret of [password, "synthetic-secret", "synthetic-client"])
+    assert.ok(!JSON.stringify(state).includes(secret));
+  const absent = settings();
+  delete absent.ADMIN_PASSWORD;
+  assert.equal((await fixture(absent).request("/account/login")).status, 503);
+  assert.equal((await fixture(absent).request("/api/account")).status, 401);
+  assert.equal((await app.request("/account/access")).status, 404);
+});
+
+test("login rate limit, CSRF and request origin cannot be bypassed by identity headers", async () => {
+  const app = fixture();
+  const forged = await app.request("/account/login", {
     method: "POST",
     headers: {
-      Cookie: session,
+      Origin: "https://attacker.test",
+      "X-Forwarded-Host": "attacker.test",
+      "x-user-id": "owner",
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: new URLSearchParams({ password }),
+  });
+  assert.equal(forged.status, 403);
+  const missingCsrf = await app.request("/account/login", {
+    method: "POST",
+    headers: {
       Origin: origin,
       "Content-Type": "application/x-www-form-urlencoded",
     },
-    body: new URLSearchParams({ csrf, grantId: id }),
+    body: new URLSearchParams({ password }),
   });
-  assert.equal(revoked.status, 303);
-  assert.equal((await call()).status, 401);
+  assert.equal(missingCsrf.status, 403);
+  for (let i = 0; i < 10; i++)
+    assert.equal((await login(app, "wrong-synthetic-password")).status, 401);
+  const limited = await login(app);
+  assert.equal(limited.status, 429);
+  assert.equal(limited.headers.get("Retry-After"), "60");
+});
+
+test("private commands require CSRF; logout, expiry and a new deployment invalidate sessions", async () => {
+  const app = fixture();
+  const cookie = cookies(await login(app));
+  const forged = await app.request("/api/account/pause", {
+    method: "POST",
+    headers: {
+      Cookie: cookie,
+      Origin: origin,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ csrf: "forged" }),
+  });
+  assert.equal(forged.status, 403);
+  assert.equal((await command(app, cookie, "logout")).status, 200);
+  assert.equal(
+    (await app.request("/api/account", { headers: { Cookie: cookie } })).status,
+    401,
+  );
+  const expired = cookies(await login(app));
+  await bindings.DB.exec("UPDATE portal_sessions SET expires=0");
+  assert.equal(
+    (await app.request("/api/account", { headers: { Cookie: expired } }))
+      .status,
+    401,
+  );
+  const previous = cookies(await login(app));
+  app.config.CF_VERSION_METADATA = {
+    ...app.config.CF_VERSION_METADATA,
+    id: "next-deployment",
+  };
+  assert.equal(
+    (await app.request("/api/account", { headers: { Cookie: previous } }))
+      .status,
+    401,
+  );
+});
+
+test("official OAuth authorizes assistants and the owner can revoke every grant", async () => {
+  const app = fixture();
+  const cookie = cookies(await login(app));
+  const first = await grant(app, cookie, "<script>synthetic</script>");
+  const second = await grant(app, cookie);
+  const use = (token: string) =>
+    app.request("/mcp", { headers: { Authorization: "Bearer " + token } });
+  assert.equal((await use(first)).status, 200);
+  assert.equal((await use(second)).status, 200);
+  assert.equal(
+    (
+      await app.request("/mcp", {
+        headers: { "x-user-id": "owner", "x-authenticated-user-id": "owner" },
+      })
+    ).status,
+    401,
+  );
+  assert.equal(
+    (await command(app, cookie, "disconnect-assistants")).status,
+    200,
+  );
+  assert.equal((await use(first)).status, 401);
+  assert.equal((await use(second)).status, 401);
+  assert.equal(
+    (await app.request("/api/account", { headers: { Cookie: cookie } })).status,
+    200,
+  );
 });

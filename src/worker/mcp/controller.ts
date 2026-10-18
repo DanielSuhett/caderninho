@@ -53,26 +53,20 @@ const longKinds = new Map<string, "sync" | "reconcile" | "reapply">([
 export async function fetchMcp(
   request: Request,
   env: Bindings,
-  principal: string,
   ctx?: ExecutionContext,
 ) {
   const routes = new Hono<{ Bindings: Bindings }>();
   routes.onError((error) => {
     throw error;
   });
-  routes.post("/mcp/rules/import", (c) =>
-    importHttp(c.req.raw, c.env, principal),
-  );
-  routes.post("/mcp/migration", (c) =>
-    migrationHttp(c.req.raw, c.env, principal),
-  );
-  routes.all("*", (c) => fetchTransport(c.req.raw, c.env, principal, ctx));
+  routes.post("/mcp/rules/import", (c) => importHttp(c.req.raw, c.env));
+  routes.post("/mcp/migration", (c) => migrationHttp(c.req.raw, c.env));
+  routes.all("*", (c) => fetchTransport(c.req.raw, c.env, ctx));
   return routes.fetch(request, env);
 }
 async function fetchTransport(
   request: Request,
   env: Bindings,
-  principal: string,
   ctx?: ExecutionContext,
 ) {
   let text: string | undefined;
@@ -144,21 +138,16 @@ async function fetchTransport(
                 throw new Error("SYNC_FILTER_NOT_SUPPORTED_USE_ITEM_SCOPE");
               if (args.renormalize && kind !== "reconcile")
                 throw new Error("RENORMALIZE_REQUIRES_RECONCILIATION");
-              const op = await startOperation(
-                env.DB,
-                principal,
-                args.requestKey,
-                {
-                  kind,
-                  itemIds: args.itemIds,
-                  ...(args.renormalize ? { renormalize: true } : {}),
-                  ...(args.filter ? { filter: args.filter } : {}),
-                },
-              );
+              const op = await startOperation(env.DB, args.requestKey, {
+                kind,
+                itemIds: args.itemIds,
+                ...(args.renormalize ? { renormalize: true } : {}),
+                ...(args.filter ? { filter: args.filter } : {}),
+              });
               await tryCatch(syncService(env).dispatch(op)); // Durable outbox survives uncertain Workflow creation.
               return response(
                 validateTaskWire("CreateTaskResult", {
-                  ...(await task(env, principal, op.id)),
+                  ...(await task(env, op.id)),
                   resultType: "task",
                 }),
               );
@@ -168,7 +157,7 @@ async function fetchTransport(
               const a = TaskParams.parse(params);
               return response(
                 validateTaskWire("GetTaskResult", {
-                  ...(await task(env, principal, a.taskId)),
+                  ...(await task(env, a.taskId)),
                   resultType: "complete",
                 }),
               );
@@ -179,14 +168,14 @@ async function fetchTransport(
               return response(
                 validateTaskWire(
                   "CancelTaskResult",
-                  await cancel(env, principal, a.taskId),
+                  await cancel(env, a.taskId),
                 ),
               );
             }
             if (m.method === "tasks/update") {
               validateTaskWire("UpdateTaskRequest", m);
               const a = UpdateParams.parse(params);
-              await getOperation(env.DB, principal, a.taskId);
+              await getOperation(env.DB, a.taskId);
               return response(
                 validateTaskWire("UpdateTaskResult", {
                   resultType: "complete",
@@ -205,7 +194,6 @@ async function fetchTransport(
               return listen(
                 request,
                 env,
-                principal,
                 m.id ?? "",
                 a.notifications.taskIds,
                 ctx ? (lifetime) => ctx.waitUntil(lifetime) : undefined,
@@ -240,7 +228,7 @@ async function fetchTransport(
       server.setRequestHandler("tools/call", async (r) => {
         const outcome = await tryCatch(
           invoke(
-            financialQueries(env, principal),
+            financialQueries(env),
             r.params.name,
             r.params.arguments ?? {},
           ),
@@ -326,11 +314,7 @@ export async function readMcpBody(
   return result.data.text;
 }
 
-export async function importHttp(
-  request: Request,
-  env: Bindings,
-  principal: string,
-) {
+export async function importHttp(request: Request, env: Bindings) {
   const a = z
     .object({
       document: z.json(),
@@ -339,8 +323,7 @@ export async function importHttp(
     })
     .strict()
     .parse(await boundedJson(request, 1048576, true));
-  return Response.json(
-    await importRuleDocument(ruleActions(env, principal), a),
-    { headers: { "Cache-Control": "no-store" } },
-  );
+  return Response.json(await importRuleDocument(ruleActions(env), a), {
+    headers: { "Cache-Control": "no-store" },
+  });
 }

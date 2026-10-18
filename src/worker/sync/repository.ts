@@ -38,24 +38,18 @@ const JsonObjectSchema = z.record(z.string(), JsonValueSchema);
 
 export async function startOperation(
   db: D1Database,
-  principal: string,
   requestKey: string,
   input: OperationInput,
 ) {
   input = OperationInputSchema.parse(input);
   const fingerprint = await hash(input);
-  await authorizedItems(db, principal, input.itemIds);
+  await authorizedItems(db, input.itemIds);
   const prior = await preparedStatement(
     db,
     database(db)
       .select()
       .from(tables.operations)
-      .where(
-        and(
-          eq(tables.operations.principal, principal),
-          eq(tables.operations.request_key, requestKey),
-        ),
-      ),
+      .where(eq(tables.operations.request_key, requestKey)),
   ).first();
   if (prior) {
     const op = OperationSchema.parse(prior);
@@ -65,27 +59,27 @@ export async function startOperation(
   let revision = await preparedStatement(
     db,
     database(db)
-      .select({ active_rules: tables.principals.active_rules })
-      .from(tables.principals)
-      .where(eq(tables.principals.id, principal)),
+      .select({ active_rules: tables.settings.active_rules })
+      .from(tables.settings)
+      .where(eq(tables.settings.id, 1)),
   ).first("active_rules");
   if (!revision) {
-    const initial = await saveRules(db, principal, EMPTY_RULES, false);
+    const initial = await saveRules(db, EMPTY_RULES, false);
     await preparedStatement(
       db,
       database(db)
-        .update(tables.principals)
+        .update(tables.settings)
         .set({
-          active_rules: sql`COALESCE(${tables.principals.active_rules}, ${initial.id})`,
+          active_rules: sql`COALESCE(${tables.settings.active_rules}, ${initial.id})`,
         })
-        .where(eq(tables.principals.id, principal)),
+        .where(eq(tables.settings.id, 1)),
     ).run();
     revision = await preparedStatement(
       db,
       database(db)
-        .select({ active_rules: tables.principals.active_rules })
-        .from(tables.principals)
-        .where(eq(tables.principals.id, principal)),
+        .select({ active_rules: tables.settings.active_rules })
+        .from(tables.settings)
+        .where(eq(tables.settings.id, 1)),
     ).first("active_rules");
   }
   const id = crypto.randomUUID(),
@@ -96,7 +90,6 @@ export async function startOperation(
       .insert(tables.operations)
       .values({
         id: id,
-        principal: principal,
         request_key: requestKey,
         kind: input.kind,
         input: JSON.stringify(input),
@@ -114,24 +107,15 @@ export async function startOperation(
       database(db)
         .select()
         .from(tables.operations)
-        .where(
-          and(
-            eq(tables.operations.principal, principal),
-            eq(tables.operations.request_key, requestKey),
-          ),
-        ),
+        .where(eq(tables.operations.request_key, requestKey)),
     ).first(),
   );
   if (op.input_hash !== fingerprint) throw new Error("IDEMPOTENCY_CONFLICT");
   return op;
 }
 
-export async function operationState(
-  db: D1Database,
-  principal: string,
-  id: string,
-) {
-  const op = await getOperation(db, principal, id);
+export async function operationState(db: D1Database, id: string) {
+  const op = await getOperation(db, id);
   return {
     id: op.id,
     status: op.status,
@@ -147,28 +131,18 @@ export async function operationState(
   };
 }
 
-export async function getOperation(
-  db: D1Database,
-  principal: string,
-  id: string,
-) {
+export async function getOperation(db: D1Database, id: string) {
   const op = OperationSchema.parse(
     await preparedStatement(
       db,
       database(db)
         .select()
         .from(tables.operations)
-        .where(
-          and(
-            eq(tables.operations.id, id),
-            eq(tables.operations.principal, principal),
-          ),
-        ),
+        .where(eq(tables.operations.id, id)),
     ).first(),
   );
   await authorizedItems(
     db,
-    principal,
     OperationInputSchema.parse(parseJson(op.input)).itemIds,
   );
   return op;
@@ -224,61 +198,44 @@ export async function finish(
       database(db)
         .delete(tables.locks)
         .where(
-          and(
-            eq(tables.locks.principal, op.principal),
-            eq(tables.locks.operation_id, op.id),
-          ),
+          and(eq(tables.locks.id, 1), eq(tables.locks.operation_id, op.id)),
         ),
     ),
   ]);
 }
 
-export function schedulingStore(
-  db: D1Database,
-  owner: string | null,
-): SchedulingStore {
+export function schedulingStore(db: D1Database): SchedulingStore {
   return {
     async due(now) {
-      if (!owner) return [];
-      return rows(
-        statement(
-          db,
-          "SELECT principal,next_sync_at,reconcile_after FROM pluggy_credentials WHERE principal=? AND enabled=1 AND next_sync_at<=? AND NOT EXISTS(SELECT 1 FROM operations WHERE operations.principal=pluggy_credentials.principal AND status='working') ORDER BY next_sync_at LIMIT 10",
-          owner,
-          now,
-        ),
-        z.object({
-          principal: z.string(),
-          next_sync_at: z.string(),
-          reconcile_after: z.string(),
-        }),
-      );
+      return z
+        .object({ next_sync_at: z.string(), reconcile_after: z.string() })
+        .nullable()
+        .parse(
+          await statement(
+            db,
+            "SELECT next_sync_at,reconcile_after FROM settings WHERE id=1 AND sync_enabled=1 AND next_sync_at<=? AND NOT EXISTS(SELECT 1 FROM operations WHERE status='working')",
+            now,
+          ).first(),
+        );
     },
     async enqueue(account, kind, next, reconcileAfter) {
-      const items = await authorizedItems(db, account.principal);
+      const items = await authorizedItems(db);
       if (!items.length) return null;
       const active = await statement(
         db,
-        "SELECT id FROM operations WHERE principal=? AND status='working' LIMIT 1",
-        account.principal,
+        "SELECT id FROM operations WHERE status='working' LIMIT 1",
       ).first();
       if (active) return null;
-      const op = await startOperation(
-        db,
-        account.principal,
-        "scheduled:" + account.next_sync_at,
-        {
-          kind,
-          itemIds: items.map((item) => item.id),
-        },
-      );
+      const op = await startOperation(db, "scheduled:" + account.next_sync_at, {
+        kind,
+        itemIds: items.map((item) => item.id),
+      });
       // The durable operation and outbox exist before the next schedule advances.
       await statement(
         db,
-        "UPDATE pluggy_credentials SET next_sync_at=?,reconcile_after=? WHERE principal=? AND next_sync_at=?",
+        "UPDATE settings SET next_sync_at=?,reconcile_after=? WHERE id=1 AND next_sync_at=?",
         next,
         reconcileAfter,
-        account.principal,
         account.next_sync_at,
       ).run();
       return op;
@@ -325,11 +282,10 @@ export async function openSynchronization(
 ): Promise<SynchronizationSession> {
   const op = await stillWorking(db, id);
   const input = OperationInputSchema.parse(parseJson(op.input));
-  const engine = await rulesFor(db, op.principal, op.rules_revision);
+  const engine = await rulesFor(db, op.rules_revision);
   return {
     operation: {
       id: op.id,
-      principal: op.principal,
       status: op.status,
       kind: input.kind,
     },
@@ -340,7 +296,7 @@ export async function openSynchronization(
         db,
         database(db)
           .insert(tables.locks)
-          .values({ principal: op.principal, operation_id: id })
+          .values({ id: 1, operation_id: id })
           .onConflictDoNothing(),
       ).run();
       return (
@@ -349,12 +305,12 @@ export async function openSynchronization(
           database(db)
             .select({ operation_id: tables.locks.operation_id })
             .from(tables.locks)
-            .where(eq(tables.locks.principal, op.principal)),
+            .where(eq(tables.locks.id, 1)),
         ).first("operation_id")) === id
       );
     },
     mature: async () => {
-      await authorizedItems(db, op.principal, input.itemIds);
+      await authorizedItems(db, input.itemIds);
       await db.batch([
         preparedStatement(
           db,
@@ -363,7 +319,6 @@ export async function openSynchronization(
             .set({ eligible: 1 })
             .where(
               and(
-                eq(tables.entities.principal, op.principal),
                 inArray(tables.entities.item_id, input.itemIds),
                 eq(tables.entities.eligible, 0),
                 eq(tables.entities.deleted, 0),
@@ -378,11 +333,9 @@ export async function openSynchronization(
         preparedStatement(
           db,
           database(db)
-            .update(tables.principals)
-            .set({ revision: sql`${tables.principals.revision} + 1` })
-            .where(
-              and(eq(tables.principals.id, op.principal), sql`changes() > 0`),
-            ),
+            .update(tables.settings)
+            .set({ revision: sql`${tables.settings.revision} + 1` })
+            .where(and(eq(tables.settings.id, 1), sql`changes() > 0`)),
         ),
       ]);
       return { phase: "matured" };
@@ -390,21 +343,21 @@ export async function openSynchronization(
     migrate: async (step) => {
       if (input.kind !== "migration")
         throw new Error("OPERATION_KIND_MISMATCH");
-      const items = await authorizedItems(db, op.principal, input.itemIds);
+      const items = await authorizedItems(db, input.itemIds);
       await migrateLegacy({ db, op, input, items, engine, step });
     },
     reapply: async (step) => {
       if (input.kind !== "reapply") throw new Error("OPERATION_KIND_MISMATCH");
-      const items = await authorizedItems(db, op.principal, input.itemIds);
+      const items = await authorizedItems(db, input.itemIds);
       return reapplyRules({ db, op, input, items, engine, step });
     },
     resolveEvent: async (provider, step) => {
       if (input.kind !== "webhook") throw new Error("OPERATION_KIND_MISMATCH");
-      await authorizedItems(db, op.principal, input.itemIds);
+      await authorizedItems(db, input.itemIds);
       return resolveEvent(db, op, provider, engine, input.eventId, step);
     },
     synchronize: async (provider, step) => {
-      const items = await authorizedItems(db, op.principal, input.itemIds);
+      const items = await authorizedItems(db, input.itemIds);
       return synchronizeResources({
         db,
         op,
@@ -485,7 +438,6 @@ export function createSyncRepository(db: D1Database) {
           database(db)
             .select({
               event_id: tables.inbox.event_id,
-              principal: tables.inbox.principal,
               item_id: tables.inbox.item_id,
             })
             .from(tables.inbox)
@@ -494,7 +446,6 @@ export function createSyncRepository(db: D1Database) {
         ),
         z.object({
           event_id: z.string(),
-          principal: z.string(),
           item_id: z.string(),
         }),
       );
@@ -513,8 +464,8 @@ export function createSyncRepository(db: D1Database) {
           ),
       ).run();
     },
-    start: (principal: string, key: string, input: OperationInput) =>
-      startOperation(db, principal, key, input),
+    start: (key: string, input: OperationInput) =>
+      startOperation(db, key, input),
     async finish(
       id: string,
       status: "completed" | "cancelled",
@@ -522,8 +473,8 @@ export function createSyncRepository(db: D1Database) {
     ) {
       await finish(db, await stillWorking(db, id), status, error);
     },
-    async cancel(principal: string, id: string) {
-      await getOperation(db, principal, id);
+    async cancel(id: string) {
+      await getOperation(db, id);
       await preparedStatement(
         db,
         database(db)
@@ -532,24 +483,18 @@ export function createSyncRepository(db: D1Database) {
           .where(
             and(
               eq(tables.operations.id, id),
-              eq(tables.operations.principal, principal),
               eq(tables.operations.status, "working"),
             ),
           ),
       ).run();
     },
     async acceptWebhook(event: WebhookEvent, receivedAt: string) {
-      const principal = z
-        .string()
-        .nullable()
-        .parse(
-          await statement(
-            db,
-            "SELECT principal FROM items WHERE id=? AND enabled=1 AND EXISTS(SELECT 1 FROM json_each(items.resources) WHERE value='transactions')",
-            event.itemId,
-          ).first("principal"),
-        );
-      if (!principal) return false;
+      const item = await statement(
+        db,
+        "SELECT id FROM items WHERE id=? AND enabled=1 AND EXISTS(SELECT 1 FROM json_each(items.resources) WHERE value='transactions')",
+        event.itemId,
+      ).first();
+      if (!item) return false;
       // Commit the receipt before ACK; cron recovers every undispatched receipt.
       const written = await preparedStatement(
         db,
@@ -557,7 +502,6 @@ export function createSyncRepository(db: D1Database) {
           .insert(tables.inbox)
           .values({
             event_id: event.eventId,
-            principal,
             item_id: event.itemId,
             account_id: event.accountId,
             event: event.event,
@@ -569,8 +513,8 @@ export function createSyncRepository(db: D1Database) {
       if (!written.success) throw new Error("INBOX_NOT_DURABLE");
       return true;
     },
-    async migrationOverlaps(principal: string, input: MigrationRequest) {
-      const [item] = await authorizedItems(db, principal, [input.itemId]);
+    async migrationOverlaps(input: MigrationRequest) {
+      const [item] = await authorizedItems(db, [input.itemId]);
       if (!item) throw new Error("ITEM_NOT_AUTHORIZED");
       const allowed = z.array(z.string()).parse(JSON.parse(item.resources));
       let overlaps = 0;
@@ -584,7 +528,6 @@ export function createSyncRepository(db: D1Database) {
             .from(tables.entities)
             .where(
               and(
-                eq(tables.entities.principal, principal),
                 eq(tables.entities.item_id, input.itemId),
                 eq(tables.entities.resource, row.resource),
                 eq(tables.entities.parent_id, row.parentId),

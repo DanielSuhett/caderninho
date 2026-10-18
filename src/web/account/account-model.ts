@@ -1,70 +1,28 @@
-import type {
-  AccountResponse,
-  PlaygroundStatus,
-} from "#contracts/portal-contract.ts";
-import type {
-  WizardIssue,
-  WizardState,
-  Credentials,
-} from "#contracts/wizard-contract.ts";
+import type { AccountResponse } from "#contracts/portal-contract.ts";
+import type { WizardIssue, WizardState } from "#contracts/wizard-contract.ts";
 import { PERSONAL_CONNECTOR_ID } from "#domain/connection-policy.ts";
 
 export type LoadState =
   | { kind: "loading" }
   | { kind: "ready" }
   | { kind: "failed"; session: boolean };
-
 export interface AccountState {
   snapshot: AccountResponse | undefined;
   load: LoadState;
-  mission: number;
+  step: number;
   message: string;
   busy: boolean;
 }
 export interface AccountActions {
   refresh: () => void;
-  selectMission: (mission: number) => void;
-  saveCredentials: (credentials: Credentials) => void;
+  selectStep: (step: number) => void;
   connectItem: (itemId?: string) => void;
   pauseSync: () => void;
   resumeSync: () => void;
   requestSync: () => void;
-  rotateKey: () => void;
-  revokeAccess: (grantId: string) => void;
-  nextClients: (cursor: string) => void;
-  watchConnection: () => void;
+  disconnectAssistants: () => void;
+  logout: () => void;
   copy: (value: string) => void;
-}
-
-export function preserveEvidence(
-  next: AccountResponse,
-  previous?: AccountResponse,
-): AccountResponse {
-  if (next.data.status.clientsAvailable || !previous) return next;
-  return {
-    ...next,
-    data: {
-      ...next.data,
-      clients: previous.data.clients,
-      status: {
-        ...next.data.status,
-        authorized: previous.data.status.authorized,
-        received: previous.data.status.received,
-      },
-    },
-  };
-}
-
-export function missionStates(status: PlaygroundStatus) {
-  return [
-    status.installation,
-    status.wizard.credentials,
-    status.wizard.connected,
-    status.wizard.sync === "completed" &&
-      status.wizard.coverage.total > 0 &&
-      status.wizard.coverage.complete === status.wizard.coverage.total,
-    status.received > 0,
-  ];
 }
 
 export const WIZARD_ISSUES: Record<
@@ -74,12 +32,12 @@ export const WIZARD_ISSUES: Record<
   credentials: {
     title: "A Pluggy não reconheceu essas chaves.",
     action:
-      "Copie o Client ID e um Client Secret válido da mesma aplicação. Não use senha do banco.",
+      "Confira PLUGGY_CLIENT_ID e PLUGGY_CLIENT_SECRET nos secrets deste Worker na sua Cloudflare.",
   },
   application: {
     title: "Esta instalação já usa outra aplicação Pluggy.",
     action:
-      "Volte à aplicação já cadastrada para renovar o secret. Seu histórico foi preservado.",
+      "Configure as credenciais da aplicação original nos secrets da Cloudflare. Seu histórico foi preservado.",
   },
   rate: {
     title: "A Pluggy pediu uma pausa.",
@@ -130,6 +88,16 @@ export function syncPresentation(state: WizardState) {
       title: "Próximas sincronizações pausadas",
       detail:
         "Seu histórico foi preservado. Abra sua conta e use Retomar sincronização para reativar a agenda.",
+    };
+  if (
+    state.sync === "completed" &&
+    (state.coverage.total === 0 ||
+      state.coverage.complete !== state.coverage.total)
+  )
+    return {
+      title: "Importação com cobertura parcial",
+      detail:
+        "Confira os recursos indisponíveis no diagnóstico antes de usar totais financeiros.",
     };
   if (state.sync === "completed")
     return {

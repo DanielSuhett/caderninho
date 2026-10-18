@@ -5,7 +5,6 @@ import { OperationStatusSchema } from "#contracts/operation.ts";
 // D1 row, serialized payloads and checkpoint layout are private to persistence.
 export const OperationSchema = z.object({
   id: z.string(),
-  principal: z.string(),
   kind: z.string(),
   input: z.string(),
   input_hash: z.string(),

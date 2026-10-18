@@ -19,14 +19,3 @@ export const WizardStateSchema = z.object({
   paused: z.boolean(),
 });
 export type WizardState = z.infer<typeof WizardStateSchema>;
-export const CredentialsSchema = z
-  .object({
-    clientId: z.string().trim().min(1).max(256),
-    clientSecret: z.string().min(1).max(1024),
-  })
-  .strict();
-export const ConnectionSchema = CredentialsSchema.extend({
-  itemId: z.string().uuid(),
-});
-export type Credentials = z.infer<typeof CredentialsSchema>;
-export type Connection = z.infer<typeof ConnectionSchema>;

@@ -8,8 +8,6 @@ import {
   type AccountActions,
   type AccountState,
   type LoadState,
-  missionStates,
-  preserveEvidence,
   WIZARD_ISSUES,
 } from "./account-model.ts";
 import { createConnectWidget } from "./connect-widget.ts";
@@ -20,21 +18,18 @@ export function useAccount(): AccountState & { actions: AccountActions } {
   const [snapshot, setSnapshot] = useState<AccountResponse>();
   const snapshotRef = useRef<AccountResponse | undefined>(undefined);
   const [load, setLoad] = useState<LoadState>({ kind: "loading" });
-  const [mission, setMission] = useState(() =>
+  const [step, setStep] = useState(() =>
     Math.min(
-      5,
+      2,
       Math.max(
         1,
-        Math.trunc(
-          Number(new URLSearchParams(location.search).get("mission")),
-        ) || 1,
+        Math.trunc(Number(new URLSearchParams(location.search).get("step"))) ||
+          1,
       ),
     ),
   );
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
-  const [watchUntil, setWatchUntil] = useState(0);
-  const cursor = useRef<string | undefined>(undefined);
   const initialized = useRef(false);
   const lifetime = useRef<AbortController | undefined>(undefined);
   const request = useRef<AbortController | undefined>(undefined);
@@ -54,9 +49,7 @@ export function useAccount(): AccountState & { actions: AccountActions } {
       const controller = new AbortController();
       request.current = controller;
       const read = async () => {
-        const result = await tryCatch(
-          api.read(controller.signal, cursor.current),
-        );
+        const result = await tryCatch(api.read(controller.signal));
         if (controller.signal.aborted || request.current !== controller) return;
         inFlight.current = undefined;
         if (result.error) {
@@ -70,14 +63,11 @@ export function useAccount(): AccountState & { actions: AccountActions } {
         }
         if (!initialized.current) {
           initialized.current = true;
-          if (!new URLSearchParams(location.search).has("mission")) {
-            const first = missionStates(result.data.data.status).findIndex(
-              (done) => !done,
-            );
-            setMission(first < 0 ? 5 : first + 1);
+          if (!new URLSearchParams(location.search).has("step")) {
+            setStep(result.data.status.connected ? 2 : 1);
           }
         }
-        const next = preserveEvidence(result.data, snapshotRef.current);
+        const next = result.data;
         snapshotRef.current = next;
         setSnapshot(next);
         setLoad({ kind: "ready" });
@@ -102,13 +92,14 @@ export function useAccount(): AccountState & { actions: AccountActions } {
 
   const pending =
     snapshot &&
-    !snapshot.data.status.wizard.paused &&
-    ["waiting", "working"].includes(snapshot.data.status.wizard.sync);
+    snapshot.status.connected &&
+    !snapshot.status.paused &&
+    ["waiting", "working"].includes(snapshot.status.sync);
   const expired = load.kind === "failed" && load.session;
   useEffect(() => {
     if (expired) return;
     const tick = () => {
-      if (pending || Date.now() < watchUntil) void refresh();
+      if (pending) void refresh();
     };
     const timer = setInterval(tick, load.kind === "failed" ? 30000 : 5000);
     document.addEventListener("visibilitychange", tick);
@@ -116,11 +107,11 @@ export function useAccount(): AccountState & { actions: AccountActions } {
       clearInterval(timer);
       document.removeEventListener("visibilitychange", tick);
     };
-  }, [refresh, pending, watchUntil, expired, load.kind]);
+  }, [refresh, pending, expired, load.kind]);
 
-  function selectMission(next: number) {
-    setMission(next);
-    history.replaceState(null, "", "/account?mission=" + next);
+  function selectStep(next: number) {
+    setStep(next);
+    history.replaceState(null, "", "/account?step=" + next);
   }
   function context() {
     if (
@@ -164,16 +155,7 @@ export function useAccount(): AccountState & { actions: AccountActions } {
     refresh: () => {
       void refresh();
     },
-    selectMission,
-    saveCredentials: (credentials) => {
-      void act(async () => {
-        const command = context();
-        await api.saveCredentials(command, credentials);
-        if (command.signal.aborted) return;
-        await refresh(true);
-        if (!command.signal.aborted) selectMission(3);
-      });
-    },
+    selectStep,
     connectItem: (itemId) => {
       const opener = document.activeElement;
       const restoreFocus = () => {
@@ -192,7 +174,7 @@ export function useAccount(): AccountState & { actions: AccountActions } {
               if (command.signal.aborted) return;
               await widget.destroy();
               await refresh(true);
-              if (!command.signal.aborted) selectMission(4);
+              if (!command.signal.aborted) selectStep(1);
             });
           },
           onError: () => setMessage(WIZARD_ISSUES.unavailable.title),
@@ -203,30 +185,14 @@ export function useAccount(): AccountState & { actions: AccountActions } {
     pauseSync: () => maintain(() => api.pauseSync(context())),
     resumeSync: () => maintain(() => api.resumeSync(context())),
     requestSync: () => maintain(() => api.requestSync(context())),
-    rotateKey: () => maintain(() => api.rotateKey(context())),
-    revokeAccess: (grantId) =>
-      maintain(() => api.revokeAccess(context(), grantId)),
-    nextClients: (next) => {
-      cursor.current = next;
-      // Evidence from another page cannot be used as a fallback for this cursor.
-      if (snapshotRef.current)
-        snapshotRef.current = {
-          ...snapshotRef.current,
-          data: {
-            ...snapshotRef.current.data,
-            clients: [],
-            status: {
-              ...snapshotRef.current.data.status,
-              authorized: 0,
-              received: 0,
-            },
-          },
-        };
-      void refresh(true);
-    },
-    watchConnection: () => {
-      setWatchUntil(Date.now() + 300000);
-      void refresh();
+    disconnectAssistants: () =>
+      maintain(() => api.disconnectAssistants(context())),
+    logout: () => {
+      void act(async () => {
+        const command = context();
+        await api.logout(command);
+        if (!command.signal.aborted) location.assign("/account/login");
+      });
     },
     copy: (value) => {
       void act(async () => {
@@ -237,5 +203,5 @@ export function useAccount(): AccountState & { actions: AccountActions } {
       });
     },
   };
-  return { snapshot, load, mission, message, busy, actions };
+  return { snapshot, load, step, message, busy, actions };
 }

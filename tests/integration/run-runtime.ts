@@ -109,7 +109,6 @@ const checked = await tryCatch(
             "Mcp-Method": method,
             "Mcp-Name": params.name ?? params.taskId ?? "",
             "Mcp-Protocol-Version": "2026-07-28",
-            "X-Test-Principal": "alice",
           },
           body: JSON.stringify({
             jsonrpc: "2.0",
@@ -160,11 +159,9 @@ const checked = await tryCatch(
     console.log(
       "PASS: native Workflow continues without a connected subscriber, same durable Task",
     );
-    for (const source of ["d1", "workflow"])
-      await command(["tests/integration/runtime-check.ts"], {
-        PRODUCT_TEST_URL: base,
-        TASK_EVENT_SOURCE: source,
-      });
+    await command(["tests/integration/runtime-check.ts"], {
+      PRODUCT_TEST_URL: base,
+    });
   })(),
 );
 await worker.stop();
