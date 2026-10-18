@@ -5,7 +5,7 @@ import { tryCatch } from "../shared";
 import { authenticatedFetch } from "./auth/controller";
 import type { Bindings } from "./bindings";
 import { authService, scheduleSync, syncService } from "./composition";
-import { failureStatus } from "./http";
+import { failureStatus, requestCategory } from "./http";
 import { fetchMcp } from "./mcp";
 import {
   DiagnosticEvent,
@@ -33,7 +33,7 @@ function createRoutes(ctx: ExecutionContext) {
           reportDiagnostic({
             durationMs: Math.round(performance.now() - started),
             event: DiagnosticEvent.http,
-            phase: SpanName.httpRequest,
+            ...requestCategory(c.req.path),
             status: c.res.status,
           }),
         );

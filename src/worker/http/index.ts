@@ -1,10 +1,9 @@
 import { readRequestBody } from "@modelcontextprotocol/server";
-import type { Logger } from "pino";
 import { z } from "zod/v4";
 
 import { exactJSON } from "../../domain";
 import { parseRuleJson } from "../../domain/rules";
-import { logger } from "../../shared/logger";
+import type { SafeFields } from "../observability";
 
 const invalidRequests = new Set([
   "EMPTY_FORM",
@@ -18,31 +17,34 @@ export function failureStatus(error: Error): 400 | 500 {
     ? 400
     : 500;
 }
-export function requestDiagnostic(
-  input: {
-    correlation: string;
-    status: number;
-    durationMs: number;
-    route: string;
-  },
-  output: Pick<Logger, "debug" | "warn" | "error"> = logger,
-) {
-  // Deliberately omit URL, query strings, bodies, identities and exception text.
-  const diagnostic = {
-    correlation: input.correlation,
-    durationMs: input.durationMs,
-    route: input.route,
-    status: input.status,
-  };
-  if (input.status >= 500) {
-    output.error({ code: "REQUEST_FAILED", ...diagnostic });
-    return;
+const requestActions = new Map<string, NonNullable<SafeFields["action"]>>([
+  ["/account", "read"],
+  ["/account/login", "login"],
+  ["/api/account", "read"],
+  ["/api/account/connect-token", "token"],
+  ["/api/account/items", "connect"],
+  ["/api/account/pause", "pause"],
+  ["/api/account/resume", "resume"],
+  ["/api/account/sync", "sync"],
+  ["/api/account/disconnect-assistants", "disconnect"],
+  ["/api/account/logout", "logout"],
+  ["/authorize", "authorize"],
+  ["/oauth/token", "token"],
+]);
+export function requestCategory(
+  path: string,
+): Pick<SafeFields, "phase" | "action"> {
+  const action = requestActions.get(path) ?? "unknown";
+  if (path === "/account" || path.startsWith("/api/account")) {
+    return { action, phase: "account.action" };
   }
-  if (input.status >= 400) {
-    output.warn({ code: "REQUEST_REJECTED", ...diagnostic });
-    return;
+  if (path === "/mcp") {
+    return { action, phase: "mcp.call" };
   }
-  output.debug({ code: "REQUEST_COMPLETED", ...diagnostic });
+  if (path === "/webhook") {
+    return { action, phase: "sync.admission" };
+  }
+  return { action, phase: "auth.request" };
 }
 
 export async function boundedJson(

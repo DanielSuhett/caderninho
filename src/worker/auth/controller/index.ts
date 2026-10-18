@@ -7,7 +7,18 @@ import { accessPage, consentPage, renderPage } from "../../../web";
 import { accountRoutes } from "../../account/controller";
 import type { Bindings } from "../../bindings";
 import { authService } from "../../composition";
-import { boundedForm, failureStatus, requestOrigin } from "../../http";
+import {
+  boundedForm,
+  failureStatus,
+  requestCategory,
+  requestOrigin,
+} from "../../http";
+import {
+  FailureCode,
+  markFailure,
+  observeSpan,
+  SpanName,
+} from "../../observability";
 import { adminConfigured, returnPath, token, verifyPassword } from "../service";
 import {
   cookieOptions,
@@ -103,25 +114,35 @@ export function oauth(api: McpHandler, origin: string) {
   });
 }
 
-export async function authenticatedFetch(
+export function authenticatedFetch(
   request: Request,
   env: Bindings,
   ctx: ExecutionContext,
   api: McpHandler,
 ) {
-  const { data, error } = await tryCatch(() =>
-    oauth(api, requestOrigin(request)).fetch(request, env, ctx),
+  return observeSpan(
+    SpanName.authentication,
+    async (span) => {
+      const { data, error } = await tryCatch(() =>
+        oauth(api, requestOrigin(request)).fetch(request, env, ctx),
+      );
+      if (error) {
+        markFailure(error, { phase: SpanName.authentication });
+        const status = failureStatus(error);
+        span.annotate({ status });
+        return Response.json(
+          { error: "AUTHENTICATION_OR_REQUEST_FAILED" },
+          {
+            headers: { "Cache-Control": "no-store" },
+            status,
+          },
+        );
+      }
+      span.annotate({ status: data.status });
+      return data;
+    },
+    requestCategory(new URL(request.url).pathname),
   );
-  if (error) {
-    return Response.json(
-      { error: "AUTHENTICATION_OR_REQUEST_FAILED" },
-      {
-        headers: { "Cache-Control": "no-store" },
-        status: failureStatus(error),
-      },
-    );
-  }
-  return data;
 }
 
 const loginCookie = "__Host-caderninho-login";
@@ -136,6 +157,11 @@ function loginRoutes() {
     const csrf = token();
     setCookie(c, loginCookie, csrf, { ...cookieOptions, maxAge: 600 });
     const configured = adminConfigured(c.env.ADMIN_PASSWORD);
+    if (!configured) {
+      markFailure(new Error(FailureCode.INSTALLATION_INCOMPLETE), {
+        phase: SpanName.authentication,
+      });
+    }
     return c.html(
       renderPage(
         accessPage({
@@ -161,6 +187,9 @@ function loginRoutes() {
       return c.text("Formato inválido.", 415);
     }
     if (!adminConfigured(c.env.ADMIN_PASSWORD)) {
+      markFailure(new Error(FailureCode.INSTALLATION_INCOMPLETE), {
+        phase: SpanName.authentication,
+      });
       return c.text("Acesso não configurado.", 503);
     }
     const form = await boundedForm(c.req.raw);

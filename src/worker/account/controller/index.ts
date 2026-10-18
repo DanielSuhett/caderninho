@@ -17,12 +17,19 @@ import {
   sessionMiddleware,
 } from "../../auth/session";
 import { accountService, authService } from "../../composition";
-import { boundedJson, failureStatus, requestOrigin } from "../../http";
+import {
+  boundedJson,
+  failureStatus,
+  requestCategory,
+  requestOrigin,
+} from "../../http";
+import { markFailure, observeSpan, SpanName } from "../../observability";
 import { wizardIssue } from "../entity";
 
 export function accountRoutes(accessRoutes: Hono<PortalEnv>) {
   const app = new Hono<PortalEnv>();
   app.onError((error, c) => {
+    markFailure(error, { phase: SpanName.accountAction });
     if (error.message === "SESSION_REQUIRED") {
       return c.json({ issue: WizardIssue.session }, 403);
     }
@@ -36,7 +43,18 @@ export function accountRoutes(accessRoutes: Hono<PortalEnv>) {
   });
   app.use("*", async (c, next) => {
     requestOrigin(c.req.raw);
-    await next();
+    if (c.req.path === "/account" || c.req.path.startsWith("/api/account")) {
+      await observeSpan(
+        SpanName.accountAction,
+        async (span) => {
+          await next();
+          span.annotate({ status: c.res.status });
+        },
+        requestCategory(c.req.path),
+      );
+    } else {
+      await next();
+    }
     c.header("Cache-Control", "no-store");
     c.header("Referrer-Policy", "same-origin");
     c.header("X-Content-Type-Options", "nosniff");
