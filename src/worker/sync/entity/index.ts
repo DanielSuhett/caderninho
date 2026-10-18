@@ -67,6 +67,15 @@ export interface OperationHandle {
   id: string;
   status: OperationStatus;
 }
+export interface WorkflowDispatcher {
+  create: (id: string) => Promise<void>;
+  status: (id: string) => Promise<string>;
+}
+export interface SyncRecoveryNotice {
+  error: Error;
+  operationId?: string;
+  phase: "dispatch" | "status" | "schedule";
+}
 export interface AdmissionResult {
   items: ItemAdmission[];
   operation: Operation | null;

@@ -14,13 +14,16 @@ import { tryCatch } from "../../shared";
 import type {
   OperationHandle,
   SchedulingStore,
+  SyncRecoveryNotice,
   SyncRepository,
+  WorkflowDispatcher,
 } from "./entity";
 
 export async function scheduleSync(
   store: SchedulingStore,
   dispatch: (operation: OperationHandle) => Promise<void>,
   now: Date,
+  onRecovery?: (notice: SyncRecoveryNotice) => void,
 ) {
   const due = await store.due(now.toISOString());
   if (!due) {
@@ -42,16 +45,18 @@ export async function scheduleSync(
       await dispatch(op);
     }
   });
-  return error ? undefined : data;
+  if (error) {
+    onRecovery?.({ error, phase: "schedule" });
+    return;
+  }
+  return data;
 }
 
 export function createSyncService(
   repository: SyncRepository,
-  workflow: {
-    create: (id: string) => Promise<void>;
-    status: (id: string) => Promise<string>;
-  },
+  workflow: WorkflowDispatcher,
   now: () => Date = () => new Date(),
+  onRecovery?: (notice: SyncRecoveryNotice) => void,
 ) {
   const dispatch = async (op: OperationHandle) => {
     if (
@@ -112,9 +117,10 @@ export function createSyncService(
         },
       );
       // The committed outbox remains pending if dispatch fails.
-      await tryCatch(() => dispatch(op)).then(({ data, error }) =>
-        error ? undefined : data,
-      );
+      const { data: _dispatched, error } = await tryCatch(() => dispatch(op));
+      if (error) {
+        onRecovery?.({ error, operationId: op.id, phase: "dispatch" });
+      }
       return {
         body: { applied: false, operationId: op.id, status: op.status },
         status: 200 as const,
@@ -125,7 +131,11 @@ export function createSyncService(
       await (await repository.operations(true)).reduce(async (previous, op) => {
         await previous;
         const { data, error } = await tryCatch(() => workflow.status(op.id));
-        if (!error && ["errored", "terminated"].includes(data)) {
+        if (error) {
+          onRecovery?.({ error, operationId: op.id, phase: "status" });
+          return;
+        }
+        if (["errored", "terminated"].includes(data)) {
           await repository.finish(
             op.id,
             data === "terminated"
@@ -139,9 +149,12 @@ export function createSyncService(
         async (previous, op) => {
           await previous;
           // The committed outbox remains pending if dispatch fails.
-          await tryCatch(() => dispatch(op)).then(({ data, error }) =>
-            error ? undefined : data,
+          const { data: _dispatched, error } = await tryCatch(() =>
+            dispatch(op),
           );
+          if (error) {
+            onRecovery?.({ error, operationId: op.id, phase: "dispatch" });
+          }
         },
         Promise.resolve(),
       );
