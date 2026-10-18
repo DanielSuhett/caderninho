@@ -6,9 +6,15 @@ import { z } from "zod/v4";
 import { createLogger } from "../../src/shared/logger";
 import { fetchMcp } from "../../src/worker/mcp";
 import { withObservation } from "../../src/worker/observability";
+import { startOperation } from "../../src/worker/sync/repository";
 import { responseJson } from "../support";
 import { settings, testMigrations } from "./personal-fixture";
-import { applyD1Migrations, reset } from "cloudflare:test";
+import {
+  applyD1Migrations,
+  createExecutionContext,
+  reset,
+  waitOnExecutionContext,
+} from "cloudflare:test";
 import { env as bindings } from "cloudflare:workers";
 
 const meta = {
@@ -17,7 +23,11 @@ const meta = {
   },
   "io.modelcontextprotocol/protocolVersion": "2026-07-28",
 };
-function rpc(method: string, params: Record<string, unknown>) {
+function rpc(
+  method: string,
+  params: Record<string, unknown>,
+  signal?: AbortSignal,
+) {
   const name = typeof params.name === "string" ? params.name : "";
   const taskId = typeof params.taskId === "string" ? params.taskId : "";
   return new Request("https://synthetic.test/mcp?secret=private-url", {
@@ -36,6 +46,7 @@ function rpc(method: string, params: Record<string, unknown>) {
       "X-Private": "private-header",
     },
     method: "POST",
+    ...(signal && { signal }),
   });
 }
 function observation(correlation = "synthetic-mcp") {
@@ -110,4 +121,154 @@ test("an internal tool error remains HTTP 200 and emits one safe MCP failure", a
   ]) {
     assert.equal(telemetry.includes(marker), false);
   }
+});
+
+test("a subscription failure after headers keeps correlation and closes its lifetime", async () => {
+  const operation = await startOperation(bindings.DB, "private-stream-key", {
+    itemIds: ["11111111-1111-4111-8111-111111111111"],
+    kind: "sync",
+  });
+  const observed = observation("synthetic-stream");
+  const context = createExecutionContext();
+  const response = await withObservation(observed.input, () =>
+    fetchMcp(
+      rpc("subscriptions/listen", {
+        notifications: { taskIds: [operation.id] },
+      }),
+      settings(),
+      context,
+    ),
+  );
+  assert.equal(response.status, 200);
+  assert.ok(response.body);
+  const reader = response.body.getReader();
+  await reader.read();
+  await reader.read();
+  await bindings.DB.exec("DROP TABLE operations");
+  const failed = await reader.read();
+  assert.equal(failed.done, false);
+  assert.ok(
+    new TextDecoder()
+      .decode(failed.value)
+      .includes("SUBSCRIPTION_CLOSED_RECONNECT"),
+  );
+  assert.equal((await reader.read()).done, true);
+  reader.releaseLock();
+  await waitOnExecutionContext(context);
+  assert.equal(observed.lines.length, 1);
+  z.object({
+    correlation: z.literal("synthetic-stream"),
+    event: z.literal("MCP_STREAM"),
+    failure: z.literal("INTERNAL_ERROR"),
+    level: z.literal(50),
+    outcome: z.literal("failed"),
+    phase: z.literal("mcp.stream"),
+  }).parse(JSON.parse(observed.lines.join("")));
+  const streamSpans = z
+    .array(z.object({ name: z.string(), outcome: z.string() }))
+    .parse(observed.spans)
+    .filter((span) => span.name === "mcp.stream");
+  assert.deepEqual(
+    streamSpans.map((span) => span.outcome),
+    ["failed"],
+  );
+  assert.equal(
+    JSON.stringify([observed.lines, observed.spans]).includes("private-"),
+    false,
+  );
+});
+
+test("100 polls, rejections and normal cancellations stay quiet and close every stream", async () => {
+  const operation = await startOperation(bindings.DB, "private-poll-key", {
+    itemIds: ["11111111-1111-4111-8111-111111111111"],
+    kind: "sync",
+  });
+  const observed = observation();
+  await Array.from({ length: 100 }, (_, index) => index).reduce(
+    async (previous, index) => {
+      await previous;
+      const poll = await withObservation(
+        { ...observed.input, correlation: `poll-${index}` },
+        () => fetchMcp(rpc("tasks/get", { taskId: operation.id }), settings()),
+      );
+      assert.equal((await responseJson(poll)).result?.status, "working");
+      const rejected = await withObservation(
+        { ...observed.input, correlation: `rejected-${index}` },
+        () =>
+          fetchMcp(
+            rpc("tools/call", {
+              arguments: { secret: "private-input" },
+              name: "private-unknown-tool",
+            }),
+            settings(),
+          ),
+      );
+      assert.equal((await responseJson(rejected)).result?.isError, true);
+      const abort = new AbortController();
+      const context = createExecutionContext();
+      const request =
+        index % 2
+          ? rpc(
+              "subscriptions/listen",
+              {
+                notifications: { taskIds: [operation.id] },
+              },
+              abort.signal,
+            )
+          : rpc("tools/list", {}, abort.signal);
+      const response = await withObservation(
+        { ...observed.input, correlation: `cancelled-${index}` },
+        () => fetchMcp(request, settings(), context),
+      );
+      assert.ok(response.body);
+      if (index % 3 === 0) {
+        abort.abort();
+      }
+      await response.body.cancel();
+      abort.abort();
+      await waitOnExecutionContext(context);
+    },
+    Promise.resolve(),
+  );
+  assert.deepEqual(observed.lines, []);
+  const spans = z
+    .array(
+      z.object({
+        action: z.string(),
+        correlation: z.string(),
+        name: z.string(),
+        outcome: z.string(),
+      }),
+    )
+    .parse(observed.spans);
+  assert.equal(
+    spans.filter(
+      (span) => span.name === "mcp.call" && span.action === "tasks_get",
+    ).length,
+    100,
+  );
+  assert.equal(
+    spans.filter(
+      (span) =>
+        span.name === "mcp.call" &&
+        span.action === "unknown" &&
+        span.outcome === "rejected",
+    ).length,
+    100,
+  );
+  assert.equal(
+    spans.filter(
+      (span) => span.name === "mcp.stream" && span.outcome === "cancelled",
+    ).length,
+    100,
+  );
+  for (const span of spans) {
+    if (span.action === "unknown") {
+      assert.ok(span.correlation.startsWith("rejected-"));
+    }
+  }
+  assert.equal(
+    JSON.stringify([observed.lines, observed.spans]).includes("private-"),
+    false,
+  );
 });
