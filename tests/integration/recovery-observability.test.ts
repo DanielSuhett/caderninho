@@ -8,7 +8,8 @@ import worker from "../../src/worker";
 import { syncService } from "../../src/worker/composition";
 import { database } from "../../src/worker/database";
 import { withObservation } from "../../src/worker/observability";
-import { items, operations } from "../../src/worker/schema";
+import { entities, items, operations } from "../../src/worker/schema";
+import { migrationHttp } from "../../src/worker/sync/controller";
 import { startOperation } from "../../src/worker/sync/repository";
 import {
   cookies,
@@ -29,6 +30,90 @@ import { env } from "cloudflare:workers";
 beforeEach(async () => {
   await reset();
   await applyD1Migrations(env.DB, testMigrations);
+});
+
+test("migration admission distinguishes dry run, overlap refusal and accepted work without changing HTTP results", async () => {
+  const itemId = "private-migration-item";
+  const now = "2026-10-01T00:00:00.000Z";
+  await database(env.DB).insert(items).values({ id: itemId });
+  await database(env.DB)
+    .insert(entities)
+    .values({
+      first_seen_at: now,
+      id: "private-record",
+      item_id: itemId,
+      normalized: { description: "private-existing", id: "private-record" },
+      normalizer: "synthetic",
+      observed_at: now,
+      parent_id: "private-parent",
+      relevant_hash: "synthetic",
+      resource: "transactions",
+      source: { id: "private-record" },
+    });
+  const lines: string[] = [];
+  const spans: object[] = [];
+  const output = createLogger({
+    destination: { write: (line) => lines.push(line) },
+    level: "warn",
+    name: "synthetic-migration",
+  });
+  await [
+    { apply: false, outcome: "noop", policy: "refuse-conflicts", status: 200 },
+    {
+      apply: true,
+      outcome: "rejected",
+      policy: "refuse-conflicts",
+      status: 409,
+    },
+    { apply: true, outcome: "success", policy: "keep-current", status: 200 },
+  ].reduce(async (previous, sample) => {
+    await previous;
+    const response = await withObservation(
+      { onSpan: (span) => spans.push(span), output },
+      () =>
+        migrationHttp(
+          new Request(`${origin}/mcp/migration`, {
+            body: JSON.stringify({
+              apply: sample.apply,
+              itemId,
+              policy: sample.policy,
+              rows: [
+                {
+                  parentId: "private-parent",
+                  readAt: now,
+                  record: {
+                    description: "private-imported",
+                    id: "private-record",
+                  },
+                  resource: "transactions",
+                  sourceKey: "private-source",
+                },
+              ],
+            }),
+            method: "POST",
+          }),
+          settings(),
+        ),
+    );
+    assert.equal(response.status, sample.status);
+    const body = await response.json();
+    if (sample.status === 409) {
+      z.object({
+        error: z.literal("MIGRATION_OVERLAP_REQUIRES_POLICY"),
+        overlaps: z.literal(1),
+      }).parse(body);
+    } else {
+      z.object({ applied: z.literal(false) }).parse(body);
+    }
+    z.object({
+      name: z.literal("sync.admission"),
+      operationKind: z.literal("migration"),
+      outcome: z.literal(sample.outcome),
+      status: z.literal(sample.status),
+    }).parse(spans.at(-1));
+  }, Promise.resolve());
+  assert.deepEqual(lines, []);
+  assert.ok(!JSON.stringify(spans).includes("private-"));
 });
 
 test("webhook receipt distinguishes a recorded notice from a duplicate without warning", async () => {

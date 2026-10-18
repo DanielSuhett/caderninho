@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import { afterEach, beforeEach, test, vi } from "vitest";
 import { z } from "zod/v4";
 
+import type { Filter } from "../../src/domain";
+import { EMPTY_RULES } from "../../src/domain/rules";
 import { createLogger } from "../../src/shared/logger";
 import { fetchMcp } from "../../src/worker/mcp";
 import { withObservation } from "../../src/worker/observability";
@@ -73,6 +75,115 @@ beforeEach(async () => {
   await applyD1Migrations(bindings.DB, testMigrations);
 });
 afterEach(() => vi.unstubAllGlobals());
+
+test("100 semantic filter and rule rejections preserve tool errors without actionable diagnostics", async () => {
+  const observed = observation();
+  const deep = Array.from({ length: 14 }).reduce<Filter>(
+    (filter) => ({ and: [filter] }),
+    { field: "currency", op: "eq", value: "BRL" },
+  );
+  const requests = [
+    {
+      arguments: { filter: { field: "amountMinor", op: "eq", value: false } },
+      expected: "Invalid amount filter",
+      name: "caderninho_query",
+    },
+    {
+      arguments: { filter: { field: "amountMinor", op: "eq", value: "01" } },
+      expected: "Minor amount must be canonical integer, at most 30 digits",
+      name: "caderninho_query",
+    },
+    {
+      arguments: { filter: { field: "currency", op: "contains", value: "BR" } },
+      expected: "contains only supports description",
+      name: "caderninho_query",
+    },
+    {
+      arguments: { filter: deep },
+      expected: "Filter complexity limit",
+      name: "caderninho_query",
+    },
+    {
+      arguments: {
+        action: "validate",
+        document: {
+          ...EMPTY_RULES,
+          categories: [
+            ...EMPTY_RULES.categories,
+            {
+              aliases: [],
+              group_id: "private-missing",
+              id: "private-category",
+              name: "Private category",
+            },
+          ],
+        },
+      },
+      expected: "Unknown group: private-category",
+      name: "caderninho_rules",
+    },
+  ];
+  await Array.from(
+    { length: 100 },
+    (_, index) => requests[index % requests.length],
+  ).reduce(async (previous, request) => {
+    await previous;
+    assert.ok(request);
+    const response = await withObservation(observed.input, () =>
+      fetchMcp(
+        rpc("tools/call", { arguments: request.arguments, name: request.name }),
+        settings(),
+      ),
+    );
+    assert.equal(response.status, 200);
+    const result = z
+      .object({
+        content: z.array(z.object({ text: z.string() })),
+        isError: z.literal(true),
+      })
+      .parse((await responseJson(response)).result);
+    assert.equal(
+      z
+        .object({ error: z.string() })
+        .parse(JSON.parse(result.content[0]?.text ?? "null")).error,
+      request.expected,
+    );
+  }, Promise.resolve());
+  assert.deepEqual(observed.lines, []);
+  assert.ok(
+    z
+      .array(z.object({ name: z.string(), outcome: z.string() }))
+      .parse(observed.spans)
+      .filter(
+        (span) => span.name === "mcp.call" || span.name === "finance.action",
+      )
+      .every((span) => span.outcome === "rejected"),
+  );
+  assert.ok(!JSON.stringify(observed.spans).includes("private-"));
+  await bindings.DB.exec(
+    "CREATE TRIGGER reject_rule_revision BEFORE INSERT ON rule_sets BEGIN SELECT RAISE(ABORT, 'private-rule-storage'); END;",
+  );
+  const failed = await withObservation(observed.input, () =>
+    fetchMcp(
+      rpc("tools/call", {
+        arguments: { action: "save", document: EMPTY_RULES },
+        name: "caderninho_rules",
+      }),
+      settings(),
+    ),
+  );
+  assert.equal(
+    z
+      .object({ isError: z.literal(true) })
+      .parse((await responseJson(failed)).result).isError,
+    true,
+  );
+  assert.equal(observed.lines.length, 1);
+  z.object({
+    failure: z.literal("INTERNAL_ERROR"),
+    level: z.literal(50),
+  }).parse(JSON.parse(observed.lines[0] ?? "null"));
+});
 
 test("an internal tool error remains HTTP 200 and emits one safe MCP failure", async () => {
   await bindings.DB.exec("DROP VIEW effective_entities");

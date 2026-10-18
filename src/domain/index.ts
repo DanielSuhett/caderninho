@@ -66,6 +66,7 @@ export {
   assertSourceTotal,
   assertWebhookEvent,
   deleteMissingAfterPage,
+  ExecutionPhase,
   type FinishedOperationStatus,
   type ItemAdmission,
   type LongOperationKind,

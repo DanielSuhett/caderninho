@@ -40,6 +40,7 @@ import {
   classifyFailure,
   DiagnosticEvent,
   FailureCode,
+  markFailure,
   Outcome,
   observeSpan,
   Phase,
@@ -309,6 +310,11 @@ export function ruleActions(env: Bindings) {
     list: () =>
       observeSpan(SpanName.financeAction, () => listRules(env.DB), {
         action: "rules_list",
+      }),
+    onValidationFailure: (error: Error) =>
+      markFailure(error, {
+        failure: FailureCode.INVALID_REQUEST,
+        phase: SpanName.financeAction,
       }),
     read: (id: string) =>
       observeSpan(SpanName.financeAction, () => readRules(env.DB, id), {

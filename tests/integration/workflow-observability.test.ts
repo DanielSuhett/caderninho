@@ -4,6 +4,7 @@ import { afterEach, beforeEach, test, vi } from "vitest";
 import { z } from "zod/v4";
 
 import { Fault, FaultCode, Resource } from "../../src/domain";
+import { tryCatch } from "../../src/shared";
 import { createLogger } from "../../src/shared/logger";
 import {
   reapplyRules,
@@ -11,7 +12,7 @@ import {
 } from "../../src/worker/composition";
 import { database } from "../../src/worker/database";
 import { withObservation } from "../../src/worker/observability";
-import { items } from "../../src/worker/schema";
+import { inbox, items } from "../../src/worker/schema";
 import { type FinancialSource, runOperation } from "../../src/worker/sync";
 import type { ExecutionOutcome, Steps } from "../../src/worker/sync/entity";
 import { getOperation, startOperation } from "../../src/worker/sync/repository";
@@ -422,6 +423,105 @@ function immediateSteps(): Steps {
     sleep: () => Promise.resolve(),
   };
 }
+
+test("a recovered provider attempt does not mark subsequent work or completion as failed", async () => {
+  const eventId = "private-event";
+  await database(env.DB)
+    .insert(inbox)
+    .values({
+      account_id: "private-account",
+      event: "transactions/updated",
+      event_id: eventId,
+      item_id: "private-item-marker",
+      payload: { transactionIds: ["private-transaction"] },
+      received_at: new Date().toISOString(),
+    });
+  const op = await startOperation(env.DB, "recovered-provider", {
+    eventId,
+    itemIds: ["private-item-marker"],
+    kind: "webhook",
+  });
+  let fetched = 0;
+  mockNetwork((input) => {
+    if (sourceUrl(input).pathname === "/auth") {
+      return Promise.resolve(Response.json({ apiKey: syntheticJwt() }));
+    }
+    fetched += 1;
+    return Promise.resolve(
+      Response.json(
+        fetched === 1
+          ? ["private-invalid-response"]
+          : { next: null, results: [] },
+      ),
+    );
+  });
+  const captured = capture();
+  const output = createLogger({
+    destination: { write: (line) => captured.lines.push(line) },
+    level: "debug",
+    name: "synthetic",
+  });
+  let attempt = 0;
+  await withObservation(
+    { ...captured.context, operationId: op.id, output },
+    () =>
+      runOperation(
+        synchronizationDependencies(settings(), () => ({ attempt })),
+        op.id,
+        {
+          async do(_name, callback) {
+            attempt = 1;
+            const { data, error } = await tryCatch(callback);
+            if (error) {
+              assert.ok(error instanceof z.ZodError);
+              attempt = 2;
+              return callback();
+            }
+            return data;
+          },
+          sleep: () => Promise.resolve(),
+        },
+      ),
+  );
+  assert.equal(fetched, 2);
+  assert.equal((await getOperation(env.DB, op.id)).result?.isError, false);
+  const work = z
+    .array(
+      z.object({
+        attempt: z.number(),
+        failure: z.string().optional(),
+        name: z.string(),
+        outcome: z.string(),
+      }),
+    )
+    .parse(captured.spans);
+  assert.deepEqual(
+    work
+      .filter((span) => span.name === "pluggy.read")
+      .map(({ outcome, attempt: observedAttempt, failure }) => ({
+        attempt: observedAttempt,
+        failure,
+        outcome,
+      })),
+    [
+      { attempt: 1, failure: "INVALID_RESPONSE", outcome: "failed" },
+      { attempt: 2, failure: undefined, outcome: "success" },
+    ],
+  );
+  assert.ok(
+    work
+      .filter(
+        (span) => span.name === "finance.publish" || span.name === "sync.phase",
+      )
+      .every((span) => span.failure === undefined),
+  );
+  assert.equal(captured.lines.length, 1);
+  z.object({
+    failure: z.undefined().optional(),
+    outcome: z.literal("completed"),
+  }).parse(JSON.parse(captured.lines[0] ?? "null"));
+  assert.ok(!JSON.stringify(captured).includes("private-"));
+});
 
 function capture() {
   const lines: string[] = [];

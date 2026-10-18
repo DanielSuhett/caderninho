@@ -9,6 +9,7 @@ import type {
 } from "../../../contracts";
 import type {
   CoverageStatus,
+  ExecutionPhase,
   FinanceRecord,
   ItemAdmission,
   ProviderRecord,
@@ -107,6 +108,14 @@ export interface ReapplicationRepository {
   release: (id: string) => Promise<void>;
   rules: (revision: string) => Promise<RuleEngine>;
   select: (run: LocalReapplication) => Promise<StoredEntity[]>;
+}
+
+export interface ReapplicationObservation {
+  batch: (
+    run: { operationId: string; batch: number },
+    callback: () => Promise<ReapplicationResult>,
+  ) => Promise<ReapplicationResult>;
+  phase: NonNullable<ExecutionDependencies["observePhase"]>;
 }
 
 export interface FinancialSource {
@@ -321,18 +330,6 @@ export interface ExecutionDependencies {
   repository: ExecutionRepository;
 }
 
-export const ExecutionPhase = {
-  acquire: "acquire",
-  collect: "collect",
-  complete: "complete",
-  mature: "mature",
-  process: "process",
-  publish: "publish",
-  select: "select",
-} as const;
-export type ExecutionPhase =
-  (typeof ExecutionPhase)[keyof typeof ExecutionPhase];
-
 export const ExecutionResult = {
   cancelled: "cancelled",
   completed: "completed",
@@ -358,3 +355,5 @@ export interface ExecutionOutcome {
   phase?: ExecutionPhase;
   progress?: Progress;
 }
+
+export { ExecutionPhase } from "../../../domain";
