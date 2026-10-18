@@ -4,6 +4,7 @@ import {
   OperationStatus,
 } from "@/contracts/operation.types";
 import { CoverageStatus, FaultCode, Resource } from "@/domain/enums";
+import type { FinanceRecord } from "@/domain/finance.entity";
 import { DEFINITIONS } from "@/domain/finance-model";
 import {
   assertCollectionComplete,
@@ -32,10 +33,11 @@ import type {
   Operation,
   PageCommit,
   ParentEntity,
+  Progress,
   SourcePage,
   Steps,
   StoredEvent,
-  SynchronizationSession,
+  SynchronizationDependencies,
 } from "./entity";
 import { progressWithDefaults } from "./entity";
 
@@ -45,55 +47,78 @@ interface Execution extends ExecutionDependencies {
   step: Steps;
 }
 
-export async function openSynchronization(
-  dependencies: ExecutionDependencies,
+export async function runOperation(
+  dependencies: SynchronizationDependencies,
   id: string,
-): Promise<SynchronizationSession> {
+  step: Steps,
+) {
   const { repository } = dependencies;
   const op = await repository.read(id);
-  const input = op.input;
+  if (op.status !== OperationStatus.working) {
+    return;
+  }
   const engine = await repository.rules(op.rules_revision);
-  const execution = { ...dependencies, op, engine };
-  return {
-    operation: { id: op.id, status: op.status, kind: input.kind },
-    cancelled: async () => !!(await repository.read(id)).cancel_requested,
-    acquire: () => repository.acquire(id),
-    mature: async () => {
+  const execution = { ...dependencies, op, engine, step };
+  for (let n = 0; ; n++) {
+    if ((await repository.read(id)).cancel_requested) {
+      await repository.finish(op, OperationStatus.cancelled);
+      return;
+    }
+    if (await step.do(`acquire-${n}`, () => repository.acquire(id))) {
+      break;
+    }
+    await step.sleep(`queued-${n}`, "10 seconds");
+  }
+  const { data, error } = await tryCatch(async () => {
+    let sourcePromise: Promise<FinancialSource> | undefined;
+    const resolveSource = () => (sourcePromise ??= dependencies.source());
+    const source: FinancialSource = {
+      page: async (...args) => (await resolveSource()).page(...args),
+      ids: async (...args) => (await resolveSource()).ids(...args),
+    };
+    await step.do("mature", async () => {
       await repository.mature(op);
       return { phase: OperationPhase.matured };
-    },
-    migrate: async (step) => {
-      if (input.kind !== OperationKind.migration) {
-        throw new Error("OPERATION_KIND_MISMATCH");
-      }
-      await migrateLegacy({ ...execution, step });
-    },
-    reapply: async (step) => {
-      if (input.kind !== OperationKind.reapply) {
-        throw new Error("OPERATION_KIND_MISMATCH");
-      }
-      return reapplyRules({ ...execution, step });
-    },
-    resolveEvent: async (source, step) => {
-      if (input.kind !== OperationKind.webhook) {
-        throw new Error("OPERATION_KIND_MISMATCH");
-      }
-      return resolveEvent({ ...execution, step }, source, input.eventId);
-    },
-    synchronize: (source, step) =>
-      synchronizeResources({ ...execution, step }, source),
-    hasErrors: async () =>
-      progressWithDefaults((await repository.read(id)).progress).errors > 0,
-    finish: (status, error = false) => repository.finish(op, status, error),
-  };
+    });
+    if (await executeOperation(execution, source)) {
+      await repository.finish(op, OperationStatus.cancelled);
+      return;
+    }
+    await step.do("finish", async () => {
+      const progress = progressWithDefaults(
+        (await repository.read(id)).progress,
+      );
+      await repository.finish(
+        op,
+        OperationStatus.completed,
+        progress.errors > 0,
+      );
+      return { phase: OperationPhase.completed };
+    });
+  });
+  if (error) {
+    await repository.finish(op, OperationStatus.completed, true);
+    throw error;
+  }
+  return data;
 }
 
-export async function reapplyRules({
-  repository,
-  op,
-  engine,
-  step,
-}: Execution) {
+function executeOperation(execution: Execution, source: FinancialSource) {
+  const input = execution.op.input;
+  switch (input.kind) {
+    case OperationKind.migration:
+      return migrateLegacy(execution);
+    case OperationKind.reapply:
+      return reapplyRules(execution);
+    case OperationKind.webhook:
+      return resolveEvent(execution, source, input.eventId);
+    case OperationKind.sync:
+    case OperationKind.reconcile:
+      return synchronizeResources(execution, source);
+  }
+}
+
+async function reapplyRules({ repository, op, engine, step }: Execution) {
   await step.do("select-reapply", async () => {
     await repository.selectReapplication(op);
     return { phase: OperationPhase.selected };
@@ -137,7 +162,6 @@ export async function reapplyRules({
       return outcome;
     });
     if (result.cancelled) {
-      await repository.finish(op, OperationStatus.cancelled);
       return true;
     }
     if (result.done) {
@@ -158,9 +182,8 @@ async function migrateLegacy({
   if (input.kind !== OperationKind.migration) {
     throw new Error("OPERATION_KIND_MISMATCH");
   }
-  await step.do("import-legacy", async () => {
+  const result = await step.do("import-legacy", async () => {
     if ((await repository.read(op.id)).cancel_requested) {
-      await repository.finish(op, OperationStatus.cancelled);
       return { cancelled: true };
     }
     const itemId = input.itemIds[0];
@@ -210,6 +233,7 @@ async function migrateLegacy({
     await repository.commitMigration(rows);
     return { imported: input.migration.length };
   });
+  return !!result.cancelled;
 }
 
 const resourceOrder: Resource[] = [
@@ -315,7 +339,6 @@ async function synchronizeCollection(
       publishPage(execution, source, { identity, name, parent }),
     );
     if (result.cancelled) {
-      await repository.finish(op, OperationStatus.cancelled);
       return true;
     }
     if (result.done) {
@@ -398,7 +421,6 @@ async function resolvePendingTransactions(
       return outcome;
     });
     if (outcome.cancelled) {
-      await repository.finish(op, OperationStatus.cancelled);
       return true;
     }
     if (outcome.done) {
@@ -410,7 +432,7 @@ async function resolvePendingTransactions(
 }
 
 async function publishResolved(
-  { repository, op, engine, prepare }: Execution,
+  execution: Execution,
   input: {
     itemId: string;
     accountId: string;
@@ -419,35 +441,24 @@ async function publishResolved(
     receipt?: { key: string; outcome: PageCommit; processedIds?: string[] };
   },
 ) {
+  const { repository, op } = execution;
   const parent = await repository.account(input.itemId, input.accountId);
   const progress = progressWithDefaults(
     (await repository.read(op.id)).progress,
   );
-  progress.pages++;
-  progress.received += input.records.length;
-  const receivedIds = new Set<string>();
-  const prepared: PreparedEntity[] = [];
-  for (const record of input.records) {
-    if (typeof record.id !== "string") {
-      throw new Error("SOURCE_ID_MISSING");
-    }
-    receivedIds.add(record.id);
-    const entry = await prepare({
-      identity: {
-        itemId: input.itemId,
-        resource: Resource.transactions,
-        parentId: input.accountId,
-        id: record.id,
-      },
-      source: record,
-      parent: parent ?? undefined,
-      operation: op,
-      engine,
-    });
-    prepared.push(entry);
-    progress[entry.state]++;
-    progress.classified += entry.classified;
-  }
+  const prepared = await prepareRecords(execution, {
+    identity: {
+      itemId: input.itemId,
+      resource: Resource.transactions,
+      parentId: input.accountId,
+    },
+    records: input.records,
+    parent: parent ?? undefined,
+    progress,
+  });
+  const receivedIds = new Set(
+    prepared.map((entry) => entry.mutation.value.identity.id),
+  );
   await repository.commitResolved({
     operationId: op.id,
     itemId: input.itemId,
@@ -579,15 +590,25 @@ export async function publishPage(
   const progress = progressWithDefaults(
     (await repository.read(op.id)).progress,
   );
-  const preparedPage = await preparePageRecords(execution, {
+  const prepared = await prepareRecords(execution, {
     identity,
-    parent,
-    page,
-    cp,
+    parent: parent?.normalized,
+    records: page.records,
     progress,
   });
-  const { prepared, collected } = preparedPage;
-  let maximum = preparedPage.maximum;
+  let collected = cp.collected;
+  let maximum = cp.maximum_created_at;
+  for (const entry of prepared) {
+    if (!entry.seenInOperation) {
+      collected++;
+    }
+    if (identity.resource === Resource.transactions) {
+      maximum = latestCreatedAt({
+        maximum,
+        created: entry.mutation.value.source.createdAt,
+      });
+    }
+  }
   assertCollectionComplete({ next: page.next, total: page.total, collected });
   // Empty initial accounts receive an inclusive creation watermark fixed at
   // operation start, only after complete pagination.
@@ -665,36 +686,31 @@ async function fetchSourcePage(
   return data;
 }
 
-async function preparePageRecords(
+async function prepareRecords(
   { op, engine, prepare }: Execution,
   {
     identity,
     parent,
-    page,
-    cp,
+    records,
     progress,
   }: {
-    identity: CollectionIdentity;
-    parent: ParentEntity;
-    page: SourcePage;
-    cp: Awaited<ReturnType<ExecutionRepository["checkpoint"]>>;
-    progress: ReturnType<typeof progressWithDefaults>;
+    identity: Pick<CollectionIdentity, "itemId" | "resource" | "parentId">;
+    parent: FinanceRecord | undefined;
+    records: SourcePage["records"];
+    progress: Progress;
   },
 ) {
-  let maximum = cp.maximum_created_at,
-    collected = cp.collected;
   const prepared: PreparedEntity[] = [];
   progress.pages++;
-  progress.received += page.records.length;
+  progress.received += records.length;
   const identities = new Map<string, string>();
-  for (const record of page.records) {
-    const recordId =
-      identity.resource === Resource.resources
-        ? record.resourceId
-        : String(record.id);
-    if (typeof recordId !== "string") {
+  for (const record of records) {
+    const id =
+      identity.resource === Resource.resources ? record.resourceId : record.id;
+    if (id == null) {
       throw new Error("SOURCE_ID_MISSING");
     }
+    const recordId = String(id);
     const contentHash = await hash(record);
     const duplicate = identities.get(recordId);
     if (duplicate) {
@@ -713,19 +729,13 @@ async function preparePageRecords(
         id: recordId,
       },
       source: record,
-      parent: parent?.normalized,
+      parent,
       operation: op,
       engine,
     });
-    if (!entry.seenInOperation) {
-      collected++;
-    }
     prepared.push(entry);
     progress[entry.state]++;
     progress.classified += entry.classified;
-    if (identity.resource === Resource.transactions) {
-      maximum = latestCreatedAt({ maximum, created: record.createdAt });
-    }
   }
-  return { prepared, collected, maximum };
+  return prepared;
 }

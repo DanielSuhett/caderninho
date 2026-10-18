@@ -481,6 +481,294 @@ test("bootstrap all pages, incremental floor excludes old history and classifies
     2,
   );
 });
+for (const flow of ["collection", "event", "pending"] as const) {
+  for (const sample of [
+    {
+      name: "counts identical IDs once and replays without preparing again",
+      conflict: false,
+      missingId: false,
+      error: null,
+    },
+    {
+      name: "rejects conflicting IDs atomically",
+      conflict: true,
+      missingId: false,
+      error: /DUPLICATE_SOURCE_ID_CHANGED_IN_PAGE/,
+    },
+    {
+      name: "rejects missing IDs atomically",
+      conflict: false,
+      missingId: true,
+      error: /SOURCE_ID_MISSING/,
+    },
+  ]) {
+    test(`${flow} publication ${sample.name}`, async () => {
+      const rejected = !!sample.error;
+      const { db, op: seed } = await setup();
+      const engine = await rulesFor(db, seed.rules_revision);
+      for (const input of [
+        {
+          identity: {
+            itemId: "item",
+            resource: Resource.accounts,
+            parentId: "",
+            id: "account",
+          },
+          source: account,
+          parent: undefined,
+        },
+        {
+          identity: identity("duplicate"),
+          source: transaction("duplicate", { status: "PENDING" }),
+          parent: account,
+        },
+      ]) {
+        await commit(
+          db,
+          (await prepareEntity(db, { ...input, operation: seed, engine }))
+            .statements,
+        );
+      }
+      await finish(db, seed, "completed");
+      const eventId = "duplicate-event";
+      if (flow === "event") {
+        await database(db)
+          .insert(tables.inbox)
+          .values({
+            event_id: eventId,
+            item_id: "item",
+            account_id: "account",
+            event: "transactions/updated",
+            payload: { transactionIds: ["duplicate"] },
+            received_at: new Date().toISOString(),
+          });
+      }
+      const op = await startOperation(
+        db,
+        "duplicate-batch",
+        flow === "event"
+          ? { kind: "webhook", itemIds: ["item"], eventId }
+          : { kind: "sync", itemIds: ["item"] },
+      );
+      const record = transaction("duplicate", {
+        description: "Confirmed",
+        amount: "-9007199254740993.29",
+      });
+      const records = [
+        record,
+        {
+          ...record,
+          ...(sample.conflict && { description: "Conflicting" }),
+          ...(sample.missingId && { id: null }),
+        },
+      ];
+      let fetched = 0;
+      const source: FinancialSource = {
+        async page({ resource }) {
+          if (resource === Resource.connections) {
+            return { records: [connection], next: null };
+          }
+          if (resource === Resource.accounts) {
+            return { records: [account], next: null };
+          }
+          if (resource === Resource.transactions && flow === "collection") {
+            fetched++;
+            return { records, next: null, total: 1 };
+          }
+          return { records: [], next: null };
+        },
+        async ids() {
+          fetched++;
+          return records;
+        },
+      };
+      const dependencies = synchronizationDependencies(env(db));
+      let preparations = 0;
+      const key =
+        flow === "collection"
+          ? "page-item-transactions-account-0"
+          : `${flow}-0`;
+      const durable = steps();
+      const execution = runOperation(
+        {
+          ...dependencies,
+          source: async () => source,
+          prepare(input) {
+            if (input.identity.resource === Resource.transactions) {
+              preparations++;
+            }
+            return dependencies.prepare(input);
+          },
+        },
+        op.id,
+        {
+          sleep: durable.sleep,
+          async do(name, callback) {
+            const result = await callback();
+            if (name === key) {
+              assert.deepEqual(await callback(), result);
+            }
+            return result;
+          },
+        },
+      );
+      if (sample.error) {
+        await assert.rejects(execution, sample.error);
+      } else {
+        await execution;
+      }
+      const current = await getOperation(db, op.id);
+      const stored = required(
+        await database(db)
+          .select()
+          .from(tables.entities)
+          .where(
+            and(
+              eq(tables.entities.resource, Resource.transactions),
+              eq(tables.entities.id, "duplicate"),
+            ),
+          )
+          .get(),
+      );
+      assert.equal(fetched, 1);
+      assert.equal(preparations, 1);
+      assert.equal(current.status, "completed");
+      assert.equal(current.result?.isError, rejected);
+      assert.equal(current.progress.classified ?? 0, rejected ? 0 : 1);
+      assert.equal(current.progress.duplicates ?? 0, rejected ? 0 : 1);
+      assert.equal(
+        stored.original_description,
+        rejected ? "Café" : "Confirmed",
+      );
+      assert.equal(stored.status, rejected ? "PENDING" : "POSTED");
+      assert.equal(
+        stored.source.amount,
+        rejected ? "-10.01" : "-9007199254740993.29",
+      );
+      if (!rejected) {
+        assert.equal(
+          (
+            await aggregateEntities(db, {
+              resource: Resource.transactions,
+              metric: "amount",
+            })
+          ).groups[0]?.totalMinor,
+          "900719925474099329",
+        );
+      }
+      const receipt = await database(db)
+        .select()
+        .from(tables.page_commits)
+        .where(
+          and(
+            eq(tables.page_commits.operation_id, op.id),
+            eq(tables.page_commits.step_key, key),
+          ),
+        )
+        .get();
+      assert.equal(!!receipt, !rejected);
+      if (flow === "event") {
+        const event = required(
+          await database(db)
+            .select()
+            .from(tables.inbox)
+            .where(eq(tables.inbox.event_id, eventId))
+            .get(),
+        );
+        assert.equal(!!event.processed_at, !rejected);
+      }
+      if (flow === "pending") {
+        const target = required(
+          await database(db)
+            .select()
+            .from(tables.operation_targets)
+            .where(
+              and(
+                eq(tables.operation_targets.operation_id, op.id),
+                eq(tables.operation_targets.id, "duplicate"),
+              ),
+            )
+            .get(),
+        );
+        assert.equal(target.processed, rejected ? 0 : 1);
+      }
+    });
+  }
+}
+
+test("cancellation inside the migration step remains cancelled and releases the installation lock without opening the source", async () => {
+  const { db, op: seed } = await setup();
+  await finish(db, seed, "completed");
+  const op = await startOperation(db, "cancel-migration", {
+    kind: "migration",
+    itemIds: ["item"],
+    migration: [],
+  });
+  await runOperation(
+    {
+      ...synchronizationDependencies(env(db)),
+      source: async () => {
+        throw new Error("SOURCE_MUST_STAY_CLOSED");
+      },
+    },
+    op.id,
+    {
+      sleep: steps().sleep,
+      async do(name, callback) {
+        if (name === "import-legacy") {
+          await database(db)
+            .update(tables.operations)
+            .set({ cancel_requested: 1 })
+            .where(eq(tables.operations.id, op.id));
+        }
+        return callback();
+      },
+    },
+  );
+  const result = await getOperation(db, op.id);
+  assert.equal(result.status, "cancelled");
+  assert.equal(result.phase, "cancelled");
+  assert.equal(result.result?.isError, false);
+  assert.equal(await database(db).select().from(tables.locks).get(), undefined);
+});
+
+test("failure to open the source is persisted and propagated; a terminal operation does not reopen dependencies", async () => {
+  const { db, op } = await setup();
+  const failure = new Error("synthetic source unavailable");
+  let opened = 0;
+  const dependencies = {
+    ...synchronizationDependencies(env(db)),
+    source: async () => {
+      opened++;
+      throw failure;
+    },
+  };
+  await assert.rejects(
+    runOperation(dependencies, op.id, steps()),
+    (error) => error === failure,
+  );
+  const result = await getOperation(db, op.id);
+  assert.equal(result.status, "completed");
+  assert.equal(result.phase, "error");
+  assert.equal(result.result?.isError, true);
+  assert.equal(await database(db).select().from(tables.locks).get(), undefined);
+  await runOperation(
+    {
+      ...dependencies,
+      repository: {
+        ...dependencies.repository,
+        rules: async () => {
+          throw new Error("TERMINAL_MUST_NOT_LOAD_RULES");
+        },
+      },
+    },
+    op.id,
+    steps(),
+  );
+  assert.equal(opened, 1);
+  assert.deepEqual(await getOperation(db, op.id), result);
+});
+
 test("idempotent operation and dispatch response loss recovery", async () => {
   const { db, op } = await setup();
   await assert.rejects(
@@ -771,7 +1059,9 @@ test("reapply freezes selection even when its filter changes and preserves manua
   await runOperation(
     {
       ...synchronizationDependencies(env(db)),
-      source: async () => providerFixture(),
+      source: async () => {
+        throw new Error("SOURCE_MUST_STAY_CLOSED");
+      },
     },
     run.id,
     steps(),
@@ -1196,7 +1486,9 @@ test("migration is replay-safe, preserves useful legacy-only history and reports
   await runOperation(
     {
       ...synchronizationDependencies(env(db)),
-      source: async () => providerFixture(),
+      source: async () => {
+        throw new Error("SOURCE_MUST_STAY_CLOSED");
+      },
     },
     m.id,
     steps(),
@@ -1204,7 +1496,9 @@ test("migration is replay-safe, preserves useful legacy-only history and reports
   await runOperation(
     {
       ...synchronizationDependencies(env(db)),
-      source: async () => providerFixture(),
+      source: async () => {
+        throw new Error("SOURCE_MUST_STAY_CLOSED");
+      },
     },
     m.id,
     steps(),

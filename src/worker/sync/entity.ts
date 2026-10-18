@@ -3,7 +3,6 @@ import type {
   MigrationRequest,
   OperationInput,
   OperationKind,
-  OperationPhase,
   OperationStatus,
   WebhookEvent,
 } from "@/contracts/operation.types";
@@ -95,22 +94,7 @@ export interface Steps {
   ): Promise<T>;
   sleep(name: string, duration: string): Promise<void>;
 }
-export interface SynchronizationSession {
-  operation: OperationHandle & {
-    kind: OperationInput["kind"];
-  };
-  cancelled(): Promise<boolean>;
-  acquire(): Promise<boolean>;
-  mature(): Promise<{ phase: OperationPhase }>;
-  migrate(step: Steps): Promise<void>;
-  reapply(step: Steps): Promise<boolean>;
-  resolveEvent(source: FinancialSource, step: Steps): Promise<boolean>;
-  synchronize(source: FinancialSource, step: Steps): Promise<boolean>;
-  hasErrors(): Promise<boolean>;
-  finish(status: FinishedOperationStatus, isError?: boolean): Promise<void>;
-}
-export interface SynchronizationDependencies {
-  open(id: string): Promise<SynchronizationSession>;
+export interface SynchronizationDependencies extends ExecutionDependencies {
   source(): Promise<FinancialSource>;
 }
 

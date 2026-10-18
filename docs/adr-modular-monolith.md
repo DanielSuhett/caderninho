@@ -68,14 +68,25 @@ Sessão, CSRF, OAuth, HTTP, parsing e ciclo de vida visual têm donos nos respec
 adaptadores. Guards que fazem narrowing de uniões mantêm essa informação de tipos.
 Steps, recibos e batches conservam a ordem e os limites atômicos existentes.
 
-Publicação, recursos, eventos, reaplicação e migração são casos de uso em
-`sync/execution.service.ts`; não executam queries nem montam statements.
+O ciclo da operação, publicação, recursos, eventos, reaplicação e migração ficam
+em `sync/execution.service.ts`; não executam queries nem montam statements.
+`runOperation` recebe persistência, preparação, origem e Steps pela composição
+e concentra lock, cancelamento, maturação, escolha da execução e conclusão.
+O Workflow e os testes usam essa mesma entrada, sem uma sessão intermediária
+que exponha a sequência interna.
 `sync/execution.repository.ts` faz leituras e commits atômicos por portas tipadas.
 A preparação financeira retorna um plano de observação ou publicação, sem builders;
 o repository traduz esse plano junto com os checkpoints, progresso e recibos no
 mesmo batch. `workflow.ts` é a entrada Cloudflare. O cliente Pluggy, sua configuração
 e o adapter Fetch ficam em `pluggy`; `database.ts`, `schema.ts`,
 `http.ts` e `bindings.ts` são compartilhados entre funcionalidades.
+
+A preparação dos registros de páginas, eventos e pendências compartilha identidade,
+detecção de duplicatas e progresso. No mesmo lote, conteúdo idêntico para o mesmo ID
+conta como duplicata sem nova preparação; conteúdo diferente recusa o lote inteiro.
+Um lote reúne os registros da mesma conexão, recurso e contexto pai recebidos
+em uma página ou seleção de IDs. Cobertura, watermark, remoção de ausentes e recibos
+conservam as políticas de cada fluxo.
 
 ## Instalação pessoal
 
@@ -227,8 +238,8 @@ fixtures e testes de D1, HTTP, OAuth e Workflows; `tests/support` contém helper
 exclusivos de testes. `biome.json` concentra lint, formatação e organização de
 imports com regras nativas. Restrições de imports bloqueiam SQL fora de repositories,
 transporte/composição em services e helpers, services em repositories e imports
-do Worker no frontend. Os controles testam casos permitidos e proibidos, incluindo
-aliases, imports dinâmicos e tentativas de reexportar persistência por índices.
+do Worker no frontend, incluindo aliases, imports dinâmicos e reexports de
+persistência por índices. O check executa o Biome diretamente.
 Os adapters e os imports de tipos de linhas têm exceções explícitas. A localização
 semântica de regras de negócio continua na revisão; o lint não interpreta o produto.
 Políticas sem cobertura de lint ficam nas

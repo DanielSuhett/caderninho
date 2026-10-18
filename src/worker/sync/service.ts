@@ -1,7 +1,6 @@
 import {
   type MigrationRequest,
   OperationKind,
-  OperationPhase,
   OperationStatus,
   type WebhookEvent,
 } from "@/contracts/operation.types";
@@ -14,71 +13,10 @@ import {
 import { tryCatch } from "@/shared/result";
 
 import type {
-  FinancialSource,
   OperationHandle,
   SchedulingStore,
-  Steps,
-  SynchronizationDependencies,
   SyncRepository,
 } from "./entity";
-
-export async function runOperation(
-  dependencies: SynchronizationDependencies,
-  id: string,
-  step: Steps,
-) {
-  const session = await dependencies.open(id);
-  const op = session.operation;
-  if (op.status !== OperationStatus.working) {
-    return;
-  }
-  for (let n = 0; ; n++) {
-    if (await session.cancelled()) {
-      await session.finish(OperationStatus.cancelled);
-      return;
-    }
-    if (await step.do(`acquire-${n}`, () => session.acquire())) {
-      break;
-    }
-    await step.sleep(`queued-${n}`, "10 seconds");
-  }
-  const { data, error } = await tryCatch(async () => {
-    let sourcePromise: Promise<FinancialSource> | undefined;
-    const resolveSource = () => (sourcePromise ??= dependencies.source());
-    const source: FinancialSource = {
-      page: async (...args) => (await resolveSource()).page(...args),
-      ids: async (...args) => (await resolveSource()).ids(...args),
-    };
-    await step.do("mature", () => session.mature());
-    const strategies = {
-      [OperationKind.migration]: async () => {
-        await session.migrate(step);
-        return false;
-      },
-      [OperationKind.reapply]: () => session.reapply(step),
-      [OperationKind.webhook]: () => session.resolveEvent(source, step),
-      [OperationKind.sync]: () => session.synchronize(source, step),
-      [OperationKind.reconcile]: () => session.synchronize(source, step),
-    } satisfies Record<OperationKind, () => Promise<boolean>>;
-    const cancelled = await strategies[op.kind]();
-    if (cancelled) {
-      await session.finish(OperationStatus.cancelled);
-      return;
-    }
-    await step.do("finish", async () => {
-      await session.finish(
-        OperationStatus.completed,
-        await session.hasErrors(),
-      );
-      return { phase: OperationPhase.completed };
-    });
-  });
-  if (error) {
-    await session.finish(OperationStatus.completed, true);
-    throw error;
-  }
-  return data;
-}
 
 export async function scheduleSync(
   store: SchedulingStore,

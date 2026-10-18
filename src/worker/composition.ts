@@ -40,7 +40,6 @@ import {
 } from "./sync";
 import type { EntityPreparer } from "./sync/entity";
 import { createExecutionRepository } from "./sync/execution.repository";
-import { openSynchronization } from "./sync/execution.service";
 import { createSyncRepository, schedulingStore } from "./sync/repository";
 
 export function synchronizationDependencies(
@@ -48,14 +47,8 @@ export function synchronizationDependencies(
 ): SynchronizationDependencies {
   const pluggy = pluggyAdapter(env);
   return {
-    open: (id) =>
-      openSynchronization(
-        {
-          repository: createExecutionRepository(env.DB),
-          prepare: (input) => prepareEntity(env.DB, input),
-        },
-        id,
-      ),
+    repository: createExecutionRepository(env.DB),
+    prepare: (input) => prepareEntity(env.DB, input),
     source: () => pluggy.financialSource(),
   };
 }

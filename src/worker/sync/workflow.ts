@@ -2,7 +2,7 @@ import { providerRetries } from "@/worker/pluggy/source";
 
 import type { Bindings } from "../bindings";
 import { synchronizationDependencies } from "../composition";
-import { runOperation } from "./service";
+import { runOperation } from "./execution.service";
 import {
   WorkflowEntrypoint,
   type WorkflowEvent,

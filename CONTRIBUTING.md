@@ -90,9 +90,9 @@ extensões TypeScript em imports relativos.
   que um índice global carregue logger, HTTP e criptografia juntos no navegador.
 
 O lint nativo bloqueia os aliases antigos `#`, as extensões `.ts`/`.tsx` e
-dependências proibidas entre camadas, com paths relativos ou aliases. Os testes
-em `src/worker/__tests__/architecture.test.ts` exercitam também imports dinâmicos,
-reexports e helpers que não se chamam `service.ts`.
+dependências proibidas entre camadas, com paths relativos ou aliases, incluindo
+imports dinâmicos, reexports e helpers que não se chamam `service.ts`.
+O check executa o Biome diretamente.
 
 ### Camadas dos módulos
 
@@ -175,6 +175,9 @@ declarações internas, inspeção de fontes/configurações, testes do próprio
 casos repetidos em camadas diferentes sem exercitar uma integração adicional.
 Lint, formatação, tipos e fronteiras de imports são executados diretamente pelo
 check. Helpers e fixtures exclusivos de um teste removido devem sair junto dele.
+
+Skills em `.agents/` e o arquivo `skills-lock.json` são configuração local do
+agente e ficam fora dos commits.
 
 ## Escopo dos PRs
 

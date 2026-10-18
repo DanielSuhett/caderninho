@@ -56,8 +56,8 @@
   `index.ts` do módulo não exporta repositories. Fluxos duráveis de `sync` e
   persistência de `finance` podem ter arquivos especializados com o mesmo sufixo
   de camada; adapters de provedor, OAuth e Workflow permanecem explícitos.
-  O Biome bloqueia imports entre camadas, inclusive em novos helpers; mantenha
-  os testes de controle dessas regras. Defina aliases `@/` no `tsconfig.json`, sem extensões
+  O Biome bloqueia imports entre camadas, inclusive em novos helpers. Defina
+  aliases `@/` no `tsconfig.json`, sem extensões
   `.ts`/`.tsx` nos imports. Prefira relativos curtos dentro do módulo e aliases
   entre módulos. `index.ts` expõe apenas APIs públicas com exports explícitos;
   arquivos internos importam as implementações diretamente, sem usar o próprio
@@ -72,11 +72,14 @@
 
 1. Confira `git status` e o diff; preserve alterações existentes. Consulte a
    documentação da área antes de mudar contratos ou arquitetura.
+   Skills em `.agents/` e `skills-lock.json` são locais e ficam fora dos commits.
 2. Use mise com Node 24: `mise install` e `mise run setup` no primeiro preparo;
    repita setup ao mudar o lockfile. `package.json` define comandos e dependências.
    Consulte `mise tasks ls`; para comandos avulsos, use `mise exec -- <comando>`.
 3. Faça mudanças pequenas e verificáveis. Durante a edição, execute
    `mise run check:quick`; mantenha testes de comportamento relevantes.
+   Execute lint, tipos e formatação diretamente; não crie metatestes de ferramentas,
+   fontes ou configurações. Remova fixtures e helpers sem consumidores.
 4. Use `mise run lint:fix` e `mise run format`; revise o diff e garanta convergência.
    Biome cuida de lint, layout e imports. Use regras nativas, documente lacunas
    e corrija a causa dos diagnósticos; não crie plugins próprios para reproduzir
