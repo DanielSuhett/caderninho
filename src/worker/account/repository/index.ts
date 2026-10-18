@@ -124,7 +124,26 @@ export async function readPortalStatus(binding: D1Database) {
       .limit(10),
   };
 }
-export async function migrationsReady(binding: D1Database) {
+const missingSchemaPattern = /no such (?:table|column):/;
+
+function missingSchema(error: Error) {
+  let current = error;
+  for (let depth = 0; depth < 3; depth += 1) {
+    if (missingSchemaPattern.test(current.message)) {
+      return true;
+    }
+    if (!(current.cause instanceof Error)) {
+      return false;
+    }
+    current = current.cause;
+  }
+  return false;
+}
+
+export async function migrationsReady(
+  binding: D1Database,
+  onFailure?: (error: Error) => void,
+) {
   const db = database(binding);
   const { data: _data, error } = await tryCatch(() =>
     db.batch([
@@ -140,6 +159,9 @@ export async function migrationsReady(binding: D1Database) {
         .limit(0),
     ]),
   );
+  if (error && !missingSchema(error)) {
+    onFailure?.(error);
+  }
   return !error;
 }
 export function createAccountRepository(

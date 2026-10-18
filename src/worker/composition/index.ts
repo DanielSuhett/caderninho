@@ -56,6 +56,10 @@ import {
   scheduleSync as runSchedule,
   type SynchronizationDependencies,
 } from "../sync";
+import {
+  observedSyncService,
+  observeRecoveries,
+} from "../sync/dispatch.adapter";
 import type {
   EntityPreparer,
   ExecutionOutcome,
@@ -197,7 +201,18 @@ export function accountService(env: Bindings) {
     dispatchSync: () => scheduleSync(env),
     installation: async () => ({
       database: !!env.DB,
-      migrations: !!env.DB && (await migrationsReady(env.DB)),
+      migrations:
+        !!env.DB &&
+        (await migrationsReady(env.DB, (error) => {
+          reportDiagnostic({
+            action: "readiness",
+            event: DiagnosticEvent.maintenance,
+            failure: classifyFailure(error),
+            outcome: Outcome.partial,
+            phase: SpanName.maintenance,
+            recovery: Recovery.retry,
+          });
+        })),
       oauth: !!env.OAUTH_KV,
       workflow: !!env.FINANCE,
     }),
@@ -209,12 +224,17 @@ export function accountService(env: Bindings) {
 }
 
 export function scheduleSync(env: Bindings, now = new Date()) {
-  return runSchedule(
-    schedulingStore(env.DB),
-    async (operation) => {
-      await syncService(env).dispatch(operation);
-    },
-    now,
+  return observeRecoveries(SpanName.scheduled, (notice) =>
+    runSchedule(
+      schedulingStore(env.DB),
+      (operation) =>
+        createSyncService(
+          createSyncRepository(env.DB),
+          workflowDispatcher(env),
+        ).dispatch(operation),
+      now,
+      notice,
+    ),
   );
 }
 
@@ -236,14 +256,21 @@ export function ruleActions(env: Bindings) {
 }
 
 export function syncService(env: Bindings) {
-  return createSyncService(createSyncRepository(env.DB), {
-    async create(id) {
+  return observedSyncService(
+    createSyncRepository(env.DB),
+    workflowDispatcher(env),
+  );
+}
+
+function workflowDispatcher(env: Bindings) {
+  return {
+    async create(id: string) {
       await env.FINANCE.create({ id, params: { operationId: id } });
     },
-    async status(id) {
+    async status(id: string) {
       return (await (await env.FINANCE.get(id)).status()).status;
     },
-  });
+  };
 }
 
 export function reapplyRules(env: Bindings) {

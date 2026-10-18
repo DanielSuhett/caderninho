@@ -180,6 +180,10 @@ const expected = new Set<FailureCode>([
 ]);
 
 export function classifyFailure(error: Error): FailureCode {
+  const context = observation.getStore();
+  if (context?.primary.error === error && context.primary.failure) {
+    return context.primary.failure;
+  }
   if (error instanceof z.ZodError || error instanceof SyntaxError) {
     return localFailures.INVALID_REQUEST;
   }
@@ -309,6 +313,7 @@ interface SpanObservation extends SafeFields {
 }
 interface ObservationInput {
   correlation?: string;
+  independent?: true;
   onSpan?: (span: SpanObservation) => void;
   operationId?: string;
   output?: Pick<Logger, "debug" | "warn" | "error">;
@@ -317,6 +322,7 @@ interface ObservationInput {
 interface Observation extends ObservationInput {
   activeSpan?: SpanName;
   primary: {
+    error?: Error;
     reported: boolean;
     severity?: number;
     failure?: FailureCode;
@@ -331,12 +337,17 @@ export function withObservation<T>(
   operation: () => T,
 ): T {
   const parent = observation.getStore();
+  const { independent, ...fields } = input;
   return observation.run(
     {
       ...parent,
-      ...input,
+      ...fields,
+      ...(independent &&
+        !parent &&
+        !input.correlation &&
+        !input.runId && { runId: crypto.randomUUID() }),
       primary:
-        input.correlation || input.runId || !parent
+        independent || input.correlation || input.runId || !parent
           ? { reported: false }
           : parent.primary,
     },
@@ -350,13 +361,14 @@ export function captureObservation() {
 }
 export function markFailure(
   error: Error,
-  fields: Pick<SafeFields, "phase" | "recovery"> = {},
+  fields: Pick<SafeFields, "failure" | "phase" | "recovery"> = {},
 ) {
   const context = observation.getStore();
-  if (!context || context.primary.failure) {
+  if (!context || (context.primary.failure && !fields.failure)) {
     return;
   }
-  context.primary.failure = classifyFailure(error);
+  context.primary.failure = fields.failure ?? classifyFailure(error);
+  context.primary.error = error;
   if (fields.phase) {
     context.primary.phase = fields.phase;
   }
