@@ -31,7 +31,9 @@ export function createConnectWidget(
     const previous = current;
     current = undefined;
     const pending = cleanup.then(async () => {
-      if (previous) await previous.destroy();
+      if (previous) {
+        await previous.destroy();
+      }
     });
     // A failed teardown is reported to its caller without poisoning later opens.
     cleanup = tryCatch(pending).then(() => {});
@@ -43,9 +45,13 @@ export function createConnectWidget(
       const closing = destroy();
       const version = generation;
       await closing;
-      if (version !== generation) return;
+      if (version !== generation) {
+        return;
+      }
       const { PluggyConnect: Widget } = await load();
-      if (version !== generation) return;
+      if (version !== generation) {
+        return;
+      }
       const instance = new Widget({
         connectToken: request.accessToken,
         includeSandbox: false,
@@ -54,18 +60,26 @@ export function createConnectWidget(
         language: "pt",
         ...(request.itemId === undefined ? {} : { updateItem: request.itemId }),
         onSuccess: (result) => {
-          if (version === generation) request.onSuccess(result.item.id);
+          if (version === generation) {
+            request.onSuccess(result.item.id);
+          }
         },
         onError: () => {
-          if (version === generation) request.onError();
+          if (version === generation) {
+            request.onError();
+          }
         },
         onClose: () => {
-          if (version === generation) request.onClose();
+          if (version === generation) {
+            request.onClose();
+          }
         },
       });
       current = instance;
       const initialized = await tryCatch(instance.init());
-      if (version !== generation) return;
+      if (version !== generation) {
+        return;
+      }
       if (initialized.error) {
         await destroy();
         throw initialized.error;

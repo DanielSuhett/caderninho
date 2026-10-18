@@ -37,19 +37,26 @@ export const TaskParams = z.object({ taskId: z.string() });
 export const UpdateParams = TaskParams.extend({
   inputResponses: z.record(z.string(), JsonValueSchema),
 });
-export async function task(env: Bindings, id: string) {
+export async function task(
+  env: Bindings,
+  id: string,
+): Promise<z.infer<typeof TaskSchema>> {
   const state = await operationState(env.DB, id);
-  return TaskSchema.parse({
+  const base = {
     taskId: state.id,
-    status: state.status,
     createdAt: state.createdAt,
     lastUpdatedAt: state.updatedAt,
     statusMessage: state.summary,
-    ...(state.result ? { result: state.result } : {}),
-    ...(state.error ? { error: state.error } : {}),
     ttlMs: null,
     pollIntervalMs: 5000,
-  });
+  };
+  if (state.status === "completed") {
+    return { ...base, status: state.status, result: state.result ?? {} };
+  }
+  if (state.status === "failed") {
+    return { ...base, status: state.status, error: state.error ?? {} };
+  }
+  return { ...base, status: state.status };
 }
 
 export function negotiated(input: unknown) {
@@ -68,11 +75,12 @@ export function negotiated(input: unknown) {
     .safeParse(input);
   return Boolean(
     p.success &&
-    p.data._meta?.["io.modelcontextprotocol/clientCapabilities"]?.extensions &&
-    Object.hasOwn(
-      p.data._meta["io.modelcontextprotocol/clientCapabilities"].extensions,
-      EXTENSION,
-    ),
+      p.data._meta?.["io.modelcontextprotocol/clientCapabilities"]
+        ?.extensions &&
+      Object.hasOwn(
+        p.data._meta["io.modelcontextprotocol/clientCapabilities"].extensions,
+        EXTENSION,
+      ),
   );
 }
 export async function cancel(env: Bindings, id: string) {
@@ -82,12 +90,19 @@ export async function cancel(env: Bindings, id: string) {
 export async function listen(
   request: Request,
   env: Bindings,
-  id: string | number,
-  ids: string[],
-  keepAlive?: (lifetime: Promise<void>) => void,
+  {
+    id,
+    ids,
+    keepAlive,
+  }: {
+    id: string | number;
+    ids: string[];
+    keepAlive?: ((lifetime: Promise<void>) => void) | undefined;
+  },
 ) {
-  if (ids.length < 1 || ids.length > 10 || new Set(ids).size !== ids.length)
+  if (ids.length < 1 || ids.length > 10 || new Set(ids).size !== ids.length) {
     throw new Error("SUBSCRIPTION_LIMIT");
+  }
   const current = await Promise.all(ids.map((t) => task(env, t)));
   const polling = current.some((state) => state.status === "working")
     ? pollingEvents()
@@ -116,9 +131,13 @@ export async function listen(
   keepAlive?.(lifetime);
   let disposed = false,
     clientClosed = false;
+  // Read live cancellation state after awaits; callbacks may change it meanwhile.
+  const isClientClosed = () => clientClosed;
   const expires = setTimeout(() => dispose(), 300000);
   function dispose() {
-    if (disposed) return;
+    if (disposed) {
+      return;
+    }
     disposed = true;
     release();
     clearTimeout(expires);
@@ -130,32 +149,67 @@ export async function listen(
     dispose();
   }
   request.signal.addEventListener("abort", abort, { once: true });
+  async function enqueueTaskUpdates() {
+    if (!polling) {
+      return true;
+    }
+    const event = await polling.next();
+    if (isClientClosed() || event.done) {
+      return true;
+    }
+    let allTerminal = true;
+    for (const taskId of ids) {
+      const state = await task(env, taskId);
+      if (state.status === "working") {
+        allTerminal = false;
+      }
+      queue.push({
+        jsonrpc: "2.0",
+        method: "notifications/tasks",
+        params: { ...state, _meta: meta },
+      });
+    }
+    return allTerminal;
+  }
+  function flushMessage(
+    controller: ReadableStreamDefaultController<Uint8Array>,
+  ) {
+    const message = queue.shift();
+    if (
+      message &&
+      typeof message === "object" &&
+      "method" in message &&
+      message.method === "notifications/tasks"
+    ) {
+      validateTaskWire("TaskStatusNotification", message);
+    }
+    if (message) {
+      controller.enqueue(
+        new TextEncoder().encode(
+          `event: message\ndata: ${JSON.stringify(message)}\n\n`,
+        ),
+      );
+    }
+    if (disposed && queue.length === 0) {
+      controller.close();
+    }
+  }
   const stream = new ReadableStream<Uint8Array>(
     {
       async pull(controller) {
         const outcome = await tryCatch(
           (async () => {
-            if (clientClosed) return;
+            if (isClientClosed()) {
+              return;
+            }
             if (disposed && queue.length === 0) {
               controller.close();
               return;
             }
             if (queue.length === 0) {
-              let allTerminal = true;
-              if (polling) {
-                const event = await polling.next();
-                if (clientClosed) return;
-                if (!event.done) {
-                  for (const taskId of ids) {
-                    const state = await task(env, taskId);
-                    if (state.status === "working") allTerminal = false;
-                    queue.push({
-                      jsonrpc: "2.0",
-                      method: "notifications/tasks",
-                      params: { ...state, _meta: meta },
-                    });
-                  }
-                }
+              const allTerminal = await enqueueTaskUpdates();
+              if (isClientClosed()) {
+                return;
               }
               if (allTerminal) {
                 queue.push({
@@ -169,24 +223,10 @@ export async function listen(
                 dispose();
               }
             }
-            const message = queue.shift();
-            if (
-              message &&
-              typeof message === "object" &&
-              "method" in message &&
-              message.method === "notifications/tasks"
-            )
-              validateTaskWire("TaskStatusNotification", message);
-            if (message)
-              controller.enqueue(
-                new TextEncoder().encode(
-                  "event: message\ndata: " + JSON.stringify(message) + "\n\n",
-                ),
-              );
-            if (disposed && queue.length === 0) controller.close();
+            flushMessage(controller);
           })(),
         );
-        if (outcome.error && !clientClosed) {
+        if (outcome.error && !isClientClosed()) {
           dispose();
           // Finish the SSE response with a protocol error. Erroring a response
           // stream can abort unrelated requests in the local RPC bridge.
@@ -231,17 +271,21 @@ export function pollingEvents(intervalMs = 5000) {
     wake: (() => void) | undefined;
   return {
     async next() {
-      if (disposed) return { done: true };
+      if (disposed) {
+        return { done: true };
+      }
       await new Promise<void>((resolve) => {
         wake = resolve;
         timer = setTimeout(resolve, intervalMs);
       });
       wake = undefined;
-      return disposed ? { done: true } : { done: false };
+      return { done: disposed };
     },
     [Symbol.dispose]() {
       disposed = true;
-      if (timer) clearTimeout(timer);
+      if (timer) {
+        clearTimeout(timer);
+      }
       wake?.();
     },
   };
@@ -261,8 +305,9 @@ export function validateTaskWire(
     validators.set(name, validator);
   }
   const result = validator.validate(value);
-  if (!result.valid)
+  if (!result.valid) {
     throw new Error(`Invalid official Tasks contract: ${name}`);
+  }
   return value;
 }
 
@@ -274,7 +319,8 @@ export function validateSubscriptionWire(
   value: unknown,
 ) {
   const result = specTypeSchemas[name]["~standard"].validate(value);
-  if (result.issues)
+  if (result.issues) {
     throw new Error(`Invalid official subscription contract: ${name}`);
+  }
   return result.value;
 }

@@ -1,10 +1,10 @@
 import { Button } from "@cloudflare/kumo/components/button";
 import { Input } from "@cloudflare/kumo/components/input";
-import { useEffect, useRef, type ReactNode } from "react";
+import { type ReactNode, useEffect, useRef } from "react";
 
 import {
-  type AccountState,
   type AccountActions,
+  type AccountState,
   supportPrompt,
   syncPresentation,
 } from "./account-model.ts";
@@ -46,11 +46,13 @@ export function AccountView({
   const heading = useRef<HTMLHeadingElement>(null);
   const previous = useRef(step);
   useEffect(() => {
-    if (previous.current === step) return;
+    if (previous.current === step) {
+      return;
+    }
     previous.current = step;
     heading.current?.focus();
   }, [step]);
-  if (!snapshot)
+  if (!snapshot) {
     return (
       <>
         <h1>Seu Caderninho.</h1>
@@ -66,6 +68,7 @@ export function AccountView({
         )}
       </>
     );
+  }
   const state = snapshot.status,
     sync = syncPresentation(state);
   return (
@@ -142,9 +145,9 @@ export function AccountView({
               <Input
                 id="mcp-url"
                 readOnly
-                value={snapshot.origin + "/mcp"}
+                value={`${snapshot.origin}/mcp`}
               />
-              <Action onClick={() => actions.copy(snapshot.origin + "/mcp")}>
+              <Action onClick={() => actions.copy(`${snapshot.origin}/mcp`)}>
                 Copiar endereço
               </Action>
               <details>
@@ -176,14 +179,7 @@ export function AccountView({
               </p>
             </>
           )}
-          <p role="status">
-            {load.kind === "failed"
-              ? load.session
-                ? "Sua sessão expirou. Entre novamente."
-                : "Verificação indisponível. Último estado confirmado em " +
-                  snapshot.checkedAt
-              : "Verificado em " + snapshot.checkedAt}
-          </p>
+          <p role="status">{verificationMessage(load, snapshot.checkedAt)}</p>
           {load.kind === "failed" && load.session && (
             <a href="/account/login">Entrar novamente</a>
           )}
@@ -241,14 +237,7 @@ export function AccountView({
         <ul>
           {Object.entries(snapshot.checks).map(([name, ready]) => (
             <li key={name}>
-              {name === "database"
-                ? "Banco"
-                : name === "workflow"
-                  ? "Importação"
-                  : name === "oauth"
-                    ? "OAuth"
-                    : "Estrutura do banco"}
-              : {ready ? "Configurado" : "Requer atenção"}
+              {checkLabel(name)}: {ready ? "Configurado" : "Requer atenção"}
             </li>
           ))}
         </ul>
@@ -276,4 +265,30 @@ export function AccountView({
       </details>
     </>
   );
+}
+
+function checkLabel(name: string) {
+  switch (name) {
+    case "database":
+      return "Banco";
+    case "workflow":
+      return "Importação";
+    case "oauth":
+      return "OAuth";
+    default:
+      return "Estrutura do banco";
+  }
+}
+
+function verificationMessage(
+  load: { kind: string; session?: boolean },
+  checkedAt: string,
+) {
+  if (load.kind !== "failed") {
+    return `Verificado em ${checkedAt}`;
+  }
+  if (load.session) {
+    return "Sua sessão expirou. Entre novamente.";
+  }
+  return `Verificação indisponível. Último estado confirmado em ${checkedAt}`;
 }

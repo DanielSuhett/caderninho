@@ -10,10 +10,11 @@ import { JsonValueSchema } from "#shared/json.ts";
 export { fail };
 
 export function assertMinor(value: string) {
-  if (!/^-?(0|[1-9]\d{0,29})$/.test(value))
+  if (!/^-?(0|[1-9]\d{0,29})$/.test(value)) {
     throw new Error(
       "Minor amount must be canonical integer, at most 30 digits",
     );
+  }
 }
 
 // Preserve JSON numeric lexemes before JavaScript can round amounts, quantities or rates.
@@ -22,21 +23,27 @@ export function exactJSON(text: string) {
 }
 
 export function decimal(value: MoneyInput) {
-  if (value === null || value === undefined) return null;
+  if (value === null || value === undefined) {
+    return null;
+  }
   const s = String(value);
 
-  if (s.length > 100 || !/^[-+]?\d+(?:\.\d+)?(?:e[-+]?\d+)?$/i.test(s))
+  if (s.length > 100 || !/^[-+]?\d+(?:\.\d+)?(?:e[-+]?\d+)?$/i.test(s)) {
     fail(FaultCode.INVALID_DECIMAL);
+  }
   const exponent = Number(s.toLowerCase().split("e")[1] ?? "0");
 
-  if (!Number.isSafeInteger(exponent) || Math.abs(exponent) > 30)
+  if (!Number.isSafeInteger(exponent) || Math.abs(exponent) > 30) {
     fail(FaultCode.DECIMAL_RANGE);
+  }
 
   return new Big(s.startsWith("+") ? s.slice(1) : s).toFixed();
 }
 
 export function minor(value: MoneyInput, currency: string) {
-  if (value === undefined || value === null) return null;
+  if (value === undefined || value === null) {
+    return null;
+  }
 
   // Explicit currency scales; an unknown currency is queryable, never silently assumed 2dp.
   const scales: Record<string, number> = {
@@ -56,13 +63,19 @@ export function minor(value: MoneyInput, currency: string) {
 
   const scale = scales[currency];
 
-  if (typeof scale !== "number") fail(FaultCode.CURRENCY_SCALE_UNSUPPORTED);
+  if (typeof scale !== "number") {
+    fail(FaultCode.CURRENCY_SCALE_UNSUPPORTED);
+  }
   const d = decimal(value);
 
-  if (d === null) fail(FaultCode.INVALID_DECIMAL);
+  if (d === null) {
+    fail(FaultCode.INVALID_DECIMAL);
+  }
   const [whole, frac = ""] = d.replace("-", "").split(".");
 
-  if (frac.length > scale) fail(FaultCode.MONEY_PRECISION_UNSUPPORTED);
+  if (frac.length > scale) {
+    fail(FaultCode.MONEY_PRECISION_UNSUPPORTED);
+  }
 
   return (
     BigInt(whole + frac.padEnd(scale, "0")) * (d.startsWith("-") ? -1n : 1n)
@@ -75,8 +88,9 @@ export function day(value: unknown) {
     !/^\d{4}-\d{2}-\d{2}$/.test(value) ||
     !Number.isFinite(Date.parse(value)) ||
     new Date(value).toISOString().slice(0, 10) !== value
-  )
+  ) {
     fail(FaultCode.INVALID_DATE);
+  }
 
   return value;
 }
@@ -104,10 +118,14 @@ export function id(value: unknown) {
 export function compareDecimal(a: MoneyInput, b: MoneyInput) {
   const x = decimal(a);
 
-  if (x === null) fail(FaultCode.INVALID_DECIMAL);
+  if (x === null) {
+    fail(FaultCode.INVALID_DECIMAL);
+  }
   const y = decimal(b);
 
-  if (y === null) fail(FaultCode.INVALID_DECIMAL);
+  if (y === null) {
+    fail(FaultCode.INVALID_DECIMAL);
+  }
 
   return new Big(x).cmp(y);
 }

@@ -12,7 +12,7 @@ await test("Oxc checks static, dynamic, reexported and type-only architectural e
   const cases = [
     [
       "src/worker/finance/corrections.ts",
-      'import { statement } from "#worker/database.ts";',
+      'import { database } from "#worker/database.ts";',
       "imports #worker/database",
     ],
     [
@@ -67,7 +67,7 @@ await test("Oxc checks static, dynamic, reexported and type-only architectural e
     ],
     [
       "src/worker/account/controller.ts",
-      'export { statement } from "#worker/database.ts";',
+      'export { database } from "#worker/database.ts";',
       "imports #worker/database",
     ],
     [
@@ -103,13 +103,14 @@ await test("Oxc checks static, dynamic, reexported and type-only architectural e
       "needs an explicit extension",
     ],
   ] as const;
-  for (const [file, source, message] of cases)
+  for (const [file, source, message] of cases) {
     assert.ok(
       (await checkImports(join(projectRoot, file), source)).some((violation) =>
         violation.includes(message),
       ),
       file,
     );
+  }
   for (const [file, source] of [
     ["src/domain/probe.ts", 'import { decimal } from "#domain/exact.ts";'],
     ["src/worker/probe.ts", 'export * from "./bindings.ts";'],
@@ -131,8 +132,9 @@ await test("Oxc checks static, dynamic, reexported and type-only architectural e
       "src/web/account/account-view.tsx",
       'import { syncPresentation } from "./account-model.ts";',
     ],
-  ] as const)
+  ] as const) {
     assert.deepEqual(await checkImports(join(projectRoot, file), source), []);
+  }
   assert.deepEqual(
     importSpecifiers(
       "fixture.ts",

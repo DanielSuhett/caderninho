@@ -9,4 +9,6 @@ function Account() {
   return <AccountView {...useAccount()} />;
 }
 const root = document.getElementById("account-root");
-if (root) createRoot(root).render(<Account />);
+if (root) {
+  createRoot(root).render(<Account />);
+}

@@ -1,8 +1,7 @@
-import { z } from "zod/v4";
-
 import { type Resource, TransactionStatus } from "#domain/enums.ts";
 import { accountingDay, assertMinor } from "#domain/exact.ts";
-import { normalizeResource } from "#domain/finance-model.ts";
+import { normalizeValidatedResource } from "#domain/finance-model.ts";
+import providerFields from "#domain/provider-fields.json" with { type: "json" };
 import type { FinanceRecord, ProviderRecord } from "#domain/schemas.ts";
 
 export function projectEntity({
@@ -20,15 +19,17 @@ export function projectEntity({
 }) {
   const record =
     legacyProjection ??
-    normalizeResource(resource, raw, parent, { referenceDay });
+    normalizeValidatedResource(resource, raw, parent, { referenceDay });
 
   if (resource === "transactions" && !legacyProjection) {
     record.accountName = parent?.name ?? null;
   }
 
-  for (const [field, value] of Object.entries(record))
-    if (field.endsWith("Minor") && typeof value === "string")
+  for (const [field, value] of Object.entries(record)) {
+    if (field.endsWith("Minor") && typeof value === "string") {
       assertMinor(value);
+    }
+  }
 
   const amount =
     record.amountMinor ??
@@ -37,16 +38,13 @@ export function projectEntity({
     record.contractAmountMinor ??
     null;
 
-  const amountText = amount === null ? null : z.string().parse(amount);
+  const amountText = amount;
 
-  if (amountText !== null) assertMinor(amountText);
+  if (amountText !== null) {
+    assertMinor(amountText);
+  }
 
-  const date =
-    typeof record.accountingDate === "string"
-      ? record.accountingDate
-      : typeof record.date === "string"
-        ? accountingDay(record.date)
-        : null;
+  const date = entityDate(record);
 
   const eligible = Number(
     date !== null &&
@@ -54,21 +52,117 @@ export function projectEntity({
       record.status !== TransactionStatus.PENDING,
   );
 
-  const text = (k: string) =>
-    typeof record[k] === "string" ? record[k] : null;
-
   return {
     record,
     amountText,
     date,
     eligible,
-    currency: text("currencyCode") ?? text("totalAmountCurrencyCode"),
-    accountType: text("accountType") ?? text("type"),
-    direction: text("type"),
-    status: text("status"),
-    category: text("category"),
-    description: text("description"),
+    ...entityAttributes(record),
+  };
+}
+
+function entityAttributes(record: FinanceRecord) {
+  return {
+    currency: record.currencyCode ?? record.totalAmountCurrencyCode ?? null,
+    accountType: record.accountType ?? record.type ?? null,
+    direction: record.type ?? null,
+    status: record.status ?? null,
+    category: record.category ?? null,
+    description: record.description ?? null,
   };
 }
 
 export const NORMALIZER = "finance-v3.1";
+
+// Only fields consumed by normalization and rules affect derived identity.
+// Timestamps and running balance may change without changing financial meaning.
+export function entityFingerprint({
+  resource,
+  raw,
+  parent,
+  legacyProjection,
+}: {
+  resource: Resource;
+  raw: ProviderRecord;
+  parent: FinanceRecord | undefined;
+  legacyProjection: FinanceRecord | undefined;
+}) {
+  const source = relevantSource(resource, raw, legacyProjection);
+
+  return {
+    source,
+    parent:
+      resource === "transactions"
+        ? {
+            id: parent?.id,
+            type: parent?.type,
+            name: parent?.name,
+            ownerDocument: parent?.ownerDocument,
+          }
+        : null,
+  };
+}
+
+function relevantSource(
+  resource: Resource,
+  raw: ProviderRecord,
+  legacyProjection: FinanceRecord | undefined,
+) {
+  const source: Record<string, unknown> = { ...raw };
+
+  if (resource !== "transactions") {
+    delete source.updatedAt;
+    delete source.createdAt;
+
+    return source;
+  }
+
+  const relevant: Record<string, unknown> = {};
+
+  for (const path of [
+    ...Object.keys(providerFields.transactions),
+    "operationType",
+    "paymentData.receiver.documentNumber.value",
+    "paymentData.payer.documentNumber.value",
+  ]) {
+    if (["updatedAt", "createdAt", "balance"].includes(path)) {
+      continue;
+    }
+    const value = providerValue(raw, path);
+
+    if (value !== undefined) {
+      relevant[path] = value;
+    }
+  }
+
+  if (legacyProjection) {
+    relevant.legacyProjection = legacyProjection;
+  }
+
+  return relevant;
+}
+
+function providerValue(raw: ProviderRecord, path: string): unknown {
+  let value: unknown = raw;
+
+  for (const segment of path.split(".")) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      return undefined;
+    }
+    value = Object.entries(value).find(([key]) => key === segment)?.[1];
+  }
+
+  return value;
+}
+
+function entityDate(record: FinanceRecord) {
+  if (typeof record.accountingDate === "string") {
+    return record.accountingDate;
+  }
+
+  if (typeof record.date === "string") {
+    return accountingDay(record.date);
+  }
+
+  return null;
+}

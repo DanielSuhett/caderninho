@@ -33,13 +33,15 @@ export async function main(args = process.argv.slice(2)) {
       activate: z.boolean(),
     })
     .parse(values);
-  if (options.save && options.activate)
+  if (options.save && options.activate) {
     throw new Error("Choose --save or --activate");
+  }
   const remote = options.save || options.activate;
-  if (remote !== (options.endpoint !== undefined))
+  if (remote !== (options.endpoint !== undefined)) {
     throw new Error(
       "Use --endpoint with --save or --activate. Default: local dry run.",
     );
+  }
   const endpoint = options.endpoint
     ? adminEndpoint(options.endpoint)
     : undefined;
@@ -70,17 +72,20 @@ export async function main(args = process.argv.slice(2)) {
     process.exitCode = 2;
     return;
   }
-  if (options.output)
+  if (options.output) {
     await writeFile(
       options.output,
-      JSON.stringify(report.document, null, 2) + "\n",
+      `${JSON.stringify(report.document, null, 2)}\n`,
       {
         encoding: "utf8",
         flag: "wx",
         mode: 0o600,
       },
     );
-  if (!endpoint) return;
+  }
+  if (!endpoint) {
+    return;
+  }
   const response = await adminRequest(
     new URL("/mcp/rules/import", endpoint),
     token,
@@ -89,7 +94,9 @@ export async function main(args = process.argv.slice(2)) {
       mode: options.activate ? "activate" : "save",
     },
   );
-  if (!response.ok) throw new Error(`Import failed: HTTP ${response.status}`);
+  if (!response.ok) {
+    throw new Error(`Import failed: HTTP ${response.status}`);
+  }
   console.log(JSON.stringify(await response.json()));
 }
 if (import.meta.main) {

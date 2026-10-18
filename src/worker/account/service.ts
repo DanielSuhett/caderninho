@@ -1,7 +1,7 @@
 import { z } from "zod/v4";
 
 import type { InstallationChecks } from "#contracts/portal-contract.ts";
-import { WizardStateSchema } from "#contracts/wizard-contract.ts";
+import type { WizardState } from "#contracts/wizard-contract.ts";
 import {
   isPersonalConnector,
   MAX_PERSONAL_CONNECTIONS,
@@ -22,25 +22,21 @@ export interface ConnectionSource {
 export function wizardState(
   evidence: Awaited<ReturnType<typeof readPortalStatus>>,
   configured: boolean,
-) {
+): WizardState {
   const { config, latest, items, coverage } = evidence;
-  const sync =
-    latest?.phase === "error" || latest?.status === "failed"
-      ? "error"
-      : latest?.status === "working"
-        ? "working"
-        : latest?.status === "completed"
-          ? "completed"
-          : latest?.status === "cancelled"
-            ? "cancelled"
-            : "waiting";
-  return WizardStateSchema.parse({
+  let sync: WizardState["sync"] = "waiting";
+  if (latest?.phase === "error" || latest?.status === "failed") {
+    sync = "error";
+  } else if (latest) {
+    sync = latest.status;
+  }
+  return {
     credentials: configured,
     connected: items.length > 0,
     sync,
     coverage: { total: coverage.total, complete: coverage.complete ?? 0 },
     paused: config.sync_enabled === 0 && items.length > 0,
-  });
+  };
 }
 
 interface AccountDependencies {
@@ -78,12 +74,16 @@ export function createAccountService(deps: AccountDependencies) {
       const id = z.uuid().parse(itemId),
         credentials = await deps.credentials();
       const access = await deps.repository.connection.itemAccess(id);
-      if (access.count >= MAX_PERSONAL_CONNECTIONS && !access.exists)
+      if (access.count >= MAX_PERSONAL_CONNECTIONS && !access.exists) {
         throw new Error("ITEM_LIMIT");
+      }
       const item = await deps.source.readItem(credentials, id);
-      if (!isPersonalConnector(item.connector?.id))
+      if (!isPersonalConnector(item.connector?.id)) {
         throw new Error("MEU_PLUGGY_REQUIRED");
-      if (item.id !== id) throw new Error("SOURCE_SCOPE_MISMATCH");
+      }
+      if (item.id !== id) {
+        throw new Error("SOURCE_SCOPE_MISMATCH");
+      }
       await deps.repository.connection.connect(
         id,
         credentials.clientId,
@@ -91,8 +91,9 @@ export function createAccountService(deps: AccountDependencies) {
       );
     },
     async token(itemId?: string) {
-      if (itemId)
+      if (itemId) {
         await deps.repository.authorizeItems([z.uuid().parse(itemId)]);
+      }
       return deps.connectToken(await deps.credentials(), itemId);
     },
     pause: () => deps.repository.pause(),

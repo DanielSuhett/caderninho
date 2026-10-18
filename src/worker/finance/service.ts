@@ -1,42 +1,39 @@
-import { z } from "zod/v4";
-
 import type {
-  RuleCommand,
-  PreviewInput,
-  SubscriptionInput,
   LiveBalanceInput,
+  PreviewInput,
+  RuleCommand,
+  SubscriptionInput,
 } from "#contracts/finance.ts";
-import type { Query, Aggregate, Identity } from "#contracts/queries.ts";
+import type { Aggregate, Identity, Query } from "#contracts/queries.ts";
 import type { WizardState } from "#contracts/wizard-contract.ts";
 import { localDay } from "#domain/exact.ts";
 import {
   type CorrectionInput,
-  type RecordReference,
   type RecordChange,
+  type RecordReference,
   recordChange,
 } from "#domain/record-correction.ts";
 import { importRules } from "#domain/rules/import-rules.ts";
 import { txContext } from "#domain/rules/rules.ts";
 import type { ProviderRecord } from "#domain/schemas.ts";
 import { detectSubscriptions } from "#domain/subscriptions.ts";
-import { parseJson } from "#shared/json.ts";
 import type {
   correctRecord,
   explainRecord,
 } from "#worker/finance/entities.repository.ts";
 import type {
-  queryEntities,
   aggregateEntities,
-  readStatus,
   previewSelection,
+  queryEntities,
+  readStatus,
   subscriptionRecords,
 } from "#worker/finance/repository.ts";
 import type {
-  readRules,
-  listRules,
   activateRules,
-  saveRules,
+  listRules,
+  readRules,
   rulesFor,
+  saveRules,
 } from "#worker/finance/rules.repository.ts";
 
 export interface FinancialQueries {
@@ -85,12 +82,19 @@ export interface RuleActions {
 }
 
 export async function manageRules(actions: RuleActions, a: RuleCommand) {
-  if (a.action === "read")
+  if (a.action === "read") {
     return a.revision ? actions.read(a.revision) : actions.list();
-  if (a.action === "activate")
-    return actions.activate(z.string().parse(a.revision));
+  }
+  if (a.action === "activate") {
+    if (a.revision === undefined) {
+      throw new Error("RULES_REVISION_REQUIRED");
+    }
+    return actions.activate(a.revision);
+  }
   const report = importRules(a.document, a.catalog);
-  if (a.action === "validate" || !report.compatible) return report;
+  if (a.action === "validate" || !report.compatible) {
+    return report;
+  }
   return actions.save(report.document, false);
 }
 
@@ -112,10 +116,12 @@ export async function previewRules(
         category: row.effective_category,
         description: row.effective_description,
       },
-      derived: await engine.evaluate(txContext(parseJson(row.normalized))),
+      derived: await engine.evaluate(txContext(row.normalized)),
     })),
   );
-  if (before !== (await reads.revision())) throw new Error("RESTART_REQUIRED");
+  if (before !== (await reads.revision())) {
+    throw new Error("RESTART_REQUIRED");
+  }
   return {
     selected: total,
     sampleOnly: true,
@@ -134,7 +140,9 @@ export async function readSubscriptions(
   input: SubscriptionInput,
 ) {
   const { before, records } = await reads.select();
-  if (before !== (await reads.revision())) throw new Error("RESTART_REQUIRED");
+  if (before !== (await reads.revision())) {
+    throw new Error("RESTART_REQUIRED");
+  }
   return detectSubscriptions(records, {
     ...input,
     asOfDay: localDay(reads.now()),
@@ -150,6 +158,8 @@ export async function importRuleDocument(
   },
 ) {
   const report = importRules(input.document, input.catalog);
-  if (!report.compatible || input.mode === "dry-run") return report;
+  if (!report.compatible || input.mode === "dry-run") {
+    return report;
+  }
   return actions.save(report.document, input.mode === "activate");
 }

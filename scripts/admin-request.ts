@@ -4,7 +4,9 @@ export const ADMIN_REQUEST_TIMEOUT_MS = 45_000;
 
 export function adminEndpoint(value: string) {
   const endpoint = new URL(value);
-  if (endpoint.protocol !== "https:") throw new Error("HTTPS_REQUIRED");
+  if (endpoint.protocol !== "https:") {
+    throw new Error("HTTPS_REQUIRED");
+  }
   return endpoint;
 }
 
@@ -21,7 +23,7 @@ export function adminRequest(
     timeout: timeoutMs,
     signal: AbortSignal.timeout(timeoutMs),
     throwHttpErrors: false,
-    headers: { Authorization: "Bearer " + token },
+    headers: { Authorization: `Bearer ${token}` },
     json: body,
   });
 }

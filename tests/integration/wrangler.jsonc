@@ -10,15 +10,15 @@
       "binding": "DB",
       "database_name": "test",
       "database_id": "local-test",
-      "migrations_dir": "../../migrations",
-    },
+      "migrations_dir": "../../migrations"
+    }
   ],
   "workflows": [
     {
       "name": "test-finance",
       "binding": "FINANCE",
-      "class_name": "TestWorkflow",
-    },
+      "class_name": "TestWorkflow"
+    }
   ],
-  "vars": { "WEBHOOK_SECRET": "synthetic-only-secret" },
+  "vars": { "WEBHOOK_SECRET": "synthetic-only-secret" }
 }

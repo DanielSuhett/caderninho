@@ -1,15 +1,15 @@
 import { z } from "zod/v4";
 
 import {
-  RuleCommandSchema,
-  PreviewInputSchema,
-  SubscriptionInputSchema,
   LiveBalanceInputSchema,
+  PreviewInputSchema,
+  RuleCommandSchema,
+  SubscriptionInputSchema,
 } from "#contracts/finance.ts";
 import {
+  AggregateSchema,
   FilterSchema,
   QuerySchema,
-  AggregateSchema,
 } from "#contracts/queries.ts";
 import {
   CorrectionInputSchema,
@@ -126,7 +126,9 @@ export const tools = declarations.map((t) => ({
 }));
 export function validateTool(name: string, input: unknown) {
   const d = declarations.find((x) => x.name === name);
-  if (!d) throw new Error("UNKNOWN_TOOL");
+  if (!d) {
+    throw new Error("UNKNOWN_TOOL");
+  }
   return d.schema.parse(input);
 }
 

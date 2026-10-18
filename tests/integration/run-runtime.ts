@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import {
+  chmod,
+  cp,
+  mkdir,
   mkdtemp,
   readFile,
-  chmod,
-  mkdir,
-  cp,
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -73,7 +73,9 @@ async function start() {
   task.child.stdout?.on("data", (x) => (logs = (logs + x).slice(-5000)));
   task.child.stderr?.on("data", (x) => (logs = (logs + x).slice(-5000)));
   for (let i = 0; i < 60; i++) {
-    if (task.child.exitCode !== null || task.child.signalCode !== null) break;
+    if (task.child.exitCode !== null || task.child.signalCode !== null) {
+      break;
+    }
     const ready = await tryCatch(
       fetch(base, { signal: AbortSignal.timeout(1000) }),
     );
@@ -84,12 +86,12 @@ async function start() {
     await new Promise((r) => setTimeout(r, 500));
   }
   await task.stop();
-  throw new Error("Runtime not ready: " + logs);
+  throw new Error(`Runtime not ready: ${logs}`);
 }
 const worker = await start();
 const checked = await tryCatch(
   (async () => {
-    await fetch(base + "/setup", { method: "POST" });
+    await fetch(`${base}/setup`, { method: "POST" });
     const meta = {
       "io.modelcontextprotocol/protocolVersion": "2026-07-28",
       "io.modelcontextprotocol/clientCapabilities": {
@@ -101,7 +103,7 @@ const checked = await tryCatch(
       params: { name?: string; taskId?: string; arguments?: object },
     ) =>
       responseJson(
-        await fetch(base + "/mcp", {
+        await fetch(`${base}/mcp`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -145,7 +147,7 @@ const checked = await tryCatch(
     // Disconnect all HTTP clients while the native Workflow continues. Stopping
     // the complete Wrangler process also kills its emulated Workflow service;
     // that emulator restart limitation is documented separately.
-    let terminal;
+    let terminal: Awaited<ReturnType<typeof responseJson>>["result"];
     for (let i = 0; i < 40; i++) {
       const t = await rpc("tasks/get", { taskId });
       if (required(t.result).status !== "working") {
@@ -234,5 +236,5 @@ console.log(
   "PASS: complete synthetic D1 export restores into an empty local database without loss",
 );
 console.log(
-  "Local workerd integration passed; isolated synthetic state: " + state,
+  `Local workerd integration passed; isolated synthetic state: ${state}`,
 );

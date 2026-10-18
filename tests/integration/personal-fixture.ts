@@ -1,10 +1,12 @@
-import { createExecutionContext } from "cloudflare:test";
-import { env as bindings } from "cloudflare:workers";
+import { getOAuthApi } from "@cloudflare/workers-oauth-provider";
 import { z } from "zod/v4";
 
 import { AccountResponseSchema } from "#contracts/portal-contract.ts";
 import { oauth } from "#worker/auth/controller.ts";
 import type { Bindings } from "#worker/bindings.ts";
+
+import { createExecutionContext } from "cloudflare:test";
+import { env as bindings } from "cloudflare:workers";
 
 export const origin = "https://caderninho.test";
 export const password = "synthetic-personal-password";
@@ -39,8 +41,23 @@ export function settings() {
       },
     },
   };
-  // The official provider injects OAUTH_PROVIDER on its first request.
-  return config as Bindings;
+  return {
+    ...config,
+    OAUTH_PROVIDER: getOAuthApi(
+      {
+        apiRoute: "/mcp",
+        resourceMetadata: {
+          resource: `${origin}/mcp`,
+          authorization_servers: [origin],
+        },
+        authorizeEndpoint: "/authorize",
+        tokenEndpoint: "/oauth/token",
+        apiHandler: { fetch: () => new Response("synthetic MCP") },
+        defaultHandler: { fetch: () => new Response("synthetic portal") },
+      },
+      config,
+    ),
+  };
 }
 export function fixture(config = settings()) {
   const provider = oauth(config, async () => new Response("verified"), origin);
@@ -89,7 +106,7 @@ export async function command(
       await app.request("/api/account", { headers: { Cookie: cookie } })
     ).json(),
   );
-  return app.request("/api/account/" + action, {
+  return app.request(`/api/account/${action}`, {
     method: "POST",
     headers: {
       Cookie: cookie,

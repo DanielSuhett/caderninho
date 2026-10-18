@@ -1,8 +1,8 @@
 import { PluggyCredentialsSchema } from "#domain/pluggy-credentials.ts";
 import {
+  assertPluggyApplication,
   createAccountRepository,
   installationReadiness,
-  assertPluggyApplication,
 } from "#worker/account/repository.ts";
 import { createAccountService } from "#worker/account/service.ts";
 import { createAuthRepository } from "#worker/auth/repository.ts";
@@ -14,38 +14,38 @@ import {
   explainRecord,
 } from "#worker/finance/entities.repository.ts";
 import {
-  readStatus,
-  previewSelection,
-  subscriptionRecords,
-  revision,
-  queryEntities,
   aggregateEntities,
+  previewSelection,
+  queryEntities,
+  readStatus,
+  revision,
+  subscriptionRecords,
 } from "#worker/finance/repository.ts";
 import {
-  readRules,
-  listRules,
   activateRules,
-  saveRules,
+  listRules,
+  readRules,
   rulesFor,
+  saveRules,
 } from "#worker/finance/rules.repository.ts";
 import {
   correctFinancialRecord,
+  type FinancialQueries,
   manageRules,
   previewRules,
   readSubscriptions,
-  type FinancialQueries,
 } from "#worker/finance/service.ts";
 import {
-  connectToken,
   connectionSource,
-  readAccount,
+  connectToken,
   financialSource,
   pluggyClient,
+  readAccount,
 } from "#worker/pluggy/source.ts";
 import {
   createSyncRepository,
-  schedulingStore,
   openSynchronization,
+  schedulingStore,
 } from "#worker/sync/repository.ts";
 import {
   createSyncService,
@@ -160,7 +160,9 @@ async function configuredCredentials(env: Bindings) {
     clientId: env.PLUGGY_CLIENT_ID,
     clientSecret: env.PLUGGY_CLIENT_SECRET,
   });
-  if (!parsed.success) throw new Error("PLUGGY_ACCOUNT_NOT_CONFIGURED");
+  if (!parsed.success) {
+    throw new Error("PLUGGY_ACCOUNT_NOT_CONFIGURED");
+  }
   await assertPluggyApplication(env.DB, parsed.data.clientId);
   return parsed.data;
 }

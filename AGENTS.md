@@ -3,8 +3,11 @@
 The product is a modular monolith in one npm package: src/worker (Cloudflare, MCP,
 D1, Workflows), src/web (React, Kumo, Vite), src/domain (pure financial logic),
 src/contracts (Zod public schemas) and src/shared (generic utilities).
-scripts contains tooling; tools/oxlint contains lint rules and their provenance.
-Use the Node 24 line in .nvmrc (nvm use) and npm ci at the repository root.
+scripts contains tooling. biome.json owns native lint, formatting and import organization;
+docs/biome-migration.md records coverage and differences from the former rules.
+Use mise install and mise run setup at the repository root. mise.toml selects
+Node 24, matching .nvmrc; keep both on the same line. npm ci and the package.json
+scripts remain usable with Node 24 outside mise. See docs/mise.md for the workflow.
 engine-strict rejects unsupported Node versions. package.json owns all dependencies
 and commands; package-lock.json is the only lockfile. wrangler.jsonc is the single
 production deployment configuration. The single initial migration targets a new, personal installation; never apply it
@@ -25,9 +28,10 @@ Application helpers inside account/auth/finance/sync keep service boundaries eve
 when not named service.ts. Concrete transport adapters use *.adapter.ts; durable
 sync flows and operation-storage.ts retain their explicit persistence role.
 MCP parsing/dispatch belongs to mcp/invoke.ts. Financial services and repositories
-receive named inputs, never ToolCall envelopes. D1 operation rows and checkpoint
-schemas stay in sync/operation-storage.ts; public contracts contain commands and
-public state, not serialized row flags.
+receive named inputs, never ToolCall envelopes. D1 operation rows and checkpoints
+derive from the Drizzle tables. Operation progress defaults and receipt types stay
+in sync/operation-storage.ts; public contracts contain commands and public state,
+not serialized row flags.
 
 The account view receives presentation and named actions. Keep HTTP/CSRF parsing
 in account-api.ts and SDK lifecycle in connect-widget.ts; use-account.ts owns
@@ -50,16 +54,17 @@ exactOptionalPropertyTypes; narrow missing values and omit absent optional field
 
 ## Formatting and imports
 
-Oxfmt owns layout and sorting: 80 columns, spaces, one JSX attribute per line,
-preserved object wrapping, builtins/external/package imports/relative imports/styles.
+Biome owns layout and sorting: 80 columns, spaces, multiline JSX attributes,
+automatic object wrapping and builtin/package/alias/path import groups.
 Side-effect imports retain their order. Combine values and inline types in one
 import; use import type when all bindings are types. Reexport local bindings when
 already imported, preserving names and aliases. Review commented duplicates
 manually when a safe fix cannot consolidate them.
 
-Oxlint checks duplicate imports/reexports and semantic promise, await and type
-export rules; tsc remains a separate check. Keep project/require-readable-spacing
-for structural spacing. Do not add a second sorting or stylistic preset. The Oxc
+Biome organizes duplicate imports/reexports and checks native promise, await and type
+export rules; tsc remains a separate check. Use native Biome rules and document
+coverage differences instead of maintaining custom lint plugins. Do not add a second
+sorting or stylistic preset. The Oxc
 import checker covers static/dynamic literal imports, reexports and type references
 using native package imports plus explicit relative paths.
 
@@ -67,6 +72,14 @@ using native package imports plus explicit relative paths.
 
 - Financial calculations and Pluggy behavior belong to domain modules. Use
   TypeScript ESM and Zod v4 schemas as model sources; export types through z.infer.
+  Contracts compose canonical domain models instead of copying their shapes.
+  Persistence uses Drizzle builders and inferred table/projection types. JSON
+  columns use TEXT JSON mode with canonical types; serialize only where an
+  existing public contract requires strings. Use native Drizzle batches with
+  unexecuted builders, preserving statement order and checkpoint atomicity.
+  SQL fragments are limited to necessary SQLite expressions; migrations and
+  synthetic test DDL may remain SQL. Validate external inputs with Zod, not
+  typed database rows, checkpoints, fixtures or constructed internal responses.
   Use standardized domain enums, pure functions and early returns. No any,
   chained assertions, non-null assertions or TypeScript suppression.
 - Async recovery uses tryCatch and its discriminated Result union. Normalize caught
@@ -86,18 +99,24 @@ using native package imports plus explicit relative paths.
 
 ## Checks
 
+mise run check executes the local validation sequence; mise run check:quick
+checks configuration, imports, types, formatting and lint. Both keep lint last
+and preserve its failure status. mise tasks validate and mise fmt --check verify
+the task configuration. No validation sequence deploys or migrates production
+data; runtime tests apply migrations only to isolated synthetic local databases.
+
 From the repository root: npm test, npm run test:product, npm run lint,
 npm run format:check, npm run typecheck, npm run check:imports, npm run build
 and npm run test:product:runtime.
 Worker runtime types: npm run types. Local D1 migrations: npm run migrate:local.
 Build output: dist/web assets and dist/worker dry-run. Migrations live in migrations/.
 
-npm run format writes Oxfmt changes; review import consolidation and formatting
+npm run format writes Biome changes; review import consolidation and formatting
 separately from behavior. npm run lint:fix followed by npm run format must converge
 without further changes. Node tooling tests cover safe import fixes, CLI validation
 and subprocess shutdown. Administrative CLIs default to dry runs and enforce a
 45-second request deadline. Prerender uses react-dom/server and exits naturally.
-Fix failing checks at their cause; do not blanket-disable rules. Keep OPF-derived
-Oxlint rules and provenance in tools/oxlint/project. Preserve public MCP contracts
+Fix failing checks at their cause; do not blanket-disable rules. Native Biome
+coverage and retired custom rules are documented in docs/biome-migration.md. Preserve public MCP contracts
 unless changes are intentional and reviewed. Local tests and dry-run builds do not
 prove deployment, real OAuth login or native MCP client catalog support.

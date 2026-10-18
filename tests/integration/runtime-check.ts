@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 
 import { z } from "zod/v4";
 
-import { responseJson, required } from "#testing/helpers.ts";
+import { required, responseJson } from "#testing/helpers.ts";
 
 const base = process.env.PRODUCT_TEST_URL ?? "http://127.0.0.1:8894";
 const meta = {
@@ -20,7 +20,7 @@ async function rpc(
     notifications?: object;
   },
 ) {
-  const response = await fetch(base + "/mcp", {
+  const response = await fetch(`${base}/mcp`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -36,13 +36,14 @@ async function rpc(
       params: { ...params, _meta: meta },
     }),
   });
-  if (!response.ok)
+  if (!response.ok) {
     throw new Error(
       `Synthetic RPC ${method}/${params.name ?? ""} failed: HTTP ${response.status}: ${await response.text()}`,
     );
+  }
   return response;
 }
-await fetch(base + "/setup", { method: "POST" });
+await fetch(`${base}/setup`, { method: "POST" });
 const result = await responseJson(
   await rpc("tools/call", {
     name: "caderninho_sync",
@@ -82,7 +83,7 @@ const denied = await responseJson(
   await rpc("tasks/get", { taskId: "unknown-task" }),
 );
 assert.ok(denied.error);
-let terminal;
+let terminal: Awaited<ReturnType<typeof responseJson>>["result"];
 for (let i = 0; i < 30; i++) {
   const value = await responseJson(await rpc("tasks/get", { taskId }));
   assert.ok(value.result, JSON.stringify(value));
@@ -99,19 +100,23 @@ assert.equal(
   JSON.stringify(terminal),
 );
 let received = second.initial;
-while (true) {
+for (;;) {
   const part = await second.reader.read();
   received += second.decoder.decode(part.value, { stream: !part.done });
-  if (part.done) break;
+  if (part.done) {
+    break;
+  }
 }
 assert.match(received, /notifications\/tasks/);
 assert.match(received, /completed/);
 const late = await subscriber();
 let output = late.initial;
-while (true) {
+for (;;) {
   const r = await late.reader.read();
   output += late.decoder.decode(r.value, { stream: !r.done });
-  if (r.done) break;
+  if (r.done) {
+    break;
+  }
 }
 assert.match(output, /completed/);
 const total = await responseJson(
@@ -128,7 +133,7 @@ console.log(
   "PASS: durable Workflow, D1, two subscribers, disconnect, terminal reconnect isolation",
 );
 
-const unauth = await fetch(base + "/auth-probe", {
+const unauth = await fetch(`${base}/auth-probe`, {
   headers: { "x-user-id": "alice", "x-authenticated-user-id": "alice" },
 });
 assert.equal(unauth.status, 401);
@@ -145,17 +150,17 @@ const event = {
 };
 assert.equal(
   (
-    await fetch(base + "/webhook", {
+    await fetch(`${base}/webhook`, {
       method: "POST",
       body: JSON.stringify(event),
     })
   ).status,
   401,
 );
-for (let i = 0; i < 2; i++)
+for (let i = 0; i < 2; i++) {
   assert.equal(
     (
-      await fetch(base + "/webhook", {
+      await fetch(`${base}/webhook`, {
         method: "POST",
         headers: { "X-Caderninho-Webhook-Secret": "synthetic-only-secret" },
         body: JSON.stringify(event),
@@ -163,7 +168,8 @@ for (let i = 0; i < 2; i++)
     ).status,
     204,
   );
-await fetch(base + "/recover", { method: "POST" });
+}
+await fetch(`${base}/recover`, { method: "POST" });
 console.log(
   "PASS: maintained OAuth rejects forged headers; authenticated webhook duplicate receipt and outbox recovery",
 );
@@ -176,19 +182,21 @@ for (let n = 0; n < 30; n++) {
       operations: z.number(),
     })
     .parse(
-      await (await fetch(base + "/inspect-event?id=" + event.eventId)).json(),
+      await (await fetch(`${base}/inspect-event?id=${event.eventId}`)).json(),
     );
   assert.equal(status.receipts, 1);
   if (status.processed) {
     assert.equal(status.operations, 1);
     break;
   }
-  if (n === 29) throw new Error("Webhook outbox did not complete");
+  if (n === 29) {
+    throw new Error("Webhook outbox did not complete");
+  }
   await new Promise((r) => setTimeout(r, 500));
 }
 assert.equal(
   (
-    await fetch(base + "/webhook", {
+    await fetch(`${base}/webhook`, {
       method: "POST",
       headers: { "X-Caderninho-Webhook-Secret": "synthetic-only-secret" },
       body: JSON.stringify({ ...event, eventId: "synthetic-force-failure" }),

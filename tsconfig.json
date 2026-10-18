@@ -30,5 +30,5 @@
     "scripts/**/*.ts",
     "tests/**/*.ts"
   ],
-  "exclude": ["node_modules", "dist", "tools/oxlint/project"]
+  "exclude": ["node_modules", "dist"]
 }

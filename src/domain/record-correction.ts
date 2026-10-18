@@ -34,19 +34,21 @@ const RecordChangeSchema = z.discriminatedUnion("field", [
 export type RecordChange = z.infer<typeof RecordChangeSchema>;
 
 export function recordChange(input: CorrectionInput): RecordChange {
-  if (input.field === "tag")
+  if (input.field === "tag") {
     return {
       field: "tag",
       key: z.string().min(1).max(80).parse(input.key),
       value: input.value,
     };
+  }
 
   if (
     input.field === "ignored" &&
     input.value !== null &&
     !["0", "1"].includes(input.value)
-  )
+  ) {
     throw new Error("ignored requires 0 or 1");
+  }
 
   return { field: input.field, value: input.value };
 }

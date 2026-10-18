@@ -10,10 +10,11 @@ export const projectRoot = path.resolve(import.meta.dirname, "..");
 
 function importDependencies(file: string, source: string) {
   const parsed = parseSync(file, source);
-  if (parsed.errors.length)
+  if (parsed.errors.length) {
     throw new Error(
       `${file}: ${parsed.errors.map((error) => error.message).join("; ")}`,
     );
+  }
   const dependencies: { specifier: string; typeOnly: boolean }[] = [];
   const add = (specifier: string, typeOnly = false) => {
     dependencies.push({ specifier, typeOnly });
@@ -32,7 +33,9 @@ function importDependencies(file: string, source: string) {
       );
     },
     ExportNamedDeclaration(node) {
-      if (node.source) add(node.source.value, node.exportKind === "type");
+      if (node.source) {
+        add(node.source.value, node.exportKind === "type");
+      }
     },
     ExportAllDeclaration(node) {
       add(node.source.value, node.exportKind === "type");
@@ -41,8 +44,9 @@ function importDependencies(file: string, source: string) {
       if (
         node.source.type === "Literal" &&
         typeof node.source.value === "string"
-      )
+      ) {
         add(node.source.value);
+      }
     },
     TSImportType(node) {
       add(node.source.value, true);
@@ -59,12 +63,15 @@ async function files(directory: string): Promise<string[]> {
   const entries = await readdir(directory, { withFileTypes: true });
   const found: string[] = [];
   for (const entry of entries) {
-    if (["node_modules", "dist", ".wrangler", "vendor"].includes(entry.name))
+    if (["node_modules", "dist", ".wrangler", "vendor"].includes(entry.name)) {
       continue;
+    }
     const file = path.join(directory, entry.name);
-    if (entry.isDirectory()) found.push(...(await files(file)));
-    else if (entry.name !== "runtime.d.ts" && /\.[cm]?tsx?$/.test(file))
+    if (entry.isDirectory()) {
+      found.push(...(await files(file)));
+    } else if (entry.name !== "runtime.d.ts" && /\.[cm]?tsx?$/.test(file)) {
       found.push(file);
+    }
   }
   return found;
 }
@@ -82,10 +89,11 @@ export async function checkImports(
     const internal = specifier.startsWith(".") || specifier.startsWith("#");
     let resolved = specifier;
     if (internal) {
-      if (!/\.[cm]?(?:tsx?|json|css)$/.test(specifier))
+      if (!/\.[cm]?(?:tsx?|json|css)$/.test(specifier)) {
         violations.push(
           `${relative} needs an explicit extension: ${specifier}`,
         );
+      }
       const target = await tryCatch(
         Promise.resolve().then(() =>
           specifier.startsWith("#")
@@ -103,17 +111,21 @@ export async function checkImports(
         .split(path.sep)
         .join("/");
     }
-    if (test) continue;
-    if (resolved.includes("/__tests__/") || resolved.startsWith("tests/"))
+    if (test) {
+      continue;
+    }
+    if (resolved.includes("/__tests__/") || resolved.startsWith("tests/")) {
       violations.push(`${relative} imports test-only module ${specifier}`);
+    }
     if (
       area === "src/shared" &&
       internal &&
       !resolved.startsWith("src/shared/")
-    )
+    ) {
       violations.push(
         `${relative}: shared depends on application-specific module ${specifier}`,
       );
+    }
     const infra =
       /^(?:node:|cloudflare:|@cloudflare\/|@modelcontextprotocol\/|drizzle-orm|hono|react|ky$|pluggy-sdk|pluggy-connect-sdk)/.test(
         resolved,
@@ -143,8 +155,10 @@ export async function checkImports(
     const repository = /^src\/worker\/.+(?:\/|\.)repository\.ts$/.test(
       resolved,
     );
-    const forbidden = service
-      ? infra ||
+    let forbidden = false;
+    if (service) {
+      forbidden =
+        infra ||
         sql ||
         /^src\/worker\/(?:bindings|composition|http)\.ts$/.test(resolved) ||
         /^src\/worker\/(?:pluggy|mcp)\//.test(resolved) ||
@@ -152,20 +166,25 @@ export async function checkImports(
         /^src\/worker\/[^/]+\/(?:controller|session|workflow)\.ts$/.test(
           resolved,
         ) ||
-        ((repository || /(?:\/|\.)adapter\.ts$/.test(resolved)) && !typeOnly)
-      : controller && sql
-        ? true
-        : ["src/domain", "src/contracts", "src/shared"].includes(area)
-          ? infra || /^src\/(?:worker|web)\//.test(resolved)
-          : area === "src/web" && resolved.startsWith("src/worker/");
-    if (forbidden) violations.push(`${relative} imports ${specifier}`);
+        ((repository || /(?:\/|\.)adapter\.ts$/.test(resolved)) && !typeOnly);
+    } else if (controller && sql) {
+      forbidden = true;
+    } else if (["src/domain", "src/contracts", "src/shared"].includes(area)) {
+      forbidden = infra || /^src\/(?:worker|web)\//.test(resolved);
+    } else if (area === "src/web") {
+      forbidden = resolved.startsWith("src/worker/");
+    }
+    if (forbidden) {
+      violations.push(`${relative} imports ${specifier}`);
+    }
     if (
       (service || persistenceFile) &&
       resolved === "src/contracts/mcp-contract.ts"
-    )
+    ) {
       violations.push(
         `${relative}: application/persistence depends on MCP envelope ${specifier}`,
       );
+    }
     const view = area === "src/web" && /(?:^|[/-])view\.tsx$/.test(relative);
     if (
       view &&
@@ -173,12 +192,14 @@ export async function checkImports(
         /^src\/web\/account\/(?:account-api|connect-widget|use-account)\.ts$/.test(
           resolved,
         ))
-    )
+    ) {
       violations.push(
         `${relative}: view depends on interaction/transport ${specifier}`,
       );
-    if (area === "src/domain" && resolved.startsWith("src/contracts/"))
+    }
+    if (area === "src/domain" && resolved.startsWith("src/contracts/")) {
       violations.push(`${relative}: domain depends on contracts`);
+    }
   }
   return violations;
 }
@@ -186,10 +207,11 @@ export async function checkImports(
 export async function checkProjectImports(): Promise<string[]> {
   const violations: string[] = [];
   for (const area of ["src", "scripts", "tests"]) {
-    for (const file of await files(path.join(projectRoot, area)))
+    for (const file of await files(path.join(projectRoot, area))) {
       violations.push(
         ...(await checkImports(file, await readFile(file, "utf8"))),
       );
+    }
   }
   for (const entry of await readdir(projectRoot)) {
     if (/\.[cm]?tsx?$/.test(entry)) {
@@ -204,7 +226,9 @@ export async function checkProjectImports(): Promise<string[]> {
 
 if (import.meta.main) {
   const violations = await checkProjectImports();
-  if (violations.length) throw new Error(violations.join("\n"));
+  if (violations.length) {
+    throw new Error(violations.join("\n"));
+  }
   process.stdout.write(
     "Import boundaries passed: domain, contracts, services, controllers, browser, tooling and tests.\n",
   );

@@ -4,57 +4,59 @@ import { z } from "zod/v4";
 
 import { compareDecimal, day } from "#domain/exact.ts";
 import {
-  RulesSchema,
-  TransactionContextSchema,
-  fields,
-  allowed,
-  accents,
-  type Rules,
-  type Derived,
-  type TransactionContext,
-  type Condition,
   ActionSchema,
-  RuleSchema,
-  DerivedSchema,
+  accents,
+  allowed,
   CatalogSchema,
+  type Condition,
   ConditionSchema,
+  type Derived,
+  DerivedSchema,
+  fields,
   type Rule,
+  RuleSchema,
+  type Rules,
+  RulesSchema,
+  type TransactionContext,
+  TransactionContextSchema,
 } from "#domain/rules/rules-schema.ts";
-import { FinanceRecordSchema } from "#domain/schemas.ts";
-import { JsonValueSchema, type JsonValue } from "#shared/json.ts";
+import type { FinanceRecord } from "#domain/schemas.ts";
+import type { JsonValue } from "#shared/json.ts";
 
 export {
   ActionSchema,
-  RuleSchema,
-  RulesSchema,
-  DerivedSchema,
-  TransactionContextSchema,
   CatalogSchema,
-  ConditionSchema,
-  type Rule,
-  type Rules,
-  type Derived,
-  type TransactionContext,
   type Condition,
+  ConditionSchema,
+  type Derived,
+  DerivedSchema,
+  type Rule,
+  RuleSchema,
+  type Rules,
+  RulesSchema,
+  type TransactionContext,
+  TransactionContextSchema,
 };
 
 type Context = { tx: TransactionContext; result: Derived };
 
 function lookup(c: Context, p: string): JsonValue {
-  if (!allowed(p)) throw new Error(`Unknown field: ${p}`);
+  if (!allowed(p)) {
+    throw new Error(`Unknown field: ${p}`);
+  }
   const [root, key, tag] = p.split(".");
 
-  if (root === "tx")
+  if (root === "tx") {
     return Object.entries(c.tx).find(([k]) => k === key)?.[1] ?? null;
+  }
 
-  if (key === "tags" && tag)
+  if (key === "tags" && tag) {
     return Object.hasOwn(c.result.tags, tag)
       ? (c.result.tags[tag] ?? null)
       : null;
+  }
 
-  return JsonValueSchema.parse(
-    Object.entries(c.result).find(([k]) => k === key)?.[1] ?? null,
-  );
+  return Object.entries(c.result).find(([k]) => k === key)?.[1] ?? null;
 }
 
 function compare(n: number, op: string) {
@@ -77,13 +79,25 @@ function compare(n: number, op: string) {
 }
 
 function checkDepth(c: Condition, depth = 0): void {
-  if (depth > 24) throw new Error("Condition depth exceeds 24");
+  if (depth > 24) {
+    throw new Error("Condition depth exceeds 24");
+  }
 
-  if ("all" in c) c.all.forEach((x) => checkDepth(x, depth + 1));
+  if ("all" in c) {
+    for (const child of c.all) {
+      checkDepth(child, depth + 1);
+    }
+  }
 
-  if ("any" in c) c.any.forEach((x) => checkDepth(x, depth + 1));
+  if ("any" in c) {
+    for (const child of c.any) {
+      checkDepth(child, depth + 1);
+    }
+  }
 
-  if ("not" in c) checkDepth(c.not, depth + 1);
+  if ("not" in c) {
+    checkDepth(c.not, depth + 1);
+  }
 }
 
 type EngineCondition = Condition & { priority: number };
@@ -91,19 +105,23 @@ type EngineCondition = Condition & { priority: number };
 // Unique sibling priorities preserve left-to-right short-circuiting. The engine
 // otherwise evaluates siblings at the same priority concurrently.
 function engineCondition(c: Condition, priority = 1): EngineCondition {
-  if ("all" in c)
+  if ("all" in c) {
     return {
       all: c.all.map((x, i) => engineCondition(x, c.all.length - i)),
       priority,
     };
+  }
 
-  if ("any" in c)
+  if ("any" in c) {
     return {
       any: c.any.map((x, i) => engineCondition(x, c.any.length - i)),
       priority,
     };
+  }
 
-  if ("not" in c) return { not: engineCondition(c.not), priority };
+  if ("not" in c) {
+    return { not: engineCondition(c.not), priority };
+  }
 
   return { ...c, priority };
 }
@@ -140,16 +158,27 @@ function operators(engine: Engine) {
     (x: JsonValue, v: { op: string; value: string }) => {
       const d = day(x);
 
-      return compare(d < v.value ? -1 : d > v.value ? 1 : 0, v.op);
+      let order = 0;
+
+      if (d < v.value) {
+        order = -1;
+      } else if (d > v.value) {
+        order = 1;
+      }
+
+      return compare(order, v.op);
     },
   );
 }
 
 export function compileRules(input: unknown) {
-  const doc = RulesSchema.parse(input);
+  return compileValidatedRules(RulesSchema.parse(input));
+}
 
-  if (JSON.stringify(doc).length > 1048576)
+export function compileValidatedRules(doc: Rules) {
+  if (JSON.stringify(doc).length > 1048576) {
     throw new Error("Rules exceed 1 MiB");
+  }
 
   const groups = new Map(doc.groups.map((g) => [g.id, g])),
     cats = new Map(doc.categories.map((c) => [c.id, c])),
@@ -158,24 +187,32 @@ export function compileRules(input: unknown) {
   const othersFound = doc.groups.find((g) => g.name === "Outros"),
     uncategorizedFound = doc.categories.find((c) => c.name === "Sem categoria");
 
-  if (!othersFound || !uncategorizedFound)
+  if (!othersFound || !uncategorizedFound) {
     throw new Error("Catalog requires Outros and Sem categoria");
+  }
 
   const others = othersFound,
     uncategorized = uncategorizedFound;
 
-  if (groups.size !== doc.groups.length || cats.size !== doc.categories.length)
+  if (
+    groups.size !== doc.groups.length ||
+    cats.size !== doc.categories.length
+  ) {
     throw new Error("Duplicate catalog id");
+  }
 
   for (const cat of doc.categories) {
-    if (!groups.has(cat.group_id)) throw new Error(`Unknown group: ${cat.id}`);
+    if (!groups.has(cat.group_id)) {
+      throw new Error(`Unknown group: ${cat.id}`);
+    }
 
     for (const alias of [cat.name, ...cat.aliases]) {
       if (
         !alias.trim() ||
         (aliases.has(alias) && aliases.get(alias) !== cat.id)
-      )
+      ) {
         throw new Error(`Ambiguous alias: ${alias}`);
+      }
       aliases.set(alias, cat.id);
     }
   }
@@ -184,23 +221,29 @@ export function compileRules(input: unknown) {
 
   const rules = doc.rules
     .map((r) => {
-      if (ids.has(r.id)) throw new Error(`Duplicate rule: ${r.id}`);
+      if (ids.has(r.id)) {
+        throw new Error(`Duplicate rule: ${r.id}`);
+      }
       ids.add(r.id);
 
       for (const a of r.event.params.actions) {
-        if ((a.op === "set_category") !== (r.event.type === "classify"))
+        if ((a.op === "set_category") !== (r.event.type === "classify")) {
           throw new Error(`Invalid phase: ${r.id}`);
+        }
 
-        if (a.op === "set_category" && !cats.has(a.value))
+        if (a.op === "set_category" && !cats.has(a.value)) {
           throw new Error(`Unknown category: ${r.id}`);
+        }
 
-        if (a.op === "set_description")
+        if (a.op === "set_description") {
           for (const m of a.value.matchAll(/\{\{\s*([^}]+?)\s*\}\}/g)) {
             const field = m[1];
 
-            if (!field || !fields.has(field) || !field.startsWith("tx."))
+            if (!field || !fields.has(field) || !field.startsWith("tx.")) {
               throw new Error(`Invalid template: ${r.id}`);
+            }
           }
+        }
       }
 
       checkDepth(r.conditions);
@@ -211,8 +254,6 @@ export function compileRules(input: unknown) {
     .sort((a, b) => a.priority - b.priority);
 
   async function evaluate(tx: TransactionContext): Promise<Derived> {
-    tx = TransactionContextSchema.parse(tx);
-
     const result: Derived = {
       category_id: "",
       category: tx.original_category,
@@ -227,10 +268,14 @@ export function compileRules(input: unknown) {
     function setCategory(id: string) {
       const cat = cats.get(id);
 
-      if (!cat) throw new Error("Unknown category");
+      if (!cat) {
+        throw new Error("Unknown category");
+      }
       const group = groups.get(cat.group_id);
 
-      if (!group) throw new Error("Unknown group");
+      if (!group) {
+        throw new Error("Unknown group");
+      }
       Object.assign(result, {
         category_id: id,
         category: cat.name,
@@ -243,7 +288,9 @@ export function compileRules(input: unknown) {
       ? aliases.get(tx.original_category)
       : uncategorized.id;
 
-    if (initial) setCategory(initial);
+    if (initial) {
+      setCategory(initial);
+    }
 
     let categorySet = false,
       descriptionSet = false;
@@ -252,10 +299,11 @@ export function compileRules(input: unknown) {
       const engine = new Engine();
       operators(engine);
 
-      for (const field of fields)
+      for (const field of fields) {
         engine.addFact(field, () => lookup({ tx, result }, field), {
           cache: false,
         });
+      }
 
       const ordered = rules.filter(
         (rule) => rule.is_active && rule.event.type === phase,
@@ -263,16 +311,23 @@ export function compileRules(input: unknown) {
 
       for (const [index, rule] of ordered.entries()) {
         function tagFacts(c: Condition): void {
-          if ("fact" in c && !fields.has(c.fact))
+          if ("fact" in c && !fields.has(c.fact)) {
             engine.addFact(c.fact, () => lookup({ tx, result }, c.fact), {
               cache: false,
             });
+          }
 
-          if ("all" in c) c.all.forEach(tagFacts);
+          if ("all" in c) {
+            c.all.forEach(tagFacts);
+          }
 
-          if ("any" in c) c.any.forEach(tagFacts);
+          if ("any" in c) {
+            c.any.forEach(tagFacts);
+          }
 
-          if ("not" in c) tagFacts(c.not);
+          if ("not" in c) {
+            tagFacts(c.not);
+          }
         }
 
         tagFacts(rule.conditions);
@@ -283,33 +338,43 @@ export function compileRules(input: unknown) {
           onSuccess: () => {
             for (const action of rule.event.params.actions) {
               if (action.op === "set_category") {
-                if (categorySet) continue;
+                if (categorySet) {
+                  continue;
+                }
                 setCategory(action.value);
                 categorySet = true;
               }
 
               if (action.op === "set_description") {
-                if (descriptionSet) continue;
-                let missing = false;
+                if (descriptionSet) {
+                  continue;
+                }
+                const missing: string[] = [];
 
                 const text = action.value.replace(
                   /\{\{\s*([^}]+?)\s*\}\}/g,
                   (_, p: string) => {
                     const x = lookup({ tx, result }, p);
 
-                    if (typeof x !== "string" || !x.trim()) missing = true;
+                    if (typeof x !== "string" || !x.trim()) {
+                      missing.push(p);
+                    }
 
                     return typeof x === "string" ? x : "";
                   },
                 );
 
-                if (missing) continue;
+                if (missing.length) {
+                  continue;
+                }
                 result.description = text;
                 descriptionSet = true;
               }
 
               if (action.op === "set_tag") {
-                if (Object.hasOwn(result.tags, action.key)) continue;
+                if (Object.hasOwn(result.tags, action.key)) {
+                  continue;
+                }
                 Object.defineProperty(result.tags, action.key, {
                   value: action.value,
                   enumerable: true,
@@ -318,11 +383,15 @@ export function compileRules(input: unknown) {
                 });
               }
 
-              if (action.op === "ignore") result.ignored = true;
+              if (action.op === "ignore") {
+                result.ignored = true;
+              }
               result.evidence.push({ ruleId: rule.id, action });
             }
 
-            if (phase === "classify" && categorySet) engine.stop();
+            if (phase === "classify" && categorySet) {
+              engine.stop();
+            }
           },
         });
       }
@@ -350,16 +419,22 @@ export const EMPTY_RULES: Rules = {
   rules: [],
 };
 
-export function txContext(record: unknown) {
-  const r = FinanceRecordSchema.parse(record);
+export function txContext(r: FinanceRecord): TransactionContext {
+  const text = (k: string) => {
+    const value = r[k];
 
-  const text = (k: string) =>
-    String(
-      z.union([z.string(), z.number(), z.boolean()]).nullish().parse(r[k]) ??
-        "",
-    );
+    if (value === null || value === undefined) {
+      return "";
+    }
 
-  return TransactionContextSchema.parse({
+    if (typeof value === "object") {
+      throw new Error("INVALID_RULE_FIELD");
+    }
+
+    return String(value);
+  };
+
+  return {
     id: r.id,
     account_id: text("accountId"),
     account_name: text("accountName"),
@@ -376,5 +451,5 @@ export function txContext(record: unknown) {
     date: text("accountingDate"),
     installment_number: text("creditCardMetadata.installmentNumber"),
     total_installments: text("creditCardMetadata.totalInstallments"),
-  });
+  };
 }

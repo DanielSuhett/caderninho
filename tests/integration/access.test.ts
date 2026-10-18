@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 
-import { applyD1Migrations, reset } from "cloudflare:test";
-import { env as bindings } from "cloudflare:workers";
 import { beforeEach, test } from "vitest";
 import { z } from "zod/v4";
 
 import { AccountResponseSchema } from "#contracts/portal-contract.ts";
 import { required } from "#testing/helpers.ts";
+import { database } from "#worker/database.ts";
+import { portal_sessions } from "#worker/schema.ts";
 
 import {
   command,
@@ -17,6 +17,8 @@ import {
   password,
   settings,
 } from "./personal-fixture.ts";
+import { applyD1Migrations, reset } from "cloudflare:test";
+import { env as bindings } from "cloudflare:workers";
 
 beforeEach(async () => {
   await reset();
@@ -78,7 +80,7 @@ async function grant(
   const approved = await app.request("/authorize", {
     method: "POST",
     headers: {
-      Cookie: ownerCookie + "; " + cookies(consent),
+      Cookie: `${ownerCookie}; ${cookies(consent)}`,
       Origin: origin,
       "Content-Type": "application/x-www-form-urlencoded",
     },
@@ -116,16 +118,18 @@ test("only the password opens private routes; missing configuration fails closed
   const cookie = cookies(authenticated);
   assert.match(cookie, /__Host-caderninho=/);
   const flags = authenticated.headers.getSetCookie().join(";");
-  for (const flag of ["HttpOnly", "Secure", "SameSite=Lax"])
+  for (const flag of ["HttpOnly", "Secure", "SameSite=Lax"]) {
     assert.ok(flags.includes(flag));
+  }
   const state = AccountResponseSchema.parse(
     await (
       await app.request("/api/account", { headers: { Cookie: cookie } })
     ).json(),
   );
   assert.equal(state.status.credentials, true);
-  for (const secret of [password, "synthetic-secret", "synthetic-client"])
+  for (const secret of [password, "synthetic-secret", "synthetic-client"]) {
     assert.ok(!JSON.stringify(state).includes(secret));
+  }
   const absent = settings();
   delete absent.ADMIN_PASSWORD;
   assert.equal((await fixture(absent).request("/account/login")).status, 503);
@@ -155,8 +159,9 @@ test("login rate limit, CSRF and request origin cannot be bypassed by identity h
     body: new URLSearchParams({ password }),
   });
   assert.equal(missingCsrf.status, 403);
-  for (let i = 0; i < 10; i++)
+  for (let i = 0; i < 10; i++) {
     assert.equal((await login(app, "wrong-synthetic-password")).status, 401);
+  }
   const limited = await login(app);
   assert.equal(limited.status, 429);
   assert.equal(limited.headers.get("Retry-After"), "60");
@@ -181,7 +186,7 @@ test("private commands require CSRF; logout, expiry and a new deployment invalid
     401,
   );
   const expired = cookies(await login(app));
-  await bindings.DB.exec("UPDATE portal_sessions SET expires=0");
+  await database(bindings.DB).update(portal_sessions).set({ expires: 0 });
   assert.equal(
     (await app.request("/api/account", { headers: { Cookie: expired } }))
       .status,
@@ -205,7 +210,7 @@ test("official OAuth authorizes assistants and the owner can revoke every grant"
   const first = await grant(app, cookie, "<script>synthetic</script>");
   const second = await grant(app, cookie);
   const use = (token: string) =>
-    app.request("/mcp", { headers: { Authorization: "Bearer " + token } });
+    app.request("/mcp", { headers: { Authorization: `Bearer ${token}` } });
   assert.equal((await use(first)).status, 200);
   assert.equal((await use(second)).status, 200);
   assert.equal(

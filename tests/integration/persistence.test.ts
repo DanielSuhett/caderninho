@@ -1,45 +1,52 @@
 import assert from "node:assert/strict";
 
 import type { D1Migration } from "@cloudflare/vitest-plugin";
-import { applyD1Migrations, reset } from "cloudflare:test";
-import { env as bindings } from "cloudflare:workers";
-import { test, beforeEach, afterEach, vi } from "vitest";
+import { and, count, countDistinct, eq, sql } from "drizzle-orm";
+import type { BatchItem } from "drizzle-orm/batch";
+import { afterEach, beforeEach, test, vi } from "vitest";
 import { z } from "zod/v4";
 
 import type { OperationInput } from "#contracts/operation.ts";
-import { FilterSchema, type Identity } from "#contracts/queries.ts";
+import type { Identity } from "#contracts/queries.ts";
+import type { Filter } from "#domain/filter.ts";
 import { convertPredicate } from "#domain/rules/convert-rules.ts";
 import { importRules } from "#domain/rules/import-rules.ts";
 import {
-  RuleSchema,
   compileRules,
   EMPTY_RULES,
+  type Rule,
   txContext,
 } from "#domain/rules/rules.ts";
 import type { ProviderRecord } from "#domain/schemas.ts";
 import type { JsonValue } from "#shared/json.ts";
 import { required, responseJson } from "#testing/helpers.ts";
 import { mockNetwork } from "#testing/network.ts";
-import type { Bindings, DurableInstance } from "#worker/bindings.ts";
+import type { DurableInstance } from "#worker/bindings.ts";
 import {
-  syncService,
   financialQueries,
   synchronizationDependencies,
+  syncService,
 } from "#worker/composition.ts";
+import { database } from "#worker/database.ts";
 import {
-  prepareEntity,
   override,
+  prepareEntity,
 } from "#worker/finance/entities.repository.ts";
 import {
+  aggregateEntities,
   moneyKey,
   queryEntities,
-  aggregateEntities,
 } from "#worker/finance/repository.ts";
-import { saveRules, rulesFor } from "#worker/finance/rules.repository.ts";
+import { rulesFor, saveRules } from "#worker/finance/rules.repository.ts";
 import { fetchMcp } from "#worker/mcp/controller.ts";
 import { task } from "#worker/mcp/tasks.ts";
-import { startOperation, getOperation } from "#worker/sync/repository.ts";
+import * as tables from "#worker/schema.ts";
+import { getOperation, startOperation } from "#worker/sync/repository.ts";
 import { type FinancialSource, runOperation } from "#worker/sync/service.ts";
+
+import { settings } from "./personal-fixture.ts";
+import { applyD1Migrations, reset } from "cloudflare:test";
+import { env as bindings } from "cloudflare:workers";
 
 declare global {
   namespace Cloudflare {
@@ -59,16 +66,16 @@ afterEach(() => vi.unstubAllGlobals());
 test("D1 queries, local corrections and task progress remain available without Pluggy credentials", async () => {
   const { db, op } = await setup();
   const engine = await rulesFor(db, op.rules_revision);
-  await db.batch(
+  await commit(
+    db,
     (
-      await prepareEntity(
-        db,
-        identity("offline"),
-        transaction("offline"),
-        account,
-        op,
-        engine,
-      )
+      await prepareEntity(db, {
+        identity: identity("offline"),
+        source: transaction("offline"),
+        parent: account,
+        operation: op,
+        engine: engine,
+      })
     ).statements,
   );
   let upstream = 0;
@@ -88,9 +95,12 @@ test("D1 queries, local corrections and task progress remain available without P
     "1001",
   );
   const reference = identity("offline");
-  const before = await db
-    .prepare("SELECT revision FROM settings WHERE id=1")
-    .first("revision");
+  const before = await database(db)
+    .select({ revision: tables.settings.revision })
+    .from(tables.settings)
+    .where(and(eq(tables.settings.id, 1)))
+    .get()
+    .then((row) => row?.revision ?? null);
   await queries.correctRecord({
     ...reference,
     field: "description",
@@ -106,9 +116,12 @@ test("D1 queries, local corrections and task progress remain available without P
   assert.equal(explanation.record?.effective_description, "Correção local");
   assert.equal(explanation.tags[0]?.origin, "manual");
   assert.equal(
-    await db
-      .prepare("SELECT revision FROM settings WHERE id=1")
-      .first("revision"),
+    await database(db)
+      .select({ revision: tables.settings.revision })
+      .from(tables.settings)
+      .where(and(eq(tables.settings.id, 1)))
+      .get()
+      .then((row) => row?.revision ?? null),
     Number(before) + 2,
   );
   const publicTask = await task(env(db), op.id);
@@ -118,8 +131,9 @@ test("D1 queries, local corrections and task progress remain available without P
     "cancel_requested",
     "dispatched",
     "synthetic-secret",
-  ])
+  ]) {
     assert.ok(!JSON.stringify(publicTask).includes(field));
+  }
   await assert.rejects(
     financialQueries(env(db)).correctRecord({
       ...reference,
@@ -161,9 +175,13 @@ const transaction = (id: string, extra: Partial<ProviderRecord> = {}) => ({
 });
 async function setup() {
   const db = bindings.DB;
-  await db.exec(
-    `INSERT INTO items VALUES('item','["accounts","transactions"]',1);`,
-  );
+  await database(db)
+    .insert(tables.items)
+    .values({
+      id: "item",
+      resources: ["accounts", "transactions"],
+      enabled: 1,
+    });
   const op = await startOperation(db, "first", {
     kind: "sync",
     itemIds: ["item"],
@@ -177,51 +195,59 @@ const identity = (id: string): Identity => ({
   id,
 });
 function steps() {
-  const saved = new Map<string, unknown>();
+  // Exercise replay through the D1 receipts, without an untyped checkpoint cache.
   return {
     async do<T extends Rpc.Serializable<T>>(
-      k: string,
-      f: () => Promise<T>,
+      _name: string,
+      callback: () => Promise<T>,
     ): Promise<T> {
-      if (saved.has(k)) {
-        // Only the result of this checkpoint callback is stored under its stable key.
-        return saved.get(k) as T;
-      }
-      const r = await f();
-      saved.set(k, r);
-      return r;
+      return callback();
     },
     async sleep() {},
-    saved,
   };
 }
+
+test("disposing polling while a reader waits wakes it with a terminal result", async () => {
+  const { pollingEvents } = await import("#worker/mcp/tasks.ts");
+  const events = pollingEvents(60000);
+  const pending = events.next();
+  events[Symbol.dispose]();
+  assert.deepEqual(await pending, { done: true });
+  assert.deepEqual(await events.next(), { done: true });
+});
+
 function providerFixture() {
   let count = 0;
   const calls: {
-    resource: Parameters<FinancialSource["page"]>[0];
+    resource: Parameters<FinancialSource["page"]>[0]["resource"];
     parent: string | null;
     cursor: string | null;
     floor: string | null;
   }[] = [];
   return {
     calls,
-    async page(
-      ...[resource, , parent, cursor, floor]: Parameters<
-        FinancialSource["page"]
-      >
-    ) {
+    async page({
+      resource,
+      parent,
+      cursor,
+      floor,
+    }: Parameters<FinancialSource["page"]>[0]) {
       calls.push({ resource, parent, cursor, floor });
-      if (resource === "accounts") return { records: [account], next: null };
+      if (resource === "accounts") {
+        return { records: [account], next: null };
+      }
       count++;
-      if (!floor && cursor === null)
+      if (!floor && cursor === null) {
         return { records: [transaction("old")], next: "two" };
-      if (!floor)
+      }
+      if (!floor) {
         return {
           records: [
             transaction("backdated", { createdAt: "2026-10-02T00:00:00.000Z" }),
           ],
           next: null,
         };
+      }
       return {
         records: [
           transaction("backdated", { createdAt: "2026-10-02T00:00:00.000Z" }),
@@ -246,18 +272,18 @@ function instance(id: string): DurableInstance {
   };
 }
 // Synthetic binding boundary: these unit tests exercise DB and FINANCE; runtime tests separately verify rejection of forged OAuth identity headers.
-const env = (db: D1Database) =>
-  ({
-    DB: db,
-    FINANCE: {
-      async create({ id }: { id: string }) {
-        return instance(id);
-      },
-      async get(id: string) {
-        return instance(id);
-      },
+const env = (db: D1Database) => ({
+  ...settings(),
+  DB: db,
+  FINANCE: {
+    async create({ id }: { id: string }) {
+      return instance(id);
     },
-  }) as Bindings;
+    async get(id: string) {
+      return instance(id);
+    },
+  },
+});
 
 test("bootstrap all pages, incremental floor excludes old history and classifies zero unchanged records", async () => {
   const { db, op } = await setup(),
@@ -270,17 +296,18 @@ test("bootstrap all pages, incremental floor excludes old history and classifies
   );
   assert.equal(
     required(
-      await db
-        .prepare(
-          "SELECT COUNT(*) n FROM entities WHERE resource='transactions'",
-        )
-        .first(),
+      await database(db)
+        .select({ n: count() })
+        .from(tables.entities)
+        .where(and(eq(tables.entities.resource, "transactions")))
+        .get()
+        .then((row) => row ?? null),
     ).n,
     2,
   );
   const first = await getOperation(db, op.id);
   assert.equal(first.status, "completed");
-  assert.equal(JSON.parse(first.progress).classified, 2);
+  assert.equal(first.progress.classified, 2);
   const next = await startOperation(db, "second", {
     kind: "sync",
     itemIds: ["item"],
@@ -293,18 +320,19 @@ test("bootstrap all pages, incremental floor excludes old history and classifies
     source,
   );
   const second = await getOperation(db, next.id);
-  assert.equal(JSON.parse(second.progress).classified, 0);
+  assert.equal(second.progress.classified, 0);
   assert.equal(
     required(source.calls.find((c) => c.resource === "transactions")).floor,
     "2026-10-02T00:00:00.000Z",
   );
   assert.equal(
     required(
-      await db
-        .prepare(
-          "SELECT COUNT(*) n FROM entities WHERE resource='transactions'",
-        )
-        .first(),
+      await database(db)
+        .select({ n: count() })
+        .from(tables.entities)
+        .where(and(eq(tables.entities.resource, "transactions")))
+        .get()
+        .then((row) => row ?? null),
     ).n,
     2,
   );
@@ -340,10 +368,12 @@ test("idempotent operation, unknown Items denied and dispatch response loss reco
   assert.equal(creates, 1);
   assert.equal(
     required(
-      await db
-        .prepare("SELECT dispatched FROM operations WHERE id=?")
-        .bind(op.id)
-        .first(),
+      await database(db)
+        .select({ dispatched: tables.operations.dispatched })
+        .from(tables.operations)
+        .where(and(eq(tables.operations.id, op.id)))
+        .get()
+        .then((row) => row ?? null),
     ).dispatched,
     1,
   );
@@ -428,28 +458,26 @@ test("manual override survives sync, rule version changes and exact SQL aggregat
   const { db, op } = await setup(),
     engine = await rulesFor(db, op.rules_revision),
     i = identity("huge");
-  let p = await prepareEntity(
-    db,
-    i,
-    transaction("huge", { amount: "-9007199254740993.01" }),
-    account,
-    op,
-    engine,
-  );
-  await db.batch(p.statements);
+  let p = await prepareEntity(db, {
+    identity: i,
+    source: transaction("huge", { amount: "-9007199254740993.01" }),
+    parent: account,
+    operation: op,
+    engine: engine,
+  });
+  await commit(db, p.statements);
   await override(db, i, "description", "Manual");
-  p = await prepareEntity(
-    db,
-    i,
-    transaction("huge", {
+  p = await prepareEntity(db, {
+    identity: i,
+    source: transaction("huge", {
       description: "Changed",
       amount: "-9007199254740993.02",
     }),
-    account,
-    op,
-    engine,
-  );
-  await db.batch(p.statements);
+    parent: account,
+    operation: op,
+    engine: engine,
+  });
+  await commit(db, p.statements);
   const query = await queryEntities(db, {});
   assert.equal(required(query.records[0]).effective_description, "Manual");
   assert.equal(
@@ -469,17 +497,16 @@ test("manual override survives sync, rule version changes and exact SQL aggregat
     }),
   );
   await saveRules(db, rules, true);
-  const unchanged = await prepareEntity(
-    db,
-    i,
-    transaction("huge", {
+  const unchanged = await prepareEntity(db, {
+    identity: i,
+    source: transaction("huge", {
       description: "Changed",
       amount: "-9007199254740993.02",
     }),
-    account,
-    op,
-    engine,
-  );
+    parent: account,
+    operation: op,
+    engine: engine,
+  });
   assert.equal(unchanged.classified, 0);
   await override(db, i, "description", null);
   assert.equal(
@@ -493,20 +520,21 @@ test("filters select exact amounts, composition and revision rejects stale pagin
   for (const [id, amount] of [
     ["a", "-10.01"],
     ["b", "-20.02"],
-  ] as const)
-    await db.batch(
+  ] as const) {
+    await commit(
+      db,
       (
-        await prepareEntity(
-          db,
-          identity(id),
-          transaction(id, { amount }),
-          account,
-          op,
-          engine,
-        )
+        await prepareEntity(db, {
+          identity: identity(id),
+          source: transaction(id, { amount }),
+          parent: account,
+          operation: op,
+          engine: engine,
+        })
       ).statements,
     );
-  const filter = {
+  }
+  const filter: Filter = {
     and: [
       { field: "amountMinor", op: "lte", value: "-2000" },
       { field: "currency", op: "eq", value: "BRL" },
@@ -620,19 +648,20 @@ test("modern Tasks wire rejects absent capability, returns flat durable handle a
 test("reapply freezes selection even when its filter changes and preserves manual overrides", async () => {
   const { db, op } = await setup(),
     engine = await rulesFor(db, op.rules_revision);
-  for (let n = 0; n < 43; n++)
-    await db.batch(
+  for (let n = 0; n < 43; n++) {
+    await commit(
+      db,
       (
-        await prepareEntity(
-          db,
-          identity("r" + n),
-          transaction("r" + n),
-          account,
-          op,
-          engine,
-        )
+        await prepareEntity(db, {
+          identity: identity(`r${n}`),
+          source: transaction(`r${n}`),
+          parent: account,
+          operation: op,
+          engine: engine,
+        })
       ).statements,
     );
+  }
   await override(db, identity("r0"), "description", "Manual");
   const rules = structuredClone(EMPTY_RULES);
   rules.rules.push(
@@ -660,72 +689,74 @@ test("reapply freezes selection even when its filter changes and preserves manua
   );
   assert.equal(
     required(
-      await db
-        .prepare("SELECT COUNT(*) n FROM derived WHERE description='Changed'")
-        .first(),
+      await database(db)
+        .select({ n: count() })
+        .from(tables.derived)
+        .where(and(eq(tables.derived.description, "Changed")))
+        .get()
+        .then((row) => row ?? null),
     ).n,
     43,
   );
   assert.equal(
     required(
-      await db
-        .prepare(
-          "SELECT effective_description FROM effective_entities WHERE id='r0'",
-        )
-        .first(),
+      await database(db)
+        .select({
+          effective_description:
+            tables.effective_entities.effective_description,
+        })
+        .from(tables.effective_entities)
+        .where(and(eq(tables.effective_entities.id, "r0")))
+        .get()
+        .then((row) => row ?? null),
     ).effective_description,
     "Manual",
   );
-  assert.equal(
-    JSON.parse((await getOperation(db, run.id)).progress).classified,
-    43,
-  );
+  assert.equal((await getOperation(db, run.id)).progress.classified, 43);
 });
 test("updated/deleted webhooks resolve current state, delayed deletion does not erase reappearance", async () => {
   const { db, op } = await setup(),
     engine = await rulesFor(db, op.rules_revision);
-  await db.batch(
+  await commit(
+    db,
     (
-      await prepareEntity(
-        db,
-        {
+      await prepareEntity(db, {
+        identity: {
           itemId: "item",
           resource: "accounts",
           parentId: "",
           id: "account",
         },
-        account,
-        null,
-        op,
-        engine,
-      )
+        source: account,
+        parent: null,
+        operation: op,
+        engine: engine,
+      })
     ).statements,
   );
-  await db.batch(
+  await commit(
+    db,
     (
-      await prepareEntity(
-        db,
-        identity("t"),
-        transaction("t", { status: "PENDING" }),
-        account,
-        op,
-        engine,
-      )
+      await prepareEntity(db, {
+        identity: identity("t"),
+        source: transaction("t", { status: "PENDING" }),
+        parent: account,
+        operation: op,
+        engine: engine,
+      })
     ).statements,
   );
   async function event(key: string, records: ProviderRecord[]) {
-    await db
-      .prepare(
-        "INSERT INTO inbox(event_id,item_id,account_id,event,payload,received_at) VALUES(?,?,?,?,?,?)",
-      )
-      .bind(
-        key,
-        "item",
-        "account",
-        "transactions/deleted",
-        JSON.stringify({ transactionIds: ["t"] }),
-        new Date().toISOString(),
-      )
+    await database(db)
+      .insert(tables.inbox)
+      .values({
+        event_id: key,
+        item_id: "item",
+        account_id: "account",
+        event: "transactions/deleted",
+        payload: { transactionIds: ["t"] },
+        received_at: new Date().toISOString(),
+      })
       .run();
     const o = await startOperation(db, key, {
       kind: "webhook",
@@ -744,21 +775,37 @@ test("updated/deleted webhooks resolve current state, delayed deletion does not 
   ]);
   assert.equal(
     required(
-      await db.prepare("SELECT status FROM entities WHERE id='t'").first(),
+      await database(db)
+        .select({ status: tables.entities.status })
+        .from(tables.entities)
+        .where(and(eq(tables.entities.id, "t")))
+        .get()
+        .then((row) => row ?? null),
     ).status,
     "POSTED",
   );
   await event("deleted", []);
   assert.equal(
     required(
-      await db.prepare("SELECT deleted FROM entities WHERE id='t'").first(),
+      await database(db)
+        .select({ deleted: tables.entities.deleted })
+        .from(tables.entities)
+        .where(and(eq(tables.entities.id, "t")))
+        .get()
+        .then((row) => row ?? null),
     ).deleted,
     1,
   );
   await event("late-delete", [transaction("t", { description: "Reappeared" })]);
-  const current = await db
-    .prepare("SELECT deleted,original_description FROM entities WHERE id='t'")
-    .first();
+  const current = await database(db)
+    .select({
+      deleted: tables.entities.deleted,
+      original_description: tables.entities.original_description,
+    })
+    .from(tables.entities)
+    .where(and(eq(tables.entities.id, "t")))
+    .get()
+    .then((row) => row ?? null);
   assert.equal(required(current).deleted, 0);
   assert.equal(required(current).original_description, "Reappeared");
 });
@@ -766,18 +813,27 @@ test("future matures once without rule evaluation; cancellation preserves prior 
   const { db, op } = await setup(),
     engine = await rulesFor(db, op.rules_revision);
   const future = transaction("future", { date: "2099-01-01T00:00:00.000Z" });
-  await db.batch(
-    (await prepareEntity(db, identity("future"), future, account, op, engine))
-      .statements,
+  await commit(
+    db,
+    (
+      await prepareEntity(db, {
+        identity: identity("future"),
+        source: future,
+        parent: account,
+        operation: op,
+        engine: engine,
+      })
+    ).statements,
   );
   const run = await startOperation(db, "mature", {
     kind: "reapply",
     itemIds: ["item"],
     filter: { field: "account", op: "eq", value: "nonexistent" },
   });
-  await db
-    .prepare("UPDATE operations SET reference_day=? WHERE id=?")
-    .bind("2099-01-02", run.id)
+  await database(db)
+    .update(tables.operations)
+    .set({ reference_day: "2099-01-02" })
+    .where(eq(tables.operations.id, run.id))
     .run();
   await runOperation(
     synchronizationDependencies(env(db)),
@@ -787,23 +843,24 @@ test("future matures once without rule evaluation; cancellation preserves prior 
   );
   assert.equal(
     required(
-      await db
-        .prepare("SELECT eligible FROM entities WHERE id='future'")
-        .first(),
+      await database(db)
+        .select({ eligible: tables.entities.eligible })
+        .from(tables.entities)
+        .where(and(eq(tables.entities.id, "future")))
+        .get()
+        .then((row) => row ?? null),
     ).eligible,
     1,
   );
-  assert.equal(
-    JSON.parse((await getOperation(db, run.id)).progress).classified,
-    0,
-  );
+  assert.equal((await getOperation(db, run.id)).progress.classified, 0);
   const cancelled = await startOperation(db, "cancelled", {
     kind: "sync",
     itemIds: ["item"],
   });
-  await db
-    .prepare("UPDATE operations SET cancel_requested=1 WHERE id=?")
-    .bind(cancelled.id)
+  await database(db)
+    .update(tables.operations)
+    .set({ cancel_requested: 1 })
+    .where(eq(tables.operations.id, cancelled.id))
     .run();
   await runOperation(
     synchronizationDependencies(env(db)),
@@ -814,9 +871,12 @@ test("future matures once without rule evaluation; cancellation preserves prior 
   assert.equal((await getOperation(db, cancelled.id)).status, "cancelled");
   assert.equal(
     required(
-      await db
-        .prepare("SELECT COUNT(*) n FROM entities WHERE id='future'")
-        .first(),
+      await database(db)
+        .select({ n: count() })
+        .from(tables.entities)
+        .where(and(eq(tables.entities.id, "future")))
+        .get()
+        .then((row) => row ?? null),
     ).n,
     1,
   );
@@ -827,7 +887,7 @@ test("page commit is replay-safe when Workflow loses the step acknowledgement", 
     base = steps();
   let replayed = false;
   const durable = {
-    ...base,
+    sleep: base.sleep,
     async do<T extends Rpc.Serializable<T>>(
       name: string,
       fn: () => Promise<T>,
@@ -847,17 +907,15 @@ test("page commit is replay-safe when Workflow loses the step acknowledgement", 
     durable,
     source,
   );
-  assert.equal(
-    JSON.parse((await getOperation(db, op.id)).progress).classified,
-    2,
-  );
+  assert.equal((await getOperation(db, op.id)).progress.classified, 2);
   assert.equal(
     required(
-      await db
-        .prepare(
-          "SELECT COUNT(*) n FROM entities WHERE resource='transactions'",
-        )
-        .first(),
+      await database(db)
+        .select({ n: count() })
+        .from(tables.entities)
+        .where(and(eq(tables.entities.resource, "transactions")))
+        .get()
+        .then((row) => row ?? null),
     ).n,
     2,
   );
@@ -875,11 +933,12 @@ test("provider Retry-After waits between durable steps and propagates other tran
   let calls = 0;
   assert.equal(
     await wrapped.do("page", async () => {
-      if (calls++ === 0)
+      if (calls++ === 0) {
         throw Object.assign(new Error("rate"), {
           code: "UPSTREAM_RATE_LIMIT",
           details: { retryAfterSeconds: 90 },
         });
+      }
       return 42;
     }),
     42,
@@ -896,35 +955,43 @@ test("provider Retry-After waits between durable steps and propagates other tran
 test("bootstrap retains every supported resource and both account/investment parents", async () => {
   const { RESOURCES } = await import("#domain/finance-model.ts");
   const { db, op } = await setup();
-  await db
-    .prepare("UPDATE items SET resources=? WHERE id='item'")
-    .bind(JSON.stringify(RESOURCES))
+  await database(db)
+    .update(tables.items)
+    .set({ resources: RESOURCES })
+    .where(eq(tables.items.id, "item"))
     .run();
   const calls: [
-    Parameters<FinancialSource["page"]>[0],
+    Parameters<FinancialSource["page"]>[0]["resource"],
     string | null,
     string | null,
   ][] = [];
   const provider = {
-    async page(
-      ...[resource, , parent, cursor]: Parameters<FinancialSource["page"]>
-    ) {
+    async page({
+      resource,
+      parent,
+      cursor,
+    }: Parameters<FinancialSource["page"]>[0]) {
       calls.push([resource, parent, cursor]);
       let records: ProviderRecord[];
-      if (resource === "connections")
+      if (resource === "connections") {
         records = [{ id: "item", connector: { id: 1, isOpenFinance: true } }];
-      else if (resource === "accounts")
+      } else if (resource === "accounts") {
         records = [account, { ...account, id: "card", type: "CREDIT" }];
-      else if (resource === "transactions")
+      } else if (resource === "transactions") {
         records = [
-          transaction(parent + "-" + (cursor ?? "one"), { accountId: parent }),
+          transaction(`${parent}-${cursor ?? "one"}`, { accountId: parent }),
         ];
-      else if (resource === "investments")
+      } else if (resource === "investments") {
         records = [{ id: "investment", currencyCode: "BRL", balance: "12" }];
-      else if (resource === "consents") records = [];
-      else if (resource === "resources") records = [{ resourceId: "r" }];
-      else if (resource === "connectors") records = [{ id: "1" }];
-      else records = [{ id: resource, currencyCode: "BRL" }];
+      } else if (resource === "consents") {
+        records = [];
+      } else if (resource === "resources") {
+        records = [{ resourceId: "r" }];
+      } else if (resource === "connectors") {
+        records = [{ id: "1" }];
+      } else {
+        records = [{ id: resource, currencyCode: "BRL" }];
+      }
       return {
         records,
         next: resource === "transactions" && !cursor ? "two" : null,
@@ -942,11 +1009,12 @@ test("bootstrap retains every supported resource and both account/investment par
   );
   assert.equal(
     required(
-      await db
-        .prepare(
-          "SELECT count(DISTINCT resource) n FROM coverage WHERE bootstrap_complete=1",
-        )
-        .first(),
+      await database(db)
+        .select({ n: countDistinct(tables.coverage.resource) })
+        .from(tables.coverage)
+        .where(and(eq(tables.coverage.bootstrap_complete, 1)))
+        .get()
+        .then((row) => row ?? null),
     ).n,
     RESOURCES.length,
   );
@@ -958,11 +1026,12 @@ test("bootstrap retains every supported resource and both account/investment par
   );
   assert.equal(
     required(
-      await db
-        .prepare(
-          "SELECT count(*) n FROM entities WHERE resource='transactions'",
-        )
-        .first(),
+      await database(db)
+        .select({ n: count() })
+        .from(tables.entities)
+        .where(and(eq(tables.entities.resource, "transactions")))
+        .get()
+        .then((row) => row ?? null),
     ).n,
     4,
   );
@@ -975,16 +1044,16 @@ test("exact metrics retain BANK/CREDIT signs and ignore manual tags without eras
     ["bank", "DEBIT", "-10", account],
     ["card", "DEBIT", "10", { ...account, type: "CREDIT" }],
   ] satisfies [string, string, string, typeof account][]) {
-    await db.batch(
+    await commit(
+      db,
       (
-        await prepareEntity(
-          db,
-          identity(id),
-          transaction(id, { type, amount }),
-          parent,
-          op,
-          engine,
-        )
+        await prepareEntity(db, {
+          identity: identity(id),
+          source: transaction(id, { type, amount }),
+          parent: parent,
+          operation: op,
+          engine: engine,
+        })
       ).statements,
     );
   }
@@ -1025,9 +1094,10 @@ test("exact metrics retain BANK/CREDIT signs and ignore manual tags without eras
 
 test("migration is replay-safe, preserves useful legacy-only history and reports overlaps", async () => {
   const { db, op } = await setup();
-  await db
-    .prepare("UPDATE operations SET status='completed' WHERE id=?")
-    .bind(op.id)
+  await database(db)
+    .update(tables.operations)
+    .set({ status: "completed" })
+    .where(eq(tables.operations.id, op.id))
     .run();
   const migration: NonNullable<
     Extract<OperationInput, { kind: "migration" }>["migration"]
@@ -1071,15 +1141,22 @@ test("migration is replay-safe, preserves useful legacy-only history and reports
   );
   assert.equal(
     required(
-      await db.prepare("SELECT count(*) n FROM migration_imports").first(),
+      await database(db)
+        .select({ n: count() })
+        .from(tables.migration_imports)
+        .get()
+        .then((row) => row ?? null),
     ).n,
     1,
   );
   assert.equal(
     required(
-      await db
-        .prepare("SELECT normalizer FROM entities WHERE id='legacy'")
-        .first(),
+      await database(db)
+        .select({ normalizer: tables.entities.normalizer })
+        .from(tables.entities)
+        .where(and(eq(tables.entities.id, "legacy")))
+        .get()
+        .then((row) => row ?? null),
     ).normalizer,
     "legacy-projection-v1",
   );
@@ -1095,9 +1172,12 @@ test("migration is replay-safe, preserves useful legacy-only history and reports
   );
   assert.equal(
     required(
-      await db
-        .prepare("SELECT deleted FROM entities WHERE id='legacy'")
-        .first(),
+      await database(db)
+        .select({ deleted: tables.entities.deleted })
+        .from(tables.entities)
+        .where(and(eq(tables.entities.id, "legacy")))
+        .get()
+        .then((row) => row ?? null),
     ).deleted,
     0,
   );
@@ -1106,19 +1186,20 @@ test("migration is replay-safe, preserves useful legacy-only history and reports
 test("preview, SQL filters and reapply select the same scoped universe; cursor cannot change filter", async () => {
   const { db, op } = await setup(),
     engine = await rulesFor(db, op.rules_revision);
-  for (let n = 0; n < 4; n++)
-    await db.batch(
+  for (let n = 0; n < 4; n++) {
+    await commit(
+      db,
       (
-        await prepareEntity(
-          db,
-          identity("p" + n),
-          transaction("p" + n, { amount: String(-n - 1) }),
-          account,
-          op,
-          engine,
-        )
+        await prepareEntity(db, {
+          identity: identity(`p${n}`),
+          source: transaction(`p${n}`, { amount: String(-n - 1) }),
+          parent: account,
+          operation: op,
+          engine: engine,
+        })
       ).statements,
     );
+  }
   const doc = structuredClone(EMPTY_RULES);
   doc.rules = [
     fixtureRule({
@@ -1132,11 +1213,11 @@ test("preview, SQL filters and reapply select the same scoped universe; cursor c
     }),
   ];
   const revision = (await saveRules(db, doc, true)).id,
-    filter = FilterSchema.parse({
+    filter = {
       field: "amountMinor",
       op: "lte",
       value: "-200",
-    });
+    } satisfies Filter;
   const { invoke } = await import("#worker/mcp/invoke.ts");
   const preview = z
     .object({ selected: z.number(), differences: z.array(z.json()) })
@@ -1170,9 +1251,12 @@ test("preview, SQL filters and reapply select the same scoped universe; cursor c
   );
   assert.equal(
     required(
-      await db
-        .prepare("SELECT count(*) n FROM derived WHERE description='Changed'")
-        .first(),
+      await database(db)
+        .select({ n: count() })
+        .from(tables.derived)
+        .where(and(eq(tables.derived.description, "Changed")))
+        .get()
+        .then((row) => row ?? null),
     ).n,
     3,
   );
@@ -1184,7 +1268,9 @@ test("transient page failure retries the same checkpoint; failed incomplete page
     original = provider.page.bind(provider);
   let attempts = 0;
   provider.page = async (...args) => {
-    if (args[3] === "two" && attempts++ === 0) throw new Error("transient");
+    if (args[0].cursor === "two" && attempts++ === 0) {
+      throw new Error("transient");
+    }
     return original(...args);
   };
   const durable = steps(),
@@ -1211,11 +1297,12 @@ test("transient page failure retries the same checkpoint; failed incomplete page
   );
   assert.equal(
     required(
-      await db
-        .prepare(
-          "SELECT bootstrap_complete FROM coverage WHERE resource='transactions'",
-        )
-        .first(),
+      await database(db)
+        .select({ bootstrap_complete: tables.coverage.bootstrap_complete })
+        .from(tables.coverage)
+        .where(and(eq(tables.coverage.resource, "transactions")))
+        .get()
+        .then((row) => row ?? null),
     ).bootstrap_complete,
     1,
   );
@@ -1225,9 +1312,11 @@ test("transient page failure retries the same checkpoint; failed incomplete page
   });
   const source = {
     ...provider,
-    async page(...[resource, ...rest]: Parameters<FinancialSource["page"]>) {
-      if (resource === "transactions") throw new Error("unavailable");
-      return original(resource, ...rest);
+    async page(input: Parameters<FinancialSource["page"]>[0]) {
+      if (input.resource === "transactions") {
+        throw new Error("unavailable");
+      }
+      return original(input);
     },
   };
   await assert.rejects(
@@ -1241,23 +1330,29 @@ test("transient page failure retries the same checkpoint; failed incomplete page
   );
   assert.equal(
     required(
-      await db
-        .prepare("SELECT status FROM coverage WHERE resource='transactions'")
-        .first(),
+      await database(db)
+        .select({ status: tables.coverage.status })
+        .from(tables.coverage)
+        .where(and(eq(tables.coverage.resource, "transactions")))
+        .get()
+        .then((row) => row ?? null),
     ).status,
     "partial",
   );
-  assert.equal(
-    JSON.parse((await getOperation(db, failed.id)).result ?? "null").isError,
-    true,
-  );
+  assert.equal((await getOperation(db, failed.id)).result?.isError, true);
   assert.equal(
     required(
-      await db
-        .prepare(
-          "SELECT count(*) n FROM entities WHERE resource='transactions' AND deleted=0",
+      await database(db)
+        .select({ n: count() })
+        .from(tables.entities)
+        .where(
+          and(
+            eq(tables.entities.resource, "transactions"),
+            eq(tables.entities.deleted, 0),
+          ),
         )
-        .first(),
+        .get()
+        .then((row) => row ?? null),
     ).n,
     2,
   );
@@ -1267,27 +1362,34 @@ test("irrelevant provider fields do not trigger rules; explicit normalization ba
   const { db, op } = await setup(),
     engine = await rulesFor(db, op.rules_revision),
     raw = transaction("stable");
-  await db.batch(
-    (await prepareEntity(db, identity("stable"), raw, account, op, engine))
-      .statements,
+  await commit(
+    db,
+    (
+      await prepareEntity(db, {
+        identity: identity("stable"),
+        source: raw,
+        parent: account,
+        operation: op,
+        engine: engine,
+      })
+    ).statements,
   );
   const next = await startOperation(db, "stable", {
     kind: "sync",
     itemIds: ["item"],
   });
-  const unchanged = await prepareEntity(
-    db,
-    identity("stable"),
-    {
+  const unchanged = await prepareEntity(db, {
+    identity: identity("stable"),
+    source: {
       ...raw,
       updatedAt: "2026-10-12T12:00:00.000Z",
       balance: "999",
       irrelevantDebugField: "different",
     },
-    account,
-    next,
-    engine,
-  );
+    parent: account,
+    operation: next,
+    engine: engine,
+  });
   assert.equal(unchanged.classified, 0);
   assert.equal(unchanged.state, "unchanged");
   const forced = await startOperation(db, "backfill", {
@@ -1296,8 +1398,15 @@ test("irrelevant provider fields do not trigger rules; explicit normalization ba
     renormalize: true,
   });
   assert.equal(
-    (await prepareEntity(db, identity("stable"), raw, account, forced, engine))
-      .classified,
+    (
+      await prepareEntity(db, {
+        identity: identity("stable"),
+        source: raw,
+        parent: account,
+        operation: forced,
+        engine: engine,
+      })
+    ).classified,
     1,
   );
 });
@@ -1311,16 +1420,32 @@ test("operational retention does not remove financial records, rule provenance o
     providerFixture(),
   );
   const { compactOperations } = await import("#worker/sync/repository.ts");
-  const count = required(
-    await db.prepare("SELECT count(*) n FROM entities").first(),
+  const financialCount = required(
+    await database(db)
+      .select({ n: count() })
+      .from(tables.entities)
+      .get()
+      .then((row) => row ?? null),
   ).n;
   await compactOperations(db, new Date("2030-01-01T00:00:00Z"));
   assert.equal(
-    required(await db.prepare("SELECT count(*) n FROM entities").first()).n,
-    count,
+    required(
+      await database(db)
+        .select({ n: count() })
+        .from(tables.entities)
+        .get()
+        .then((row) => row ?? null),
+    ).n,
+    financialCount,
   );
   assert.equal(
-    required(await db.prepare("SELECT count(*) n FROM page_commits").first()).n,
+    required(
+      await database(db)
+        .select({ n: count() })
+        .from(tables.page_commits)
+        .get()
+        .then((row) => row ?? null),
+    ).n,
     0,
   );
   assert.equal(
@@ -1337,12 +1462,15 @@ test("operational retention does not remove financial records, rule provenance o
 
 test("changed totals during pagination retain partial coverage and never advance complete checkpoint", async () => {
   const { db, op } = await setup();
-  await db.exec(`UPDATE items SET resources='["accounts"]' WHERE id='item'`);
+  await database(db)
+    .update(tables.items)
+    .set({ resources: ["accounts"] })
+    .where(eq(tables.items.id, "item"));
   const source = {
     async ids() {
       return [];
     },
-    async page(...[, , , cursor]: Parameters<FinancialSource["page"]>) {
+    async page({ cursor }: Parameters<FinancialSource["page"]>[0]) {
       return cursor
         ? { records: [{ ...account, id: "second" }], next: null, total: 3 }
         : { records: [account], next: "2", total: 2 };
@@ -1354,16 +1482,32 @@ test("changed totals during pagination retain partial coverage and never advance
   );
   assert.equal(
     required(
-      await db.prepare("SELECT bootstrap_complete FROM coverage").first(),
+      await database(db)
+        .select({ bootstrap_complete: tables.coverage.bootstrap_complete })
+        .from(tables.coverage)
+        .get()
+        .then((row) => row ?? null),
     ).bootstrap_complete,
     0,
   );
   assert.equal(
-    required(await db.prepare("SELECT status FROM coverage").first()).status,
+    required(
+      await database(db)
+        .select({ status: tables.coverage.status })
+        .from(tables.coverage)
+        .get()
+        .then((row) => row ?? null),
+    ).status,
     "partial",
   );
   assert.equal(
-    required(await db.prepare("SELECT count(*) n FROM entities").first()).n,
+    required(
+      await database(db)
+        .select({ n: count() })
+        .from(tables.entities)
+        .get()
+        .then((row) => row ?? null),
+    ).n,
     1,
   );
 });
@@ -1375,60 +1519,67 @@ function fixtureRule(r: {
   priority: number;
   is_active: boolean;
   when: JsonValue;
-  actions: z.infer<typeof RuleSchema>["event"]["params"]["actions"];
-}) {
+  actions: Rule["event"]["params"]["actions"];
+}): Rule {
   const condition = convertPredicate(r.when, "fixture");
-  return RuleSchema.parse({
+  return {
     id: r.id,
     name: r.name,
     priority: r.priority,
     is_active: r.is_active,
     conditions: "fact" in condition ? { all: [condition] } : condition,
     event: { type: r.stage, params: { actions: r.actions } },
-  });
+  };
 }
 
 test("native D1 rolls back entity data and checkpoint when any batch statement fails", async () => {
   const { db, op } = await setup();
   const engine = await rulesFor(db, op.rules_revision);
-  const entity = await prepareEntity(
-    db,
-    identity("atomic"),
-    transaction("atomic"),
-    account,
-    op,
-    engine,
-  );
+  const entity = await prepareEntity(db, {
+    identity: identity("atomic"),
+    source: transaction("atomic"),
+    parent: account,
+    operation: op,
+    engine: engine,
+  });
   await assert.rejects(
-    db.batch([
+    commit(db, [
       ...entity.statements,
-      db
-        .prepare(
-          "INSERT INTO checkpoints(operation_id,item_id,resource) VALUES(?,?,?)",
-        )
-        .bind(op.id, "item", "transactions"),
-      db
-        .prepare("INSERT INTO locks(operation_id) VALUES(?)")
-        .bind("missing-operation"),
+      database(db).insert(tables.checkpoints).values({
+        operation_id: op.id,
+        item_id: "item",
+        resource: "transactions",
+      }),
+      database(db)
+        .insert(tables.locks)
+        .values({ operation_id: "missing-operation" }),
     ]),
   );
   assert.equal(
-    await db
-      .prepare("SELECT COUNT(*) AS n FROM entities WHERE id='atomic'")
-      .first("n"),
+    await database(db)
+      .select({ n: count() })
+      .from(tables.entities)
+      .where(and(eq(tables.entities.id, "atomic")))
+      .get()
+      .then((row) => row?.n ?? null),
     0,
   );
   assert.equal(
-    await db
-      .prepare("SELECT COUNT(*) AS n FROM derived WHERE id='atomic'")
-      .first("n"),
+    await database(db)
+      .select({ n: count() })
+      .from(tables.derived)
+      .where(and(eq(tables.derived.id, "atomic")))
+      .get()
+      .then((row) => row?.n ?? null),
     0,
   );
   assert.equal(
-    await db
-      .prepare("SELECT COUNT(*) AS n FROM checkpoints WHERE operation_id=?")
-      .bind(op.id)
-      .first("n"),
+    await database(db)
+      .select({ n: count() })
+      .from(tables.checkpoints)
+      .where(and(eq(tables.checkpoints.operation_id, op.id)))
+      .get()
+      .then((row) => row?.n ?? null),
     0,
   );
 });
@@ -1455,14 +1606,20 @@ test("legacy revisions remain readable; explicit conversion creates a new revisi
     ],
   };
   const serialized = JSON.stringify(old);
-  await db
-    .prepare(
-      "INSERT INTO rule_sets(id,document,normalizer,created_at,ready) VALUES(?,?,?,?,1)",
-    )
-    .bind("legacy", serialized, NORMALIZER, new Date().toISOString())
+  await database(db)
+    .insert(tables.rule_sets)
+    .values({
+      id: "legacy",
+      document: sql`${serialized}`,
+      normalizer: NORMALIZER,
+      created_at: new Date().toISOString(),
+      ready: 1,
+    })
     .run();
-  await db
-    .prepare("UPDATE settings SET active_rules='legacy' WHERE id=1")
+  await database(db)
+    .update(tables.settings)
+    .set({ active_rules: "legacy" })
+    .where(eq(tables.settings.id, 1))
     .run();
   const frozen = await startOperation(db, "legacy-operation", {
     kind: "sync",
@@ -1486,9 +1643,12 @@ test("legacy revisions remain readable; explicit conversion creates a new revisi
   assert.notEqual(saved.id, "legacy");
   assert.equal((await getOperation(db, frozen.id)).rules_revision, "legacy");
   assert.equal(
-    await db
-      .prepare("SELECT document FROM rule_sets WHERE id='legacy'")
-      .first("document"),
+    await database(db)
+      .select({ document: sql<string>`${tables.rule_sets.document}` })
+      .from(tables.rule_sets)
+      .where(and(eq(tables.rule_sets.id, "legacy")))
+      .get()
+      .then((row) => row?.document ?? null),
     serialized,
   );
   assert.equal(
@@ -1510,9 +1670,11 @@ test("HTTP conversion defaults to dry run and oversized import bodies fail befor
     { amount: "9007199254740993.01" },
   );
   const { db } = await setup();
-  const before = await db
-    .prepare("SELECT COUNT(*) AS n FROM rule_sets")
-    .first("n");
+  const before = await database(db)
+    .select({ n: count() })
+    .from(tables.rule_sets)
+    .get()
+    .then((row) => row?.n ?? null);
   const old = { ...EMPTY_RULES, version: 1 };
   const response = await fetchMcp(
     new Request("https://local/mcp/rules/import", {
@@ -1530,7 +1692,11 @@ test("HTTP conversion defaults to dry run and oversized import bodies fail befor
     .parse(await response.json());
   assert.equal(report.document.version, 2);
   assert.equal(
-    await db.prepare("SELECT COUNT(*) AS n FROM rule_sets").first("n"),
+    await database(db)
+      .select({ n: count() })
+      .from(tables.rule_sets)
+      .get()
+      .then((row) => row?.n ?? null),
     before,
   );
   await assert.rejects(
@@ -1549,16 +1715,21 @@ test("page publication rolls back data, progress, checkpoint and receipt togethe
   const { publishPage } = await import("#worker/sync/publication.ts");
   const { db, op } = await setup();
   const engine = await rulesFor(db, op.rules_revision);
-  await db
-    .prepare(
-      "INSERT INTO checkpoints(operation_id,item_id,resource,parent_id) VALUES(?,?,'accounts','')",
-    )
-    .bind(op.id, "item")
+  await database(db)
+    .insert(tables.checkpoints)
+    .values({
+      operation_id: op.id,
+      item_id: "item",
+      resource: "accounts",
+      parent_id: "",
+    })
     .run();
-  const before = await db
-    .prepare("SELECT progress FROM operations WHERE id=?")
-    .bind(op.id)
-    .first("progress");
+  const before = await database(db)
+    .select({ progress: sql<string>`${tables.operations.progress}` })
+    .from(tables.operations)
+    .where(and(eq(tables.operations.id, op.id)))
+    .get()
+    .then((row) => row?.progress ?? null);
   await db.exec(
     "CREATE TRIGGER fail_page_receipt BEFORE INSERT ON page_commits BEGIN SELECT RAISE(ABORT, 'synthetic receipt failure'); END",
   );
@@ -1581,48 +1752,199 @@ test("page publication rolls back data, progress, checkpoint and receipt togethe
   };
   await assert.rejects(publishPage(publication), /synthetic receipt failure/);
   assert.equal(
-    await db.prepare("SELECT COUNT(*) n FROM entities").first("n"),
+    await database(db)
+      .select({ n: count() })
+      .from(tables.entities)
+      .get()
+      .then((row) => row?.n ?? null),
     0,
   );
   assert.equal(
-    await db.prepare("SELECT COUNT(*) n FROM page_commits").first("n"),
+    await database(db)
+      .select({ n: count() })
+      .from(tables.page_commits)
+      .get()
+      .then((row) => row?.n ?? null),
     0,
   );
   assert.equal(
-    await db
-      .prepare("SELECT page FROM checkpoints WHERE operation_id=?")
-      .bind(op.id)
-      .first("page"),
+    await database(db)
+      .select({ page: tables.checkpoints.page })
+      .from(tables.checkpoints)
+      .where(and(eq(tables.checkpoints.operation_id, op.id)))
+      .get()
+      .then((row) => row?.page ?? null),
     0,
   );
   assert.equal(
-    await db
-      .prepare("SELECT progress FROM operations WHERE id=?")
-      .bind(op.id)
-      .first("progress"),
+    await database(db)
+      .select({ progress: sql<string>`${tables.operations.progress}` })
+      .from(tables.operations)
+      .where(and(eq(tables.operations.id, op.id)))
+      .get()
+      .then((row) => row?.progress ?? null),
     before,
   );
   await db.exec("DROP TRIGGER fail_page_receipt");
   await publishPage(publication);
-  const progress = await db
-    .prepare("SELECT progress FROM operations WHERE id=?")
-    .bind(op.id)
-    .first("progress");
+  const progress = await database(db)
+    .select({ progress: sql<string>`${tables.operations.progress}` })
+    .from(tables.operations)
+    .where(and(eq(tables.operations.id, op.id)))
+    .get()
+    .then((row) => row?.progress ?? null);
   await publishPage(publication);
   assert.equal(fetched, 2);
   assert.equal(
-    await db.prepare("SELECT COUNT(*) n FROM entities").first("n"),
+    await database(db)
+      .select({ n: count() })
+      .from(tables.entities)
+      .get()
+      .then((row) => row?.n ?? null),
     1,
   );
   assert.equal(
-    await db.prepare("SELECT COUNT(*) n FROM page_commits").first("n"),
+    await database(db)
+      .select({ n: count() })
+      .from(tables.page_commits)
+      .get()
+      .then((row) => row?.n ?? null),
     1,
   );
   assert.equal(
-    await db
-      .prepare("SELECT progress FROM operations WHERE id=?")
-      .bind(op.id)
-      .first("progress"),
+    await database(db)
+      .select({ progress: sql<string>`${tables.operations.progress}` })
+      .from(tables.operations)
+      .where(and(eq(tables.operations.id, op.id)))
+      .get()
+      .then((row) => row?.progress ?? null),
     progress,
+  );
+});
+
+async function commit(db: D1Database, queries: BatchItem<"sqlite">[]) {
+  const [first, ...rest] = queries;
+  if (!first) {
+    throw new Error("Empty fixture batch");
+  }
+  return database(db).batch([first, ...rest]);
+}
+
+test("Drizzle JSON mapping preserves public strings, default progress and manual tag precedence", async () => {
+  const { db, op } = await setup();
+  assert.deepEqual(op.input, { kind: "sync", itemIds: ["item"] });
+  assert.deepEqual(op.progress, {});
+  const engine = await rulesFor(db, op.rules_revision);
+  const source = transaction("json", { description: 'Café "especial" ☕' });
+  await commit(
+    db,
+    (
+      await prepareEntity(db, {
+        identity: identity("json"),
+        source: source,
+        parent: account,
+        operation: op,
+        engine: engine,
+      })
+    ).statements,
+  );
+  const stored = required(
+    await database(db)
+      .select()
+      .from(tables.entities)
+      .where(eq(tables.entities.id, "json"))
+      .get(),
+  );
+  assert.deepEqual(stored.source, source);
+  assert.equal(stored.normalized.description, source.description);
+  const { invoke } = await import("#worker/mcp/invoke.ts");
+  await database(db).insert(tables.tags).values({
+    item_id: "item",
+    resource: "transactions",
+    parent_id: "account",
+    id: "json",
+    key: "project",
+    value: "derived",
+    origin: "derived",
+  });
+  await invoke(financialQueries(env(db)), "caderninho_override", {
+    ...identity("json"),
+    field: "tag",
+    key: "project",
+    value: "manual",
+  });
+  assert.equal(
+    (await queryEntities(db, { filter: { tag: "project", value: "derived" } }))
+      .records.length,
+    0,
+  );
+  const record = required(
+    (await queryEntities(db, { filter: { tag: "project", value: "manual" } }))
+      .records[0],
+  );
+  assert.equal(record.source, JSON.stringify(source));
+  assert.equal(record.normalized, JSON.stringify(stored.normalized));
+  assert.equal(record.effective_tags, '{"project":"manual"}');
+  assert.equal(typeof record.evidence, "string");
+  await invoke(financialQueries(env(db)), "caderninho_override", {
+    ...identity("json"),
+    field: "tag",
+    key: "project",
+    value: null,
+  });
+  assert.equal(
+    (await queryEntities(db, { filter: { tag: "project", value: "derived" } }))
+      .records.length,
+    1,
+  );
+});
+
+test("integer limb aggregation cancels huge signed amounts and keeps missing measures separate by currency", async () => {
+  const { db, op } = await setup();
+  const engine = await rulesFor(db, op.rules_revision);
+  for (const [id, amount, currencyCode] of [
+    ["positive", "9007199254740993.01", "BRL"],
+    ["negative", "-9007199254740993.00", "BRL"],
+    ["missing", null, "BRL"],
+    ["usd-missing", null, "USD"],
+    ["eur-zero", "0", "EUR"],
+  ] as const) {
+    await commit(
+      db,
+      (
+        await prepareEntity(db, {
+          identity: identity(id),
+          source: transaction(id, { amount, currencyCode }),
+          parent: account,
+          operation: op,
+          engine: engine,
+        })
+      ).statements,
+    );
+  }
+  const groups = (await aggregateEntities(db, {})).groups;
+  assert.deepEqual(
+    groups.find((g) => g.currency === "BRL"),
+    { currency: "BRL", count: "3", known: "2", totalMinor: "1", partial: true },
+  );
+  assert.deepEqual(
+    groups.find((g) => g.currency === "USD"),
+    {
+      currency: "USD",
+      count: "1",
+      known: "0",
+      totalMinor: null,
+      partial: true,
+    },
+  );
+  assert.deepEqual(
+    groups.find((g) => g.currency === "EUR"),
+    {
+      currency: "EUR",
+      count: "1",
+      known: "1",
+      totalMinor: "0",
+      partial: false,
+    },
   );
 });

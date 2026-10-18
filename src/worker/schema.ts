@@ -1,15 +1,28 @@
 import { sql } from "drizzle-orm";
 import {
+  check,
+  foreignKey,
+  index,
+  integer,
+  primaryKey,
   sqliteTable,
   sqliteView,
   text,
-  integer,
-  primaryKey,
-  foreignKey,
-  index,
   uniqueIndex,
-  check,
 } from "drizzle-orm/sqlite-core";
+import type { z } from "zod/v4";
+
+import type {
+  OperationInput,
+  OperationStatus,
+  WebhookEvent,
+} from "#contracts/operation.ts";
+import type { Resource } from "#domain/enums.ts";
+import type { LegacyRulesSchema } from "#domain/rules/convert-rules.ts";
+import type { Derived, Rules } from "#domain/rules/rules-schema.ts";
+import type { FinanceRecord, ProviderRecord } from "#domain/schemas.ts";
+import type { JsonValue } from "#shared/json.ts";
+import type { PageCommit, Progress } from "#worker/sync/operation-storage.ts";
 
 // Mirrors 0001_personal.sql. Wrangler owns migrations; this schema does not generate DDL.
 export const settings = sqliteTable(
@@ -30,9 +43,7 @@ export const settings = sqliteTable(
     reconcile_after: text("reconcile_after")
       .notNull()
       .default(sql`'1970-01-01T00:00:00.000Z'`),
-    revision: integer("revision")
-      .notNull()
-      .default(sql`0`),
+    revision: integer("revision").notNull().default(sql`0`),
     active_rules: text("active_rules"),
   },
   (t) => [
@@ -46,10 +57,10 @@ export const items = sqliteTable(
   "items",
   {
     id: text("id").notNull(),
-    resources: text("resources").notNull(),
-    enabled: integer("enabled")
-      .notNull()
-      .default(sql`1`),
+    resources: text("resources", { mode: "json" })
+      .$type<Resource[]>()
+      .notNull(),
+    enabled: integer("enabled").notNull().default(sql`1`),
   },
   (t) => [
     primaryKey({ columns: [t.id] }),
@@ -61,12 +72,12 @@ export const rule_sets = sqliteTable(
   "rule_sets",
   {
     id: text("id").notNull(),
-    document: text("document").notNull(),
+    document: text("document", { mode: "json" })
+      .$type<Rules | z.infer<typeof LegacyRulesSchema>>()
+      .notNull(),
     normalizer: text("normalizer").notNull(),
     created_at: text("created_at").notNull(),
-    ready: integer("ready")
-      .notNull()
-      .default(sql`0`),
+    ready: integer("ready").notNull().default(sql`0`),
   },
   (t) => [
     primaryKey({ columns: [t.id] }),
@@ -130,9 +141,13 @@ export const rules = sqliteTable(
     id: text("id").notNull(),
     position: integer("position").notNull(),
     priority: integer("priority").notNull(),
-    stage: text("stage").notNull(),
+    stage: text("stage")
+      .$type<Rules["rules"][number]["event"]["type"]>()
+      .notNull(),
     active: integer("active").notNull(),
-    definition: text("definition").notNull(),
+    definition: text("definition", { mode: "json" })
+      .$type<Rules["rules"][number]>()
+      .notNull(),
   },
   (t) => [
     primaryKey({ columns: [t.revision, t.id] }),
@@ -144,71 +159,65 @@ export const rules = sqliteTable(
   ],
 );
 
-export const entities = sqliteTable(
-  "entities",
-  {
-    item_id: text("item_id").notNull(),
-    resource: text("resource").notNull(),
-    parent_id: text("parent_id")
-      .notNull()
-      .default(sql`''`),
-    id: text("id").notNull(),
-    source: text("source").notNull(),
-    normalized: text("normalized").notNull(),
-    relevant_hash: text("relevant_hash").notNull(),
-    normalizer: text("normalizer").notNull(),
-    source_created_at: text("source_created_at"),
-    source_updated_at: text("source_updated_at"),
-    first_seen_at: text("first_seen_at").notNull(),
-    observed_at: text("observed_at").notNull(),
-    transaction_date: text("transaction_date"),
-    currency: text("currency"),
-    amount_minor: text("amount_minor"),
-    amount_key: text("amount_key"),
-    amount_digits: text("amount_digits"),
-    amount_sign: integer("amount_sign"),
-    account_type: text("account_type"),
-    direction: text("direction"),
-    status: text("status"),
-    original_category: text("original_category"),
-    original_description: text("original_description"),
-    eligible: integer("eligible")
-      .notNull()
-      .default(sql`0`),
-    deleted: integer("deleted")
-      .notNull()
-      .default(sql`0`),
-    seen_operation: text("seen_operation"),
-  },
-  (t) => [
-    primaryKey({
-      columns: [t.item_id, t.resource, t.parent_id, t.id],
-    }),
-    foreignKey({
-      columns: [t.item_id],
-      foreignColumns: [items.id],
-    }),
-    index("entity_category").on(t.resource, t.original_category),
-    index("entity_amount").on(t.resource, t.currency, t.amount_key),
-    index("entity_future")
-      .on(t.transaction_date, t.id)
-      .where(sql`eligible=0 AND deleted=0`),
-    index("entity_pending")
-      .on(t.item_id, t.parent_id, t.id)
-      .where(sql`resource='transactions' AND status='PENDING' AND deleted=0`),
-    index("entity_status").on(t.resource, t.status, t.id),
-    index("entity_account").on(t.item_id, t.resource, t.parent_id, t.id),
-    index("entity_date").on(t.resource, t.transaction_date, t.id),
-    check("entities_source_check", sql`json_valid(source)`),
-    check("entities_normalized_check", sql`json_valid(normalized)`),
-  ],
-);
+const entityColumns = () => ({
+  item_id: text("item_id").notNull(),
+  resource: text("resource").$type<Resource>().notNull(),
+  parent_id: text("parent_id").notNull().default(sql`''`),
+  id: text("id").notNull(),
+  source: text("source", { mode: "json" }).$type<ProviderRecord>().notNull(),
+  normalized: text("normalized", { mode: "json" })
+    .$type<FinanceRecord>()
+    .notNull(),
+  relevant_hash: text("relevant_hash").notNull(),
+  normalizer: text("normalizer").notNull(),
+  source_created_at: text("source_created_at"),
+  source_updated_at: text("source_updated_at"),
+  first_seen_at: text("first_seen_at").notNull(),
+  observed_at: text("observed_at").notNull(),
+  transaction_date: text("transaction_date"),
+  currency: text("currency"),
+  amount_minor: text("amount_minor"),
+  amount_key: text("amount_key"),
+  amount_digits: text("amount_digits"),
+  amount_sign: integer("amount_sign"),
+  account_type: text("account_type"),
+  direction: text("direction"),
+  status: text("status"),
+  original_category: text("original_category"),
+  original_description: text("original_description"),
+  eligible: integer("eligible").notNull().default(sql`0`),
+  deleted: integer("deleted").notNull().default(sql`0`),
+  seen_operation: text("seen_operation"),
+});
+
+export const entities = sqliteTable("entities", entityColumns(), (t) => [
+  primaryKey({
+    columns: [t.item_id, t.resource, t.parent_id, t.id],
+  }),
+  foreignKey({
+    columns: [t.item_id],
+    foreignColumns: [items.id],
+  }),
+  index("entity_category").on(t.resource, t.original_category),
+  index("entity_amount").on(t.resource, t.currency, t.amount_key),
+  index("entity_future")
+    .on(t.transaction_date, t.id)
+    .where(sql`eligible=0 AND deleted=0`),
+  index("entity_pending")
+    .on(t.item_id, t.parent_id, t.id)
+    .where(sql`resource='transactions' AND status='PENDING' AND deleted=0`),
+  index("entity_status").on(t.resource, t.status, t.id),
+  index("entity_account").on(t.item_id, t.resource, t.parent_id, t.id),
+  index("entity_date").on(t.resource, t.transaction_date, t.id),
+  check("entities_source_check", sql`json_valid(source)`),
+  check("entities_normalized_check", sql`json_valid(normalized)`),
+]);
 
 export const derived = sqliteTable(
   "derived",
   {
     item_id: text("item_id").notNull(),
-    resource: text("resource").notNull(),
+    resource: text("resource").$type<Resource>().notNull(),
     parent_id: text("parent_id").notNull(),
     id: text("id").notNull(),
     rules_revision: text("rules_revision").notNull(),
@@ -217,7 +226,9 @@ export const derived = sqliteTable(
     group_id: text("group_id").notNull(),
     description: text("description").notNull(),
     ignored: integer("ignored").notNull(),
-    evidence: text("evidence").notNull(),
+    evidence: text("evidence", { mode: "json" })
+      .$type<Derived["evidence"]>()
+      .notNull(),
   },
   (t) => [
     primaryKey({
@@ -245,10 +256,12 @@ export const overrides = sqliteTable(
   "overrides",
   {
     item_id: text("item_id").notNull(),
-    resource: text("resource").notNull(),
+    resource: text("resource").$type<Resource>().notNull(),
     parent_id: text("parent_id").notNull(),
     id: text("id").notNull(),
-    field: text("field").notNull(),
+    field: text("field", {
+      enum: ["category", "description", "ignored"],
+    }).notNull(),
     value: text("value").notNull(),
     updated_at: text("updated_at").notNull(),
   },
@@ -276,12 +289,12 @@ export const tags = sqliteTable(
   "tags",
   {
     item_id: text("item_id").notNull(),
-    resource: text("resource").notNull(),
+    resource: text("resource").$type<Resource>().notNull(),
     parent_id: text("parent_id").notNull(),
     id: text("id").notNull(),
     key: text("key").notNull(),
     value: text("value").notNull(),
-    origin: text("origin").notNull(),
+    origin: text("origin", { enum: ["derived", "manual"] }).notNull(),
   },
   (t) => [
     primaryKey({
@@ -304,33 +317,29 @@ export const tags = sqliteTable(
 export const operations = sqliteTable(
   "operations",
   {
-    id: text("id"),
+    id: text("id").notNull(),
 
     request_key: text("request_key").notNull(),
-    kind: text("kind").notNull(),
-    input: text("input").notNull(),
+    kind: text("kind").$type<OperationInput["kind"]>().notNull(),
+    input: text("input", { mode: "json" }).$type<OperationInput>().notNull(),
     input_hash: text("input_hash").notNull(),
     rules_revision: text("rules_revision").notNull(),
     reference_day: text("reference_day").notNull(),
     status: text("status")
+      .$type<OperationStatus>()
       .notNull()
       .default(sql`'working'`),
-    phase: text("phase")
-      .notNull()
-      .default(sql`'queued'`),
-    cancel_requested: integer("cancel_requested")
-      .notNull()
-      .default(sql`0`),
-    dispatched: integer("dispatched")
-      .notNull()
-      .default(sql`0`),
+    phase: text("phase").notNull().default(sql`'queued'`),
+    cancel_requested: integer("cancel_requested").notNull().default(sql`0`),
+    dispatched: integer("dispatched").notNull().default(sql`0`),
     created_at: text("created_at").notNull(),
     updated_at: text("updated_at").notNull(),
-    progress: text("progress")
+    progress: text("progress", { mode: "json" })
+      .$type<Partial<Progress>>()
       .notNull()
       .default(sql`'{}'`),
-    result: text("result"),
-    error: text("error"),
+    result: text("result", { mode: "json" }).$type<Record<string, JsonValue>>(),
+    error: text("error", { mode: "json" }).$type<Record<string, JsonValue>>(),
   },
   (t) => [
     primaryKey({ columns: [t.id] }),
@@ -364,14 +373,10 @@ export const coverage = sqliteTable(
   "coverage",
   {
     item_id: text("item_id").notNull(),
-    resource: text("resource").notNull(),
-    parent_id: text("parent_id")
-      .notNull()
-      .default(sql`''`),
+    resource: text("resource").$type<Resource>().notNull(),
+    parent_id: text("parent_id").notNull().default(sql`''`),
     status: text("status").notNull(),
-    bootstrap_complete: integer("bootstrap_complete")
-      .notNull()
-      .default(sql`0`),
+    bootstrap_complete: integer("bootstrap_complete").notNull().default(sql`0`),
     confirmed_created_at: text("confirmed_created_at"),
     observed_at: text("observed_at"),
     parent_signature: text("parent_signature"),
@@ -390,23 +395,15 @@ export const checkpoints = sqliteTable(
   {
     operation_id: text("operation_id").notNull(),
     item_id: text("item_id").notNull(),
-    resource: text("resource").notNull(),
-    parent_id: text("parent_id")
-      .notNull()
-      .default(sql`''`),
+    resource: text("resource").$type<Resource>().notNull(),
+    parent_id: text("parent_id").notNull().default(sql`''`),
     cursor: text("cursor"),
     creation_floor: text("creation_floor"),
     maximum_created_at: text("maximum_created_at"),
-    page: integer("page")
-      .notNull()
-      .default(sql`0`),
-    done: integer("done")
-      .notNull()
-      .default(sql`0`),
+    page: integer("page").notNull().default(sql`0`),
+    done: integer("done").notNull().default(sql`0`),
     expected_total: integer("expected_total"),
-    collected: integer("collected")
-      .notNull()
-      .default(sql`0`),
+    collected: integer("collected").notNull().default(sql`0`),
   },
   (t) => [
     primaryKey({
@@ -421,12 +418,10 @@ export const operation_targets = sqliteTable(
   {
     operation_id: text("operation_id").notNull(),
     item_id: text("item_id").notNull(),
-    resource: text("resource").notNull(),
+    resource: text("resource").$type<Resource>().notNull(),
     parent_id: text("parent_id").notNull(),
     id: text("id").notNull(),
-    processed: integer("processed")
-      .notNull()
-      .default(sql`0`),
+    processed: integer("processed").notNull().default(sql`0`),
   },
   (t) => [
     primaryKey({
@@ -448,7 +443,7 @@ export const page_commits = sqliteTable(
   {
     operation_id: text("operation_id").notNull(),
     step_key: text("step_key").notNull(),
-    progress: text("progress").notNull(),
+    progress: text("progress", { mode: "json" }).$type<PageCommit>().notNull(),
   },
   (t) => [primaryKey({ columns: [t.operation_id, t.step_key] })],
 );
@@ -456,12 +451,14 @@ export const page_commits = sqliteTable(
 export const inbox = sqliteTable(
   "inbox",
   {
-    event_id: text("event_id"),
+    event_id: text("event_id").notNull(),
 
     item_id: text("item_id").notNull(),
     account_id: text("account_id").notNull(),
     event: text("event").notNull(),
-    payload: text("payload").notNull(),
+    payload: text("payload", { mode: "json" })
+      .$type<Partial<WebhookEvent>>()
+      .notNull(),
     received_at: text("received_at").notNull(),
     operation_id: text("operation_id"),
     processed_at: text("processed_at"),
@@ -489,37 +486,28 @@ export const migration_imports = sqliteTable(
 );
 
 export const effective_entities = sqliteView("effective_entities", {
-  item_id: text("item_id"),
-  resource: text("resource"),
-  parent_id: text("parent_id"),
-  id: text("id"),
-  source: text("source"),
-  normalized: text("normalized"),
-  relevant_hash: text("relevant_hash"),
-  normalizer: text("normalizer"),
-  source_created_at: text("source_created_at"),
-  source_updated_at: text("source_updated_at"),
-  first_seen_at: text("first_seen_at"),
-  observed_at: text("observed_at"),
-  transaction_date: text("transaction_date"),
-  currency: text("currency"),
-  amount_minor: text("amount_minor"),
-  amount_key: text("amount_key"),
-  amount_digits: text("amount_digits"),
-  amount_sign: integer("amount_sign"),
-  account_type: text("account_type"),
-  direction: text("direction"),
-  status: text("status"),
-  original_category: text("original_category"),
-  original_description: text("original_description"),
-  eligible: integer("eligible"),
-  deleted: integer("deleted"),
-  seen_operation: text("seen_operation"),
+  ...entityColumns(),
   effective_category: text("effective_category"),
   effective_description: text("effective_description"),
   ignored: integer("ignored"),
   category_id: text("category_id"),
   group_id: text("group_id"),
   rules_revision: text("rules_revision"),
-  evidence: text("evidence"),
+  evidence: text("evidence", { mode: "json" }).$type<Derived["evidence"]>(),
 }).existing();
+
+export const portal_sessions = sqliteTable(
+  "portal_sessions",
+  {
+    id: text("id").primaryKey().notNull(),
+    csrf: text("csrf").notNull(),
+    expires: integer("expires").notNull(),
+    auth_version: text("auth_version").notNull(),
+  },
+  (t) => [index("portal_sessions_expiry").on(t.expires)],
+);
+export const login_attempts = sqliteTable("login_attempts", {
+  id: text("id").primaryKey().notNull(),
+  attempts: integer("attempts").notNull(),
+  expires: integer("expires").notNull(),
+});

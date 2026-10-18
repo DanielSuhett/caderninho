@@ -1,18 +1,18 @@
-import { parse, isLosslessNumber } from "lossless-json";
+import { isLosslessNumber, parse } from "lossless-json";
 import { z } from "zod/v4";
 
 import {
-  LegacyRulesSchema,
   convertRules,
+  LegacyRulesSchema,
 } from "#domain/rules/convert-rules.ts";
 import {
-  RuleSchema,
-  RulesSchema,
   compileRules,
   type Condition as RuleCondition,
+  RuleSchema,
   type Rules,
+  RulesSchema,
 } from "#domain/rules/rules.ts";
-import { JsonValueSchema, type JsonValue } from "#shared/json.ts";
+import { type JsonValue, JsonValueSchema } from "#shared/json.ts";
 
 const Condition = z
   .object({
@@ -75,10 +75,12 @@ export function importRules(
     return { compatible: true, document: native.data, issues: [] };
   }
 
-  if (LegacyRulesSchema.safeParse(input).success) return convertRules(input);
+  if (LegacyRulesSchema.safeParse(input).success) {
+    return convertRules(input);
+  }
   const parsed = Package.safeParse(input);
 
-  if (!parsed.success)
+  if (!parsed.success) {
     return {
       compatible: false,
       document: null,
@@ -88,14 +90,18 @@ export function importRules(
         message: i.message,
       })),
     };
+  }
   const issues: { path: string; code: string; message: string }[] = [];
   const rules: Rules["rules"] = [];
 
   function literal(value: JsonValue | undefined, path: string): string {
-    if (typeof value === "string") return value;
+    if (typeof value === "string") {
+      return value;
+    }
 
-    if (typeof value === "number" && Number.isSafeInteger(value))
+    if (typeof value === "number" && Number.isSafeInteger(value)) {
       return String(value);
+    }
     issues.push({
       path,
       code: "INVALID_LITERAL",
@@ -121,7 +127,7 @@ export function importRules(
       }
 
       const children = c.conditions.map((v, i) =>
-        condition(v, path + "../../../../apps/worker/application" + i),
+        condition(v, `${path}../../../../apps/worker/application${i}`),
       );
 
       return c.op === "and" ? { all: children } : { any: children };
@@ -140,37 +146,20 @@ export function importRules(
     }
 
     if (c.op === "equals") {
-      if (field === "tx.amount")
-        return {
-          fact: field,
-          operator: "decimalCompare",
-          value: { op: "eq", value: literal(c.value, path) },
-        };
-
-      const value = z
-        .union([z.string(), z.number().int().safe(), z.boolean(), z.null()])
-        .safeParse(c.value ?? null);
-
-      if (value.success)
-        return { fact: field, operator: "equal", value: value.data };
-      issues.push({
-        path,
-        code: "INVALID_LITERAL",
-        message: "Equality requires a scalar literal",
-      });
-
-      return { not: { all: [] } };
+      return equality(field, c.value, path);
     }
 
-    if (c.op === "gte" || c.op === "lte")
+    if (c.op === "gte" || c.op === "lte") {
       return {
         fact: field,
         operator: field === "tx.date" ? "dateCompare" : "decimalCompare",
         value: { op: c.op, value: literal(c.value, path) },
       };
+    }
 
-    if (c.op === "regex")
+    if (c.op === "regex") {
       return { fact: field, operator: "regex", value: literal(c.value, path) };
+    }
 
     if (c.op === "contains" || c.op === "starts_with") {
       const text = z
@@ -190,6 +179,35 @@ export function importRules(
     return { not: { all: [] } };
   }
 
+  function equality(
+    field: string,
+    input: JsonValue | undefined,
+    path: string,
+  ): RuleCondition {
+    if (field === "tx.amount") {
+      return {
+        fact: field,
+        operator: "decimalCompare",
+        value: { op: "eq", value: literal(input, path) },
+      };
+    }
+
+    const value = z
+      .union([z.string(), z.number().int().safe(), z.boolean(), z.null()])
+      .safeParse(input ?? null);
+
+    if (value.success) {
+      return { fact: field, operator: "equal", value: value.data };
+    }
+    issues.push({
+      path,
+      code: "INVALID_LITERAL",
+      message: "Equality requires a scalar literal",
+    });
+
+    return { not: { all: [] } };
+  }
+
   for (const [index, r] of parsed.data.rules.entries()) {
     const children = r.conditions.map((c, i) =>
       condition(c, `rules.${index}.conditions.${i}`),
@@ -205,10 +223,12 @@ export function importRules(
           : a.op !== "set_category",
       );
 
-      if (!actions.length) continue;
+      if (!actions.length) {
+        continue;
+      }
 
       const candidate = RuleSchema.safeParse({
-        id: (r.id ?? `securo-${index + 1}`) + "-" + stage,
+        id: `${r.id ?? `securo-${index + 1}`}-${stage}`,
         name: r.name,
         priority: r.priority,
         is_active: r.is_active,
@@ -229,16 +249,18 @@ export function importRules(
     }
   }
 
-  if (!catalog)
+  if (!catalog) {
     issues.push({
       path: "categories",
       code: "CATALOG_REQUIRED",
       message:
         "Securo export has no catalog; supply explicit groups, category IDs and aliases. No categories are invented.",
     });
+  }
 
-  if (issues.length || !catalog)
+  if (issues.length || !catalog) {
     return { compatible: false, document: null, issues };
+  }
 
   try {
     const { document } = compileRules({ version: 2, ...catalog, rules });
@@ -263,12 +285,18 @@ export function importRules(
 // Preserve literal lexemes while priorities and package versions remain safe integers.
 export function parseRuleJson(text: string): unknown {
   return parse(text, (key, value) => {
-    if (!isLosslessNumber(value)) return value;
+    if (!isLosslessNumber(value)) {
+      return value;
+    }
 
-    if (key === "value") return value.value;
+    if (key === "value") {
+      return value.value;
+    }
     const number = Number(value.value);
 
-    if (!Number.isSafeInteger(number)) throw new Error("UNSAFE_RULE_NUMBER");
+    if (!Number.isSafeInteger(number)) {
+      throw new Error("UNSAFE_RULE_NUMBER");
+    }
 
     return number;
   });

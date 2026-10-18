@@ -1,8 +1,8 @@
 import { z } from "zod/v4";
 
 import {
-  FaultCodeSchema,
   FaultCode,
+  FaultCodeSchema,
   type FaultCode as FaultCodeType,
 } from "#domain/enums.ts";
 
@@ -40,7 +40,9 @@ export function parseDomain<T extends z.ZodType>(
 ): z.output<T> {
   const parsed = schema.safeParse(value);
 
-  if (!parsed.success) throw new Fault(code);
+  if (!parsed.success) {
+    throw new Fault(code);
+  }
 
   return parsed.data;
 }

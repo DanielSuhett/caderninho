@@ -1,11 +1,11 @@
 import {
-  FaultCode,
   Classification,
-  TransactionType,
-  TransactionStatus,
+  FaultCode,
   Periodicity,
   RecurrenceClassification,
   RecurrenceStrength,
+  TransactionStatus,
+  TransactionType,
 } from "#domain/enums.ts";
 // Pure, versioned heuristics over normalized snapshot records. No API, LLM or writes.
 import { day } from "#domain/exact.ts";
@@ -14,14 +14,13 @@ import type {
   RecurrenceResult,
   SubscriptionCandidate,
 } from "#domain/outputs.ts";
-import {
-  EligibleRecurrenceRecordSchema,
-  type FinanceRecord,
-  type EligibleRecurrenceRecord,
-  type RecurrenceGroup,
-  type RecurrenceOptions,
-  type Cadence,
-  type Exclusion,
+import type {
+  Cadence,
+  EligibleRecurrenceRecord,
+  Exclusion,
+  FinanceRecord,
+  RecurrenceGroup,
+  RecurrenceOptions,
 } from "#domain/schemas.ts";
 
 export const SUBSCRIPTION_RULES = {
@@ -84,7 +83,7 @@ const excludedClassifications = new Set<Classification>([
   Classification.refund,
 ]);
 
-const dateIndex = (date: string) => Date.parse(date + "T00:00:00Z") / 86400000;
+const dateIndex = (date: string) => Date.parse(`${date}T00:00:00Z`) / 86400000;
 
 const monthIndex = (date: string) =>
   Number(date.slice(0, 4)) * 12 + Number(date.slice(5, 7)) - 1;
@@ -114,7 +113,9 @@ function cadence(rows: EligibleRecurrenceRecord[]): Cadence | null {
   const pairs = dates.slice(1).map((date, i) => {
     const previous = dates[i];
 
-    if (!previous) fail(FaultCode.INVALID_RESPONSE);
+    if (!previous) {
+      fail(FaultCode.INVALID_RESPONSE);
+    }
 
     return {
       days: dateIndex(date) - dateIndex(previous),
@@ -134,16 +135,16 @@ function cadence(rows: EligibleRecurrenceRecord[]): Cadence | null {
     pairs.every(
       (p) => p.months === 12 && p.dayDistance <= tolerances.annualDays,
     )
-  )
+  ) {
     pattern = Periodicity.annual;
-  else if (
+  } else if (
     !multipleInMonth &&
     pairs.every(
       (p) => p.months === 3 && p.dayDistance <= tolerances.quarterlyDays,
     )
-  )
+  ) {
     pattern = Periodicity.quarterly;
-  else if (
+  } else if (
     !multipleInMonth &&
     pairs.some((p) => p.months === 1) &&
     pairs.every(
@@ -155,12 +156,17 @@ function cadence(rows: EligibleRecurrenceRecord[]): Cadence | null {
   ) {
     pattern = Periodicity.monthly;
     missingCycles = pairs.reduce((n, p) => n + p.months - 1, 0);
-  } else if (pairs.every((p) => Math.abs(p.days - 7) <= tolerances.weeklyDays))
+  } else if (
+    pairs.every((p) => Math.abs(p.days - 7) <= tolerances.weeklyDays)
+  ) {
     pattern = Periodicity.weekly;
-  else if (rows.length >= 3 && months.size >= 3)
+  } else if (rows.length >= 3 && months.size >= 3) {
     pattern = Periodicity.irregular;
+  }
 
-  if (!pattern) return null;
+  if (!pattern) {
+    return null;
+  }
 
   const enough =
     rows.length >=
@@ -181,17 +187,22 @@ function nameFor(row: FinanceRecord) {
   for (const source of ["merchant.name", "counterparty"]) {
     const value = row[source];
 
-    if (typeof value === "string" && value.trim())
+    if (typeof value === "string" && value.trim()) {
       return { source, value, normalized: normalizeName(value) };
+    }
   }
 
   return null; // Descriptions and numeric/name suffixes are never stripped to invent a payee.
 }
 
 function exclusionReason(row: FinanceRecord, asOfDay: string) {
-  if (row.type !== TransactionType.DEBIT) return "credit_or_refund_not_netted";
+  if (row.type !== TransactionType.DEBIT) {
+    return "credit_or_refund_not_netted";
+  }
 
-  if (row.status !== TransactionStatus.POSTED) return "not_posted";
+  if (row.status !== TransactionStatus.POSTED) {
+    return "not_posted";
+  }
 
   try {
     day(row.accountingDate);
@@ -199,10 +210,13 @@ function exclusionReason(row: FinanceRecord, asOfDay: string) {
     return "missing_or_invalid_date";
   }
 
-  if (row.accountingDate && row.accountingDate > asOfDay) return "future";
+  if (row.accountingDate && row.accountingDate > asOfDay) {
+    return "future";
+  }
 
-  if (row.classification && excludedClassifications.has(row.classification))
+  if (row.classification && excludedClassifications.has(row.classification)) {
     return row.classification;
+  }
 
   // Providers may omit totalInstallments. installmentNumber alone is already a warning.
   const installment = row["creditCardMetadata.installmentNumber"],
@@ -211,20 +225,28 @@ function exclusionReason(row: FinanceRecord, asOfDay: string) {
   if (
     (installment != null && Number(installment) > 0) ||
     (total != null && Number(total) > 1)
-  )
+  ) {
     return "installment_metadata";
+  }
 
   if (
     typeof row.absoluteAmountMinor !== "string" ||
     !/^\d+$/.test(row.absoluteAmountMinor)
-  )
+  ) {
     return "missing_or_invalid_amount";
+  }
 
-  if (BigInt(row.absoluteAmountMinor) === 0n) return "zero_amount";
+  if (BigInt(row.absoluteAmountMinor) === 0n) {
+    return "zero_amount";
+  }
 
-  if (!row.accountId) return "missing_account";
+  if (!row.accountId) {
+    return "missing_account";
+  }
 
-  if (!nameFor(row)) return "missing_payee";
+  if (!nameFor(row)) {
+    return "missing_payee";
+  }
 
   return null;
 }
@@ -241,11 +263,15 @@ function candidate(
 
   const first = rows[0];
 
-  if (!first) fail(FaultCode.INVALID_RESPONSE);
+  if (!first) {
+    fail(FaultCode.INVALID_RESPONSE);
+  }
 
   const payee = nameFor(first);
 
-  if (!payee) fail(FaultCode.INVALID_RESPONSE);
+  if (!payee) {
+    fail(FaultCode.INVALID_RESPONSE);
+  }
 
   const values = rows.map((row) => BigInt(row.absoluteAmountMinor)),
     sum = values.reduce((n, v) => n + v, 0n);
@@ -255,7 +281,9 @@ function candidate(
 
   const last = rows.at(-1);
 
-  if (!last) fail(FaultCode.INVALID_RESPONSE);
+  if (!last) {
+    fail(FaultCode.INVALID_RESPONSE);
+  }
 
   const categories = [
     ...new Set(
@@ -273,13 +301,11 @@ function candidate(
     ordinaryExpenses.has(normalizeName(name)),
   );
 
-  const classification = !purposeKnown
-    ? RecurrenceClassification.recurring_payment
-    : expenseCategory ||
-        pattern.multipleChargesPerMonth ||
-        pattern.observedPattern === Periodicity.irregular
-      ? RecurrenceClassification.recurring_expense
-      : RecurrenceClassification.possible_subscription;
+  const classification = recurrenceClassification(
+    purposeKnown,
+    expenseCategory,
+    pattern,
+  );
 
   const reasons = [
     "repeated_payee_in_same_account",
@@ -291,40 +317,42 @@ function candidate(
     "same_payee_can_represent_multiple_contracts",
   ];
 
-  if (minimum !== maximum) reasons.push("amounts_vary");
+  if (minimum !== maximum) {
+    reasons.push("amounts_vary");
+  }
 
   if (
     pattern.periodicity === Periodicity.insufficient_history ||
     (pattern.observedPattern === Periodicity.annual && rows.length === 2)
-  )
+  ) {
     warnings.push("limited_occurrences");
+  }
 
-  if (pattern.missingCycles)
+  if (pattern.missingCycles) {
     warnings.push("gaps_in_observed_cycles_not_proof_of_cancellation");
+  }
 
-  if (pattern.multipleChargesPerMonth)
+  if (pattern.multipleChargesPerMonth) {
     warnings.push("multiple_charges_per_month");
+  }
 
-  if (!purposeKnown)
+  if (!purposeKnown) {
     warnings.push("economic_purpose_uncertain_not_confirmed_spending");
+  }
 
-  if (expenseCategory)
+  if (expenseCategory) {
     warnings.push("category_suggests_ordinary_expense_but_can_be_inconsistent");
+  }
 
-  if (categories.length > 1) warnings.push("category_changes");
+  if (categories.length > 1) {
+    warnings.push("category_changes");
+  }
 
-  if (payee.source === "counterparty")
+  if (payee.source === "counterparty") {
     warnings.push("counterparty_is_not_guaranteed_merchant_identity");
+  }
 
-  const strength =
-    pattern.periodicity === Periodicity.insufficient_history ||
-    pattern.observedPattern === Periodicity.irregular ||
-    pattern.missingCycles ||
-    (pattern.observedPattern === Periodicity.annual && rows.length === 2)
-      ? RecurrenceStrength.limited
-      : rows.length >= 6
-        ? RecurrenceStrength.strong
-        : RecurrenceStrength.moderate;
+  const strength = recurrenceStrength(pattern, rows.length);
 
   const byMonth: Record<string, string> = {};
 
@@ -409,49 +437,19 @@ export function detectSubscriptions(
     if (
       typeof row.absoluteAmountMinor === "string" &&
       /^\d+$/.test(row.absoluteAmountMinor)
-    )
+    ) {
       item.knownAmountMinor = (
         BigInt(item.knownAmountMinor ?? "0") + BigInt(row.absoluteAmountMinor)
       ).toString();
+    }
 
-    if (item.recordIds.length < SUBSCRIPTION_RULES.maxExclusionIds)
+    if (item.recordIds.length < SUBSCRIPTION_RULES.maxExclusionIds) {
       item.recordIds.push(row.id);
+    }
     exclusions.set(reason, item);
   };
 
-  for (const row of rows) {
-    const reason = exclusionReason(row, asOfDay);
-
-    if (reason) {
-      exclude(row, reason);
-      continue;
-    }
-
-    const name = nameFor(row);
-
-    if (!name) {
-      exclude(row, "missing_payee");
-      continue;
-    }
-
-    const checked = EligibleRecurrenceRecordSchema.safeParse(row);
-
-    if (!checked.success) {
-      exclude(row, "missing_or_invalid_amount");
-      continue;
-    }
-
-    const key = JSON.stringify([
-      row.accountId,
-      currency,
-      name.source,
-      name.normalized,
-    ]);
-
-    const group = groups.get(key) ?? { name, rows: [] };
-    group.rows.push(checked.data);
-    groups.set(key, group);
-  }
+  collectRecurrenceGroups(rows, { currency, asOfDay }, groups, exclude);
 
   const candidates: SubscriptionCandidate[] = [];
 
@@ -463,21 +461,32 @@ export function detectSubscriptions(
     );
     const pattern = group.rows.length >= 2 ? cadence(group.rows) : null;
 
-    if (pattern) candidates.push(candidate(group, pattern));
-    else for (const row of group.rows) exclude(row, "no_temporal_pattern");
+    if (pattern) {
+      candidates.push(candidate(group, pattern));
+    } else {
+      for (const row of group.rows) {
+        exclude(row, "no_temporal_pattern");
+      }
+    }
   }
 
   candidates.sort((a, b) => {
     const x = BigInt(a.amounts.observedTotalMinor),
       y = BigInt(b.amounts.observedTotalMinor);
 
-    return x > y
-      ? -1
-      : x < y
-        ? 1
-        : a.accountId.localeCompare(b.accountId) ||
-          a.payee.normalizedName.localeCompare(b.payee.normalizedName) ||
-          a.anchorRecordId.localeCompare(b.anchorRecordId);
+    if (x > y) {
+      return -1;
+    }
+
+    if (x < y) {
+      return 1;
+    }
+
+    return (
+      a.accountId.localeCompare(b.accountId) ||
+      a.payee.normalizedName.localeCompare(b.payee.normalizedName) ||
+      a.anchorRecordId.localeCompare(b.anchorRecordId)
+    );
   });
 
   const byClassification = {
@@ -527,11 +536,7 @@ export function detectSubscriptions(
       historyDays,
       historyAssessment:
         historyDays < 90 ? "short_window" : "multi_month_window",
-      outcome: candidates.length
-        ? "candidates_found"
-        : historyDays < 60
-          ? Periodicity.insufficient_history
-          : "no_candidates_in_snapshot",
+      outcome: recurrenceOutcome(candidates.length, historyDays),
       scannedAllFilteredRecords: true,
       groupCount: groups.size,
     },
@@ -555,4 +560,101 @@ export function detectSubscriptions(
       referencesTruncated: item.count > item.recordIds.length,
     })),
   };
+}
+
+function recurrenceClassification(
+  purposeKnown: boolean,
+  expenseCategory: boolean,
+  pattern: Cadence,
+) {
+  if (!purposeKnown) {
+    return RecurrenceClassification.recurring_payment;
+  }
+
+  if (
+    expenseCategory ||
+    pattern.multipleChargesPerMonth ||
+    pattern.observedPattern === Periodicity.irregular
+  ) {
+    return RecurrenceClassification.recurring_expense;
+  }
+
+  return RecurrenceClassification.possible_subscription;
+}
+
+function recurrenceStrength(pattern: Cadence, occurrences: number) {
+  if (
+    pattern.periodicity === Periodicity.insufficient_history ||
+    pattern.observedPattern === Periodicity.irregular ||
+    pattern.missingCycles ||
+    (pattern.observedPattern === Periodicity.annual && occurrences === 2)
+  ) {
+    return RecurrenceStrength.limited;
+  }
+
+  return occurrences >= 6
+    ? RecurrenceStrength.strong
+    : RecurrenceStrength.moderate;
+}
+
+function recurrenceOutcome(count: number, historyDays: number) {
+  if (count) {
+    return "candidates_found";
+  }
+
+  if (historyDays < 60) {
+    return Periodicity.insufficient_history;
+  }
+
+  return "no_candidates_in_snapshot";
+}
+
+function collectRecurrenceGroups(
+  rows: FinanceRecord[],
+  { currency, asOfDay }: Pick<RecurrenceOptions, "currency" | "asOfDay">,
+  groups: Map<string, RecurrenceGroup>,
+  exclude: (row: FinanceRecord, reason: string) => void,
+) {
+  for (const row of rows) {
+    const reason = exclusionReason(row, asOfDay);
+
+    if (reason) {
+      exclude(row, reason);
+      continue;
+    }
+
+    const name = nameFor(row);
+
+    if (!name) {
+      exclude(row, "missing_payee");
+      continue;
+    }
+
+    if (
+      typeof row.accountingDate !== "string" ||
+      typeof row.absoluteAmountMinor !== "string" ||
+      typeof row.accountId !== "string" ||
+      typeof row.currencyCode !== "string"
+    ) {
+      exclude(row, "missing_or_invalid_amount");
+      continue;
+    }
+
+    const key = JSON.stringify([
+      row.accountId,
+      currency,
+      name.source,
+      name.normalized,
+    ]);
+
+    const group = groups.get(key) ?? { name, rows: [] };
+    group.rows.push({
+      ...row,
+      accountingDate: row.accountingDate,
+      absoluteAmountMinor: row.absoluteAmountMinor,
+      accountId: row.accountId,
+      currencyCode: row.currencyCode,
+    });
+    groups.set(key, group);
+  }
 }

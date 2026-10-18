@@ -33,10 +33,11 @@ export async function createSession<E extends { Bindings: Bindings }>(
 }
 export async function sessionMiddleware(c: Context<PortalEnv>, next: Next) {
   const session = await readSession(c);
-  if (!session)
+  if (!session) {
     return c.req.path.startsWith("/api/")
       ? c.json({ issue: "session" }, 401)
       : c.redirect("/account/login");
+  }
   c.set("session", session);
   await next();
 }

@@ -19,7 +19,7 @@ const exec = promisify(execFile);
 const cli = (name: string, args: string[]) =>
   exec(
     process.execPath,
-    [join(projectRoot, "scripts", name + ".ts"), ...args],
+    [join(projectRoot, "scripts", `${name}.ts`), ...args],
     {
       timeout: 15_000,
       env: { ...process.env, CADERNINHO_TOKEN: "" },

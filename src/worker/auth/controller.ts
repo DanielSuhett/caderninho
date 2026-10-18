@@ -1,6 +1,6 @@
 import { OAuthProvider } from "@cloudflare/workers-oauth-provider";
 import { Hono } from "hono";
-import { getCookie, setCookie, deleteCookie } from "hono/cookie";
+import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { z } from "zod/v4";
 
 import { tryCatch } from "#shared/result.ts";
@@ -9,16 +9,16 @@ import { consentPage } from "#web/consent-view.tsx";
 import { renderPage } from "#web/document.tsx";
 import { accountRoutes } from "#worker/account/controller.ts";
 import {
-  token,
   adminConfigured,
-  verifyPassword,
   returnPath,
+  token,
+  verifyPassword,
 } from "#worker/auth/service.ts";
 import {
-  readSession,
   cookieOptions,
   createSession,
   type PortalEnv,
+  readSession,
 } from "#worker/auth/session.ts";
 import type { Bindings } from "#worker/bindings.ts";
 import { authService } from "#worker/composition.ts";
@@ -26,7 +26,7 @@ import { boundedForm, failureStatus, requestOrigin } from "#worker/http.ts";
 
 type McpHandler = (request: Request, env: Bindings) => Promise<Response>;
 
-export function oauth(env: Bindings, api: McpHandler, origin: string) {
+export function oauth(api: McpHandler, origin: string) {
   const routes = new Hono<{ Bindings: Bindings }>();
   routes.onError((error) => {
     throw error;
@@ -60,17 +60,20 @@ export function oauth(env: Bindings, api: McpHandler, origin: string) {
     const request = c.req.raw,
       bindings = c.env,
       helpers = bindings.OAUTH_PROVIDER;
-    if (request.headers.get("Origin") !== origin)
+    if (request.headers.get("Origin") !== origin) {
       return c.text("Origem não autorizada.", 403);
+    }
     if (
       !request.headers
         .get("Content-Type")
         ?.startsWith("application/x-www-form-urlencoded")
-    )
+    ) {
       return c.text("Formato inválido.", 415);
+    }
     const session = await readSession(c);
-    if (!session)
+    if (!session) {
       return c.text("Sessão expirada. Reabra a conexão pelo assistente.", 401);
+    }
     const form = await boundedForm(request),
       handle = String(form.get("handle"));
     if (form.get("decision") !== "approve") {
@@ -100,8 +103,9 @@ export function oauth(env: Bindings, api: McpHandler, origin: string) {
         auth: z.object({ scope: z.array(z.string()) }),
       })
       .parse(c.executionCtx);
-    if (!verified.auth.scope.includes("finance"))
+    if (!verified.auth.scope.includes("finance")) {
       return c.text("Forbidden", 403);
+    }
     await next();
   });
   authenticated.all("/mcp/*", (c) => api(c.req.raw, c.env));
@@ -114,7 +118,7 @@ export function oauth(env: Bindings, api: McpHandler, origin: string) {
     scopesSupported: ["finance", "offline_access"],
     requiredScopes: ["finance"],
     resourceMetadata: {
-      resource: origin + "/mcp",
+      resource: `${origin}/mcp`,
       authorization_servers: [origin],
     },
     apiHandler: {
@@ -134,9 +138,9 @@ export async function authenticatedFetch(
   api: McpHandler,
 ) {
   const result = await tryCatch(
-    oauth(env, api, requestOrigin(request)).fetch(request, env, ctx),
+    oauth(api, requestOrigin(request)).fetch(request, env, ctx),
   );
-  if (result.error)
+  if (result.error) {
     return Response.json(
       { error: "AUTHENTICATION_OR_REQUEST_FAILED" },
       {
@@ -144,6 +148,7 @@ export async function authenticatedFetch(
         headers: { "Cache-Control": "no-store" },
       },
     );
+  }
   return result.data;
 }
 
@@ -153,62 +158,75 @@ export function loginRoutes() {
   const app = new Hono<PortalEnv>();
   app.get("/account/login", async (c) => {
     const target = returnPath(c.req.query("returnTo"));
-    if (await readSession(c)) return c.redirect(target);
+    if (await readSession(c)) {
+      return c.redirect(target);
+    }
     const csrf = token();
     setCookie(c, loginCookie, csrf, { ...cookieOptions, maxAge: 600 });
     const configured = adminConfigured(c.env.ADMIN_PASSWORD);
     return c.html(
       renderPage(
-        accessPage(requestOrigin(c.req.raw), configured, csrf, "", target),
+        accessPage({
+          origin: requestOrigin(c.req.raw),
+          configured: configured,
+          csrf: csrf,
+          error: "",
+          target: target,
+        }),
       ),
       configured ? 200 : 503,
     );
   });
   app.post("/account/login", async (c) => {
-    if (c.req.header("Origin") !== requestOrigin(c.req.raw))
+    if (c.req.header("Origin") !== requestOrigin(c.req.raw)) {
       return c.text("Origem não autorizada.", 403);
+    }
     if (
       !c.req
         .header("Content-Type")
         ?.startsWith("application/x-www-form-urlencoded")
-    )
+    ) {
       return c.text("Formato inválido.", 415);
-    if (!adminConfigured(c.env.ADMIN_PASSWORD))
+    }
+    if (!adminConfigured(c.env.ADMIN_PASSWORD)) {
       return c.text("Acesso não configurado.", 503);
+    }
     const form = await boundedForm(c.req.raw);
     const csrf = getCookie(c, loginCookie);
-    if (!csrf || form.get("csrf") !== csrf)
+    if (!csrf || form.get("csrf") !== csrf) {
       return c.text("Atualize a página para entrar novamente.", 403);
+    }
     if (!(await authService(c.env).allowLoginAttempt())) {
       c.header("Retry-After", "60");
       return c.html(
         renderPage(
-          accessPage(
-            requestOrigin(c.req.raw),
-            true,
-            csrf,
-            "Limite de tentativas. Aguarde 60 segundos.",
-            returnPath(form.get("returnTo") ?? undefined),
-          ),
+          accessPage({
+            origin: requestOrigin(c.req.raw),
+            configured: true,
+            csrf: csrf,
+            error: "Limite de tentativas. Aguarde 60 segundos.",
+            target: returnPath(form.get("returnTo") ?? undefined),
+          }),
         ),
         429,
       );
     }
     if (
       !(await verifyPassword(c.env.ADMIN_PASSWORD, form.get("password") ?? ""))
-    )
+    ) {
       return c.html(
         renderPage(
-          accessPage(
-            requestOrigin(c.req.raw),
-            true,
-            csrf,
-            "Senha inválida.",
-            returnPath(form.get("returnTo") ?? undefined),
-          ),
+          accessPage({
+            origin: requestOrigin(c.req.raw),
+            configured: true,
+            csrf: csrf,
+            error: "Senha inválida.",
+            target: returnPath(form.get("returnTo") ?? undefined),
+          }),
         ),
         401,
       );
+    }
     await createSession(c);
     deleteCookie(c, loginCookie, cookieOptions);
     return c.redirect(returnPath(form.get("returnTo") ?? undefined), 303);

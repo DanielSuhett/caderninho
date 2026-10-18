@@ -4,11 +4,11 @@ import test from "node:test";
 import { z } from "zod/v4";
 
 import {
-  exactJSON,
-  decimal,
-  minor,
   accountingDay,
+  decimal,
+  exactJSON,
   localDay,
+  minor,
 } from "#domain/exact.ts";
 import { normalizeResource } from "#domain/finance-model.ts";
 

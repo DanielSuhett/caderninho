@@ -8,10 +8,10 @@ import { required, sourceUrl } from "#testing/helpers.ts";
 import { mockNetwork, syntheticJwt } from "#testing/network.ts";
 import { PersonalPluggyClient } from "#worker/pluggy/client.adapter.ts";
 import {
-  providerRetries,
   connectToken,
   financialSource,
   pluggyClient,
+  providerRetries,
   readAccount,
 } from "#worker/pluggy/source.ts";
 
@@ -39,7 +39,9 @@ test("SDK/Fetch in workerd preserve numeric lexemes and date strings on auth, re
     const url = sourceUrl(input);
     urls.push(url);
     assert.equal(url.origin, origin);
-    if (url.pathname === "/auth") return auth();
+    if (url.pathname === "/auth") {
+      return auth();
+    }
     return new Response(
       '{"id":"account","balance":9007199254740993.29,"quantity":1.234567890123456789,"updatedAt":"2026-10-01T01:02:03-03:00","accessToken":"synthetic-connect"}',
     );
@@ -69,8 +71,9 @@ test("tokens are reused only inside a client and invalidated after a 401 without
     }
     reads++;
     tokens.push(new Headers(init?.headers).get("X-API-KEY") ?? "");
-    if (reads === 2)
+    if (reads === 2) {
       return new Response("private unauthorized body", { status: 401 });
+    }
     return Response.json({ id: "account" });
   });
   const alice = client();
@@ -103,7 +106,9 @@ test("HTTP errors keep original status and headers, map non-JSON safely, and nev
     let requests = 0;
     mockNetwork(async (input) => {
       requests++;
-      if (sourceUrl(input).pathname === "/auth") return auth();
+      if (sourceUrl(input).pathname === "/auth") {
+        return auth();
+      }
       return new Response(body, { status, headers: { "Retry-After": "42" } });
     });
     const sdk = client();
@@ -121,7 +126,13 @@ test("HTTP errors keep original status and headers, map non-JSON safely, and nev
       return true;
     });
     await assert.rejects(
-      financialSource(sdk).page("accounts", "item", "", null, null),
+      financialSource(sdk).page({
+        resource: "accounts",
+        item: "item",
+        parent: "",
+        cursor: null,
+        floor: null,
+      }),
       (error) =>
         error instanceof Fault &&
         error.code === code &&
@@ -145,7 +156,9 @@ test("redirects are rejected before reading their body or forwarding API keys", 
     mockNetwork(async (input) => {
       calls++;
       const path = sourceUrl(input).pathname;
-      if (path === "/auth" && redirectAt !== path) return auth();
+      if (path === "/auth" && redirectAt !== path) {
+        return auth();
+      }
       assert.equal(path, redirectAt);
       return new Response(
         new ReadableStream({
@@ -178,7 +191,9 @@ test("byte limits stop streaming reads regardless of missing or dishonest Conten
   ]) {
     let chunks = 0;
     mockNetwork(async (input) => {
-      if (sourceUrl(input).pathname === "/auth") return auth();
+      if (sourceUrl(input).pathname === "/auth") {
+        return auth();
+      }
       return new Response(
         new ReadableStream({
           pull(controller) {
@@ -198,8 +213,9 @@ test("byte limits stop streaming reads regardless of missing or dishonest Conten
   }
   for (const path of ["/auth", "/connect_token"]) {
     mockNetwork(async (input) => {
-      if (sourceUrl(input).pathname === "/auth" && path !== "/auth")
+      if (sourceUrl(input).pathname === "/auth" && path !== "/auth") {
         return auth();
+      }
       return new Response("x".repeat(16385));
     });
     await assert.rejects(
@@ -214,7 +230,9 @@ test("Fetch request timeout covers a stalled response body and does not retry", 
   let calls = 0;
   mockNetwork(async (input) => {
     calls++;
-    if (sourceUrl(input).pathname === "/auth") return auth();
+    if (sourceUrl(input).pathname === "/auth") {
+      return auth();
+    }
     return new Response(
       new ReadableStream({
         start(controller) {
@@ -234,32 +252,41 @@ test("SDK pages preserve encoded cursors, creation floor, response scope and exp
   const paths: URL[] = [];
   mockNetwork(async (input) => {
     const url = sourceUrl(input);
-    if (url.pathname === "/auth") return auth();
+    if (url.pathname === "/auth") {
+      return auth();
+    }
     paths.push(url);
     assert.equal(url.pathname, "/v2/transactions");
-    if (url.searchParams.has("ids"))
+    if (url.searchParams.has("ids")) {
       return Response.json({
         results: [{ id: "tx", accountId: "account" }],
         next: null,
       });
+    }
     return Response.json({
       results: [],
       next:
         paths.length === 1
-          ? "?accountId=account&after=" + encodeURIComponent(cursor)
+          ? `?accountId=account&after=${encodeURIComponent(cursor)}`
           : null,
     });
   });
   const source = financialSource(client());
-  const first = await source.page(
-    "transactions",
-    "item",
-    "account",
-    null,
-    floor,
-  );
+  const first = await source.page({
+    resource: "transactions",
+    item: "item",
+    parent: "account",
+    cursor: null,
+    floor: floor,
+  });
   assert.equal(first.next, cursor);
-  await source.page("transactions", "item", "account", first.next, floor);
+  await source.page({
+    resource: "transactions",
+    item: "item",
+    parent: "account",
+    cursor: first.next,
+    floor: floor,
+  });
   assert.equal(required(paths[1]).searchParams.get("after"), cursor);
   assert.equal(required(paths[0]).searchParams.get("createdAtFrom"), floor);
   assert.equal(required(paths[1]).searchParams.get("createdAtFrom"), floor);
@@ -279,13 +306,13 @@ test("SDK pages preserve encoded cursors, creation floor, response scope and exp
         : Response.json({ results: [], next: value }),
     );
     await assert.rejects(
-      financialSource(client()).page(
-        "transactions",
-        "item",
-        "account",
-        "previous",
-        floor,
-      ),
+      financialSource(client()).page({
+        resource: "transactions",
+        item: "item",
+        parent: "account",
+        cursor: "previous",
+        floor: floor,
+      }),
       code,
     );
   }
@@ -298,13 +325,13 @@ test("SDK pages preserve encoded cursors, creation floor, response scope and exp
         }),
   );
   await assert.rejects(
-    financialSource(client()).page(
-      "transactions",
-      "item",
-      "account",
-      null,
-      floor,
-    ),
+    financialSource(client()).page({
+      resource: "transactions",
+      item: "item",
+      parent: "account",
+      cursor: null,
+      floor: floor,
+    }),
     /SOURCE_SCOPE_MISMATCH/,
   );
   await assert.rejects(
@@ -316,7 +343,9 @@ test("SDK pages preserve encoded cursors, creation floor, response scope and exp
 test("429 Retry-After is returned to the Workflow and waited outside a durable step", async () => {
   let reads = 0;
   mockNetwork(async (input) => {
-    if (sourceUrl(input).pathname === "/auth") return auth();
+    if (sourceUrl(input).pathname === "/auth") {
+      return auth();
+    }
     reads++;
     return reads === 1
       ? new Response("private", {
@@ -356,12 +385,19 @@ test("every financial resource uses the public SDK operation with one-page check
   const paths: URL[] = [];
   mockNetwork(async (input) => {
     const url = sourceUrl(input);
-    if (url.pathname === "/auth") return auth();
+    if (url.pathname === "/auth") {
+      return auth();
+    }
     paths.push(url);
-    if (url.pathname === "/items/item") return Response.json({ id: "item" });
-    if (url.pathname === "/connectors/200") return Response.json({ id: 200 });
-    if (url.pathname === "/identity")
+    if (url.pathname === "/items/item") {
+      return Response.json({ id: "item" });
+    }
+    if (url.pathname === "/connectors/200") {
+      return Response.json({ id: 200 });
+    }
+    if (url.pathname === "/identity") {
       return Response.json({ id: "identity", itemId: "item" });
+    }
     return Response.json({
       results: [{ id: "record" }],
       page: url.searchParams.get("page") ?? 1,
@@ -383,30 +419,30 @@ test("every financial resource uses the public SDK operation with one-page check
     ["identity", "/identity"],
     ["categories", "/categories"],
     ["statements", "/accounts/parent/statements"],
-  ] satisfies [Parameters<typeof source.page>[0], string][];
+  ] satisfies [Parameters<typeof source.page>[0]["resource"], string][];
   for (const [resource, path] of operations) {
     const before = paths.length;
-    const page = await source.page(
-      resource,
-      "item",
-      "parent",
-      null,
-      null,
-      "200",
-    );
+    const page = await source.page({
+      resource: resource,
+      item: "item",
+      parent: "parent",
+      cursor: null,
+      floor: null,
+      connectorId: "200",
+    });
     assert.equal(paths.length, before + 1);
     assert.equal(required(paths[before]).pathname, path);
     assert.equal(page.records.length, 1);
     if (required(paths[before]).searchParams.has("page")) {
       assert.equal(page.next, "2");
-      const last = await source.page(
-        resource,
-        "item",
-        "parent",
-        page.next,
-        null,
-        "200",
-      );
+      const last = await source.page({
+        resource: resource,
+        item: "item",
+        parent: "parent",
+        cursor: page.next,
+        floor: null,
+        connectorId: "200",
+      });
       assert.equal(last.next, null);
       assert.equal(required(paths[before + 1]).searchParams.get("page"), "2");
       assert.equal(

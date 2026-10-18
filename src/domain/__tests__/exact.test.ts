@@ -10,9 +10,10 @@ await test("stored minor units preserve the shared integer and 30-digit precisio
     "1",
     "-1",
     "9".repeat(30),
-    "-" + "9".repeat(30),
-  ])
+    `-${"9".repeat(30)}`,
+  ]) {
     assert.doesNotThrow(() => assertMinor(value));
+  }
 
   for (const value of [
     "",
@@ -22,12 +23,13 @@ await test("stored minor units preserve the shared integer and 30-digit precisio
     "1.0",
     "1e2",
     "9".repeat(31),
-    "-" + "9".repeat(31),
-  ])
+    `-${"9".repeat(31)}`,
+  ]) {
     assert.throws(
       () => assertMinor(value),
       /canonical integer, at most 30 digits/,
     );
+  }
 });
 
 await test("decimal canonical output preserves signs, exponent bounds and values beyond IEEE precision", () => {
@@ -38,16 +40,17 @@ await test("decimal canonical output preserves signs, exponent bounds and values
     ["-000.000e30", "0"],
     ["+001.2300", "1.23"],
     ["-000001.2300e-2", "-0.0123"],
-    ["1e-30", "0." + "0".repeat(29) + "1"],
-    ["1e30", "1" + "0".repeat(30)],
+    ["1e-30", `0.${"0".repeat(29)}1`],
+    ["1e30", `1${"0".repeat(30)}`],
     ["9007199254740993.290000", "9007199254740993.29"],
     [
       "123456789012345678901234567890.1234567890123456789",
       "123456789012345678901234567890.1234567890123456789",
     ],
     [0.29, "0.29"],
-  ] satisfies [string | number | null | undefined, string | null][])
+  ] satisfies [string | number | null | undefined, string | null][]) {
     assert.equal(decimal(input), expected);
+  }
 });
 
 await test("decimal rejection and comparison preserve left-to-right error precedence", () => {
@@ -61,11 +64,13 @@ await test("decimal rejection and comparison preserve left-to-right error preced
     "1e",
     "1e+",
     "1".repeat(101),
-  ] as const)
+  ] as const) {
     assert.throws(() => decimal(input), /INVALID_DECIMAL/);
+  }
 
-  for (const input of ["1e31", "1e-31", "1e99999999999999999"])
+  for (const input of ["1e31", "1e-31", "1e99999999999999999"]) {
     assert.throws(() => decimal(input), /DECIMAL_RANGE/);
+  }
 
   assert.throws(() => compareDecimal(null, "1e31"), /INVALID_DECIMAL/);
   assert.throws(() => compareDecimal("1e31", null), /DECIMAL_RANGE/);
@@ -79,8 +84,9 @@ await test("decimal rejection and comparison preserve left-to-right error preced
     ["1e-30", "0", 1],
     ["0", "1e30", -1],
     ["0.12345678901234567891", "0.12345678901234567890", 1],
-  ] satisfies [string, string, number][])
+  ] satisfies [string, string, number][]) {
     assert.equal(compareDecimal(a, b), expected);
+  }
 });
 
 await test("currency scales retain exact integers and reject excess precision without rounding", () => {
@@ -96,6 +102,7 @@ await test("currency scales retain exact integers and reject excess precision wi
     ["1.001", "BRL"],
     ["1.1", "JPY"],
     ["1.2345", "KWD"],
-  ] as const)
+  ] as const) {
     assert.throws(() => minor(value, currency), /MONEY_PRECISION_UNSUPPORTED/);
+  }
 });

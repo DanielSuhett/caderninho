@@ -139,8 +139,9 @@ implementação. O checker não tenta julgar semântica pela presença de uma st
 
 Testes unitários ficam em `__tests__` junto ao módulo. `tests/integration` contém
 fixtures e testes de D1, HTTP, OAuth e Workflows; `tests/support` contém helpers
-exclusivos de testes. `tools/oxlint` conserva as regras locais e a proveniência
-do código de terceiros. As migrações SQL em `migrations` mantêm sua ordem.
+exclusivos de testes. `biome.json` concentra lint, formatação e organização de
+imports com regras nativas; [a migração](biome-migration.md) registra as diferenças
+de cobertura. As migrações SQL em `migrations` mantêm sua ordem.
 
 Os comandos e convenções de contribuição estão em [CONTRIBUTING.md](../CONTRIBUTING.md).
 A identidade visual está em [DESIGN.md](../DESIGN.md), e a instalação e operação em

@@ -1,6 +1,6 @@
 import { Button, LinkButton } from "@cloudflare/kumo/components/button";
 import { Input } from "@cloudflare/kumo/components/input";
-import { useId, type ComponentProps } from "react";
+import { type ComponentProps, useId } from "react";
 
 type DataAttributes = { [key: `data-${string}`]: string };
 
@@ -40,12 +40,12 @@ export function UiField({
   ...props
 }: ComponentProps<typeof Input> & { label: string }) {
   const generatedId = useId();
-  const id = props.id ?? "field-" + generatedId;
+  const id = props.id ?? `field-${generatedId}`;
   // Keep caller IDs: Kumo's built-in Field wrapper generates its own ID.
   return (
     <div className="field">
       <label
-        id={id + "-label"}
+        id={`${id}-label`}
         htmlFor={id}
       >
         {label}
@@ -54,7 +54,7 @@ export function UiField({
         size="lg"
         {...props}
         id={id}
-        aria-labelledby={id + "-label"}
+        aria-labelledby={`${id}-label`}
       />
     </div>
   );

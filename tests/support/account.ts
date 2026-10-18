@@ -1,7 +1,7 @@
-import { AccountResponseSchema } from "#contracts/portal-contract.ts";
+import type { AccountResponse } from "#contracts/portal-contract.ts";
 
-export function accountSnapshot() {
-  return AccountResponseSchema.parse({
+export function accountSnapshot(): AccountResponse {
+  return {
     origin: "https://caderninho.test",
     csrf: "synthetic-csrf",
     checkedAt: "2026-10-17T12:00:00Z",
@@ -15,5 +15,5 @@ export function accountSnapshot() {
       paused: false,
       coverage: { total: 2, complete: 1 },
     },
-  });
+  };
 }

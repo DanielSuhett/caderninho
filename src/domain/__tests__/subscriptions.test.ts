@@ -44,7 +44,7 @@ function tx(
 
 const monthly = (prefix = "m", extra: Parameters<typeof tx>[3] = {}) =>
   ["07", "08", "09"].map((month) =>
-    tx(prefix + month, "2026-" + month + "-05", "10.00", extra),
+    tx(prefix + month, `2026-${month}-05`, "10.00", extra),
   );
 
 const direct = (
@@ -136,11 +136,12 @@ await test("installments, own transfers, bill payments, refunds, pending, future
     "missing_or_invalid_amount",
     "missing_payee",
     "future",
-  ])
+  ]) {
     assert.ok(
       result.exclusions.some((e) => e.reason === reason),
       reason,
     );
+  }
   assert.equal(result.recordCount, extras.length + 3);
   const excluded = result.exclusions.reduce((n, e) => n + e.count, 0);
   assert.equal(excluded, extras.length);
@@ -188,7 +189,7 @@ await test("grouping is conservative: accounts/sources separated, whitespace/cas
 
 await test("weekly, quarterly, annual, missing cycles and insufficient history remain explicit", () => {
   const weekly = direct(
-    ["2026-09-01", "2026-09-08", "2026-09-15"].map((d, i) => tx("w" + i, d)),
+    ["2026-09-01", "2026-09-08", "2026-09-15"].map((d, i) => tx(`w${i}`, d)),
   );
 
   assert.equal(required(weekly.candidates[0]).periodicity, "weekly");
@@ -203,7 +204,7 @@ await test("weekly, quarterly, annual, missing cycles and insufficient history r
   );
 
   const quarterly = direct(
-    ["2026-01-31", "2026-04-30", "2026-07-31"].map((d, i) => tx("q" + i, d)),
+    ["2026-01-31", "2026-04-30", "2026-07-31"].map((d, i) => tx(`q${i}`, d)),
     { from: "2026-01-01" },
   );
 
@@ -229,7 +230,7 @@ await test("weekly, quarterly, annual, missing cycles and insufficient history r
   assert.equal(required(short.candidates[0]).observedPattern, "monthly");
 
   const gaps = direct(
-    ["2026-06-05", "2026-07-05", "2026-09-05"].map((d, i) => tx("gap" + i, d)),
+    ["2026-06-05", "2026-07-05", "2026-09-05"].map((d, i) => tx(`gap${i}`, d)),
     { from: "2026-06-01" },
   );
 
@@ -241,7 +242,7 @@ await test("weekly, quarterly, annual, missing cycles and insufficient history r
 
   const irregular = direct(
     ["2026-07-01", "2026-07-12", "2026-08-22", "2026-09-30"].map((d, i) =>
-      tx("i" + i, d),
+      tx(`i${i}`, d),
     ),
   );
 
@@ -253,7 +254,7 @@ await test("weekly, quarterly, annual, missing cycles and insufficient history r
 
   const burst = direct(
     ["2026-07-01", "2026-07-02", "2026-07-03"].map((d, i) =>
-      tx("burst" + i, d),
+      tx(`burst${i}`, d),
     ),
   );
 

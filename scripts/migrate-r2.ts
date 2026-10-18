@@ -1,13 +1,13 @@
 // Reads an explicitly exported R2 directory. Never deletes R2 or touches it remotely.
 import { readdir, readFile } from "node:fs/promises";
-import { resolve, relative, join } from "node:path";
+import { join, relative, resolve } from "node:path";
 import { parseArgs } from "node:util";
 
 import { z } from "zod/v4";
 
 import { MigrationRowSchema } from "#contracts/operation.ts";
 import { DEFINITIONS } from "#domain/finance-model.ts";
-import { SnapshotSchema, FinanceRecordSchema } from "#domain/schemas.ts";
+import { FinanceRecordSchema, SnapshotSchema } from "#domain/schemas.ts";
 import { tryCatch } from "#shared/result.ts";
 import { hash } from "#worker/database.ts";
 
@@ -39,8 +39,9 @@ export async function main(args = process.argv.slice(2)) {
       "batch-size": z.coerce.number().int().min(1).max(20),
     })
     .parse(values);
-  if (options.apply && !options.endpoint)
+  if (options.apply && !options.endpoint) {
     throw new Error("--apply requires --endpoint");
+  }
   const endpoint = options.endpoint
     ? adminEndpoint(options.endpoint)
     : undefined;
@@ -50,26 +51,33 @@ export async function main(args = process.argv.slice(2)) {
   const root = resolve(options.directory),
     itemId = options.item,
     selected = new Map<string, z.infer<typeof MigrationRowSchema>>();
-  let overlaps = 0,
-    manifests = 0;
-  async function visit(dir: string): Promise<void> {
+  let overlaps = 0;
+  async function visit(dir: string): Promise<number> {
+    let manifests = 0;
     for (const entry of await readdir(dir, { withFileTypes: true })) {
       const file = join(dir, entry.name);
       if (entry.isDirectory()) {
-        await visit(file);
+        manifests += await visit(file);
         continue;
       }
-      if (!entry.isFile() || !entry.name.endsWith(".json")) continue;
+      if (!entry.isFile() || !entry.name.endsWith(".json")) {
+        continue;
+      }
       const parsed = SnapshotSchema.safeParse(
         JSON.parse(await readFile(file, "utf8")),
       );
-      if (!parsed.success || parsed.data.itemId !== itemId) continue;
+      if (!parsed.success || parsed.data.itemId !== itemId) {
+        continue;
+      }
       manifests++;
       for (const collection of Object.values(parsed.data.collections)) {
-        if (!collection.dataKey) continue;
+        if (!collection.dataKey) {
+          continue;
+        }
         const dataFile = resolve(root, collection.dataKey);
-        if (relative(root, dataFile).startsWith(".."))
+        if (relative(root, dataFile).startsWith("..")) {
           throw new Error("INVALID_R2_KEY");
+        }
         const data = z
           .object({ records: z.array(FinanceRecordSchema) })
           .parse(JSON.parse(await readFile(dataFile, "utf8")));
@@ -85,7 +93,7 @@ export async function main(args = process.argv.slice(2)) {
                 )
             : "";
           const row = MigrationRowSchema.parse({
-            sourceKey: collection.dataKey + "#" + record.id,
+            sourceKey: `${collection.dataKey}#${record.id}`,
             readAt: collection.readAt,
             resource: collection.resource,
             parentId,
@@ -95,25 +103,31 @@ export async function main(args = process.argv.slice(2)) {
             prior = selected.get(key);
           if (prior && (await hash(prior.record)) !== (await hash(record))) {
             overlaps++;
-            if (options.overlap !== "newest")
+            if (options.overlap !== "newest") {
               throw new Error(
                 "Overlapping exported records differ. Review export and explicitly choose --overlap newest.",
               );
-            if (prior.readAt === row.readAt)
+            }
+            if (prior.readAt === row.readAt) {
               throw new Error(
                 "Equal reference time with conflicting records requires manual resolution in a copy of the export.",
               );
+            }
           }
-          if (!prior || prior.readAt < row.readAt) selected.set(key, row);
+          if (!prior || prior.readAt < row.readAt) {
+            selected.set(key, row);
+          }
         }
       }
     }
+    return manifests;
   }
-  await visit(root);
-  if (!manifests)
+  const manifests = await visit(root);
+  if (!manifests) {
     throw new Error(
       "No supported snapshots for the requested Item. Legacy v1 exports require an explicit converter; nothing imported.",
     );
+  }
   console.log(
     JSON.stringify({
       manifests,
@@ -123,7 +137,9 @@ export async function main(args = process.argv.slice(2)) {
       applied: false,
     }),
   );
-  if (!endpoint) return;
+  if (!endpoint) {
+    return;
+  }
   const size = options["batch-size"],
     all = [...selected.values()];
   for (let offset = 0; offset < all.length; offset += size) {
@@ -137,10 +153,11 @@ export async function main(args = process.argv.slice(2)) {
         apply: options.apply,
       },
     );
-    if (!response.ok)
+    if (!response.ok) {
       throw new Error(
         `Migration HTTP ${response.status}; committed batches remain. Reuse identical input to resume.`,
       );
+    }
     console.log(JSON.stringify(await response.json()));
   }
 }

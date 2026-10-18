@@ -9,7 +9,7 @@ await test("financial failure overrides transport completion and setup never equ
     config: { sync_enabled: 1, connected_at: "today" },
     items: [{ id: "synthetic-item" }],
     coverage: { total: 4, complete: 1 },
-    latest: { status: "completed", phase: "error", updated_at: "now" },
+    latest: { status: "completed" as const, phase: "error", updated_at: "now" },
   };
   assert.equal(wizardState(evidence, true).sync, "error");
   assert.deepEqual(wizardState(evidence, true).coverage, {
@@ -45,9 +45,10 @@ await test("financial failure overrides transport completion and setup never equ
     "UPSTREAM_NETWORK",
     "UPSTREAM_UNAVAILABLE",
     "UPSTREAM_ERROR",
-  ])
+  ]) {
     assert.equal(
       wizardIssue(Object.assign(new Error("private upstream body"), { code })),
       "unavailable",
     );
+  }
 });

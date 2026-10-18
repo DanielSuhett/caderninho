@@ -1,3 +1,6 @@
+button {
+  margin: 6px 8px 6px 0;
+}
 main {
   max-width: 1120px;
 }
@@ -35,9 +38,6 @@ main {
 .setup-layout h2:focus {
   outline: 2px solid var(--accent);
   outline-offset: 6px;
-}
-button {
-  margin: 6px 8px 6px 0;
 }
 label {
   display: block;

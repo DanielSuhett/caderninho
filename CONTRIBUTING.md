@@ -12,28 +12,31 @@ de build e fronteiras de segurança mesmo quando os arquivos são pequenos.
 
 ## Validar uma mudança
 
-Use a linha Node 24 indicada por `.nvmrc`:
+Use o mise para selecionar Node 24 e executar a rotina local:
 
 ```sh
-nvm use
-npm ci
-npm run check:imports
-npm test
-npm run lint
-npm run format:check
-npm run typecheck
-npm run test:product
-npm run build
-npm run test:product:runtime
+mise trust
+mise install
+mise run setup
+mise run check
 ```
+
+Durante uma edição, use `mise run check:quick`. Consulte `mise tasks ls` e o
+[guia do mise](docs/mise.md) para tasks individuais, diagnóstico completo do
+Biome e as decisões baseadas no histórico recente. O lint ainda tem os
+diagnósticos pendentes registrados no [relatório](docs/reports/biome-migration.md);
+por isso as sequências que o incluem ainda terminam com erro.
+
+Os scripts npm continuam disponíveis sem o mise: selecione Node 24 pela `.nvmrc`
+com `nvm use`, execute `npm ci` e os comandos de `package.json`.
 
 A CI executa os checks com dados sintéticos, SQLite e workerd locais. Não faz
 deploy nem consulta bancos reais. Build dry-run e execução local são provas distintas.
 
 ## Layout e TypeScript
 
-Oxfmt aplica 80 colunas e um atributo JSX por linha. Execute `npm run lint:fix`
-para correções seguras de imports e `npm run format` para layout e ordenação.
+Biome aplica 80 colunas e atributos JSX em múltiplas linhas. Execute `npm run lint:fix`
+para correções seguras e organização de imports e `npm run format` para layout.
 Revise consolidação de imports separadamente da formatação global; repetir os
 dois comandos depois da consolidação deve produzir zero alterações adicionais.
 Imports com valores e tipos usam `import { value, type Type }`; imports só de

@@ -1,8 +1,8 @@
 import type {
   MigrationRequest,
-  WebhookEvent,
   OperationInput,
   OperationStatus,
+  WebhookEvent,
 } from "#contracts/operation.ts";
 import type { Resource } from "#domain/enums.ts";
 import type { ProviderRecord } from "#domain/schemas.ts";
@@ -15,14 +15,14 @@ export interface OperationHandle {
 }
 
 export interface FinancialSource {
-  page(
-    resource: Resource,
-    item: string,
-    parent: string,
-    cursor: string | null,
-    floor: string | null,
-    connectorId?: string,
-  ): Promise<{
+  page(input: {
+    resource: Resource;
+    item: string;
+    parent: string;
+    cursor: string | null;
+    floor: string | null;
+    connectorId?: string | undefined;
+  }): Promise<{
     records: ProviderRecord[];
     next: string | null;
     total?: number;
@@ -72,13 +72,17 @@ export async function runOperation(
 ) {
   const session = await dependencies.open(id);
   const op = session.operation;
-  if (op.status !== "working") return;
+  if (op.status !== "working") {
+    return;
+  }
   for (let n = 0; ; n++) {
     if (await session.cancelled()) {
       await session.finish("cancelled");
       return;
     }
-    if (await step.do(`acquire-${n}`, () => session.acquire())) break;
+    if (await step.do(`acquire-${n}`, () => session.acquire())) {
+      break;
+    }
     await step.sleep(`queued-${n}`, "10 seconds");
   }
   const execution = await tryCatch(
@@ -141,7 +145,9 @@ export async function scheduleSync(
   now: Date,
 ) {
   const due = await store.due(now.toISOString());
-  if (!due) return;
+  if (!due) {
+    return;
+  }
   // A failed dispatch is recoverable through the durable outbox.
   await tryCatch(
     (async () => {
@@ -154,7 +160,9 @@ export async function scheduleSync(
           ? new Date(now.getTime() + 7 * 86400000).toISOString()
           : due.reconcile_after,
       );
-      if (op) await dispatch(op);
+      if (op) {
+        await dispatch(op);
+      }
     })(),
   );
 }
@@ -168,31 +176,36 @@ export function createSyncService(
   now: () => Date = () => new Date(),
 ) {
   const dispatch = async (op: OperationHandle) => {
-    if (op.status !== "working" || !(await repository.needsDispatch(op.id)))
+    if (op.status !== "working" || !(await repository.needsDispatch(op.id))) {
       return;
+    }
     const created = await tryCatch(workflow.create(op.id));
     if (created.error) {
       const existing = await tryCatch(workflow.status(op.id));
-      if (existing.error) throw created.error;
+      if (existing.error) {
+        throw created.error;
+      }
     }
     await repository.markDispatched(op.id);
   };
   return {
     dispatch,
     async recover() {
-      for (const op of await repository.operations(false))
+      for (const op of await repository.operations(false)) {
         await tryCatch(dispatch(op));
+      }
       for (const op of await repository.operations(true)) {
         const state = await tryCatch(workflow.status(op.id));
-        if (!state.error && ["errored", "terminated"].includes(state.data))
+        if (!state.error && ["errored", "terminated"].includes(state.data)) {
           await repository.finish(
             op.id,
             state.data === "terminated" ? "cancelled" : "completed",
             state.data === "errored",
           );
+        }
       }
       for (const event of await repository.inbox()) {
-        const op = await repository.start("webhook:" + event.event_id, {
+        const op = await repository.start(`webhook:${event.event_id}`, {
           kind: "webhook",
           itemIds: [event.item_id],
           eventId: event.event_id,
@@ -206,18 +219,20 @@ export function createSyncService(
       if (
         event.event === "transactions/created" &&
         !event.transactionsCreatedAtFrom
-      )
+      ) {
         throw new Error("MISSING_CREATION_FLOOR");
+      }
       if (
         event.event !== "transactions/created" &&
         !event.transactionIds?.length
-      )
+      ) {
         throw new Error("MISSING_TRANSACTION_IDS");
+      }
       return repository.acceptWebhook(event, now().toISOString());
     },
     async migrate(input: MigrationRequest) {
       const overlaps = await repository.migrationOverlaps(input);
-      if (!input.apply)
+      if (!input.apply) {
         return {
           status: 200 as const,
           body: {
@@ -227,13 +242,15 @@ export function createSyncService(
             applied: false,
           },
         };
-      if (overlaps && input.policy === "refuse-conflicts")
+      }
+      if (overlaps && input.policy === "refuse-conflicts") {
         return {
           status: 409 as const,
           body: { error: "MIGRATION_OVERLAP_REQUIRES_POLICY", overlaps },
         };
+      }
       const op = await repository.start(
-        "migration:" + (await repository.fingerprint(input)),
+        `migration:${await repository.fingerprint(input)}`,
         {
           kind: "migration",
           itemIds: [input.itemId],

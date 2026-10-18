@@ -4,6 +4,7 @@ import test from "node:test";
 import type { PluggyConnect } from "pluggy-connect-sdk";
 
 import { accountSnapshot } from "#testing/account.ts";
+import { required } from "#testing/helpers.ts";
 import {
   AccountRequestError,
   createAccountApi,
@@ -16,8 +17,12 @@ await test("account commands preserve CSRF, validate responses and never retry a
   const api = createAccountApi("https://caderninho.test", async (input) => {
     const request = new Request(input);
     requests.push(request);
-    if (request.method === "GET") return Response.json(accountSnapshot());
-    if (request.url.endsWith("/pause")) return Response.json({ ok: true });
+    if (request.method === "GET") {
+      return Response.json(accountSnapshot());
+    }
+    if (request.url.endsWith("/pause")) {
+      return Response.json({ ok: true });
+    }
     return Response.json(
       { issue: "rate", private: "never exposed" },
       { status: 429 },
@@ -105,7 +110,7 @@ await test("widget ignores late SDK loading and stale events after replacement o
   assert.equal(destroyed, 1);
   await events[0]?.onError?.({ message: "ignored" });
   await events[0]?.onClose?.();
-  assert.deepEqual(events[1]?.connectorIds, [200]);
+  assert.deepEqual(required(events[1]).connectorIds, [200]);
   await widget.destroy();
   await events[1]?.onClose?.();
   assert.equal(destroyed, 2);

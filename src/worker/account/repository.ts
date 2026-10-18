@@ -1,160 +1,183 @@
-import { z } from "zod/v4";
+import { and, count, desc, eq, gt, gte, inArray, lte, sql } from "drizzle-orm";
 
 import { ResourceSchema } from "#domain/enums.ts";
 import { tryCatch } from "#shared/result.ts";
 import type { Bindings } from "#worker/bindings.ts";
-import { hash, statement } from "#worker/database.ts";
+import { database, hash } from "#worker/database.ts";
 import { authorizedItems } from "#worker/finance/repository.ts";
+import {
+  coverage,
+  items,
+  login_attempts,
+  operations,
+  portal_sessions,
+  settings,
+} from "#worker/schema.ts";
 
 export async function assertPluggyApplication(
-  db: D1Database,
+  binding: D1Database,
   clientId: string,
 ) {
-  const configured = z
-    .object({ client_id_hash: z.string().nullable() })
-    .parse(
-      await statement(
-        db,
-        "SELECT client_id_hash FROM settings WHERE id=1",
-      ).first(),
-    );
+  const configured = await database(binding)
+    .select({ client_id_hash: settings.client_id_hash })
+    .from(settings)
+    .where(eq(settings.id, 1))
+    .get();
+  if (!configured) {
+    throw new Error("SETTINGS_MISSING");
+  }
   const fingerprint = await hash(clientId);
-  if (configured.client_id_hash && configured.client_id_hash !== fingerprint)
+  if (configured.client_id_hash && configured.client_id_hash !== fingerprint) {
     throw new Error("APPLICATION_CHANGE_REQUIRES_MIGRATION");
+  }
   return fingerprint;
 }
-
-export function connectionStore(db: D1Database) {
+export function connectionStore(binding: D1Database) {
+  const db = database(binding);
   return {
     async itemAccess(itemId: string) {
-      const count = z.coerce
-        .number()
-        .parse(
-          await statement(db, "SELECT COUNT(*) AS n FROM items").first("n"),
-        );
+      const row = await db.select({ count: count() }).from(items).get();
       return {
-        count,
+        count: row?.count ?? 0,
         exists: Boolean(
-          await statement(
-            db,
-            "SELECT id FROM items WHERE id=?",
-            itemId,
-          ).first(),
+          await db
+            .select({ id: items.id })
+            .from(items)
+            .where(eq(items.id, itemId))
+            .get(),
         ),
       };
     },
     async connect(itemId: string, clientId: string, now: string) {
       await db.batch([
-        statement(
-          db,
-          "UPDATE settings SET client_id_hash=?,sync_enabled=1,next_sync_at=?,connected_at=? WHERE id=1",
-          await hash(clientId),
-          now,
-          now,
-        ),
-        statement(
-          db,
-          "INSERT INTO items(id,resources,enabled) VALUES(?,?,1) ON CONFLICT(id) DO UPDATE SET enabled=1",
-          itemId,
-          JSON.stringify(ResourceSchema.options),
-        ),
+        db
+          .update(settings)
+          .set({
+            client_id_hash: await hash(clientId),
+            sync_enabled: 1,
+            next_sync_at: now,
+            connected_at: now,
+          })
+          .where(eq(settings.id, 1)),
+        db
+          .insert(items)
+          .values({ id: itemId, resources: ResourceSchema.options, enabled: 1 })
+          .onConflictDoUpdate({ target: items.id, set: { enabled: 1 } }),
       ]);
     },
   };
 }
-
-export async function readPortalStatus(db: D1Database) {
-  const config = z
-    .object({ sync_enabled: z.number(), connected_at: z.string() })
-    .parse(
-      await statement(
-        db,
-        "SELECT sync_enabled,connected_at FROM settings WHERE id=1",
-      ).first(),
-    );
-  const latest = z
-    .object({ status: z.string(), phase: z.string(), updated_at: z.string() })
-    .nullable()
-    .parse(
-      await statement(
-        db,
-        "SELECT status,phase,updated_at FROM operations WHERE kind IN ('sync','reconcile') AND created_at>=? ORDER BY created_at DESC LIMIT 1",
-        config.connected_at,
-      ).first(),
-    );
-  const items = z
-    .array(z.object({ id: z.string() }))
-    .parse(
-      (
-        await statement(
-          db,
-          "SELECT id FROM items WHERE enabled=1 ORDER BY id",
-        ).all()
-      ).results,
-    );
-  const coverage = z
-    .object({ total: z.number(), complete: z.number().nullable() })
-    .parse(
-      await statement(
-        db,
-        "SELECT COUNT(*) AS total,SUM(CASE WHEN status IN ('available','empty') AND bootstrap_complete=1 THEN 1 ELSE 0 END) AS complete FROM coverage",
-      ).first(),
-    );
-  return { config, latest, items, coverage };
+export async function readPortalStatus(binding: D1Database) {
+  const db = database(binding);
+  const config = await db
+    .select({
+      sync_enabled: settings.sync_enabled,
+      connected_at: settings.connected_at,
+    })
+    .from(settings)
+    .where(eq(settings.id, 1))
+    .get();
+  if (!config) {
+    throw new Error("SETTINGS_MISSING");
+  }
+  const latest =
+    (await db
+      .select({
+        status: operations.status,
+        phase: operations.phase,
+        updated_at: operations.updated_at,
+      })
+      .from(operations)
+      .where(
+        and(
+          inArray(operations.kind, ["sync", "reconcile"]),
+          gte(operations.created_at, config.connected_at),
+        ),
+      )
+      .orderBy(desc(operations.created_at))
+      .limit(1)
+      .get()) ?? null;
+  const connected = await db
+    .select({ id: items.id })
+    .from(items)
+    .where(eq(items.enabled, 1))
+    .orderBy(items.id);
+  const totals = await db
+    .select({
+      total: count(),
+      complete: sql<
+        number | null
+      >`sum(case when ${coverage.status} in ('available','empty') and ${coverage.bootstrap_complete}=1 then 1 else 0 end)`,
+    })
+    .from(coverage)
+    .get();
+  return {
+    config,
+    latest,
+    items: connected,
+    coverage: totals ?? { total: 0, complete: null },
+  };
 }
-
 export async function installationReadiness(env: Bindings) {
   const checks = {
     database: Boolean(env.DB),
     workflow: Boolean(env.FINANCE),
     oauth: Boolean(env.OAUTH_KV),
   };
-  if (!checks.database) return { ...checks, migrations: false };
+  if (!checks.database) {
+    return { ...checks, migrations: false };
+  }
+  const db = database(env.DB);
   const schema = await tryCatch(
-    env.DB.batch([
-      env.DB.prepare(
-        "SELECT id,csrf,expires,auth_version FROM portal_sessions LIMIT 0",
-      ),
-      env.DB.prepare("SELECT id,attempts,expires FROM login_attempts LIMIT 0"),
-      env.DB.prepare(
-        "SELECT id,sync_enabled,next_sync_at,manual_sync_after,reconcile_after,client_id_hash,connected_at FROM settings LIMIT 0",
-      ),
-      env.DB.prepare("SELECT status,bootstrap_complete FROM coverage LIMIT 0"),
+    db.batch([
+      db.select().from(portal_sessions).limit(0),
+      db.select().from(login_attempts).limit(0),
+      db.select().from(settings).limit(0),
+      db
+        .select({
+          status: coverage.status,
+          bootstrap_complete: coverage.bootstrap_complete,
+        })
+        .from(coverage)
+        .limit(0),
     ]),
   );
-  return {
-    ...checks,
-    migrations: !schema.error && schema.data.every((result) => result.success),
-  };
+  return { ...checks, migrations: !schema.error };
 }
-
 export function createAccountRepository(env: Bindings) {
+  const db = database(env.DB);
   return {
     connection: connectionStore(env.DB),
     status: () => readPortalStatus(env.DB),
     authorizeItems: (ids: string[]) => authorizedItems(env.DB, ids),
     async pause() {
-      await statement(
-        env.DB,
-        "UPDATE settings SET sync_enabled=0 WHERE id=1",
-      ).run();
+      await db
+        .update(settings)
+        .set({ sync_enabled: 0 })
+        .where(eq(settings.id, 1));
     },
     async resume(now: string) {
-      await statement(
-        env.DB,
-        "UPDATE settings SET sync_enabled=1,next_sync_at=? WHERE id=1 AND sync_enabled=0",
-        now,
-      ).run();
+      await db
+        .update(settings)
+        .set({ sync_enabled: 1, next_sync_at: now })
+        .where(and(eq(settings.id, 1), eq(settings.sync_enabled, 0)));
     },
     async requestSync(now: Date) {
-      const result = await statement(
-        env.DB,
-        "UPDATE settings SET next_sync_at=?,manual_sync_after=? WHERE id=1 AND sync_enabled=1 AND manual_sync_after<=? AND next_sync_at>?",
-        now.toISOString(),
-        new Date(now.getTime() + 900000).toISOString(),
-        now.toISOString(),
-        now.toISOString(),
-      ).run();
+      const result = await db
+        .update(settings)
+        .set({
+          next_sync_at: now.toISOString(),
+          manual_sync_after: new Date(now.getTime() + 900000).toISOString(),
+        })
+        .where(
+          and(
+            eq(settings.id, 1),
+            eq(settings.sync_enabled, 1),
+            lte(settings.manual_sync_after, now.toISOString()),
+            gt(settings.next_sync_at, now.toISOString()),
+          ),
+        )
+        .run();
       return result.meta.changes === 1;
     },
   };

@@ -2,8 +2,8 @@ import { z } from "zod/v4";
 
 import {
   Periodicity,
-  RecurrenceClassificationSchema,
   PeriodicitySchema,
+  RecurrenceClassificationSchema,
   RecurrenceStrengthSchema,
 } from "#domain/enums.ts";
 

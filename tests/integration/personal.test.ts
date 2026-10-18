@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 
-import { applyD1Migrations, reset } from "cloudflare:test";
-import { env as bindings } from "cloudflare:workers";
+import { and, count, eq } from "drizzle-orm";
+import { sqliteTable, text } from "drizzle-orm/sqlite-core";
 import { afterEach, beforeEach, test, vi } from "vitest";
 import { z } from "zod/v4";
 
@@ -16,7 +16,9 @@ import {
   financialQueries,
   scheduleSync,
 } from "#worker/composition.ts";
+import { database } from "#worker/database.ts";
 import { invoke } from "#worker/mcp/invoke.ts";
+import * as tables from "#worker/schema.ts";
 
 import {
   command,
@@ -25,6 +27,8 @@ import {
   login,
   settings,
 } from "./personal-fixture.ts";
+import { applyD1Migrations, reset } from "cloudflare:test";
+import { env as bindings } from "cloudflare:workers";
 
 const item = "11111111-1111-4111-8111-111111111111";
 beforeEach(async () => {
@@ -35,12 +39,15 @@ afterEach(() => vi.unstubAllGlobals());
 function source(connector = 200) {
   mockNetwork(async (input) => {
     const url = sourceUrl(input);
-    if (url.pathname === "/auth")
+    if (url.pathname === "/auth") {
       return Response.json({ apiKey: syntheticJwt() });
-    if (url.pathname === "/connect_token")
+    }
+    if (url.pathname === "/connect_token") {
       return Response.json({ accessToken: "synthetic-widget-token" });
-    if (url.pathname === "/items/" + item)
+    }
+    if (url.pathname === `/items/${item}`) {
       return Response.json({ id: item, connector: { id: connector } });
+    }
     throw new Error("Unexpected synthetic request");
   });
 }
@@ -62,19 +69,26 @@ test("deployment credentials connect Meu Pluggy; D1 stores only settings and the
   const state = await service.state();
   assert.equal(state.status.connected, true);
   assert.equal(state.status.sync, "waiting");
-  const stored = await bindings.DB.prepare("SELECT * FROM settings").first();
+  const stored = await database(bindings.DB)
+    .select()
+    .from(tables.settings)
+    .get()
+    .then((row) => row ?? null);
   assert.ok(!JSON.stringify(stored).includes("synthetic-secret"));
   assert.ok(!JSON.stringify(stored).includes("synthetic-client"));
-  const tables = await bindings.DB.prepare(
-    "SELECT name FROM sqlite_schema WHERE type='table'",
-  ).all();
+  const installedTables = await database(bindings.DB)
+    .select({ name: sqlite_schema.name })
+    .from(sqlite_schema)
+    .where(and(eq(sqlite_schema.type, "table")))
+    .all();
   for (const removed of [
     "principals",
     "pluggy_credentials",
     "portal_logins",
     "mcp_receipts",
-  ])
-    assert.ok(!tables.results.some((row) => row.name === removed));
+  ]) {
+    assert.ok(!installedTables.some((row) => row.name === removed));
+  }
   const bad = { ...config, PLUGGY_CLIENT_ID: "different-application" };
   await assert.rejects(
     accountService(bad).token(),
@@ -98,7 +112,11 @@ test("upstream validation rejects a direct bank connector before any Item is sav
     /MEU_PLUGGY_REQUIRED/,
   );
   assert.equal(
-    await bindings.DB.prepare("SELECT COUNT(*) AS n FROM items").first("n"),
+    await database(bindings.DB)
+      .select({ n: count() })
+      .from(tables.items)
+      .get()
+      .then((row) => row?.n ?? null),
     0,
   );
   source();
@@ -118,29 +136,35 @@ test("pause and manual sync preserve settings; daily scheduling creates one dura
   assert.equal((await service.wizardState()).paused, true);
   await scheduleSync(config, new Date("2099-01-01T00:00:00Z"));
   assert.equal(
-    await bindings.DB.prepare("SELECT COUNT(*) AS n FROM operations").first(
-      "n",
-    ),
+    await database(bindings.DB)
+      .select({ n: count() })
+      .from(tables.operations)
+      .get()
+      .then((row) => row?.n ?? null),
     0,
   );
   await service.resume();
-  await bindings.DB.exec(
-    "UPDATE settings SET next_sync_at='2099-01-01T00:00:00Z'",
-  );
+  await database(bindings.DB)
+    .update(tables.settings)
+    .set({ next_sync_at: "2099-01-01T00:00:00Z" });
   assert.equal(await service.requestSync(), true);
   assert.equal(await service.requestSync(), false);
   await scheduleSync(config, new Date("2099-01-01T00:00:00Z"));
   await scheduleSync(config, new Date("2099-01-01T00:00:00Z"));
   assert.equal(
-    await bindings.DB.prepare("SELECT COUNT(*) AS n FROM operations").first(
-      "n",
-    ),
+    await database(bindings.DB)
+      .select({ n: count() })
+      .from(tables.operations)
+      .get()
+      .then((row) => row?.n ?? null),
     1,
   );
   assert.equal(
-    await bindings.DB.prepare("SELECT dispatched FROM operations").first(
-      "dispatched",
-    ),
+    await database(bindings.DB)
+      .select({ dispatched: tables.operations.dispatched })
+      .from(tables.operations)
+      .get()
+      .then((row) => row?.dispatched ?? null),
     1,
   );
 });
@@ -176,10 +200,19 @@ test("live balance authorizes the stored account before network and uses renewed
   const config = settings();
   await accountService(config).connectItem(item);
   const accountId = "22222222-2222-4222-8222-222222222222";
-  await bindings.DB.prepare(
-    "INSERT INTO entities(item_id,resource,id,source,normalized,relevant_hash,normalizer,first_seen_at,observed_at) VALUES(?,'accounts',?,'{}','{}','synthetic','test','now','now')",
-  )
-    .bind(item, accountId)
+  await database(bindings.DB)
+    .insert(tables.entities)
+    .values({
+      item_id: item,
+      resource: "accounts",
+      id: accountId,
+      source: {},
+      normalized: { id: accountId },
+      relevant_hash: "synthetic",
+      normalizer: "test",
+      first_seen_at: "now",
+      observed_at: "now",
+    })
     .run();
   let requests = 0;
   config.PLUGGY_CLIENT_SECRET = "renewed-synthetic-secret";
@@ -193,7 +226,7 @@ test("live balance authorizes the stored account before network and uses renewed
       assert.equal(body.clientSecret, "renewed-synthetic-secret");
       return Response.json({ apiKey: syntheticJwt() });
     }
-    assert.equal(url.pathname, "/accounts/" + accountId);
+    assert.equal(url.pathname, `/accounts/${accountId}`);
     return new Response(
       '{"id":"' +
         accountId +
@@ -226,4 +259,9 @@ test("live balance authorizes the stored account before network and uses renewed
   assert.equal(balance.balance, "9007199254740993.29");
   assert.equal(balance.currency, "BRL");
   assert.equal(requests, 2);
+});
+
+const sqlite_schema = sqliteTable("sqlite_schema", {
+  name: text("name").notNull(),
+  type: text("type").notNull(),
 });

@@ -1,0 +1,106 @@
+[tools]
+node = "24"
+
+[settings]
+activate_aggressive = true
+
+[env]
+WRANGLER_SEND_METRICS = "false"
+CLOUDFLARE_CF_FETCH_ENABLED = "false"
+WRANGLER_LOG_PATH = "{{ config_root }}/.wrangler/logs/wrangler.log"
+
+[tasks.setup]
+description = "Instalar dependências exatamente como no package-lock.json"
+run = "npm ci"
+
+[tasks.check]
+description = "Validação local completa, em sequência; lint por último"
+run = [
+  "mise tasks validate",
+  "mise fmt --check",
+  "mise run check:imports",
+  "mise run typecheck",
+  "mise run format:check",
+  "mise run test",
+  "mise run test:product",
+  "mise run build",
+  "mise run test:product:runtime",
+  "mise run lint",
+]
+
+[tasks."check:quick"]
+description = "Validar configuração, imports, tipos, layout e lint sem testes/build"
+run = [
+  "mise tasks validate",
+  "mise fmt --check",
+  "mise run check:imports",
+  "mise run typecheck",
+  "mise run format:check",
+  "mise run lint",
+]
+
+[tasks."check:imports"]
+description = "Verificar resolução de imports e fronteiras dos módulos"
+run = "npm run check:imports"
+
+[tasks.typecheck]
+description = "Verificar tipos com TypeScript"
+run = "npm run typecheck"
+
+[tasks.lint]
+description = "Verificar regras e imports com Biome; warnings falham"
+run = "npm run lint"
+
+[tasks."lint:fix"]
+description = "Aplicar correções seguras do Biome e organizar imports"
+run = "npm run lint:fix"
+
+[tasks."lint:all"]
+description = "Exibir todos os diagnósticos, sem truncamento"
+run = "npm run lint -- --max-diagnostics=none"
+
+[tasks."lint:json"]
+description = "Emitir todos os diagnósticos em JSON no stdout"
+run = "npm run --silent lint -- --max-diagnostics=none --reporter=json"
+output = "interleave"
+quiet = true
+
+[tasks.format]
+description = "Formatar arquivos com Biome e a configuração do mise"
+run = ["npm run format", "mise fmt"]
+
+[tasks."format:check"]
+description = "Verificar layout dos arquivos com Biome"
+run = "npm run format:check"
+
+[tasks.test]
+description = "Executar testes unitários de domínio, aplicação e tooling"
+run = "npm test"
+
+[tasks."test:product"]
+description = "Executar testes de integração com Vitest e Cloudflare"
+run = "npm run test:product"
+
+[tasks."test:product:runtime"]
+description = "Validar Worker, D1 e Workflows locais com dados sintéticos"
+run = "npm run test:product:runtime"
+
+[tasks.build]
+description = "Build do portal e dry-run do Worker, sem publicação"
+run = "npm run build"
+
+[tasks."build:portal"]
+description = "Build e prerender do portal"
+run = "npm run build:portal"
+
+[tasks.dev]
+description = "Build do portal e servidor Wrangler local"
+run = "npm run dev"
+
+[tasks.types]
+description = "Regenerar src/worker/runtime.d.ts com Wrangler"
+run = "npm run types"
+
+[tasks."migrate:local"]
+description = "Aplicar migrações somente no D1 local"
+run = "npm run migrate:local"

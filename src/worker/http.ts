@@ -34,19 +34,30 @@ export async function boundedJson(
   maximum = 1048576,
   losslessRules = false,
 ) {
-  if (!request.body) throw new Error("BODY_REQUIRED");
+  if (!request.body) {
+    throw new Error("BODY_REQUIRED");
+  }
   const body = await readRequestBody(request, maximum);
-  if (body.tooLarge) throw new Error("BODY_LIMIT");
+  if (body.tooLarge) {
+    throw new Error("BODY_LIMIT");
+  }
   return z.json().parse((losslessRules ? parseRuleJson : exactJSON)(body.text));
 }
 
 export async function boundedForm(request: Request) {
-  if (!request.body) throw new Error("EMPTY_FORM");
+  if (!request.body) {
+    throw new Error("EMPTY_FORM");
+  }
   const body = await readRequestBody(request, 8192);
-  if (body.tooLarge) throw new Error("FORM_TOO_LARGE");
+  if (body.tooLarge) {
+    throw new Error("FORM_TOO_LARGE");
+  }
   const form = new URLSearchParams(body.text);
-  for (const name of form.keys())
-    if (form.getAll(name).length !== 1) throw new Error("DUPLICATE_FORM_FIELD");
+  for (const name of form.keys()) {
+    if (form.getAll(name).length !== 1) {
+      throw new Error("DUPLICATE_FORM_FIELD");
+    }
+  }
   return form;
 }
 
@@ -56,7 +67,8 @@ export function requestOrigin(request: Request) {
     url.protocol !== "https:" &&
     url.hostname !== "localhost" &&
     url.hostname !== "127.0.0.1"
-  )
+  ) {
     throw new Error("HTTPS_REQUIRED");
+  }
   return url.origin;
 }

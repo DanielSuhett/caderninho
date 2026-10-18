@@ -71,40 +71,45 @@ export const WIZARD_ISSUES: Record<
   },
 };
 export function syncPresentation(state: WizardState) {
-  if (state.sync === "error")
+  if (state.sync === "error") {
     return {
       title: "A cópia precisa de atenção",
       detail:
         "Uma etapa falhou. Seus dados já salvos foram preservados. Use o diagnóstico abaixo para investigar.",
     };
-  if (state.sync === "cancelled")
+  }
+  if (state.sync === "cancelled") {
     return {
       title: "Importação cancelada",
       detail:
         "Seus dados já salvos foram preservados. Abra sua conta para solicitar uma nova sincronização.",
     };
-  if (state.paused && state.sync !== "working")
+  }
+  if (state.paused && state.sync !== "working") {
     return {
       title: "Próximas sincronizações pausadas",
       detail:
         "Seu histórico foi preservado. Abra sua conta e use Retomar sincronização para reativar a agenda.",
     };
+  }
   if (
     state.sync === "completed" &&
     (state.coverage.total === 0 ||
       state.coverage.complete !== state.coverage.total)
-  )
+  ) {
     return {
       title: "Importação com cobertura parcial",
       detail:
         "Confira os recursos indisponíveis no diagnóstico antes de usar totais financeiros.",
     };
-  if (state.sync === "completed")
+  }
+  if (state.sync === "completed") {
     return {
       title: "Importação concluída",
       detail:
         "Consulte a cobertura pelo assistente antes de usar totais financeiros.",
     };
+  }
   return {
     title: "Estamos preparando sua cópia",
     detail:

@@ -35,7 +35,7 @@ export function createAccountApi(
     signal: AbortSignal,
     command?: { csrf: string; itemId?: string },
   ) {
-    const response = await ky(new URL("/api/account" + path, origin), {
+    const response = await ky(new URL(`/api/account${path}`, origin), {
       method: command ? "POST" : "GET",
       headers: { Accept: "application/json" },
       ...(command ? { json: command } : {}),
@@ -54,8 +54,9 @@ export function createAccountApi(
       response.status === 403 ||
       response.type === "opaqueredirect" ||
       (response.status >= 300 && response.status < 400)
-    )
+    ) {
       throw new AccountRequestError("session");
+    }
     if (!response.ok) {
       const body = await tryCatch(response.json<unknown>());
       const failure = FailureSchema.safeParse(body.data);
@@ -69,7 +70,7 @@ export function createAccountApi(
     action: string,
     context: CommandContext,
     fields: { itemId?: string } = {},
-  ) => request("/" + action, context.signal, { csrf: context.csrf, ...fields });
+  ) => request(`/${action}`, context.signal, { csrf: context.csrf, ...fields });
   const maintain = async (
     action: string,
     context: CommandContext,

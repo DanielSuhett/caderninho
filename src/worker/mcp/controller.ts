@@ -1,43 +1,43 @@
 import {
-  Server,
   createMcpHandler,
-  specTypeSchemas,
   readRequestBody,
+  Server,
+  specTypeSchemas,
 } from "@modelcontextprotocol/server";
 import { CfWorkerJsonSchemaValidator } from "@modelcontextprotocol/server/validators/cf-worker";
 import { Hono } from "hono";
 import { z } from "zod/v4";
 
 import {
-  tools,
   LongInput,
   PRODUCT_INSTRUCTIONS,
+  tools,
 } from "#contracts/mcp-contract.ts";
 import { RulesSchema } from "#domain/rules/rules.ts";
 import { parseJson } from "#shared/json.ts";
 import { tryCatch } from "#shared/result.ts";
 import type { Bindings } from "#worker/bindings.ts";
 import {
-  syncService,
-  ruleActions,
   financialQueries,
+  ruleActions,
+  syncService,
 } from "#worker/composition.ts";
 import { importRuleDocument } from "#worker/finance/service.ts";
 import { boundedJson } from "#worker/http.ts";
 import { invoke } from "#worker/mcp/invoke.ts";
 import {
-  task,
   cancel,
+  EXTENSION,
   listen,
   negotiated,
-  EXTENSION,
-  UpdateParams,
   TaskParams,
-  validateTaskWire,
+  task,
+  UpdateParams,
   validateSubscriptionWire,
+  validateTaskWire,
 } from "#worker/mcp/tasks.ts";
 import { migrationHttp } from "#worker/sync/controller.ts";
-import { startOperation, getOperation } from "#worker/sync/repository.ts";
+import { getOperation, startOperation } from "#worker/sync/repository.ts";
 
 const Envelope = z.object({
   jsonrpc: z.literal("2.0"),
@@ -72,7 +72,9 @@ async function fetchTransport(
   let text: string | undefined;
   if (request.method === "POST") {
     const body = await readMcpBody(request);
-    if (body instanceof Response) return body;
+    if (body instanceof Response) {
+      return body;
+    }
     text = body;
     let message: unknown;
     try {
@@ -82,129 +84,18 @@ async function fetchTransport(
     }
     const parsed = Envelope.safeParse(message);
     if (parsed.success) {
-      const m = parsed.data,
-        params = m.params ?? {},
-        kind =
-          m.method === "tools/call"
-            ? typeof params.name === "string"
-              ? longKinds.get(params.name)
-              : undefined
-            : undefined;
+      const m = parsed.data;
+      const params = m.params ?? {};
+      let kind: "sync" | "reconcile" | "reapply" | undefined;
+      if (m.method === "tools/call" && typeof params.name === "string") {
+        kind = longKinds.get(params.name);
+      }
       if (
         m.method.startsWith("tasks/") ||
         m.method === "subscriptions/listen" ||
         kind
       ) {
-        const response = (result: unknown) =>
-          Response.json(
-            { jsonrpc: "2.0", id: m.id, result },
-            { headers: { "Cache-Control": "no-store" } },
-          );
-        const error = (code: number, message: string, data?: unknown) =>
-          Response.json(
-            {
-              jsonrpc: "2.0",
-              id: m.id ?? null,
-              error: { code, message, ...(data ? { data } : {}) },
-            },
-            { headers: { "Cache-Control": "no-store" } },
-          );
-        if (m.id === undefined) return error(-32600, "Request id required");
-        if (request.headers.get("Mcp-Protocol-Version") !== "2026-07-28")
-          return error(-32600, "Tasks require protocol 2026-07-28");
-        const expectedName = kind ? params.name : params.taskId;
-        if (
-          request.headers.get("Mcp-Method") !== m.method ||
-          (expectedName && request.headers.get("Mcp-Name") !== expectedName)
-        )
-          return error(-32020, "MCP routing headers disagree with request");
-        const version = z
-          .object({
-            "io.modelcontextprotocol/protocolVersion": z.literal("2026-07-28"),
-          })
-          .loose()
-          .safeParse(params._meta);
-        if (params._meta && !version.success)
-          return error(-32600, "Protocol metadata must match routing version");
-        if (!negotiated(params))
-          return error(-32021, "Missing required client capability", {
-            requiredCapabilities: { extensions: { [EXTENSION]: {} } },
-          });
-        const attempt = await tryCatch(
-          (async () => {
-            if (kind) {
-              const args = LongInput.parse(params.arguments);
-              if (kind !== "reapply" && args.filter)
-                throw new Error("SYNC_FILTER_NOT_SUPPORTED_USE_ITEM_SCOPE");
-              if (args.renormalize && kind !== "reconcile")
-                throw new Error("RENORMALIZE_REQUIRES_RECONCILIATION");
-              const op = await startOperation(env.DB, args.requestKey, {
-                kind,
-                itemIds: args.itemIds,
-                ...(args.renormalize ? { renormalize: true } : {}),
-                ...(args.filter ? { filter: args.filter } : {}),
-              });
-              await tryCatch(syncService(env).dispatch(op)); // Durable outbox survives uncertain Workflow creation.
-              return response(
-                validateTaskWire("CreateTaskResult", {
-                  ...(await task(env, op.id)),
-                  resultType: "task",
-                }),
-              );
-            }
-            if (m.method === "tasks/get") {
-              validateTaskWire("GetTaskRequest", m);
-              const a = TaskParams.parse(params);
-              return response(
-                validateTaskWire("GetTaskResult", {
-                  ...(await task(env, a.taskId)),
-                  resultType: "complete",
-                }),
-              );
-            }
-            if (m.method === "tasks/cancel") {
-              validateTaskWire("CancelTaskRequest", m);
-              const a = TaskParams.parse(params);
-              return response(
-                validateTaskWire(
-                  "CancelTaskResult",
-                  await cancel(env, a.taskId),
-                ),
-              );
-            }
-            if (m.method === "tasks/update") {
-              validateTaskWire("UpdateTaskRequest", m);
-              const a = UpdateParams.parse(params);
-              await getOperation(env.DB, a.taskId);
-              return response(
-                validateTaskWire("UpdateTaskResult", {
-                  resultType: "complete",
-                }),
-              );
-            }
-            if (m.method === "subscriptions/listen") {
-              validateSubscriptionWire("SubscriptionsListenRequest", m);
-              const a = z
-                .object({
-                  notifications: z.object({ taskIds: z.array(z.string()) }),
-                })
-                .parse(params);
-              if (!request.headers.get("Accept")?.includes("text/event-stream"))
-                return error(-32600, "SSE Accept required");
-              return listen(
-                request,
-                env,
-                m.id ?? "",
-                a.notifications.taskIds,
-                ctx ? (lifetime) => ctx.waitUntil(lifetime) : undefined,
-              );
-            }
-            return error(-32601, "Method not found");
-          })(),
-        );
-        if (attempt.error)
-          return error(-32602, "Invalid or unauthorized operation");
-        return attempt.data;
+        return handleTaskRequest({ request, env, m, params, kind, ctx });
       }
     }
   }
@@ -221,7 +112,9 @@ async function fetchTransport(
       server.setRequestHandler("tools/list", async () => ({
         tools: tools.map((tool) => {
           const validated = specTypeSchemas.Tool["~standard"].validate(tool);
-          if (validated.issues) throw new Error("INVALID_TOOL_SCHEMA");
+          if (validated.issues) {
+            throw new Error("INVALID_TOOL_SCHEMA");
+          }
           return validated.value;
         }),
       }));
@@ -296,6 +189,152 @@ async function fetchTransport(
   return new Response(stream, { status: response.status, headers });
 }
 
+async function handleTaskRequest({
+  request,
+  env,
+  m,
+  params,
+  kind,
+  ctx,
+}: {
+  request: Request;
+  env: Bindings;
+  m: z.infer<typeof Envelope>;
+  params: NonNullable<z.infer<typeof Envelope>["params"]>;
+  kind: "sync" | "reconcile" | "reapply" | undefined;
+  ctx: ExecutionContext | undefined;
+}) {
+  const response = (result: unknown) =>
+    Response.json(
+      { jsonrpc: "2.0", id: m.id, result },
+      { headers: { "Cache-Control": "no-store" } },
+    );
+  const error = (code: number, message: string, data?: unknown) =>
+    Response.json(
+      {
+        jsonrpc: "2.0",
+        id: m.id ?? null,
+        error: { code, message, ...(data ? { data } : {}) },
+      },
+      { headers: { "Cache-Control": "no-store" } },
+    );
+  if (m.id === undefined) {
+    return error(-32600, "Request id required");
+  }
+  if (request.headers.get("Mcp-Protocol-Version") !== "2026-07-28") {
+    return error(-32600, "Tasks require protocol 2026-07-28");
+  }
+  const expectedName = kind ? params.name : params.taskId;
+  if (
+    request.headers.get("Mcp-Method") !== m.method ||
+    (expectedName && request.headers.get("Mcp-Name") !== expectedName)
+  ) {
+    return error(-32020, "MCP routing headers disagree with request");
+  }
+  const version = z
+    .object({
+      "io.modelcontextprotocol/protocolVersion": z.literal("2026-07-28"),
+    })
+    .loose()
+    .safeParse(params._meta);
+  if (params._meta && !version.success) {
+    return error(-32600, "Protocol metadata must match routing version");
+  }
+  if (!negotiated(params)) {
+    return error(-32021, "Missing required client capability", {
+      requiredCapabilities: { extensions: { [EXTENSION]: {} } },
+    });
+  }
+  const attempt = await tryCatch(
+    (async () => {
+      if (kind) {
+        const op = await createLongOperation(env, { kind, params });
+        return response(
+          validateTaskWire("CreateTaskResult", {
+            ...(await task(env, op.id)),
+            resultType: "task",
+          }),
+        );
+      }
+      if (m.method === "tasks/get") {
+        validateTaskWire("GetTaskRequest", m);
+        const a = TaskParams.parse(params);
+        return response(
+          validateTaskWire("GetTaskResult", {
+            ...(await task(env, a.taskId)),
+            resultType: "complete",
+          }),
+        );
+      }
+      if (m.method === "tasks/cancel") {
+        validateTaskWire("CancelTaskRequest", m);
+        const a = TaskParams.parse(params);
+        return response(
+          validateTaskWire("CancelTaskResult", await cancel(env, a.taskId)),
+        );
+      }
+      if (m.method === "tasks/update") {
+        validateTaskWire("UpdateTaskRequest", m);
+        const a = UpdateParams.parse(params);
+        await getOperation(env.DB, a.taskId);
+        return response(
+          validateTaskWire("UpdateTaskResult", {
+            resultType: "complete",
+          }),
+        );
+      }
+      if (m.method === "subscriptions/listen") {
+        validateSubscriptionWire("SubscriptionsListenRequest", m);
+        const a = z
+          .object({
+            notifications: z.object({ taskIds: z.array(z.string()) }),
+          })
+          .parse(params);
+        if (!request.headers.get("Accept")?.includes("text/event-stream")) {
+          return error(-32600, "SSE Accept required");
+        }
+        return listen(request, env, {
+          id: m.id ?? "",
+          ids: a.notifications.taskIds,
+          keepAlive: ctx ? (lifetime) => ctx.waitUntil(lifetime) : undefined,
+        });
+      }
+      return error(-32601, "Method not found");
+    })(),
+  );
+  if (attempt.error) {
+    return error(-32602, "Invalid or unauthorized operation");
+  }
+  return attempt.data;
+}
+
+async function createLongOperation(
+  env: Bindings,
+  {
+    kind,
+    params,
+  }: {
+    kind: "sync" | "reconcile" | "reapply";
+    params: NonNullable<z.infer<typeof Envelope>["params"]>;
+  },
+) {
+  const args = LongInput.parse(params.arguments);
+  if (kind !== "reapply" && args.filter) {
+    throw new Error("SYNC_FILTER_NOT_SUPPORTED_USE_ITEM_SCOPE");
+  }
+  if (args.renormalize && kind !== "reconcile") {
+    throw new Error("RENORMALIZE_REQUIRES_RECONCILIATION");
+  }
+  const op = await startOperation(env.DB, args.requestKey, {
+    kind,
+    itemIds: args.itemIds,
+    ...(args.renormalize ? { renormalize: true } : {}),
+    ...(args.filter ? { filter: args.filter } : {}),
+  });
+  await tryCatch(syncService(env).dispatch(op)); // Durable outbox survives uncertain Workflow creation.
+  return op;
+}
+
 export const MAX_MCP_BODY_BYTES = 32768;
 
 // Consume the original stream under the SDK's byte limit, before auth/JSON parsing.
@@ -305,11 +344,13 @@ export async function readMcpBody(
 ): Promise<string | Response> {
   const result = await tryCatch(readRequestBody(request, MAX_MCP_BODY_BYTES));
 
-  if (result.error)
+  if (result.error) {
     return new Response("Unreadable request body", { status: 400 });
+  }
 
-  if (result.data.tooLarge)
+  if (result.data.tooLarge) {
     return new Response("Request too large", { status: 413 });
+  }
 
   return result.data.text;
 }

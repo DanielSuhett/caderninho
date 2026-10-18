@@ -84,8 +84,9 @@ await test("conversion rejects unsupported nested expressions with an exact path
     { var: ["tx.description", "fallback"] },
     { and: [] },
     { "==": [{ var: "tx.amount" }, 1] },
-  ])
+  ]) {
     assert.equal(convertRules(legacy(when)).compatible, false);
+  }
 });
 
 await test("equal priorities preserve document order, derived facts update and concurrent evaluations isolate state", async () => {
@@ -199,12 +200,13 @@ await test("schemas reject arbitrary paths, dynamic facts, unsafe priorities and
       operator: "dateCompare",
       value: { op: "eq", value: "2026-02-30" },
     },
-  ])
+  ]) {
     assert.equal(
       RuleSchema.safeParse({ ...base, conditions: { all: [condition] } })
         .success,
       false,
     );
+  }
   assert.equal(
     RuleSchema.safeParse({
       ...base,
@@ -232,8 +234,9 @@ await test("lossless JSON rejects malformed numeric tokens and preserves financi
     },
   );
 
-  for (const text of ['{"x":01}', '{"x":NaN}', '{"x":1.}'])
+  for (const text of ['{"x":01}', '{"x":NaN}', '{"x":1.}']) {
     assert.throws(() => exactJSON(text));
+  }
   assert.throws(
     () => parseRuleJson('{"priority":9007199254740993}'),
     /UNSAFE_RULE_NUMBER/,

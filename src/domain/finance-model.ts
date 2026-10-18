@@ -1,35 +1,35 @@
 import { z } from "zod/v4";
 
 import {
-  Product,
-  TransactionType,
-  PaymentMethod,
-  TransactionStatus,
   AccountType,
-  ProvenanceOrigin,
-  ResourceSchema,
-  FaultCode,
-  Resource,
   Classification,
+  FaultCode,
+  PaymentMethod,
+  Product,
+  ProvenanceOrigin,
+  Resource,
+  ResourceSchema,
+  TransactionStatus,
+  TransactionType,
 } from "#domain/enums.ts";
 import {
-  decimal,
-  minor,
   accountingDay,
-  localDay,
+  decimal,
   fail,
   id,
+  localDay,
+  minor,
 } from "#domain/exact.ts";
 import { Fault, parseDomain } from "#domain/fault.ts";
 import providerFields from "#domain/provider-fields.json" with { type: "json" };
 import {
-  ProviderFieldSchema,
-  ProviderRecordSchema,
-  FinanceRecordSchema,
   type FinanceRecord,
-  type ProviderField,
-  type ResourceDefinition,
   type MetricDefinition,
+  type ProviderField,
+  ProviderFieldSchema,
+  type ProviderRecord,
+  ProviderRecordSchema,
+  type ResourceDefinition,
 } from "#domain/schemas.ts";
 import type { JsonValue } from "#shared/json.ts";
 
@@ -270,7 +270,7 @@ export function metricsFor(
           field:
             resource === Resource.transactions && f === "amount"
               ? "absoluteAmountMinor"
-              : f + "Minor",
+              : `${f}Minor`,
           unit: "currency_minor",
           temporal: FLOW.includes(resource) ? "flow" : "stock",
           description:
@@ -315,7 +315,9 @@ function at(obj: unknown, path: string): unknown {
   for (const key of path.split(".")) {
     const container = z.record(z.string(), z.unknown()).safeParse(value);
 
-    if (!container.success) return undefined;
+    if (!container.success) {
+      return undefined;
+    }
     value = container.data[key];
   }
 
@@ -328,44 +330,54 @@ function project(raw: unknown, spec: Record<string, ProviderField>) {
   for (const [path, s] of Object.entries(spec)) {
     const v = at(raw, path);
 
-    if (v === undefined) continue;
-
-    if (v === null) {
-      result[path] = null;
+    if (v === undefined) {
       continue;
     }
 
-    if (s.kind === "decimal")
-      result[path] = decimal(
-        parseDomain(
-          z.union([z.string(), z.number()]),
-          v,
-          FaultCode.INVALID_RESPONSE,
-        ),
-      );
-    else if (s.kind === "array") {
-      if (!Array.isArray(v) || v.length > 2000)
-        fail(FaultCode.INVALID_RESPONSE);
-      result[path] = v.map((x) => project(x, s.fields ?? {}));
-    } else if (s.kind === "array_scalar") {
-      if (
-        !Array.isArray(v) ||
-        v.length > 2000 ||
-        v.some((x) => typeof x !== "string" && typeof x !== "boolean")
-      )
-        fail(FaultCode.INVALID_RESPONSE);
-      result[path] = parseDomain(z.json(), v, FaultCode.INVALID_RESPONSE);
-    } else {
-      if (!isOneOf(typeof v, ["string", "number", "boolean"]))
-        fail(FaultCode.INVALID_RESPONSE);
-
-      if (typeof v === "string" && v.length > 4000)
-        fail(FaultCode.FIELD_TOO_LARGE);
-      result[path] = parseDomain(z.json(), v, FaultCode.INVALID_RESPONSE);
-    }
+    result[path] = projectValue(v, s);
   }
 
   return result;
+}
+
+function projectValue(value: unknown, spec: ProviderField): JsonValue {
+  if (value === null) {
+    return null;
+  }
+  if (spec.kind === "decimal") {
+    return decimal(
+      parseDomain(
+        z.union([z.string(), z.number()]),
+        value,
+        FaultCode.INVALID_RESPONSE,
+      ),
+    );
+  }
+  if (spec.kind === "array") {
+    if (!Array.isArray(value) || value.length > 2000) {
+      fail(FaultCode.INVALID_RESPONSE);
+    }
+    return value.map((entry) => project(entry, spec.fields ?? {}));
+  }
+  if (spec.kind === "array_scalar") {
+    if (
+      !Array.isArray(value) ||
+      value.length > 2000 ||
+      value.some(
+        (entry) => typeof entry !== "string" && typeof entry !== "boolean",
+      )
+    ) {
+      fail(FaultCode.INVALID_RESPONSE);
+    }
+    return parseDomain(z.json(), value, FaultCode.INVALID_RESPONSE);
+  }
+  if (!isOneOf(typeof value, ["string", "number", "boolean"])) {
+    fail(FaultCode.INVALID_RESPONSE);
+  }
+  if (typeof value === "string" && value.length > 4000) {
+    fail(FaultCode.FIELD_TOO_LARGE);
+  }
+  return parseDomain(z.json(), value, FaultCode.INVALID_RESPONSE);
 }
 
 export function normalizeResource(
@@ -374,48 +386,95 @@ export function normalizeResource(
   parent: FinanceRecord | null | undefined,
   context: { categories?: FinanceRecord[]; referenceDay: string | null },
 ) {
-  if (resource === Resource.transactions && !context.referenceDay)
-    throw new Error("REFERENCE_DAY_REQUIRED");
-
-  const raw = parseDomain(
-    ProviderRecordSchema,
-    input,
-    FaultCode.INVALID_RESPONSE,
+  return normalizeValidatedResource(
+    resource,
+    parseDomain(ProviderRecordSchema, input, FaultCode.INVALID_RESPONSE),
+    parent,
+    context,
   );
+}
+
+export function normalizeValidatedResource(
+  resource: Resource,
+  raw: ProviderRecord,
+  parent: FinanceRecord | null | undefined,
+  context: { categories?: FinanceRecord[]; referenceDay: string | null },
+) {
+  if (resource === Resource.transactions && !context.referenceDay) {
+    throw new Error("REFERENCE_DAY_REQUIRED");
+  }
 
   const projected = project(raw, providerMap[resource]);
 
-  const r: FinanceRecord = FinanceRecordSchema.parse({
+  const r: FinanceRecord = {
     ...projected,
-    id: id(
-      resource === Resource.resources
-        ? raw.resourceId
-        : resource === Resource.connectors
-          ? String(raw.id)
-          : projected.id,
-    ),
-  });
-
-  if (resource === Resource.resources) r.id = id(raw.resourceId);
-
-  if (resource === Resource.connectors) r.id = String(raw.id);
-  id(r.id);
+    id: normalizedId(resource, raw, projected),
+  };
 
   if (parent) {
     if (resource === Resource.investment_transactions) {
       r.investmentId = parent.id;
       r.currencyCode = parent.currencyCode;
-    } else r.accountId = parent.id;
+    } else {
+      r.accountId = parent.id;
+    }
   }
 
-  if (resource === Resource.statements)
+  if (resource === Resource.statements) {
     r.documentAccess = "authorized_download_requires_fresh_link";
+  }
+  normalizeMoney(resource, r);
+
+  if (FLOW.includes(resource)) {
+    r.accountingDate = accountingDay(r.date);
+  }
+
+  if (resource === Resource.transactions) {
+    normalizeTransaction(r, raw, parent, context);
+  }
+
+  r.provenance = Object.fromEntries(
+    Object.keys(r)
+      .filter((k) => k !== "provenance")
+      .map((k) => [
+        k,
+        {
+          origin: provenanceOrigin(resource, k),
+          sourceField: k.endsWith("Minor") ? k.slice(0, -5) : k,
+        },
+      ]),
+  );
+
+  return r;
+}
+
+function isOneOf<const T>(value: unknown, values: readonly T[]): value is T {
+  return values.some((candidate) => candidate === value);
+}
+
+function normalizedId(
+  resource: Resource,
+  raw: ProviderRecord,
+  projected: Record<string, JsonValue>,
+) {
+  if (resource === Resource.resources) {
+    return id(raw.resourceId);
+  }
+
+  if (resource === Resource.connectors) {
+    return id(String(raw.id));
+  }
+
+  return id(projected.id);
+}
+
+function normalizeMoney(resource: Resource, r: FinanceRecord) {
   const currency = r.currencyCode ?? r.totalAmountCurrencyCode;
 
-  for (const field of MONEY[resource] ?? [])
+  for (const field of MONEY[resource] ?? []) {
     if (field in r && r[field] !== null) {
       try {
-        r[field + "Minor"] = minor(
+        r[`${field}Minor`] = minor(
           parseDomain(
             z.union([z.string(), z.number()]),
             r[field],
@@ -437,219 +496,256 @@ export function normalizeResource(
             FaultCode.CURRENCY_SCALE_UNSUPPORTED,
           ])
         ) {
-          r[field + "Minor"] = null;
+          r[`${field}Minor`] = null;
           r.precisionWarnings ??= [];
           r.precisionWarnings.push({ field, code: e.code });
-        } else throw e;
+        } else {
+          throw e;
+        }
       }
     }
-
-  if (FLOW.includes(resource)) r.accountingDate = accountingDay(r.date);
-
-  if (resource === Resource.transactions) {
-    if (raw.accountId !== parent?.id) fail(FaultCode.PARENT_MISMATCH);
-
-    if (!parent) fail(FaultCode.PARENT_MISMATCH);
-    r.accountType = parent.type;
-    r.timestampLocalDate = Number.isFinite(Date.parse(raw.date ?? ""))
-      ? localDay(new Date(raw.date ?? ""))
-      : null;
-    r.absoluteAmountMinor =
-      r.amountMinor == null
-        ? null
-        : (BigInt(r.amountMinor) < 0n
-            ? -BigInt(r.amountMinor)
-            : BigInt(r.amountMinor)
-          ).toString();
-    r.billId = raw.creditCardMetadata?.billId ?? null;
-    r.paymentMethod = raw.paymentData?.paymentMethod ?? null;
-    r.counterparty =
-      raw.type === TransactionType.DEBIT
-        ? (raw.paymentData?.receiver?.name ?? raw.merchant?.name ?? null)
-        : (raw.paymentData?.payer?.name ?? null);
-
-    const doc = (x: unknown) =>
-      typeof x === "string" &&
-      /^[\d./-]+$/.test(x) &&
-      isOneOf(x.replace(/\D/g, "").length, [11, 14])
-        ? x.replace(/\D/g, "")
-        : null;
-
-    const payer = doc(raw.paymentData?.payer?.documentNumber?.value),
-      receiver = doc(raw.paymentData?.receiver?.documentNumber?.value),
-      owner = parent.ownerDocument;
-
-    r.ownTransferEvidence = !!(owner && payer === owner && receiver === owner);
-
-    let cls: Classification = Classification.unknown,
-      evidence: string[] = [];
-
-    if (r.ownTransferEvidence) {
-      cls = Classification.own_transfer;
-      evidence = [
-        "paymentData participant documents equal authenticated account holder document",
-      ];
-    } else if (raw.operationType === "PAGAMENTO_FATURA") {
-      cls = Classification.bill_payment;
-      evidence = [
-        "operationType=PAGAMENTO_FATURA (institution or Pluggy synthesized bill payment)",
-      ];
-    } else if (isOneOf(raw.operationType ?? "", ["ESTORNO", "CASHBACK"])) {
-      cls = Classification.refund;
-      evidence = ["operationType=" + raw.operationType];
-    } else {
-      const category = context.categories?.find((c) => c.id === raw.categoryId);
-
-      const names = [
-        raw.category,
-        category?.description,
-        category?.parentDescription,
-      ];
-
-      if (names.includes("Credit card payment")) {
-        cls = Classification.bill_payment_category;
-        evidence = [
-          "Pluggy category: Credit card payment; classification may be corrected",
-        ];
-      } else if (
-        names.some((x) =>
-          isOneOf(x ?? "", [
-            "Same person transfer",
-            "Investments",
-            "Automatic investment",
-            "Fixed income",
-            "Fixed Income Investment",
-            "Mutual funds",
-            "Variable income",
-            "Pension",
-          ]),
-        )
-      ) {
-        cls = Classification.patrimonial_category;
-        evidence = [
-          "Pluggy category hierarchy; not independently proven economic purpose",
-        ];
-      } else if (
-        names.some((x) =>
-          isOneOf(x ?? "", [
-            "Transfers",
-            "Transfer - PIX",
-            "Transfer - TED",
-            "Transfer - DOC",
-            "Cash withdrawal",
-          ]),
-        ) ||
-        isOneOf(r.paymentMethod ?? "", [
-          PaymentMethod.PIX,
-          PaymentMethod.TED,
-          PaymentMethod.DOC,
-          PaymentMethod.TEV,
-          PaymentMethod.BOLETO,
-        ]) ||
-        isOneOf(raw.operationType ?? "", [
-          PaymentMethod.PIX,
-          PaymentMethod.TED,
-          PaymentMethod.DOC,
-          PaymentMethod.TEV,
-        ])
-      ) {
-        cls = Classification.transfer_uncertain;
-        evidence = [
-          "Payment method or transfer category; ownership/economic purpose unknown",
-        ];
-      } else if (
-        raw.type === TransactionType.DEBIT &&
-        (parent.type === TransactionType.CREDIT ||
-          raw.merchant?.name ||
-          (category?.parentDescription &&
-            !isOneOf(category.parentDescription, [
-              "Income",
-              "Other",
-              "Others",
-              "Transfers",
-              "Investments",
-              "Same person transfer",
-            ])))
-      ) {
-        cls = Classification.consumption_evidence;
-        evidence = [
-          parent.type === TransactionType.CREDIT
-            ? "credit account DEBIT"
-            : "Pluggy merchant/category evidence",
-        ];
-      }
-    }
-
-    r.classification = cls;
-    r.classificationEvidence = evidence;
-
-    const valid =
-      raw.status === TransactionStatus.POSTED &&
-      r.accountingDate &&
-      context.referenceDay !== null &&
-      r.accountingDate <= context.referenceDay &&
-      isOneOf(raw.type ?? "", [
-        TransactionType.CREDIT,
-        TransactionType.DEBIT,
-      ]) &&
-      r.amountMinor != null;
-
-    const abs =
-      r.amountMinor == null
-        ? null
-        : BigInt(r.amountMinor) < 0n
-          ? -BigInt(r.amountMinor)
-          : BigInt(r.amountMinor);
-
-    r.signedFlowMinor =
-      valid && parent.type === AccountType.BANK
-        ? (raw.type === TransactionType.CREDIT
-            ? (abs ?? 0n)
-            : -(abs ?? 0n)
-          ).toString()
-        : null;
-    r.knownConsumptionMinor =
-      valid &&
-      raw.type === TransactionType.DEBIT &&
-      cls === Classification.consumption_evidence
-        ? (abs ?? 0n).toString()
-        : null;
-    r.unclassifiedDebitMinor =
-      valid &&
-      raw.type === TransactionType.DEBIT &&
-      isOneOf(cls, ["unknown", Classification.transfer_uncertain])
-        ? (abs ?? 0n).toString()
-        : null;
   }
-
-  r.provenance = Object.fromEntries(
-    Object.keys(r)
-      .filter((k) => k !== "provenance")
-      .map((k) => [
-        k,
-        {
-          origin:
-            (derived[resource] ?? []).includes(k) || k.endsWith("Minor")
-              ? ProvenanceOrigin.local_derivation
-              : isOneOf(k, [
-                    "description",
-                    "category",
-                    "categoryId",
-                    "merchant.name",
-                    "merchant.businessName",
-                    "merchant.cnae",
-                    "merchant.category",
-                  ])
-                ? ProvenanceOrigin.pluggy_enrichment
-                : ProvenanceOrigin.provider_via_pluggy,
-          sourceField: k.endsWith("Minor") ? k.slice(0, -5) : k,
-        },
-      ]),
-  );
-
-  return r;
 }
 
-function isOneOf<const T>(value: unknown, values: readonly T[]): value is T {
-  return values.some((candidate) => candidate === value);
+function absoluteMinor(value: string | null | undefined) {
+  if (value == null) {
+    return null;
+  }
+  const amount = BigInt(value);
+
+  return amount < 0n ? -amount : amount;
+}
+
+function normalizeTransaction(
+  r: FinanceRecord,
+  raw: ProviderRecord,
+  parent: FinanceRecord | null | undefined,
+  context: { categories?: FinanceRecord[]; referenceDay: string | null },
+) {
+  if (raw.accountId !== parent?.id) {
+    fail(FaultCode.PARENT_MISMATCH);
+  }
+
+  if (!parent) {
+    fail(FaultCode.PARENT_MISMATCH);
+  }
+  r.accountType = parent.type;
+  r.timestampLocalDate = Number.isFinite(Date.parse(raw.date ?? ""))
+    ? localDay(new Date(raw.date ?? ""))
+    : null;
+  r.absoluteAmountMinor = absoluteMinor(r.amountMinor)?.toString() ?? null;
+  r.billId = raw.creditCardMetadata?.billId ?? null;
+  r.paymentMethod = raw.paymentData?.paymentMethod ?? null;
+  r.counterparty = transactionCounterparty(raw);
+
+  classifyTransaction(r, raw, parent, context);
+  applyTransactionAmounts(r, raw, parent, context.referenceDay);
+}
+
+function classifyTransaction(
+  r: FinanceRecord,
+  raw: ProviderRecord,
+  parent: FinanceRecord,
+  context: { categories?: FinanceRecord[] },
+) {
+  const doc = (x: unknown) =>
+    typeof x === "string" &&
+    /^[\d./-]+$/.test(x) &&
+    isOneOf(x.replace(/\D/g, "").length, [11, 14])
+      ? x.replace(/\D/g, "")
+      : null;
+
+  const payer = doc(raw.paymentData?.payer?.documentNumber?.value),
+    receiver = doc(raw.paymentData?.receiver?.documentNumber?.value),
+    owner = parent.ownerDocument;
+
+  r.ownTransferEvidence = !!(owner && payer === owner && receiver === owner);
+
+  let cls: Classification = Classification.unknown,
+    evidence: string[] = [];
+
+  if (r.ownTransferEvidence) {
+    cls = Classification.own_transfer;
+    evidence = [
+      "paymentData participant documents equal authenticated account holder document",
+    ];
+  } else if (raw.operationType === "PAGAMENTO_FATURA") {
+    cls = Classification.bill_payment;
+    evidence = [
+      "operationType=PAGAMENTO_FATURA (institution or Pluggy synthesized bill payment)",
+    ];
+  } else if (isOneOf(raw.operationType ?? "", ["ESTORNO", "CASHBACK"])) {
+    cls = Classification.refund;
+    evidence = [`operationType=${raw.operationType}`];
+  } else {
+    ({ classification: cls, evidence } = classifyCategory(
+      raw,
+      parent,
+      r,
+      context.categories,
+    ));
+  }
+
+  r.classification = cls;
+  r.classificationEvidence = evidence;
+}
+
+function classifyCategory(
+  raw: ProviderRecord,
+  parent: FinanceRecord,
+  r: FinanceRecord,
+  categories: FinanceRecord[] | undefined,
+) {
+  let cls: Classification = Classification.unknown;
+  let evidence: string[] = [];
+  const category = categories?.find((c) => c.id === raw.categoryId);
+
+  const names = [
+    raw.category,
+    category?.description,
+    category?.parentDescription,
+  ];
+
+  if (names.includes("Credit card payment")) {
+    cls = Classification.bill_payment_category;
+    evidence = [
+      "Pluggy category: Credit card payment; classification may be corrected",
+    ];
+  } else if (
+    names.some((x) =>
+      isOneOf(x ?? "", [
+        "Same person transfer",
+        "Investments",
+        "Automatic investment",
+        "Fixed income",
+        "Fixed Income Investment",
+        "Mutual funds",
+        "Variable income",
+        "Pension",
+      ]),
+    )
+  ) {
+    cls = Classification.patrimonial_category;
+    evidence = [
+      "Pluggy category hierarchy; not independently proven economic purpose",
+    ];
+  } else if (
+    names.some((x) =>
+      isOneOf(x ?? "", [
+        "Transfers",
+        "Transfer - PIX",
+        "Transfer - TED",
+        "Transfer - DOC",
+        "Cash withdrawal",
+      ]),
+    ) ||
+    isOneOf(r.paymentMethod ?? "", [
+      PaymentMethod.PIX,
+      PaymentMethod.TED,
+      PaymentMethod.DOC,
+      PaymentMethod.TEV,
+      PaymentMethod.BOLETO,
+    ]) ||
+    isOneOf(raw.operationType ?? "", [
+      PaymentMethod.PIX,
+      PaymentMethod.TED,
+      PaymentMethod.DOC,
+      PaymentMethod.TEV,
+    ])
+  ) {
+    cls = Classification.transfer_uncertain;
+    evidence = [
+      "Payment method or transfer category; ownership/economic purpose unknown",
+    ];
+  } else if (
+    raw.type === TransactionType.DEBIT &&
+    (parent.type === TransactionType.CREDIT ||
+      raw.merchant?.name ||
+      (category?.parentDescription &&
+        !isOneOf(category.parentDescription, [
+          "Income",
+          "Other",
+          "Others",
+          "Transfers",
+          "Investments",
+          "Same person transfer",
+        ])))
+  ) {
+    cls = Classification.consumption_evidence;
+    evidence = [
+      parent.type === TransactionType.CREDIT
+        ? "credit account DEBIT"
+        : "Pluggy merchant/category evidence",
+    ];
+  }
+
+  return { classification: cls, evidence };
+}
+
+function applyTransactionAmounts(
+  r: FinanceRecord,
+  raw: ProviderRecord,
+  parent: FinanceRecord,
+  referenceDay: string | null,
+) {
+  const valid =
+    raw.status === TransactionStatus.POSTED &&
+    r.accountingDate &&
+    referenceDay !== null &&
+    r.accountingDate <= referenceDay &&
+    isOneOf(raw.type ?? "", [TransactionType.CREDIT, TransactionType.DEBIT]) &&
+    r.amountMinor != null;
+
+  const abs = absoluteMinor(r.amountMinor);
+  const cls = r.classification;
+
+  r.signedFlowMinor =
+    valid && parent.type === AccountType.BANK
+      ? (raw.type === TransactionType.CREDIT
+          ? (abs ?? 0n)
+          : -(abs ?? 0n)
+        ).toString()
+      : null;
+  r.knownConsumptionMinor =
+    valid &&
+    raw.type === TransactionType.DEBIT &&
+    cls === Classification.consumption_evidence
+      ? (abs ?? 0n).toString()
+      : null;
+  r.unclassifiedDebitMinor =
+    valid &&
+    raw.type === TransactionType.DEBIT &&
+    isOneOf(cls, ["unknown", Classification.transfer_uncertain])
+      ? (abs ?? 0n).toString()
+      : null;
+}
+
+function provenanceOrigin(resource: Resource, field: string) {
+  if ((derived[resource] ?? []).includes(field) || field.endsWith("Minor")) {
+    return ProvenanceOrigin.local_derivation;
+  }
+
+  if (
+    isOneOf(field, [
+      "description",
+      "category",
+      "categoryId",
+      "merchant.name",
+      "merchant.businessName",
+      "merchant.cnae",
+      "merchant.category",
+    ])
+  ) {
+    return ProvenanceOrigin.pluggy_enrichment;
+  }
+
+  return ProvenanceOrigin.provider_via_pluggy;
+}
+
+function transactionCounterparty(raw: ProviderRecord) {
+  if (raw.type === TransactionType.DEBIT) {
+    return raw.paymentData?.receiver?.name ?? raw.merchant?.name ?? null;
+  }
+
+  return raw.paymentData?.payer?.name ?? null;
 }

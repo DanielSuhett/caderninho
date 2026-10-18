@@ -1,14 +1,13 @@
+import type { Bindings } from "#worker/bindings.ts";
+import { synchronizationDependencies } from "#worker/composition.ts";
+import { providerRetries } from "#worker/pluggy/source.ts";
+import { runOperation } from "#worker/sync/service.ts";
+
 import {
   WorkflowEntrypoint,
   type WorkflowEvent,
   type WorkflowStep,
 } from "cloudflare:workers";
-import { z } from "zod/v4";
-
-import type { Bindings } from "#worker/bindings.ts";
-import { synchronizationDependencies } from "#worker/composition.ts";
-import { providerRetries } from "#worker/pluggy/source.ts";
-import { runOperation } from "#worker/sync/service.ts";
 
 export class FinanceWorkflow extends WorkflowEntrypoint<
   Bindings,
@@ -32,17 +31,12 @@ export class FinanceWorkflow extends WorkflowEntrypoint<
             },
             fn,
           ),
-        sleep: (name, duration) =>
-          step.sleep(
-            name,
-            Number(
-              z
-                .string()
-                .regex(/^\d+ seconds?$/)
-                .parse(duration)
-                .split(" ")[0],
-            ) * 1000,
-          ),
+        sleep: (name, duration) => {
+          if (!/^\d+ seconds?$/.test(duration)) {
+            throw new Error("INVALID_STEP_DURATION");
+          }
+          return step.sleep(name, Number(duration.split(" ")[0]) * 1000);
+        },
       }),
     );
   }

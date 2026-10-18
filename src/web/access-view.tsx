@@ -1,13 +1,19 @@
 import { Portal } from "#web/portal-view.tsx";
 import { UiButton, UiField } from "#web/ui.tsx";
 
-export function accessPage(
-  origin: string,
-  configured: boolean,
-  csrf: string,
+export function accessPage({
+  origin,
+  configured,
+  csrf,
   error = "",
   target = "/account",
-) {
+}: {
+  origin: string;
+  configured: boolean;
+  csrf: string;
+  error?: string;
+  target?: string;
+}) {
   return (
     <Portal>
       <p className="eyebrow">Seu Caderninho · acesso privado</p>

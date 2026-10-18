@@ -29,7 +29,7 @@ function transportError(code: string, response?: Response) {
 // Keep the official SDK endpoint methods; adapt its protected transport to Fetch.
 // Upstream bodies and credentials never enter errors or logs.
 export class PersonalPluggyClient extends PluggyClient {
-  private cachedKey = "";
+  private cachedKey: string = "";
   private readonly maximum: number;
   private readonly timeoutMs: number;
 
@@ -44,8 +44,9 @@ export class PersonalPluggyClient extends PluggyClient {
   }
 
   protected override async getApiKey() {
-    if (this.cachedKey && !this.isJwtExpired(this.cachedKey))
+    if (this.cachedKey && !this.isJwtExpired(this.cachedKey)) {
       return this.cachedKey;
+    }
     const authenticated = z.object({ apiKey: z.string().min(1) }).parse(
       await this.request<unknown>("POST", "auth", {
         clientId: this.clientId,
@@ -93,7 +94,7 @@ export class PersonalPluggyClient extends PluggyClient {
   ): Promise<T> {
     const deadline = AbortSignal.timeout(this.timeoutMs);
     const result = await tryCatch(
-      ky("https://api.pluggy.ai/" + endpoint, {
+      ky(`https://api.pluggy.ai/${endpoint}`, {
         method,
         ...(body === undefined ? {} : { json: body }),
         headers: apiKey ? { "X-API-KEY": apiKey } : {},
@@ -105,7 +106,9 @@ export class PersonalPluggyClient extends PluggyClient {
         parseJson: exactJSON,
         fetch: async (input, init) => {
           const response = await fetch(input, init);
-          if (response.status === 401) this.cachedKey = "";
+          if (response.status === 401) {
+            this.cachedKey = "";
+          }
           if (!response.ok) {
             void tryCatch(response.body?.cancel() ?? Promise.resolve());
             throw transportError(
@@ -127,11 +130,15 @@ export class PersonalPluggyClient extends PluggyClient {
               void tryCatch(reader.cancel());
             };
             deadline.addEventListener("abort", abort, { once: true });
-            if (deadline.aborted) abort();
+            if (deadline.aborted) {
+              abort();
+            }
             try {
               for (;;) {
                 const chunk = await reader.read();
-                if (chunk.done) break;
+                if (chunk.done) {
+                  break;
+                }
                 size += chunk.value.byteLength;
                 if (size > this.maximum) {
                   void tryCatch(reader.cancel());
@@ -158,9 +165,12 @@ export class PersonalPluggyClient extends PluggyClient {
       }).json<T>(),
     );
     if (result.error) {
-      if (deadline.aborted) throw transportError("ETIMEDOUT");
-      if (result.error instanceof SyntaxError)
+      if (deadline.aborted) {
+        throw transportError("ETIMEDOUT");
+      }
+      if (result.error instanceof SyntaxError) {
         throw transportError("ERR_BODY_PARSE_FAILURE");
+      }
       throw result.error;
     }
     return result.data;

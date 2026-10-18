@@ -1,11 +1,11 @@
 import { z } from "zod/v4";
 
 import {
-  ResourceSchema,
   AvailabilitySchema,
   ClassificationSchema,
   PeriodicitySchema,
   ProvenanceOriginSchema,
+  ResourceSchema,
 } from "#domain/enums.ts";
 import { JsonValueSchema } from "#shared/json.ts";
 
@@ -79,6 +79,9 @@ export const FinanceRecordSchema = z
     operationType: text,
     counterparty: text,
     amountMinor: text,
+    balanceMinor: text,
+    totalAmountMinor: text,
+    contractAmountMinor: text,
     absoluteAmountMinor: text,
     signedFlowMinor: text,
     knownConsumptionMinor: text,
@@ -152,6 +155,7 @@ export const ProviderRecordSchema = z
     taxNumber: text,
     url: text,
     updatedAt: text,
+    createdAt: text,
     updateDateTime: text,
     balance: MoneyInputSchema,
     availableBalance: MoneyInputSchema,

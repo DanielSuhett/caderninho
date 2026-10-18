@@ -16,22 +16,25 @@ export async function verifyPassword(
     !adminConfigured(expected) ||
     supplied.length < 16 ||
     supplied.length > 256
-  )
+  ) {
     return false;
+  }
   const digest = (value: string) =>
     crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
   const [a, b] = await Promise.all([digest(expected ?? ""), digest(supplied)]);
   const left = new Uint8Array(a),
     right = new Uint8Array(b);
   let difference = 0;
-  for (let i = 0; i < left.length; i++)
+  for (let i = 0; i < left.length; i++) {
     difference |= (left[i] ?? 0) ^ (right[i] ?? 0);
+  }
   return difference === 0;
 }
 
 export function returnPath(value: string | undefined) {
-  if (!value || value.length > 4096 || !value.startsWith("/authorize?"))
+  if (!value || value.length > 4096 || !value.startsWith("/authorize?")) {
     return "/account";
+  }
   const url = new URL(value, "https://internal.test");
   return url.origin === "https://internal.test" && url.pathname === "/authorize"
     ? url.pathname + url.search
@@ -47,7 +50,9 @@ export function createAuthService(
 ) {
   return {
     async readSession(id: string) {
-      if (id.length > 100) return null;
+      if (id.length > 100) {
+        return null;
+      }
       const session = await repository.session(id, now());
       return session?.auth_version === version ? session : null;
     },
