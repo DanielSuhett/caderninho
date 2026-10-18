@@ -33,6 +33,7 @@ function createRoutes(ctx: ExecutionContext) {
       observeSpan(SpanName.httpRequest, async (span) => {
         const started = performance.now();
         await next();
+        c.header("X-Request-ID", correlation);
         span.annotate(
           reportDiagnostic({
             durationMs: Math.round(performance.now() - started),
