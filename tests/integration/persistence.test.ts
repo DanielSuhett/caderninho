@@ -32,6 +32,7 @@ import {
 } from "../../src/worker/finance/repository";
 import { fetchMcp } from "../../src/worker/mcp";
 import { listen, task } from "../../src/worker/mcp/tasks";
+import { withObservation } from "../../src/worker/observability";
 import {
   checkpoints as checkpointsTable,
   coverage as coverageTable,
@@ -2230,8 +2231,10 @@ test("page publication rolls back data, progress, checkpoint and receipt togethe
     "CREATE TRIGGER fail_page_receipt BEFORE INSERT ON page_commits BEGIN SELECT RAISE(ABORT, 'synthetic receipt failure'); END",
   );
   let fetched = 0;
+  const spans: { name: string; outcome?: string }[] = [];
   const execution = {
     engine,
+    observePhase: required(synchronizationDependencies(env(db)).observePhase),
     op,
     prepare: (input: Parameters<typeof prepareEntity>[1]) =>
       prepareEntity(db, input),
@@ -2264,10 +2267,12 @@ test("page publication rolls back data, progress, checkpoint and receipt togethe
     name: "atomic-page",
     parent: { normalized: account, relevant_hash: "synthetic-parent" },
   };
-  await assert.rejects(
-    publishPage(execution, provider, publication),
-    syntheticReceiptFailurePattern,
-  );
+  const publish = () =>
+    withObservation(
+      { onSpan: (span) => spans.push(span), operationId: op.id },
+      () => publishPage(execution, provider, publication),
+    );
+  await assert.rejects(publish(), syntheticReceiptFailurePattern);
   assert.equal(
     await database(db)
       .select({ n: count() })
@@ -2311,14 +2316,20 @@ test("page publication rolls back data, progress, checkpoint and receipt togethe
     before,
   );
   await db.exec("DROP TRIGGER fail_page_receipt");
-  await publishPage(execution, provider, publication);
+  await publish();
   const progress = await database(db)
     .select({ progress: sql<string>`${operationsTable.progress}` })
     .from(operationsTable)
     .where(and(eq(operationsTable.id, op.id)))
     .get()
     .then((row) => row?.progress ?? null);
-  await publishPage(execution, provider, publication);
+  await publish();
+  assert.deepEqual(
+    spans
+      .filter((span) => span.name === "finance.publish")
+      .map((span) => span.outcome),
+    ["failed", "success"],
+  );
   assert.equal(fetched, 2);
   assert.equal(
     await database(db)
