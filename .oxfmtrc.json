@@ -1,0 +1,37 @@
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "printWidth": 80,
+  "tabWidth": 2,
+  "semi": true,
+  "singleQuote": false,
+  "trailingComma": "all",
+  "ignorePatterns": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/.wrangler/**",
+    ".agents/**",
+    "**/*.md",
+    "**/package-lock.json",
+    "tools/oxlint/project/**",
+    "src/worker/runtime.d.ts",
+    "src/worker/vendor/**"
+  ],
+  "endOfLine": "lf",
+  "bracketSpacing": true,
+  "singleAttributePerLine": true,
+  "sortImports": {
+    "sortSideEffects": false,
+    "newlinesBetween": true,
+    "partitionByNewline": false,
+    "groups": [
+      "builtin",
+      "external",
+      ["internal", "subpath"],
+      ["parent", "sibling", "index"],
+      "style",
+      "unknown"
+    ]
+  },
+  "useTabs": false,
+  "objectWrap": "preserve"
+}

@@ -1,0 +1,49 @@
+import {
+  WorkflowEntrypoint,
+  type WorkflowEvent,
+  type WorkflowStep,
+} from "cloudflare:workers";
+import { z } from "zod/v4";
+
+import type { Bindings } from "#worker/bindings.ts";
+import { synchronizationDependencies } from "#worker/composition.ts";
+import { providerRetries } from "#worker/pluggy/source.ts";
+import { runOperation } from "#worker/sync/service.ts";
+
+export class FinanceWorkflow extends WorkflowEntrypoint<
+  Bindings,
+  { operationId: string }
+> {
+  async run(event: WorkflowEvent<{ operationId: string }>, step: WorkflowStep) {
+    return runOperation(
+      synchronizationDependencies(this.env),
+      event.payload.operationId,
+      providerRetries({
+        do: (name, fn) =>
+          step.do(
+            name,
+            {
+              retries: {
+                limit: 6,
+                delay: "10 seconds",
+                backoff: "exponential",
+              },
+              timeout: "5 minutes",
+            },
+            fn,
+          ),
+        sleep: (name, duration) =>
+          step.sleep(
+            name,
+            Number(
+              z
+                .string()
+                .regex(/^\d+ seconds?$/)
+                .parse(duration)
+                .split(" ")[0],
+            ) * 1000,
+          ),
+      }),
+    );
+  }
+}

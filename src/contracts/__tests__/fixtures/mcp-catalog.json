@@ -1,0 +1,1130 @@
+[
+  {
+    "name": "caderninho_setup_status",
+    "description": "Diagn\u00f3stico de configura\u00e7\u00e3o sem credenciais, identificadores ou dados banc\u00e1rios. Oriente uma a\u00e7\u00e3o por vez. Nunca pe\u00e7a secrets, senhas ou prints de chaves. N\u00e3o inicia importa\u00e7\u00e3o.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "caderninho_sync",
+    "description": "Materializar todos os recursos autorizados; primeira carga integral, depois incremento. MCP Task dur\u00e1vel.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "requestKey": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "renormalize": {
+          "type": "boolean"
+        },
+        "itemIds": {
+          "minItems": 1,
+          "maxItems": 100,
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "filter": {
+          "$ref": "#/$defs/__schema0"
+        }
+      },
+      "required": ["requestKey", "itemIds"],
+      "additionalProperties": false,
+      "$defs": {
+        "__schema0": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "field": {
+                  "type": "string",
+                  "enum": [
+                    "date",
+                    "account",
+                    "item",
+                    "currency",
+                    "direction",
+                    "original.category",
+                    "effective.category",
+                    "effective.group",
+                    "original.description",
+                    "effective.description",
+                    "amountMinor",
+                    "status",
+                    "eligible",
+                    "ignored"
+                  ]
+                },
+                "op": {
+                  "type": "string",
+                  "enum": ["eq", "ne", "gte", "lte", "contains"]
+                },
+                "value": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "maxLength": 2048
+                    },
+                    {
+                      "type": "boolean"
+                    }
+                  ]
+                }
+              },
+              "required": ["field", "op", "value"],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "tag": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 80
+                },
+                "value": {
+                  "type": "string",
+                  "maxLength": 2048
+                }
+              },
+              "required": ["tag", "value"],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "and": {
+                  "minItems": 1,
+                  "maxItems": 30,
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/__schema0"
+                  }
+                }
+              },
+              "required": ["and"],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "or": {
+                  "minItems": 1,
+                  "maxItems": 30,
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/__schema0"
+                  }
+                }
+              },
+              "required": ["or"],
+              "additionalProperties": false
+            }
+          ]
+        }
+      }
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "openWorldHint": true
+    }
+  },
+  {
+    "name": "caderninho_reconcile",
+    "description": "Reconcilia\u00e7\u00e3o expl\u00edcita de todos os recursos dos Items indicados. MCP Task.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "requestKey": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "renormalize": {
+          "type": "boolean"
+        },
+        "itemIds": {
+          "minItems": 1,
+          "maxItems": 100,
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "filter": {
+          "$ref": "#/$defs/__schema0"
+        }
+      },
+      "required": ["requestKey", "itemIds"],
+      "additionalProperties": false,
+      "$defs": {
+        "__schema0": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "field": {
+                  "type": "string",
+                  "enum": [
+                    "date",
+                    "account",
+                    "item",
+                    "currency",
+                    "direction",
+                    "original.category",
+                    "effective.category",
+                    "effective.group",
+                    "original.description",
+                    "effective.description",
+                    "amountMinor",
+                    "status",
+                    "eligible",
+                    "ignored"
+                  ]
+                },
+                "op": {
+                  "type": "string",
+                  "enum": ["eq", "ne", "gte", "lte", "contains"]
+                },
+                "value": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "maxLength": 2048
+                    },
+                    {
+                      "type": "boolean"
+                    }
+                  ]
+                }
+              },
+              "required": ["field", "op", "value"],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "tag": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 80
+                },
+                "value": {
+                  "type": "string",
+                  "maxLength": 2048
+                }
+              },
+              "required": ["tag", "value"],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "and": {
+                  "minItems": 1,
+                  "maxItems": 30,
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/__schema0"
+                  }
+                }
+              },
+              "required": ["and"],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "or": {
+                  "minItems": 1,
+                  "maxItems": 30,
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/__schema0"
+                  }
+                }
+              },
+              "required": ["or"],
+              "additionalProperties": false
+            }
+          ]
+        }
+      }
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "openWorldHint": true
+    }
+  },
+  {
+    "name": "caderninho_reapply",
+    "description": "Reaplicar vers\u00e3o ativa de regras ao filtro expl\u00edcito, preservando overrides. MCP Task.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "requestKey": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "renormalize": {
+          "type": "boolean"
+        },
+        "itemIds": {
+          "minItems": 1,
+          "maxItems": 100,
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "filter": {
+          "$ref": "#/$defs/__schema0"
+        }
+      },
+      "required": ["requestKey", "itemIds"],
+      "additionalProperties": false,
+      "$defs": {
+        "__schema0": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "field": {
+                  "type": "string",
+                  "enum": [
+                    "date",
+                    "account",
+                    "item",
+                    "currency",
+                    "direction",
+                    "original.category",
+                    "effective.category",
+                    "effective.group",
+                    "original.description",
+                    "effective.description",
+                    "amountMinor",
+                    "status",
+                    "eligible",
+                    "ignored"
+                  ]
+                },
+                "op": {
+                  "type": "string",
+                  "enum": ["eq", "ne", "gte", "lte", "contains"]
+                },
+                "value": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "maxLength": 2048
+                    },
+                    {
+                      "type": "boolean"
+                    }
+                  ]
+                }
+              },
+              "required": ["field", "op", "value"],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "tag": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 80
+                },
+                "value": {
+                  "type": "string",
+                  "maxLength": 2048
+                }
+              },
+              "required": ["tag", "value"],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "and": {
+                  "minItems": 1,
+                  "maxItems": 30,
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/__schema0"
+                  }
+                }
+              },
+              "required": ["and"],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "or": {
+                  "minItems": 1,
+                  "maxItems": 30,
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/__schema0"
+                  }
+                }
+              },
+              "required": ["or"],
+              "additionalProperties": false
+            }
+          ]
+        }
+      }
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "caderninho_status",
+    "description": "Consultar cobertura D1, opera\u00e7\u00f5es e backlog; sem iniciar importa\u00e7\u00e3o.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "caderninho_query",
+    "description": "Consultar registros no D1. Campos original.* e effective.* s\u00e3o distintos. Cursor exige mesma revis\u00e3o.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "resource": {
+          "default": "transactions",
+          "type": "string",
+          "enum": [
+            "accounts",
+            "transactions",
+            "investments",
+            "investment_transactions",
+            "bills",
+            "loans",
+            "identity",
+            "connections",
+            "resources",
+            "consents",
+            "connectors",
+            "categories",
+            "statements"
+          ]
+        },
+        "filter": {
+          "$ref": "#/$defs/__schema0"
+        },
+        "limit": {
+          "default": 50,
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200
+        },
+        "cursor": {
+          "type": "object",
+          "properties": {
+            "revision": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "offset": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "scope": {
+              "type": "string",
+              "minLength": 64,
+              "maxLength": 64
+            }
+          },
+          "required": ["revision", "offset", "scope"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["resource", "limit"],
+      "additionalProperties": false,
+      "$defs": {
+        "__schema0": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "field": {
+                  "type": "string",
+                  "enum": [
+                    "date",
+                    "account",
+                    "item",
+                    "currency",
+                    "direction",
+                    "original.category",
+                    "effective.category",
+                    "effective.group",
+                    "original.description",
+                    "effective.description",
+                    "amountMinor",
+                    "status",
+                    "eligible",
+                    "ignored"
+                  ]
+                },
+                "op": {
+                  "type": "string",
+                  "enum": ["eq", "ne", "gte", "lte", "contains"]
+                },
+                "value": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "maxLength": 2048
+                    },
+                    {
+                      "type": "boolean"
+                    }
+                  ]
+                }
+              },
+              "required": ["field", "op", "value"],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "tag": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 80
+                },
+                "value": {
+                  "type": "string",
+                  "maxLength": 2048
+                }
+              },
+              "required": ["tag", "value"],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "and": {
+                  "minItems": 1,
+                  "maxItems": 30,
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/__schema0"
+                  }
+                }
+              },
+              "required": ["and"],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "or": {
+                  "minItems": 1,
+                  "maxItems": 30,
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/__schema0"
+                  }
+                }
+              },
+              "required": ["or"],
+              "additionalProperties": false
+            }
+          ]
+        }
+      }
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "caderninho_aggregate",
+    "description": "Totais exatos por moeda do universo SQL. metric aceita count, amount, cashFlow (BANK), consumption_v1 ou unclassifiedDebits para transa\u00e7\u00f5es e m\u00e9tricas pr\u00f3prias de cada recurso. M\u00e9tricas flow excluem pendentes/futuros; valores ignorados s\u00e3o exclu\u00eddos. Sem metric, soma bruta assinada da origem.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "resource": {
+          "default": "transactions",
+          "type": "string",
+          "enum": [
+            "accounts",
+            "transactions",
+            "investments",
+            "investment_transactions",
+            "bills",
+            "loans",
+            "identity",
+            "connections",
+            "resources",
+            "consents",
+            "connectors",
+            "categories",
+            "statements"
+          ]
+        },
+        "filter": {
+          "$ref": "#/$defs/__schema0"
+        },
+        "metric": {
+          "type": "string"
+        }
+      },
+      "required": ["resource"],
+      "additionalProperties": false,
+      "$defs": {
+        "__schema0": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "field": {
+                  "type": "string",
+                  "enum": [
+                    "date",
+                    "account",
+                    "item",
+                    "currency",
+                    "direction",
+                    "original.category",
+                    "effective.category",
+                    "effective.group",
+                    "original.description",
+                    "effective.description",
+                    "amountMinor",
+                    "status",
+                    "eligible",
+                    "ignored"
+                  ]
+                },
+                "op": {
+                  "type": "string",
+                  "enum": ["eq", "ne", "gte", "lte", "contains"]
+                },
+                "value": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "maxLength": 2048
+                    },
+                    {
+                      "type": "boolean"
+                    }
+                  ]
+                }
+              },
+              "required": ["field", "op", "value"],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "tag": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 80
+                },
+                "value": {
+                  "type": "string",
+                  "maxLength": 2048
+                }
+              },
+              "required": ["tag", "value"],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "and": {
+                  "minItems": 1,
+                  "maxItems": 30,
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/__schema0"
+                  }
+                }
+              },
+              "required": ["and"],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "or": {
+                  "minItems": 1,
+                  "maxItems": 30,
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/__schema0"
+                  }
+                }
+              },
+              "required": ["or"],
+              "additionalProperties": false
+            }
+          ]
+        }
+      }
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "caderninho_rules",
+    "description": "Importar/validar, criar/editar vers\u00e3o completa, ativar, desativar ou ordenar regras. Importa\u00e7\u00e3o dry-run por padr\u00e3o; activate publica vers\u00e3o sem recategorizar o passado.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "action": {
+          "type": "string",
+          "enum": ["validate", "save", "activate", "read"]
+        },
+        "document": {
+          "$ref": "#/$defs/__schema0"
+        },
+        "revision": {
+          "type": "string"
+        },
+        "catalog": {
+          "type": "object",
+          "properties": {
+            "groups": {
+              "maxItems": 1000,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "maxLength": 2048
+                  },
+                  "name": {
+                    "type": "string",
+                    "maxLength": 2048
+                  }
+                },
+                "required": ["id", "name"],
+                "additionalProperties": false
+              }
+            },
+            "categories": {
+              "maxItems": 5000,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "maxLength": 2048
+                  },
+                  "name": {
+                    "type": "string",
+                    "maxLength": 2048
+                  },
+                  "group_id": {
+                    "type": "string",
+                    "maxLength": 2048
+                  },
+                  "aliases": {
+                    "default": [],
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "maxLength": 2048
+                    }
+                  }
+                },
+                "required": ["id", "name", "group_id", "aliases"],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": ["groups", "categories"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["action"],
+      "additionalProperties": false,
+      "$defs": {
+        "__schema0": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            },
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/__schema0"
+              }
+            },
+            {
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {
+                "$ref": "#/$defs/__schema0"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "caderninho_preview",
+    "description": "Simular regras no mesmo filtro usado por reaplica\u00e7\u00e3o. Quantidade total SQL; diferen\u00e7as da amostra identificada, sem alterar dados.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "filter": {
+          "$ref": "#/$defs/__schema0"
+        },
+        "itemIds": {
+          "minItems": 1,
+          "maxItems": 100,
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "revision": {
+          "type": "string"
+        },
+        "limit": {
+          "default": 20,
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 50
+        }
+      },
+      "required": ["itemIds", "revision", "limit"],
+      "additionalProperties": false,
+      "$defs": {
+        "__schema0": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "field": {
+                  "type": "string",
+                  "enum": [
+                    "date",
+                    "account",
+                    "item",
+                    "currency",
+                    "direction",
+                    "original.category",
+                    "effective.category",
+                    "effective.group",
+                    "original.description",
+                    "effective.description",
+                    "amountMinor",
+                    "status",
+                    "eligible",
+                    "ignored"
+                  ]
+                },
+                "op": {
+                  "type": "string",
+                  "enum": ["eq", "ne", "gte", "lte", "contains"]
+                },
+                "value": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "maxLength": 2048
+                    },
+                    {
+                      "type": "boolean"
+                    }
+                  ]
+                }
+              },
+              "required": ["field", "op", "value"],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "tag": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 80
+                },
+                "value": {
+                  "type": "string",
+                  "maxLength": 2048
+                }
+              },
+              "required": ["tag", "value"],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "and": {
+                  "minItems": 1,
+                  "maxItems": 30,
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/__schema0"
+                  }
+                }
+              },
+              "required": ["and"],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "or": {
+                  "minItems": 1,
+                  "maxItems": 30,
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/__schema0"
+                  }
+                }
+              },
+              "required": ["or"],
+              "additionalProperties": false
+            }
+          ]
+        }
+      }
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "caderninho_override",
+    "description": "Corrigir campo local; value=null remove override e volta \u00e0 heran\u00e7a. N\u00e3o escreve na Pluggy.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "itemId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "resource": {
+          "type": "string",
+          "enum": [
+            "accounts",
+            "transactions",
+            "investments",
+            "investment_transactions",
+            "bills",
+            "loans",
+            "identity",
+            "connections",
+            "resources",
+            "consents",
+            "connectors",
+            "categories",
+            "statements"
+          ]
+        },
+        "parentId": {
+          "default": "",
+          "type": "string"
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "field": {
+          "type": "string",
+          "enum": ["category", "description", "ignored", "tag"]
+        },
+        "key": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 2048
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": ["itemId", "resource", "parentId", "id", "field", "value"],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "caderninho_explain",
+    "description": "Explicar origem, vers\u00e3o, regras aplicadas e overrides da transa\u00e7\u00e3o.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "itemId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "resource": {
+          "type": "string",
+          "enum": [
+            "accounts",
+            "transactions",
+            "investments",
+            "investment_transactions",
+            "bills",
+            "loans",
+            "identity",
+            "connections",
+            "resources",
+            "consents",
+            "connectors",
+            "categories",
+            "statements"
+          ]
+        },
+        "parentId": {
+          "default": "",
+          "type": "string"
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": ["itemId", "resource", "parentId", "id"],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "caderninho_get_subscriptions",
+    "description": "Detectar recorr\u00eancias na base D1 completa do per\u00edodo solicitado. Recusa universo maior que o limite de an\u00e1lise; n\u00e3o inventa totais de amostra.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "from": {
+          "type": "string"
+        },
+        "to": {
+          "type": "string"
+        },
+        "currency": {
+          "type": "string"
+        },
+        "limit": {
+          "default": 20,
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        }
+      },
+      "required": ["from", "to", "currency", "limit"],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "caderninho_live_balance",
+    "description": "Leitura pontual da conta na Pluggy, sem sync ou PATCH. Informa hor\u00e1rio da leitura e refer\u00eancia da origem; n\u00e3o garante saldo banc\u00e1rio em tempo real.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "itemId": {
+          "type": "string"
+        },
+        "accountId": {
+          "type": "string"
+        }
+      },
+      "required": ["itemId", "accountId"],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": true
+    }
+  }
+]

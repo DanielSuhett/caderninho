@@ -1,0 +1,56 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "caderninho",
+  "main": "src/worker/index.ts",
+  "compatibility_date": "2026-10-06",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "workers_dev": true,
+  "assets": {
+    "directory": "./dist/web",
+    "binding": "ASSETS",
+    "run_worker_first": [
+      "/api/*",
+      "/account",
+      "/account/*",
+      "/mcp",
+      "/mcp/*",
+      "/authorize",
+      "/callback",
+      "/oauth/*",
+      "/token",
+      "/register",
+      "/.well-known/*",
+      "/webhook",
+    ],
+  },
+  "preview_urls": false,
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "caderninho",
+      "migrations_dir": "migrations",
+    },
+  ],
+  "kv_namespaces": [{ "binding": "OAUTH_KV" }],
+  "workflows": [
+    {
+      "name": "caderninho-finance",
+      "binding": "FINANCE",
+      "class_name": "FinanceWorkflow",
+    },
+  ],
+  "triggers": { "crons": ["* * * * *"] },
+  "vars": {
+    "TASK_EVENT_SOURCE": "d1",
+    // Installation-specific values come from Worker secrets (see .dev.vars.example).
+    // Existing installations can retain PUBLIC_ORIGIN/OWNER_ID as dashboard vars.
+  },
+  "keep_vars": true,
+  "observability": {
+    "enabled": true,
+    "redact_query_string": true,
+    "head_sampling_rate": 0.1,
+    "logs": { "enabled": true, "invocation_logs": false },
+    "traces": { "enabled": true, "head_sampling_rate": 0.1 },
+  },
+}

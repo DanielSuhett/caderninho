@@ -1,0 +1,14 @@
+# Examples only. Supply your own values directly in the Deploy to Cloudflare form.
+# Required formats and manual configuration: README.md.
+# Deploy to Cloudflare reads these five fields. Never deploy the placeholder values.
+OWNER_ID=replace-with-generated-uuid
+PUBLIC_ORIGIN=https://your-worker.your-subdomain.workers.dev
+ADMIN_KEY_SHA256=replace-with-generated-admin-key-sha256
+CREDENTIAL_KEY=replace-with-base64-32-byte-random-key
+WEBHOOK_SECRET=replace-with-independent-random-secret
+
+# Pluggy credentials are entered privately in /account after installation.
+# Optional compatibility with an existing GitHub owner; preserve existing values.
+# GITHUB_CLIENT_SECRET=replace-with-own-oauth-secret
+# Optional only during a planned rotation. Keep the old key in backups.
+# CREDENTIAL_PREVIOUS_KEY=previous-base64-32-byte-key

@@ -1,0 +1,172 @@
+diff --git a/node_modules/pluggy-sdk/dist/baseApi.d.ts b/node_modules/pluggy-sdk/dist/baseApi.d.ts
+index 21d8d97..4b783a9 100644
+--- a/node_modules/pluggy-sdk/dist/baseApi.d.ts
++++ b/node_modules/pluggy-sdk/dist/baseApi.d.ts
+@@ -1,4 +1,4 @@
+-import { Got, Method } from 'got';
++import { Got, Method, ExtendOptions } from 'got';
+ type QueryParameters = {
+     [key: string]: number | number[] | string | string[] | boolean;
+ };
+@@ -8,12 +8,21 @@ export type ClientParams = {
+     /** Pluggy Client Secret */
+     clientSecret: string;
+     baseUrl?: string;
++    /** Got options inherited by authentication, reads and mutations. */
++    requestOptions?: ExtendOptions;
++    /** Maximum response bytes; enforced while streaming. Redirects are rejected. */
++    maxResponseBytes?: number;
++    /** Log only a fixed error message, never upstream bodies. Default: true. */
++    logErrors?: boolean;
+ };
+ export declare class BaseApi {
+-    protected apiKey: string;
++    protected apiKey?: string;
+     protected clientId: string;
+     protected clientSecret: string;
+     protected baseUrl?: string;
++    private requestOptions: ExtendOptions;
++    private maxResponseBytes?: number;
++    private logErrors: boolean;
+     protected defaultHeaders: Record<string, string>;
+     protected serviceInstance: Got;
+     constructor(params: ClientParams);
+diff --git a/node_modules/pluggy-sdk/dist/baseApi.js b/node_modules/pluggy-sdk/dist/baseApi.js
+index f4f3cc4..b43567e 100644
+--- a/node_modules/pluggy-sdk/dist/baseApi.js
++++ b/node_modules/pluggy-sdk/dist/baseApi.js
+@@ -45,7 +45,10 @@ class BaseApi {
+     constructor(params) {
+         const { clientId, clientSecret } = params;
+         const { PLUGGY_API_URL } = process.env;
+-        this.baseUrl = PLUGGY_API_URL || 'https://api.pluggy.ai';
++        this.baseUrl = params.baseUrl || PLUGGY_API_URL || 'https://api.pluggy.ai';
++        this.requestOptions = params.requestOptions || {};
++        this.maxResponseBytes = params.maxResponseBytes;
++        this.logErrors = params.logErrors !== false;
+         if (clientSecret && clientId) {
+             this.clientId = clientId;
+             this.clientSecret = clientSecret;
+@@ -60,6 +63,7 @@ class BaseApi {
+     }
+     getServiceInstance() {
+         if (!this.serviceInstance) {
++            const { handlers = [], hooks = {}, ...requestOptions } = this.requestOptions;
+             this.serviceInstance = got_1.default.extend({
+                 headers: this.defaultHeaders,
+                 responseType: 'json',
+@@ -70,6 +74,48 @@ class BaseApi {
+                     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
+                     statusCodes: [429],
+                 },
++                ...requestOptions,
++                followRedirect: false,
++                hooks: {
++                    ...hooks,
++                    beforeError: [...(hooks.beforeError || []), error => {
++                        if (error.response && error.response.statusCode === 401) this.apiKey = undefined;
++                        if (this.logErrors) console.error('[Pluggy SDK] HTTP request failed');
++                        return error;
++                    }],
++                },
++                handlers: [...handlers, (options, next) => {
++                    // workerd emits response.aborted before the Node request timeout error.
++                    // Cancel Got at the request deadline so that race cannot hide ETIMEDOUT.
++                    const requestTimeout = options.timeout.request;
++                    delete options.timeout.request;
++                    const request = next(options);
++                    let timedOut = false;
++                    const timer = requestTimeout === undefined ? undefined : setTimeout(() => {
++                        timedOut = true;
++                        request.cancel();
++                    }, requestTimeout);
++                    request.on('response', response => {
++                        if (response.statusCode === 401) this.apiKey = undefined;
++                        const abort = code => response.request.destroy(Object.assign(new Error(code), { code }));
++                        if (response.statusCode >= 300 && response.statusCode < 400) {
++                            abort('UPSTREAM_REDIRECT');
++                            return;
++                        }
++                        if (this.maxResponseBytes !== undefined) {
++                            if (Number(response.headers['content-length']) > this.maxResponseBytes) abort('UPSTREAM_TOO_LARGE');
++                            let bytes = 0;
++                            response.request.on('data', chunk => {
++                                bytes += chunk.length;
++                                if (bytes > this.maxResponseBytes) abort('UPSTREAM_TOO_LARGE');
++                            });
++                        }
++                    });
++                    return request.catch(error => {
++                        if (timedOut) Object.assign(error, { code: 'ETIMEDOUT', name: 'TimeoutError' });
++                        throw error;
++                    }).finally(() => clearTimeout(timer));
++                }],
+             });
+         }
+         return this.serviceInstance;
+@@ -92,27 +138,10 @@ class BaseApi {
+     async createGetRequest(endpoint, params) {
+         const apiKey = await this.getApiKey();
+         const url = `${this.baseUrl}/${endpoint}${this.mapToQueryString(params)}`;
+-        try {
+-            const { statusCode, body } = await this.getServiceInstance()(url, {
+-                headers: {
+-                    ...this.defaultHeaders,
+-                    'X-API-KEY': apiKey,
+-                },
+-                responseType: 'json',
+-                parseJson: transforms_1.deserializeJSONWithDates,
+-            });
+-            if (statusCode < 200 || statusCode >= 300) {
+-                return Promise.reject(body);
+-            }
+-            return body;
+-        }
+-        catch (error) {
+-            if (error instanceof got_1.HTTPError) {
+-                console.error(`[Pluggy SDK] HTTP request failed: ${error.message || ''}`, error.response.body);
+-                return Promise.reject(error.response.body);
+-            }
+-            return Promise.reject(error);
+-        }
++        const { body } = await this.getServiceInstance()(url, {
++            headers: { ...this.defaultHeaders, 'X-API-KEY': apiKey },
++        });
++        return body;
+     }
+     createPostRequest(endpoint, params, body) {
+         return this.createMutationRequest('post', endpoint, params, body);
+@@ -132,27 +161,12 @@ class BaseApi {
+         if (body) {
+             Object.keys(body).forEach(key => (body[key] === undefined ? delete body[key] : {}));
+         }
+-        try {
+-            const { statusCode, body: responseBody } = await this.getServiceInstance()(url, {
+-                method,
+-                headers: {
+-                    ...this.defaultHeaders,
+-                    'X-API-KEY': apiKey,
+-                },
+-                json: body,
+-            });
+-            if (statusCode < 200 || statusCode >= 300) {
+-                return Promise.reject(body);
+-            }
+-            return responseBody;
+-        }
+-        catch (error) {
+-            if (error instanceof got_1.HTTPError) {
+-                console.error(`[Pluggy SDK] HTTP request failed: ${error.message || ''}`, error.response.body);
+-                return Promise.reject(error.response.body);
+-            }
+-            return Promise.reject(error);
+-        }
++        const { body: responseBody } = await this.getServiceInstance()(url, {
++            method,
++            headers: { ...this.defaultHeaders, 'X-API-KEY': apiKey },
++            json: body,
++        });
++        return responseBody;
+     }
+     mapToQueryString(params) {
+         if (!params) {
