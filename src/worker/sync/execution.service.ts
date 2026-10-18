@@ -52,6 +52,7 @@ import {
 interface Execution extends ExecutionDependencies {
   engine: RuleEngine;
   op: Operation;
+  setPhase?: (phase: ExecutionPhase) => void;
   step: Steps;
 }
 
@@ -87,6 +88,9 @@ export async function runOperation(
         );
       },
       op,
+      setPhase(phase: ExecutionPhase) {
+        summary.phase = phase;
+      },
       step,
     };
     async function acquire(attempt: number): Promise<boolean> {
@@ -484,6 +488,7 @@ async function synchronizeCollection(
 
   async function nextPage(pageIndex: number): Promise<boolean> {
     const name = `page-${itemId}-${resource}-${parentId}-${pageIndex}`;
+    execution.setPhase?.(ExecutionPhase.collect);
     const result = await step.do(name, () =>
       publishPage(execution, source, { identity, name, parent }),
     );
@@ -543,6 +548,7 @@ async function resolvePendingTransactions(
 
   async function nextBatch(batch: number): Promise<boolean> {
     const key = `pending-${batch}`;
+    execution.setPhase?.(ExecutionPhase.collect);
     const outcome = await step.do(key, async () => {
       const committed = await repository.receipt(op.id, key);
       if (committed) {
@@ -646,6 +652,7 @@ async function resolveEvent(
     cursor: string | null,
   ): Promise<boolean> {
     const key = `event-${batch}`;
+    execution.setPhase?.(ExecutionPhase.collect);
     const result: { done: boolean; cancelled: boolean; next: string | null } =
       await step.do(key, async () => {
         const saved = await repository.receipt(op.id, key);

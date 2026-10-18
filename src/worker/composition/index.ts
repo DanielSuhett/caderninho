@@ -355,17 +355,21 @@ export function reapplyRules(env: Bindings) {
         },
       },
       {
-        batch: (operationId, callback) =>
+        batch: ({ operationId, batch }, callback) =>
           withObservation({ operationId }, () =>
-            observeSpan(SpanName.reapplication, async (span) => {
-              const result = await callback();
-              span.annotate({
-                batches: replayed ? 0 : 1,
-                outcome: replayed ? Outcome.replayed : Outcome.completed,
-                processed: replayed ? 0 : result.processed,
-              });
-              return result;
-            }),
+            observeSpan(
+              SpanName.reapplication,
+              async (span) => {
+                const result = await callback();
+                span.annotate({
+                  batches: replayed ? 0 : 1,
+                  outcome: replayed ? Outcome.replayed : Outcome.completed,
+                  processed: replayed ? 0 : result.processed,
+                });
+                return result;
+              },
+              { batch },
+            ),
           ),
         phase: observeExecutionPhase,
       },
