@@ -591,6 +591,7 @@
         "!src/worker/database/index.ts",
         "!src/worker/schema/index.ts",
         "!src/worker/http/index.ts",
+        "!src/worker/observability/index.ts",
         "!src/worker/runtime.d.ts",
         "!src/worker/vendor/**",
         "!src/worker/**/__tests__/**",

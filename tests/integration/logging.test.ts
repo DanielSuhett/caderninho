@@ -1,38 +1,63 @@
 import assert from "node:assert/strict";
 
-import { test } from "vitest";
-import { z } from "zod/v4";
+import { afterEach, beforeEach, test, vi } from "vitest";
 
 import { createLogger } from "../../src/shared/logger";
-import { requestDiagnostic } from "../../src/worker/http";
+import worker from "../../src/worker";
+import { withObservation } from "../../src/worker/observability";
+import {
+  cookies,
+  fixture,
+  login,
+  origin,
+  settings,
+  testMigrations,
+} from "./personal-fixture";
+import {
+  applyD1Migrations,
+  createExecutionContext,
+  reset,
+} from "cloudflare:test";
+import { env as bindings } from "cloudflare:workers";
 
-test("Worker logging filters polling and writes only safe structured HTTP metadata", () => {
+beforeEach(async () => {
+  await reset();
+  await applyD1Migrations(bindings.DB, testMigrations);
+});
+afterEach(() => vi.unstubAllGlobals());
+
+test("100 account polls and 100 expired sessions remain quiet at warn", async () => {
+  const config = settings();
+  const cookie = cookies(await login(fixture(config)));
   const lines: string[] = [];
-  const logger = createLogger({
+  const output = createLogger({
     destination: { write: (line) => lines.push(line) },
     level: "warn",
     name: "synthetic-worker",
   });
-  const diagnostic = {
-    body: { balance: "123.45", token: "synthetic-secret" },
-    correlation: "synthetic-correlation",
-    durationMs: 3,
-    route: "api",
-    url: "https://synthetic.example?token=synthetic-secret",
-  };
-  requestDiagnostic({ ...diagnostic, status: 200 }, logger);
-  requestDiagnostic({ ...diagnostic, status: 503 }, logger);
-  assert.equal(lines.length, 1);
-  z.object({
-    code: z.literal("REQUEST_FAILED"),
-    correlation: z.literal("synthetic-correlation"),
-    durationMs: z.literal(3),
-    level: z.literal(50),
-    name: z.literal("synthetic-worker"),
-    route: z.literal("api"),
-    status: z.literal(503),
-    time: z.number(),
-  })
-    .strict()
-    .parse(JSON.parse(lines.join("")));
+  await withObservation({ output }, async () => {
+    await Promise.all(
+      Array.from({ length: 100 }, async () => {
+        const poll = await worker.fetch(
+          new Request(`${origin}/api/account`, { headers: { Cookie: cookie } }),
+          config,
+          createExecutionContext(),
+        );
+        assert.equal(poll.status, 200);
+        const expired = await worker.fetch(
+          new Request(`${origin}/api/account`, {
+            headers: { "X-Request-ID": "private-untrusted-correlation" },
+          }),
+          config,
+          createExecutionContext(),
+        );
+        assert.equal(expired.status, 401);
+        assert.notEqual(
+          expired.headers.get("X-Request-ID"),
+          "private-untrusted-correlation",
+        );
+      }),
+    );
+  });
+  assert.deepEqual(lines, []);
 });

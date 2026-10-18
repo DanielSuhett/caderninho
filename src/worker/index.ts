@@ -5,8 +5,16 @@ import { tryCatch } from "../shared";
 import { authenticatedFetch } from "./auth/controller";
 import type { Bindings } from "./bindings";
 import { authService, scheduleSync, syncService } from "./composition";
-import { failureStatus, requestDiagnostic } from "./http";
+import { failureStatus } from "./http";
 import { fetchMcp } from "./mcp";
+import {
+  DiagnosticEvent,
+  markFailure,
+  observeSpan,
+  reportDiagnostic,
+  SpanName,
+  withObservation,
+} from "./observability";
 import { receiveWebhook } from "./sync/controller";
 
 export { receiveWebhook } from "./sync/controller";
@@ -14,31 +22,27 @@ export { FinanceWorkflow } from "./sync/workflow";
 
 function createRoutes(ctx: ExecutionContext) {
   const routes = new Hono<{ Bindings: Bindings }>();
-  routes.use("*", async (c, next) => {
+  routes.use("*", (c, next) => {
     const correlation = crypto.randomUUID();
-    const started = performance.now();
     c.header("X-Request-ID", correlation);
-    await next();
-    const { path } = c.req;
-    let route = "public-or-oauth";
-    if (path.startsWith("/api/")) {
-      route = "api";
-    } else if (path.startsWith("/account")) {
-      route = "account";
-    } else if (path === "/mcp") {
-      route = "mcp";
-    } else if (path === "/webhook") {
-      route = "webhook";
-    }
-    requestDiagnostic({
-      correlation,
-      durationMs: Math.round(performance.now() - started),
-      route,
-      status: c.res.status,
-    });
+    return withObservation({ correlation }, () =>
+      observeSpan(SpanName.httpRequest, async (span) => {
+        const started = performance.now();
+        await next();
+        span.annotate(
+          reportDiagnostic({
+            durationMs: Math.round(performance.now() - started),
+            event: DiagnosticEvent.http,
+            phase: SpanName.httpRequest,
+            status: c.res.status,
+          }),
+        );
+      }),
+    );
   });
-  routes.onError((error, c) =>
-    c.json(
+  routes.onError((error, c) => {
+    markFailure(error, { phase: SpanName.httpRequest });
+    return c.json(
       {
         code:
           failureStatus(error) === 400
@@ -46,8 +50,8 @@ function createRoutes(ctx: ExecutionContext) {
             : FaultCode.INTERNAL_ERROR,
       },
       failureStatus(error),
-    ),
-  );
+    );
+  });
 
   routes.post("/webhook", async (c) => {
     const { data, error } = await tryCatch(() =>
