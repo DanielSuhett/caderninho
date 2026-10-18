@@ -1,16 +1,39 @@
 import type { ReapplicationInput, ReapplicationResult } from "../../domain";
 import { txContext } from "../../domain/rules";
 import { tryCatch } from "../../shared";
-import type { ReapplicationRepository } from "./entity";
+import {
+  type ExecutionDependencies,
+  ExecutionPhase,
+  type LocalReapplication,
+  type ReapplicationRepository,
+} from "./entity";
 
 export function createReapplicationService(
   repository: ReapplicationRepository,
+  observation?: {
+    batch: (
+      operationId: string,
+      callback: () => Promise<ReapplicationResult>,
+    ) => Promise<ReapplicationResult>;
+    phase: NonNullable<ExecutionDependencies["observePhase"]>;
+  },
 ) {
+  const phase: NonNullable<ExecutionDependencies["observePhase"]> =
+    observation?.phase ?? ((_phase, callback) => callback());
   return async (input: ReapplicationInput): Promise<ReapplicationResult> => {
     if (input.renormalize) {
       throw new Error("RENORMALIZE_REQUIRES_RECONCILIATION");
     }
     const run = await repository.begin(input);
+    return observation
+      ? observation.batch(run.operation.id, () => applyBatch(run, input))
+      : applyBatch(run, input);
+  };
+
+  async function applyBatch(
+    run: LocalReapplication,
+    input: ReapplicationInput,
+  ): Promise<ReapplicationResult> {
     const saved = await repository.receipt(run.operation.id, run.batch);
     if (saved) {
       return saved;
@@ -24,17 +47,21 @@ export function createReapplicationService(
         throw new Error("REAPPLICATION_TOO_LARGE_USE_BATCHES");
       }
       const engine = await repository.rules(run.operation.rules_revision);
-      const changes = await Promise.all(
-        selected.slice(0, 5).map(async (entity) => ({
-          derived: await engine.evaluate(txContext(entity.normalized)),
-          identity: {
-            id: entity.id,
-            itemId: entity.item_id,
-            parentId: entity.parent_id,
-            resource: entity.resource,
-          },
-        })),
-      );
+      const prepare = () =>
+        Promise.all(
+          selected.slice(0, 5).map(async (entity) => ({
+            derived: await engine.evaluate(txContext(entity.normalized)),
+            identity: {
+              id: entity.id,
+              itemId: entity.item_id,
+              parentId: entity.parent_id,
+              resource: entity.resource,
+            },
+          })),
+        );
+      const changes = await phase(ExecutionPhase.process, prepare, {
+        processed: Math.min(selected.length, 5),
+      });
       const after = lastIdentity(changes.at(-1)?.identity, run.after);
       const result: ReapplicationResult = {
         continuation:
@@ -47,8 +74,11 @@ export function createReapplicationService(
         totalProcessed:
           (run.operation.progress.classified ?? 0) + changes.length,
       };
+      const commit = () => repository.commit(run, changes, result, after);
       const { data: _data, error } = await tryCatch(() =>
-        repository.commit(run, changes, result, after),
+        phase(ExecutionPhase.publish, commit, {
+          processed: changes.length,
+        }),
       );
       if (error) {
         const replay = await repository.receipt(run.operation.id, run.batch);
@@ -63,7 +93,7 @@ export function createReapplicationService(
     } finally {
       await repository.release(run.operation.id);
     }
-  };
+  }
 }
 
 function lastIdentity(
