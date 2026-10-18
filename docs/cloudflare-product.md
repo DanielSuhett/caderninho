@@ -258,7 +258,8 @@ Retenção financeira e de regras/proveniência é indefinida. Tasks e chaves
 idempotentes permanecem consultáveis (`ttlMs=null`). O cron roda uma vez ao dia,
 às **09:00 UTC** (06:00 em São Paulo), recupera a outbox, verifica a agenda e faz
 manutenção. Sem cliente/evento não há outro despertar automático. Sessões vencem
-na leitura, independentemente da frequência de remoção física.
+na leitura, independentemente da frequência de remoção física, limitada a 200
+sessões por rodada diária.
 
 A limpeza usa índices parciais: escolhe uma operação terminal com mais de 30 dias,
 remove até 200 registros de cada tabela técnica (`checkpoints`, `page_commits`,

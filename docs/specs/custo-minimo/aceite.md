@@ -33,6 +33,34 @@ linhas lidas/escritas, statements, chamadas de origem, steps e duração de pare
 As medições interceptam apenas os resultados D1 dos statements reais, sem segunda
 execução de queries. Seeds, migrações e geração do histórico ficam fora dos totais.
 
+Resultados medidos no D1 local, com três tags derivadas por transação:
+
+| Cenário | Linhas lidas | Linhas escritas | Chamadas da origem sintética | Steps |
+| --- | ---: | ---: | ---: | ---: |
+| Bootstrap: 10.000 transações | 11.280 | 192.093 | 200 | 415 |
+| Incremento: 100 novas, 100 valores alterados, 50 pendentes resolvidas | 35.841 | 16.603 | 210 | 435 |
+| Reconciliação da origem inalterada | 52.924 | 11.443 | 200 | 415 |
+| Dia ocioso, 100 mil operações + 100 mil eventos | 8 | 0 | 0 | 0 |
+| Dia ocioso, 1 milhão de operações + 1 milhão de eventos | 8 | 0 | 0 | 0 |
+
+| Ação local explícita | Linhas lidas | Linhas escritas | Statements D1 |
+| --- | ---: | ---: | ---: |
+| Reaplicar cinco transações com três tags e nova versão | 74 | 89 | 48 |
+| Limpar backlog de 201 registros por tabela técnica | 2.406 | 600 | 6 |
+
+O lote de limpeza removeu 200 registros de cada uma das três tabelas e deixou
+um em cada, preservando a operação. O lote de reaplicação usa zero Pluggy e zero
+Workflow; repetição confirmada não publica novamente. A fixture de backlog tem
+orçamento próprio de até 2.500 leituras/2.000 escritas, distinto do dia ocioso.
+Reproduza com `mise exec -- npm run test:product -- tests/integration/daily-cycles.test.ts --testNamePattern='retention backlog' --silent=false`.
+
+O footprint D1 (`size_after`, incluindo índices) passou de 56.414.208 bytes no
+bootstrap para 57.085.952 no incremento e 57.171.968 na reconciliação. Com histórico
+sintético de 100 mil operações/eventos chegou a 104.747.008 bytes; com um milhão,
+549.482.496 bytes. Seeds e esses snapshots não são projeção de crescimento mensal.
+Steps incluem `do` e `sleep` sintéticos; não medem billing/armazenamento de instâncias.
+O teste de volume usa timeout de 360 segundos; esse prazo não é configuração de produção.
+
 A simulação usa Steps e origem sintéticos, sem chamadas externas nem instâncias
 reais de Workflow. Duração de parede não equivale à CPU faturada. Contadores de
 KV e CPU de produção não são produzidos por esse teste. O runtime separado prova
@@ -70,6 +98,20 @@ de queries com três tags. Isso não mede a CPU real de regras arbitrárias. A e
 de um milhão de operações/eventos ultrapassa 500 MB: a prova de custo ocioso
 constante não comprova que esse volume caiba no Free.
 
+Projeção ilustrativa de 30 dias com 26 incrementos e quatro reconciliações:
+1.143.562 leituras e 477.450 escritas D1, mais 12.970 steps sintéticos. Com franquias
+Paid ainda disponíveis, essas parcelas ficam incluídas. Se leituras e escritas já
+estiverem integralmente excedentes, custariam aproximadamente US$ 0,479/mês apenas
+em D1, antes de storage, CPU, requests, KV e Pluggy. Admissão, manutenção, OAuth
+e interações do dono acrescentam consumo a essa projeção apenas dos executores. Isso excede a meta secundária
+de US$ 0,10 nesse cenário; não se assume franquia integral livre.
+
+Bootstrap excedeu as 100 mil escritas Free/dia. O plano Paid parte de US$ 5/mês de base, com consumo incremental D1 incluído
+somente se houver franquia disponível. Esse preço de plano não comprova o custo
+do serviço completo. CPU real e quotas por Step da
+ingestão ainda exigem validação. Seleções por Item e lotes locais permitem restringir
+trabalho explicitamente, sem descartar registros ou contratar um plano automaticamente.
+
 A janela de 24 horas é política do produto. A [Pluggy documenta](https://v2.docs.pluggy.ai/en/reference/rate-limits)
 429 por limite de endpoint/IP/minuto e `Retry-After`; isso não comprova uma regra
 comercial de uma leitura/dia. O código para o ciclo em 429/timeout e preserva a
@@ -95,7 +137,8 @@ reserva, estendendo-a quando o Retry-After é maior. Não executa PATCH de Item.
    separadamente mensalidade Paid, franquia disponível e consumo incremental.
 
 Retenção drena uma operação terminal e até 200 registros por tabela/dia, mais
-200 payloads legados/dia. Backlog maior leva vários ciclos; compactação explícita
+200 payloads legados e 200 sessões vencidas/dia. A validade das sessões continua
+verificada na leitura; a fila física de remoção não prolonga autenticação. Backlog maior leva vários ciclos; compactação explícita
 pode ser chamada por manutenção autorizada. Recibos locais, IDs idempotentes e
 histórico financeiro/regras permanecem, portanto armazenamento cresce com o uso.
 O índice redundante `entity_account` foi mantido: removê-lo exige medir também

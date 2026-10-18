@@ -1,4 +1,4 @@
-import { and, eq, gt, lte, sql } from "drizzle-orm";
+import { and, eq, gt, inArray, lte, sql } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 
 import { hash } from "../../../shared";
@@ -79,7 +79,19 @@ export async function compactAccess(binding: D1Database) {
   const db = database(binding),
     now = Date.now();
   await db.batch([
-    db.delete(portal_sessions).where(lte(portal_sessions.expires, now)),
+    db
+      .delete(portal_sessions)
+      .where(
+        inArray(
+          portal_sessions.id,
+          db
+            .select({ id: portal_sessions.id })
+            .from(portal_sessions)
+            .where(lte(portal_sessions.expires, now))
+            .orderBy(portal_sessions.expires)
+            .limit(200),
+        ),
+      ),
     db.delete(login_attempts).where(lte(login_attempts.expires, now)),
   ]);
 }
