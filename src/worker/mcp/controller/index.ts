@@ -29,6 +29,16 @@ import {
 } from "../../composition";
 import { importRuleDocument } from "../../finance";
 import { boundedJson } from "../../http";
+import {
+  captureObservation,
+  DiagnosticEvent,
+  markFailure,
+  observeSpan,
+  Recovery,
+  reportDiagnostic,
+  type SafeFields,
+  SpanName,
+} from "../../observability";
 import { migrationHttp } from "../../sync/controller";
 import { invoke } from "../invoke";
 import type { Envelope } from "../protocol.types";
@@ -54,6 +64,21 @@ const longKinds = new Map<string, LongOperationKind>([
   [ToolName.sync, OperationKind.sync],
   [ToolName.reconcile, OperationKind.reconcile],
   [ToolName.reapply, OperationKind.reapply],
+]);
+const toolActions = new Map<string, NonNullable<SafeFields["action"]>>([
+  [ToolName.aggregate, "aggregate"],
+  [ToolName.explain, "explain"],
+  [ToolName.get_subscriptions, "subscriptions"],
+  [ToolName.live_balance, "live_balance"],
+  [ToolName.override, "correct"],
+  [ToolName.preview, "preview"],
+  [ToolName.query, "query"],
+  [ToolName.reapply, "reapply"],
+  [ToolName.reconcile, "reconcile"],
+  [ToolName.rules, "rules"],
+  [ToolName.setup_status, "setup_status"],
+  [ToolName.status, "status"],
+  [ToolName.sync, "sync"],
 ]);
 // The catalog is controlled code. Adapt it to the SDK once per isolate,
 // instead of validating the same declarations on every tools/list request.
@@ -113,6 +138,7 @@ async function fetchTransport(
       }
     }
   }
+  const inRequest = captureObservation();
   const handler = createMcpHandler(
     () => {
       const server = new Server(
@@ -123,22 +149,51 @@ async function fetchTransport(
           jsonSchemaValidator: new CfWorkerJsonSchemaValidator(),
         },
       );
-      server.setRequestHandler("tools/list", async () => ({ tools: catalog }));
-      server.setRequestHandler("tools/call", async (r) => {
-        const { data, error } = await tryCatch(() =>
-          invoke(
-            financialQueries(env),
-            r.params.name,
-            r.params.arguments ?? {},
-          ),
-        );
-        const payload = error ? { error: error.message } : data;
-        return {
-          content: [{ text: JSON.stringify(payload), type: "text" }],
-          isError: !!error,
-          resultType: "complete",
-        };
-      });
+      server.setRequestHandler("tools/list", () =>
+        inRequest(() =>
+          observeSpan(SpanName.mcpCall, () => ({ tools: catalog }), {
+            action: "tools_list",
+          }),
+        ),
+      );
+      server.setRequestHandler("tools/call", (r) =>
+        inRequest(() => {
+          const action = toolActions.get(r.params.name) ?? "unknown";
+          return observeSpan(
+            SpanName.mcpCall,
+            async (span) => {
+              const { data, error } = await tryCatch(() =>
+                invoke(
+                  financialQueries(env),
+                  r.params.name,
+                  r.params.arguments ?? {},
+                ),
+              );
+              if (error) {
+                markFailure(error, {
+                  phase: SpanName.mcpCall,
+                  recovery: Recovery.none,
+                });
+                span.annotate(
+                  reportDiagnostic({
+                    action,
+                    event: DiagnosticEvent.mcp,
+                    phase: SpanName.mcpCall,
+                    recovery: Recovery.none,
+                  }),
+                );
+              }
+              const payload = error ? { error: error.message } : data;
+              return {
+                content: [{ text: JSON.stringify(payload), type: "text" }],
+                isError: !!error,
+                resultType: "complete",
+              };
+            },
+            { action },
+          );
+        }),
+      );
       return server;
     },
     {

@@ -30,6 +30,7 @@ import {
   saveRules,
   subscriptionRecords,
 } from "../finance/repository";
+import { observeSpan, SpanName } from "../observability";
 import { createPluggyAdapter } from "../pluggy";
 import {
   createReapplicationService,
@@ -85,7 +86,7 @@ export function prepareEntity(
 
 export function financialQueries(env: Bindings): FinancialQueries {
   const pluggy = pluggyAdapter(env);
-  return createFinancialService({
+  const service = createFinancialService({
     actions: ruleActions(env),
     now: () => new Date(),
     readAccount: (accountId) => pluggy.readAccount(accountId),
@@ -112,6 +113,61 @@ export function financialQueries(env: Bindings): FinancialQueries {
     },
     setupStatus: () => accountService(env).wizardState(),
   });
+  return {
+    ...service,
+    aggregate: (input) =>
+      observeSpan(SpanName.financeAction, () => service.aggregate(input), {
+        action: "aggregate",
+        resource: input.resource,
+      }),
+    correctRecord: (input) =>
+      observeSpan(SpanName.financeAction, () => service.correctRecord(input), {
+        action: "correct",
+        resource: input.resource,
+      }),
+    explainRecord: (input) =>
+      observeSpan(SpanName.financeAction, () => service.explainRecord(input), {
+        action: "explain",
+        resource: input.resource,
+      }),
+    manageRules: (input) =>
+      observeSpan(SpanName.financeAction, () => service.manageRules(input), {
+        action: "rules",
+      }),
+    previewRules: (input) =>
+      observeSpan(SpanName.financeAction, () => service.previewRules(input), {
+        action: "preview",
+      }),
+    query: (input) =>
+      observeSpan(SpanName.financeAction, () => service.query(input), {
+        action: "query",
+        resource: input.resource,
+      }),
+    readAccount: (accountId) =>
+      observeSpan(
+        SpanName.financeAction,
+        () => service.readAccount(accountId),
+        {
+          action: "live_balance",
+        },
+      ),
+    readStatus: () =>
+      observeSpan(SpanName.financeAction, () => service.readStatus(), {
+        action: "status",
+      }),
+    readSubscriptions: (input) =>
+      observeSpan(
+        SpanName.financeAction,
+        () => service.readSubscriptions(input),
+        {
+          action: "subscriptions",
+        },
+      ),
+    setupStatus: () =>
+      observeSpan(SpanName.financeAction, () => service.setupStatus(), {
+        action: "setup_status",
+      }),
+  };
 }
 
 export function accountService(env: Bindings) {
@@ -151,11 +207,24 @@ export function authService(env: Bindings) {
 
 export function ruleActions(env: Bindings) {
   return {
-    activate: (id: string) => activateRules(env.DB, id),
-    list: () => listRules(env.DB),
-    read: (id: string) => readRules(env.DB, id),
+    activate: (id: string) =>
+      observeSpan(SpanName.financeAction, () => activateRules(env.DB, id), {
+        action: "rules_activate",
+      }),
+    list: () =>
+      observeSpan(SpanName.financeAction, () => listRules(env.DB), {
+        action: "rules_list",
+      }),
+    read: (id: string) =>
+      observeSpan(SpanName.financeAction, () => readRules(env.DB, id), {
+        action: "rules_read",
+      }),
     save: (document: Rules, activate = false) =>
-      saveRules(env.DB, document, activate),
+      observeSpan(
+        SpanName.financeAction,
+        () => saveRules(env.DB, document, activate),
+        { action: "rules_save" },
+      ),
   };
 }
 
