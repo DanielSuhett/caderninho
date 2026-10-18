@@ -35,9 +35,12 @@ export type RecordChange = z.infer<typeof RecordChangeSchema>;
 
 export function recordChange(input: CorrectionInput): RecordChange {
   if (input.field === "tag") {
+    if (input.key === undefined) {
+      throw new Error("TAG_KEY_REQUIRED");
+    }
     return {
       field: "tag",
-      key: z.string().min(1).max(80).parse(input.key),
+      key: input.key,
       value: input.value,
     };
   }

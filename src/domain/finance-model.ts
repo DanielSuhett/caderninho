@@ -14,6 +14,7 @@ import {
 } from "#domain/enums.ts";
 import {
   accountingDay,
+  assertMinor,
   decimal,
   fail,
   id,
@@ -21,7 +22,7 @@ import {
   minor,
 } from "#domain/exact.ts";
 import { Fault, parseDomain } from "#domain/fault.ts";
-import providerFields from "#domain/provider-fields.json" with { type: "json" };
+import providerFields from "#domain/provider-fields.ts";
 import {
   type FinanceRecord,
   type MetricDefinition,
@@ -309,7 +310,7 @@ export function metricsFor(
   };
 }
 
-function at(obj: unknown, path: string): unknown {
+export function providerFieldValue(obj: unknown, path: string): unknown {
   let value = obj;
 
   for (const key of path.split(".")) {
@@ -328,7 +329,7 @@ function project(raw: unknown, spec: Record<string, ProviderField>) {
   const result: Record<string, JsonValue> = {};
 
   for (const [path, s] of Object.entries(spec)) {
-    const v = at(raw, path);
+    const v = providerFieldValue(raw, path);
 
     if (v === undefined) {
       continue;
@@ -472,36 +473,41 @@ function normalizeMoney(resource: Resource, r: FinanceRecord) {
   const currency = r.currencyCode ?? r.totalAmountCurrencyCode;
 
   for (const field of MONEY[resource] ?? []) {
-    if (field in r && r[field] !== null) {
-      try {
-        r[`${field}Minor`] = minor(
-          parseDomain(
-            z.union([z.string(), z.number()]),
-            r[field],
-            FaultCode.INVALID_RESPONSE,
-          ),
-          field === "creditData.balanceForeignCurrency"
-            ? "USD"
-            : parseDomain(
-                z.string(),
-                currency,
-                FaultCode.CURRENCY_SCALE_UNSUPPORTED,
-              ),
-        );
-      } catch (e) {
-        if (
-          e instanceof Fault &&
-          isOneOf(e.code, [
-            FaultCode.MONEY_PRECISION_UNSUPPORTED,
-            FaultCode.CURRENCY_SCALE_UNSUPPORTED,
-          ])
-        ) {
-          r[`${field}Minor`] = null;
-          r.precisionWarnings ??= [];
-          r.precisionWarnings.push({ field, code: e.code });
-        } else {
-          throw e;
-        }
+    if (!(field in r) || r[field] === null) {
+      continue;
+    }
+    try {
+      const amountMinor = minor(
+        parseDomain(
+          z.union([z.string(), z.number()]),
+          r[field],
+          FaultCode.INVALID_RESPONSE,
+        ),
+        field === "creditData.balanceForeignCurrency"
+          ? "USD"
+          : parseDomain(
+              z.string(),
+              currency,
+              FaultCode.CURRENCY_SCALE_UNSUPPORTED,
+            ),
+      );
+      if (amountMinor !== null) {
+        assertMinor(amountMinor);
+      }
+      r[`${field}Minor`] = amountMinor;
+    } catch (e) {
+      if (
+        e instanceof Fault &&
+        isOneOf(e.code, [
+          FaultCode.MONEY_PRECISION_UNSUPPORTED,
+          FaultCode.CURRENCY_SCALE_UNSUPPORTED,
+        ])
+      ) {
+        r[`${field}Minor`] = null;
+        r.precisionWarnings ??= [];
+        r.precisionWarnings.push({ field, code: e.code });
+      } else {
+        throw e;
       }
     }
   }

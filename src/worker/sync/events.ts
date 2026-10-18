@@ -1,8 +1,8 @@
 import { and, eq, sql } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 
+import type { EntityPreparer } from "#worker/composition.ts";
 import { database, required } from "#worker/database.ts";
-import { prepareEntity } from "#worker/finance/entities.repository.ts";
 import { authorizedItems } from "#worker/finance/repository.ts";
 import type { rulesFor } from "#worker/finance/rules.repository.ts";
 import * as tables from "#worker/schema.ts";
@@ -18,6 +18,7 @@ export async function publishResolved(
   {
     operation: op,
     engine,
+    prepare,
     item,
     account,
     ids,
@@ -26,6 +27,7 @@ export async function publishResolved(
   }: {
     operation: Operation;
     engine: Awaited<ReturnType<typeof rulesFor>>;
+    prepare: EntityPreparer;
     item: string;
     account: string;
     ids: string[];
@@ -57,7 +59,7 @@ export async function publishResolved(
     if (typeof record.id !== "string") {
       throw new Error("SOURCE_ID_MISSING");
     }
-    const prepared = await prepareEntity(db, {
+    const prepared = await prepare({
       identity: {
         itemId: item,
         resource: "transactions",
@@ -65,7 +67,7 @@ export async function publishResolved(
         id: record.id,
       },
       source: record,
-      parent: parent,
+      parent: parent ?? undefined,
       operation: op,
       engine: engine,
     });
@@ -123,12 +125,14 @@ export async function resolveEvent(
     operation: op,
     provider,
     engine,
+    prepare,
     eventId,
     step,
   }: {
     operation: Operation;
     provider: Pick<FinancialSource, "page" | "ids">;
     engine: Awaited<ReturnType<typeof rulesFor>>;
+    prepare: EntityPreparer;
     eventId: string;
     step: Steps;
   },
@@ -190,6 +194,7 @@ export async function resolveEvent(
         await publishResolved(db, {
           operation: op,
           engine: engine,
+          prepare,
           item: e.item_id,
           account: e.account_id,
           ids: ids,

@@ -46,7 +46,7 @@ o mise fornece ambiente, atalhos e sequências de validação.
 | Consultar as tasks | `mise tasks ls` | Lista com a descrição de cada comando |
 
 As sequências são seriais e interrompem na primeira falha. O lint fica por último
-para que seus diagnósticos pendentes não impeçam a execução dos outros checks.
+para que novos diagnósticos não impeçam a execução dos outros checks.
 Uma falha de testes ou de tipos ainda interrompe a sequência imediatamente.
 Nenhum check executa `npm ci`, aplica correções ou publica o projeto.
 O próprio mise pode instalar Node se a versão configurada estiver ausente.
@@ -110,9 +110,9 @@ mise exec -- node scripts/import-rules.ts --help
 ## Limites e verificação
 
 O mise não resolve os diagnósticos de clareza nem adiciona equivalentes ausentes
-do Biome. O [relatório da migração](reports/biome-migration.md) registrou 630 erros,
-3 warnings e 86 informações. Portanto, o lint e as sequências que o incluem
-devem continuar falhando enquanto esses pontos não forem corrigidos.
+do Biome. O [relatório da migração](reports/biome-migration.md) preserva o baseline
+de 630 erros, 3 warnings e 86 informações. A correção posterior zerou todos esses
+diagnósticos, mantendo as regras ativas e a falha do comando em futuros warnings.
 
 Testes Node com servidores HTTP, Vitest e o runtime precisam abrir portas locais.
 Em execução restrita, `listen EPERM` indica falta de permissão de loopback: o mise

@@ -1,4 +1,7 @@
+import type { Identity } from "#contracts/queries.ts";
 import { PluggyCredentialsSchema } from "#domain/pluggy-credentials.ts";
+import type { Rules } from "#domain/rules/rules.ts";
+import type { FinanceRecord, ProviderRecord } from "#domain/schemas.ts";
 import {
   assertPluggyApplication,
   createAccountRepository,
@@ -8,11 +11,14 @@ import { createAccountService } from "#worker/account/service.ts";
 import { createAuthRepository } from "#worker/auth/repository.ts";
 import { createAuthService } from "#worker/auth/service.ts";
 import type { Bindings } from "#worker/bindings.ts";
+import { hash } from "#worker/database.ts";
 import {
   authorizeAccount,
   correctRecord,
+  entityPersistence,
   explainRecord,
 } from "#worker/finance/entities.repository.ts";
+import { prepareEntity as prepareFinancialEntity } from "#worker/finance/entity-preparation.ts";
 import {
   aggregateEntities,
   previewSelection,
@@ -42,6 +48,7 @@ import {
   pluggyClient,
   readAccount,
 } from "#worker/pluggy/source.ts";
+import type { Operation } from "#worker/sync/operation-storage.ts";
 import {
   createSyncRepository,
   openSynchronization,
@@ -57,11 +64,53 @@ export function synchronizationDependencies(
   env: Bindings,
 ): SynchronizationDependencies {
   return {
-    open: (id) => openSynchronization(env.DB, id),
+    open: (id) =>
+      openSynchronization(env.DB, id, (input) => prepareEntity(env.DB, input)),
     source: async () =>
       financialSource(pluggyClient(await configuredCredentials(env))),
   };
 }
+
+export function prepareEntity(
+  db: D1Database,
+  input: {
+    identity: Identity;
+    source: ProviderRecord;
+    parent: FinanceRecord | undefined;
+    operation: Pick<
+      Operation,
+      "id" | "input" | "reference_day" | "rules_revision"
+    >;
+    engine: Awaited<ReturnType<typeof rulesFor>>;
+    observedAt?: string;
+    legacyProjection?: FinanceRecord;
+  },
+) {
+  return prepareFinancialEntity(
+    {
+      repository: entityPersistence(db),
+      hash,
+      evaluate: input.engine.evaluate,
+    },
+    {
+      identity: input.identity,
+      source: input.source,
+      parent: input.parent,
+      operationId: input.operation.id,
+      referenceDay: input.operation.reference_day,
+      rulesRevision: input.operation.rules_revision,
+      renormalize: input.operation.input.renormalize === true,
+      observedAt: input.observedAt ?? new Date().toISOString(),
+      ...(input.legacyProjection === undefined
+        ? {}
+        : { legacyProjection: input.legacyProjection }),
+    },
+  );
+}
+
+export type EntityPreparer = (
+  input: Parameters<typeof prepareEntity>[1],
+) => ReturnType<typeof prepareEntity>;
 
 export function financialQueries(env: Bindings): FinancialQueries {
   return {
@@ -139,7 +188,7 @@ export function ruleActions(env: Bindings) {
     read: (revision: string) => readRules(env.DB, revision),
     list: () => listRules(env.DB),
     activate: (revision: string) => activateRules(env.DB, revision),
-    save: (document: unknown, activate = false) =>
+    save: (document: Rules, activate = false) =>
       saveRules(env.DB, document, activate),
   };
 }

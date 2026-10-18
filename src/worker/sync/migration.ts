@@ -2,8 +2,8 @@ import { and, eq, sql } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 
 import type { OperationInput } from "#contracts/operation.ts";
+import type { EntityPreparer } from "#worker/composition.ts";
 import { database, hash } from "#worker/database.ts";
-import { prepareEntity } from "#worker/finance/entities.repository.ts";
 import type { rulesFor } from "#worker/finance/rules.repository.ts";
 import * as tables from "#worker/schema.ts";
 import type { Operation } from "#worker/sync/operation-storage.ts";
@@ -16,6 +16,7 @@ type Flow = {
   input: Extract<OperationInput, { kind: "migration" }>;
   items: Pick<typeof tables.items.$inferSelect, "id" | "resources">[];
   engine: Awaited<ReturnType<typeof rulesFor>>;
+  prepare: EntityPreparer;
   step: Steps;
 };
 export async function migrateLegacy({
@@ -24,6 +25,7 @@ export async function migrateLegacy({
   input,
   items,
   engine,
+  prepare,
   step,
 }: Flow) {
   const id = op.id;
@@ -73,7 +75,7 @@ export async function migrateLegacy({
       ) {
         continue;
       }
-      const prepared = await prepareEntity(db, {
+      const prepared = await prepare({
         identity: identity,
         source: {
           id: row.record.id,
@@ -81,7 +83,7 @@ export async function migrateLegacy({
           legacyProjection: row.record,
           legacySourceKey: row.sourceKey,
         },
-        parent: null,
+        parent: undefined,
         operation: op,
         engine: engine,
         legacyProjection: row.record,

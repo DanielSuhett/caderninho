@@ -44,19 +44,20 @@ function lookup(c: Context, p: string): JsonValue {
   if (!allowed(p)) {
     throw new Error(`Unknown field: ${p}`);
   }
-  const [root, key, tag] = p.split(".");
-
-  if (root === "tx") {
-    return Object.entries(c.tx).find(([k]) => k === key)?.[1] ?? null;
+  if (p.startsWith("tx.")) {
+    const transaction: Record<string, string> = c.tx;
+    return transaction[p.slice(3)] ?? null;
   }
 
-  if (key === "tags" && tag) {
+  if (p.startsWith("result.tags.")) {
+    const tag = p.slice(12);
     return Object.hasOwn(c.result.tags, tag)
       ? (c.result.tags[tag] ?? null)
       : null;
   }
 
-  return Object.entries(c.result).find(([k]) => k === key)?.[1] ?? null;
+  const result: Record<string, JsonValue> = c.result;
+  return result[p.slice(7)] ?? null;
 }
 
 function compare(n: number, op: string) {
@@ -191,9 +192,6 @@ export function compileValidatedRules(doc: Rules) {
     throw new Error("Catalog requires Outros and Sem categoria");
   }
 
-  const others = othersFound,
-    uncategorized = uncategorizedFound;
-
   if (
     groups.size !== doc.groups.length ||
     cats.size !== doc.categories.length
@@ -216,6 +214,9 @@ export function compileValidatedRules(doc: Rules) {
       aliases.set(alias, cat.id);
     }
   }
+
+  const others = othersFound,
+    uncategorized = uncategorizedFound;
 
   const ids = new Set<string>();
 
@@ -444,36 +445,24 @@ export const EMPTY_RULES: Rules = {
 };
 
 export function txContext(r: FinanceRecord): TransactionContext {
-  const text = (k: string) => {
-    const value = r[k];
-
-    if (value === null || value === undefined) {
-      return "";
-    }
-
-    if (typeof value === "object") {
-      throw new Error("INVALID_RULE_FIELD");
-    }
-
-    return String(value);
-  };
+  const amount = String(r.amount ?? "");
 
   return {
     id: r.id,
-    account_id: text("accountId"),
-    account_name: text("accountName"),
-    description: text("description"),
-    counterparty_name: text("counterparty"),
-    direction: text("type"),
-    operation: text("operationType"),
-    payment_method: text("paymentMethod"),
-    currency: text("currencyCode"),
-    account_type: text("accountType"),
-    original_category: text("category"),
-    amount: text("amount"),
-    amount_abs: text("amount").replace(/^[-+]/, ""),
-    date: text("accountingDate"),
-    installment_number: text("creditCardMetadata.installmentNumber"),
-    total_installments: text("creditCardMetadata.totalInstallments"),
+    account_id: r.accountId ?? "",
+    account_name: r.accountName ?? "",
+    description: r.description ?? "",
+    counterparty_name: r.counterparty ?? "",
+    direction: r.type ?? "",
+    operation: r.operationType ?? "",
+    payment_method: r.paymentMethod ?? "",
+    currency: r.currencyCode ?? "",
+    account_type: r.accountType ?? "",
+    original_category: r.category ?? "",
+    amount,
+    amount_abs: amount.replace(/^[-+]/, ""),
+    date: r.accountingDate ?? "",
+    installment_number: String(r["creditCardMetadata.installmentNumber"] ?? ""),
+    total_installments: String(r["creditCardMetadata.totalInstallments"] ?? ""),
   };
 }

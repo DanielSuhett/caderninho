@@ -2,17 +2,17 @@ import { and, desc, eq } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 
 import { NORMALIZER } from "#domain/entity.ts";
-import { compileRules, compileValidatedRules } from "#domain/rules/rules.ts";
+import { compileValidatedRules, type Rules } from "#domain/rules/rules.ts";
 import { database, hash, required } from "#worker/database.ts";
 import * as tables from "#worker/schema.ts";
 
 export async function saveRules(
   db: D1Database,
-  input: unknown,
+  document: Rules,
   activate = false,
 ) {
-  const { document } = compileRules(input),
-    id = await hash({ document, normalizer: NORMALIZER });
+  compileValidatedRules(document);
+  const id = await hash({ document, normalizer: NORMALIZER });
   const statements: BatchItem<"sqlite">[] = [
     database(db)
       .insert(tables.rule_sets)

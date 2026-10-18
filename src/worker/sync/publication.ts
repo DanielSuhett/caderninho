@@ -3,8 +3,8 @@ import type { BatchItem } from "drizzle-orm/batch";
 
 import type { Resource } from "#domain/enums.ts";
 import { tryCatch } from "#shared/result.ts";
+import type { EntityPreparer } from "#worker/composition.ts";
 import { database, hash, required } from "#worker/database.ts";
-import { prepareEntity } from "#worker/finance/entities.repository.ts";
 import { authorizedItems } from "#worker/finance/repository.ts";
 import type { rulesFor } from "#worker/finance/rules.repository.ts";
 import * as tables from "#worker/schema.ts";
@@ -35,6 +35,7 @@ type PublicationInput = {
     "normalized" | "relevant_hash"
   > | null;
   engine: Awaited<ReturnType<typeof rulesFor>>;
+  prepare: EntityPreparer;
   provider: Pick<FinancialSource, "page">;
 };
 
@@ -47,6 +48,7 @@ export async function publishPage({
   parentId,
   parent,
   engine,
+  prepare,
   provider,
 }: PublicationInput) {
   const id = op.id;
@@ -104,13 +106,14 @@ export async function publishPage({
     edits,
     collected,
     maximum: observedMaximum,
-  } = await preparePageRecords(db, {
+  } = await preparePageRecords({
     op,
     resource,
     item,
     parentId,
     parent,
     engine,
+    prepare,
     page,
     cp,
     progress,
@@ -304,24 +307,22 @@ async function fetchSourcePage(
   return fetched.data;
 }
 
-async function preparePageRecords(
-  db: D1Database,
-  {
-    op,
-    resource,
-    item,
-    parentId,
-    parent,
-    engine,
-    page,
-    cp,
-    progress,
-  }: Omit<PublicationInput, "db" | "name" | "provider"> & {
-    page: SourcePage;
-    cp: Checkpoint;
-    progress: ReturnType<typeof progressWithDefaults>;
-  },
-) {
+async function preparePageRecords({
+  op,
+  resource,
+  item,
+  parentId,
+  parent,
+  engine,
+  prepare,
+  page,
+  cp,
+  progress,
+}: Omit<PublicationInput, "db" | "name" | "provider"> & {
+  page: SourcePage;
+  cp: Checkpoint;
+  progress: ReturnType<typeof progressWithDefaults>;
+}) {
   let maximum = cp.maximum_created_at;
   let collected = cp.collected;
   const edits: BatchItem<"sqlite">[] = [];
@@ -344,7 +345,7 @@ async function preparePageRecords(
       continue;
     }
     identities.set(recordId, contentHash);
-    const prepared = await prepareEntity(db, {
+    const prepared = await prepare({
       identity: {
         itemId: item.id,
         resource,
@@ -352,7 +353,7 @@ async function preparePageRecords(
         id: recordId,
       },
       source: record,
-      parent: parent ? parent.normalized : null,
+      parent: parent?.normalized,
       operation: op,
       engine: engine,
     });

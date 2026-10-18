@@ -56,6 +56,7 @@ export const FinanceRecordSchema = z
   .object({
     id: z.string(),
     accountId: text,
+    accountName: text,
     investmentId: text,
     accountType: text,
     ownerDocument: text,
@@ -78,6 +79,7 @@ export const FinanceRecordSchema = z
     paymentMethod: text,
     operationType: text,
     counterparty: text,
+    amount: MoneyInputSchema,
     amountMinor: text,
     balanceMinor: text,
     totalAmountMinor: text,
@@ -127,6 +129,7 @@ export const ProviderRecordSchema = z
     resourceId: text,
     itemId: text,
     accountId: text,
+    investmentId: text,
     type: text,
     status: text,
     executionStatus: text,

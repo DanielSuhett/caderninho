@@ -20,6 +20,7 @@ import type {
 } from "#contracts/operation.ts";
 import { localDay } from "#domain/exact.ts";
 import { EMPTY_RULES } from "#domain/rules/rules.ts";
+import type { EntityPreparer } from "#worker/composition.ts";
 import { database, hash, required } from "#worker/database.ts";
 import { authorizedItems } from "#worker/finance/repository.ts";
 import { rulesFor, saveRules } from "#worker/finance/rules.repository.ts";
@@ -336,6 +337,7 @@ export async function compactOperations(db: D1Database, now = new Date()) {
 export async function openSynchronization(
   db: D1Database,
   id: string,
+  prepare: EntityPreparer,
 ): Promise<SynchronizationSession> {
   const op = await stillWorking(db, id);
   const input = op.input;
@@ -393,7 +395,7 @@ export async function openSynchronization(
         throw new Error("OPERATION_KIND_MISMATCH");
       }
       const items = await authorizedItems(db, input.itemIds);
-      await migrateLegacy({ db, op, input, items, engine, step });
+      await migrateLegacy({ db, op, input, items, engine, prepare, step });
     },
     reapply: async (step) => {
       if (input.kind !== "reapply") {
@@ -411,6 +413,7 @@ export async function openSynchronization(
         operation: op,
         provider: provider,
         engine: engine,
+        prepare,
         eventId: input.eventId,
         step: step,
       });
@@ -423,6 +426,7 @@ export async function openSynchronization(
         input,
         items,
         engine,
+        prepare,
         provider,
         step,
       });

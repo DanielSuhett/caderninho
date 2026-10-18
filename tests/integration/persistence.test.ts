@@ -8,6 +8,7 @@ import { z } from "zod/v4";
 
 import type { OperationInput } from "#contracts/operation.ts";
 import type { Identity } from "#contracts/queries.ts";
+import { Fault } from "#domain/fault.ts";
 import type { Filter } from "#domain/filter.ts";
 import { convertPredicate } from "#domain/rules/convert-rules.ts";
 import { importRules } from "#domain/rules/import-rules.ts";
@@ -24,14 +25,12 @@ import { mockNetwork } from "#testing/network.ts";
 import type { DurableInstance } from "#worker/bindings.ts";
 import {
   financialQueries,
+  prepareEntity,
   synchronizationDependencies,
   syncService,
 } from "#worker/composition.ts";
 import { database } from "#worker/database.ts";
-import {
-  override,
-  prepareEntity,
-} from "#worker/finance/entities.repository.ts";
+import { override } from "#worker/finance/entities.repository.ts";
 import {
   aggregateEntities,
   moneyKey,
@@ -728,7 +727,7 @@ test("updated/deleted webhooks resolve current state, delayed deletion does not 
           id: "account",
         },
         source: account,
-        parent: null,
+        parent: undefined,
         operation: op,
         engine: engine,
       })
@@ -934,10 +933,9 @@ test("provider Retry-After waits between durable steps and propagates other tran
   assert.equal(
     await wrapped.do("page", async () => {
       if (calls++ === 0) {
-        throw Object.assign(new Error("rate"), {
-          code: "UPSTREAM_RATE_LIMIT",
-          details: { retryAfterSeconds: 90 },
-        });
+        const fault = new Fault("UPSTREAM_RATE_LIMIT");
+        fault.details = { retryAfterSeconds: 90 };
+        throw fault;
       }
       return 42;
     }),
@@ -1411,6 +1409,111 @@ test("irrelevant provider fields do not trigger rules; explicit normalization ba
   );
 });
 
+test("observation, resurrection and parent changes preserve identity, first-seen time and classification semantics", async () => {
+  const { db, op } = await setup();
+  const engine = await rulesFor(db, op.rules_revision);
+  const source = transaction("lifecycle");
+  const input = {
+    identity: identity("lifecycle"),
+    source,
+    parent: account,
+    operation: op,
+    engine,
+  };
+  const firstSeen = "2026-10-01T10:00:00.000Z";
+  const observedAt = "2026-10-02T10:00:00.000Z";
+  const created = await prepareEntity(db, { ...input, observedAt: firstSeen });
+  assert.equal(created.state, "new");
+  await commit(db, created.statements);
+  const observed = await prepareEntity(db, {
+    ...input,
+    observedAt,
+    source: {
+      ...source,
+      updatedAt: observedAt,
+      irrelevantDebugField: "preserved",
+    },
+    engine: {
+      ...engine,
+      async evaluate() {
+        throw new Error("Unchanged entities must skip rules");
+      },
+    },
+  });
+  assert.equal(observed.state, "unchanged");
+  assert.equal(observed.seenInOperation, true);
+  assert.equal(observed.classified, 0);
+  await commit(db, observed.statements);
+  const stored = required(
+    await database(db)
+      .select()
+      .from(tables.entities)
+      .where(eq(tables.entities.id, "lifecycle"))
+      .get(),
+  );
+  assert.equal(stored.first_seen_at, firstSeen);
+  assert.equal(stored.observed_at, observedAt);
+  assert.equal(stored.source.irrelevantDebugField, "preserved");
+  await database(db)
+    .update(tables.entities)
+    .set({ deleted: 1 })
+    .where(eq(tables.entities.id, "lifecycle"))
+    .run();
+  const resurrected = await prepareEntity(db, { ...input, observedAt });
+  assert.equal(resurrected.state, "changed");
+  assert.equal(resurrected.classified, 1);
+  await commit(db, resurrected.statements);
+  const renamed = await prepareEntity(db, {
+    ...input,
+    parent: { ...account, name: "Renamed synthetic account" },
+  });
+  assert.equal(renamed.state, "changed");
+  assert.equal(renamed.classified, 1);
+  await commit(db, renamed.statements);
+  const active = required(
+    await database(db)
+      .select()
+      .from(tables.entities)
+      .where(eq(tables.entities.id, "lifecycle"))
+      .get(),
+  );
+  assert.equal(active.first_seen_at, firstSeen);
+  assert.equal(active.deleted, 0);
+  assert.equal(active.normalized.accountName, "Renamed synthetic account");
+  await assert.rejects(
+    prepareEntity(db, { ...input, source: { ...source, id: "different" } }),
+    /SOURCE_ID_MISMATCH/,
+  );
+});
+
+test("legacy entry rejects noncanonical secondary money without publishing an entity", async () => {
+  const { db, op } = await setup();
+  const engine = await rulesFor(db, op.rules_revision);
+  await assert.rejects(
+    prepareEntity(db, {
+      identity: identity("invalid-legacy"),
+      source: { id: "invalid-legacy" },
+      parent: undefined,
+      operation: op,
+      engine,
+      legacyProjection: {
+        id: "invalid-legacy",
+        amountMinor: "1000",
+        legacyFeeMinor: "001",
+      },
+    }),
+    /canonical integer, at most 30 digits/,
+  );
+  assert.equal(
+    await database(db)
+      .select()
+      .from(tables.entities)
+      .where(eq(tables.entities.id, "invalid-legacy"))
+      .get(),
+    undefined,
+  );
+});
+
 test("operational retention does not remove financial records, rule provenance or idempotency", async () => {
   const { db, op } = await setup();
   await runOperation(
@@ -1738,6 +1841,8 @@ test("page publication rolls back data, progress, checkpoint and receipt togethe
     db,
     op,
     name: "atomic-page",
+    prepare: (input: Parameters<typeof prepareEntity>[1]) =>
+      prepareEntity(db, input),
     resource: "accounts" as const,
     item: { id: "item" },
     parentId: "",

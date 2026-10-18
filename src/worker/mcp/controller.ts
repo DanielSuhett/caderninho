@@ -296,7 +296,11 @@ async function handleTaskRequest({
         return listen(request, env, {
           id: m.id ?? "",
           ids: a.notifications.taskIds,
-          keepAlive: ctx ? (lifetime) => ctx.waitUntil(lifetime) : undefined,
+          ...(ctx
+            ? {
+                keepAlive: (lifetime: Promise<void>) => ctx.waitUntil(lifetime),
+              }
+            : {}),
         });
       }
       return error(-32601, "Method not found");

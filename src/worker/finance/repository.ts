@@ -50,7 +50,6 @@ const columns = {
 };
 
 export function moneyKey(s: string) {
-  assertMinor(s);
   const n = BigInt(s),
     abs = (n < 0n ? -n : n).toString().padStart(30, "0");
   return n < 0n
@@ -134,6 +133,7 @@ function filterValue(filter: Extract<Filter, { field: string }>) {
     if (typeof filter.value !== "string") {
       throw new Error("Invalid amount filter");
     }
+    assertMinor(filter.value);
     return moneyKey(filter.value);
   }
   return typeof filter.value === "boolean"

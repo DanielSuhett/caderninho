@@ -294,15 +294,10 @@ export function providerRetries(steps: Steps): Steps {
             if (!result.error) {
               return { kind: "success" as const, value: result.data };
             }
-            const rate = z
-              .object({
-                code: z.literal("UPSTREAM_RATE_LIMIT"),
-                details: z
-                  .object({ retryAfterSeconds: z.number().optional() })
-                  .optional(),
-              })
-              .safeParse(result.error);
-            if (!rate.success) {
+            if (
+              !(result.error instanceof Fault) ||
+              result.error.code !== FaultCode.UPSTREAM_RATE_LIMIT
+            ) {
               throw result.error;
             }
             return {
@@ -311,7 +306,7 @@ export function providerRetries(steps: Steps): Steps {
                 1,
                 Math.min(
                   86400,
-                  rate.data.details?.retryAfterSeconds ?? 10 * 2 ** attempt,
+                  result.error.details?.retryAfterSeconds ?? 10 * 2 ** attempt,
                 ),
               ),
             };

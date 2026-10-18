@@ -191,6 +191,27 @@ export type Rules = z.infer<typeof RulesSchema>;
 
 export type Rule = z.infer<typeof RuleSchema>;
 
+const ConversionIssueSchema = z.object({
+  path: z.string(),
+  code: z.string(),
+  message: z.string(),
+});
+
+const RuleImportReportSchema = z.discriminatedUnion("compatible", [
+  z.object({
+    compatible: z.literal(true),
+    document: RulesSchema,
+    issues: z.array(ConversionIssueSchema),
+  }),
+  z.object({
+    compatible: z.literal(false),
+    document: z.null(),
+    issues: z.array(ConversionIssueSchema),
+  }),
+]);
+
+export type RuleImportReport = z.infer<typeof RuleImportReportSchema>;
+
 export const DerivedSchema = z.object({
   category_id: z.string(),
   category: z.string(),

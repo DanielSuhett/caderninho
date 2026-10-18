@@ -338,6 +338,15 @@ test("SDK pages preserve encoded cursors, creation floor, response scope and exp
     financialSource(client()).ids("account", ["tx"]),
     /IDS_SCOPE_MISMATCH/,
   );
+  mockNetwork(async (input) =>
+    sourceUrl(input).pathname === "/auth"
+      ? auth()
+      : Response.json({ id: "another-account", balance: "10.00" }),
+  );
+  await assert.rejects(
+    readAccount(client(), "account"),
+    /SOURCE_SCOPE_MISMATCH/,
+  );
 });
 
 test("429 Retry-After is returned to the Workflow and waited outside a durable step", async () => {

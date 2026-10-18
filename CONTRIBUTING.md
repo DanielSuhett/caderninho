@@ -23,9 +23,9 @@ mise run check
 
 Durante uma edição, use `mise run check:quick`. Consulte `mise tasks ls` e o
 [guia do mise](docs/mise.md) para tasks individuais, diagnóstico completo do
-Biome e as decisões baseadas no histórico recente. O lint ainda tem os
-diagnósticos pendentes registrados no [relatório](docs/reports/biome-migration.md);
-por isso as sequências que o incluem ainda terminam com erro.
+Biome e as decisões baseadas no histórico recente. O
+[relatório](docs/reports/biome-migration.md) preserva o diagnóstico inicial e
+registra as correções que zeraram os erros e warnings.
 
 Os scripts npm continuam disponíveis sem o mise: selecione Node 24 pela `.nvmrc`
 com `nvm use`, execute `npm ci` e os comandos de `package.json`.

@@ -14,7 +14,7 @@ import {
   recordChange,
 } from "#domain/record-correction.ts";
 import { importRules } from "#domain/rules/import-rules.ts";
-import { txContext } from "#domain/rules/rules.ts";
+import { type Rules, txContext } from "#domain/rules/rules.ts";
 import type { ProviderRecord } from "#domain/schemas.ts";
 import { detectSubscriptions } from "#domain/subscriptions.ts";
 import type {
@@ -78,7 +78,7 @@ export interface RuleActions {
   read(revision: string): ReturnType<typeof readRules>;
   list(): ReturnType<typeof listRules>;
   activate(revision: string): ReturnType<typeof activateRules>;
-  save(document: unknown, activate?: boolean): ReturnType<typeof saveRules>;
+  save(document: Rules, activate?: boolean): ReturnType<typeof saveRules>;
 }
 
 export async function manageRules(actions: RuleActions, a: RuleCommand) {

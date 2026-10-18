@@ -1,5 +1,3 @@
-import { z } from "zod/v4";
-
 import type { InstallationChecks } from "#contracts/portal-contract.ts";
 import type { WizardState } from "#contracts/wizard-contract.ts";
 import {
@@ -71,28 +69,27 @@ export function createAccountService(deps: AccountDependencies) {
       return wizardState(await deps.repository.status(), deps.configured());
     },
     async connectItem(itemId: string) {
-      const id = z.uuid().parse(itemId),
-        credentials = await deps.credentials();
-      const access = await deps.repository.connection.itemAccess(id);
+      const credentials = await deps.credentials();
+      const access = await deps.repository.connection.itemAccess(itemId);
       if (access.count >= MAX_PERSONAL_CONNECTIONS && !access.exists) {
         throw new Error("ITEM_LIMIT");
       }
-      const item = await deps.source.readItem(credentials, id);
+      const item = await deps.source.readItem(credentials, itemId);
       if (!isPersonalConnector(item.connector?.id)) {
         throw new Error("MEU_PLUGGY_REQUIRED");
       }
-      if (item.id !== id) {
+      if (item.id !== itemId) {
         throw new Error("SOURCE_SCOPE_MISMATCH");
       }
       await deps.repository.connection.connect(
-        id,
+        itemId,
         credentials.clientId,
         deps.now().toISOString(),
       );
     },
     async token(itemId?: string) {
       if (itemId) {
-        await deps.repository.authorizeItems([z.uuid().parse(itemId)]);
+        await deps.repository.authorizeItems([itemId]);
       }
       return deps.connectToken(await deps.credentials(), itemId);
     },

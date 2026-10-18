@@ -4,6 +4,7 @@ import type { OperationInput } from "#contracts/operation.ts";
 import type { Resource } from "#domain/enums.ts";
 import { DEFINITIONS } from "#domain/finance-model.ts";
 import { itemInfo, productState } from "#domain/provider-state.ts";
+import type { EntityPreparer } from "#worker/composition.ts";
 import { database } from "#worker/database.ts";
 import { authorizedItems } from "#worker/finance/repository.ts";
 import type { rulesFor } from "#worker/finance/rules.repository.ts";
@@ -35,6 +36,7 @@ type ResourceSyncInput = {
   input: OperationInput;
   items: Pick<typeof tables.items.$inferSelect, "id" | "resources">[];
   engine: Awaited<ReturnType<typeof rulesFor>>;
+  prepare: EntityPreparer;
   step: Steps;
   provider: Pick<FinancialSource, "page" | "ids">;
 };
@@ -45,6 +47,7 @@ export async function synchronizeResources({
   input,
   items,
   engine,
+  prepare,
   step,
   provider,
 }: ResourceSyncInput) {
@@ -61,6 +64,7 @@ export async function synchronizeResources({
           item,
           resource,
           engine,
+          prepare,
           step,
           provider,
         })
@@ -69,7 +73,14 @@ export async function synchronizeResources({
       }
     }
   }
-  return resolvePendingTransactions(db, { op, items, engine, step, provider });
+  return resolvePendingTransactions(db, {
+    op,
+    items,
+    engine,
+    prepare,
+    step,
+    provider,
+  });
 }
 
 async function synchronizeItemResource(
@@ -80,6 +91,7 @@ async function synchronizeItemResource(
     item,
     resource,
     engine,
+    prepare,
     step,
     provider,
   }: Omit<ResourceSyncInput, "db" | "items"> & {
@@ -196,6 +208,7 @@ async function synchronizeItemResource(
           parentId,
           parent,
           engine,
+          prepare,
           provider,
         });
       });
@@ -309,6 +322,7 @@ async function resolvePendingTransactions(
     op,
     items,
     engine,
+    prepare,
     step,
     provider,
   }: Omit<ResourceSyncInput, "db" | "input">,
@@ -397,6 +411,7 @@ async function resolvePendingTransactions(
       await publishResolved(db, {
         operation: op,
         engine: engine,
+        prepare,
         item: first.item_id,
         account: first.parent_id,
         ids: ids,

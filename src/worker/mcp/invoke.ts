@@ -29,9 +29,6 @@ export async function invoke(
     case "caderninho_live_balance": {
       await queries.authorizeAccount(call.input);
       const raw = await queries.readAccount(call.input.accountId);
-      if (raw.id !== call.input.accountId) {
-        throw new Error("SOURCE_ID_MISMATCH");
-      }
       return {
         balance: raw.balance,
         currency: raw.currencyCode,

@@ -2,7 +2,13 @@
 
 Data: 18 de outubro de 2026.
 
-Status: regras de Oxlint ativadas e seus diagnósticos corrigidos. Os 70 erros
+Status atual: revisão manual aplicada por funcionalidade após a migração para
+Biome. A [continuação da revisão](#continuação-da-revisão-manual-no-projeto)
+registra os contratos e fluxos simplificados. `mise run check` passou, com 41 testes
+Node, 49 testes Worker, build dry-run e runtime sintético.
+`prepareEntity` é um exemplo dos critérios, não o limite do escopo.
+
+Histórico: regras de Oxlint ativadas e seus diagnósticos corrigidos. Os 70 erros
 registrados na ativação foram resolvidos sem desativar regras ou adicionar
 supressões. O estado intencionalmente reprovado foi uma etapa intermediária,
 encerrada pelo pedido posterior de corrigir todos os erros.
@@ -17,14 +23,14 @@ comandos e diferenças de cobertura. As seções específicas de Oxlint/Oxfmt ab
 registram o diagnóstico e as decisões anteriores. As configurações e o código
 vendorizado dessas ferramentas foram removidos.
 
-## Ampliação posterior das regras
+## Histórico: ampliação posterior das regras
 
 Após a correção dos 70 erros iniciais, foram ativadas as seis novas regras de
 legibilidade solicitadas: chaves obrigatórias, newline-before-return e as quatro
 regras Shopify. O novo snapshot registra **811 erros e 0 warnings**. O inventário
 completo está em [lint-legibilidade.md](./reports/lint-legibilidade.md).
 
-O lint volta a reprovar nesta etapa de adoção. Não houve correção em massa da
+O lint voltou a reprovar naquela etapa de adoção. Não houve correção em massa da
 aplicação. O conflito entre binary-assignment-parens: always e Oxfmt foi confirmado
 por teste. A avaliação de Biome é uma discussão posterior; nenhuma migração foi
 iniciada. Os resultados de validação do ciclo anterior abaixo são históricos.
@@ -45,7 +51,7 @@ Não é criar o maior número de funções pequenas ou aplicar uma nova arquitet
 
 ## Escopo e evidências
 
-O ponto de partida é `prepareEntity`, em
+O ponto de partida do diagnóstico original foi `prepareEntity`, em
 [entities.repository.ts](../src/worker/finance/entities.repository.ts), e seus
 contratos e colaboradores imediatos:
 
@@ -479,7 +485,7 @@ de acesso a loopback fora do sandbox; a execução restrita havia falhado com
 `listen EPERM`. Essa falha de ambiente não foi tratada como defeito da aplicação.
 Os resultados acima são das execuções locais concluídas, sem publicação remota.
 
-## Resultado do primeiro recorte
+## Histórico: resultado do primeiro recorte
 
 `projectEntity` agora acessa diretamente os atributos de texto conhecidos e os
 campos monetários consumidos estão explícitos no schema. A seleção dinâmica dos
@@ -490,3 +496,81 @@ builders, com o mapeamento de colunas em uma função local própria.
 As extrações de normalização, classificação, conversão de regras, recorrência e
 sincronização permanecem locais aos módulos existentes. O lint serve como proteção
 contra regressões; decisões de domínio e invariantes continuam exigindo revisão.
+
+## Continuação da revisão manual no projeto
+
+A revisão percorreu domínio, contratos, funcionalidades do Worker, painel e
+scripts, buscando os mesmos padrões do exemplo original: acesso dinâmico a campos
+conhecidos, parses estruturais repetidos, garantias que se perdiam entre funções,
+políticas dentro do mapper e decisões de fluxo misturadas com persistência.
+O código que já tinha uma fronteira clara foi mantido.
+
+### Mudanças por responsabilidade
+
+| Área | Mudança aplicada |
+| --- | --- |
+| Normalização e projeção | `accountName`, `amount` e `investmentId` do provedor ganharam campos conhecidos nos schemas. `txContext` lê esses campos diretamente. A navegação dos campos dinâmicos do provedor usa um único seletor, compartilhado pela normalização e pelo fingerprint. |
+| Regras e conversão | Relatórios de importação discriminam sucesso com documento e falha sem documento. Importação nativa e conversão v1 reutilizam o resultado validado. A gravação recebe `Rules`, sem novo parse estrutural; verificações de catálogo, fases e referências continuam na compilação. Os caminhos de diagnósticos perderam referências acidentais à antiga árvore de diretórios. |
+| Recorrências | A seleção retorna o registro elegível com seus campos obrigatórios ou o motivo de exclusão. O agrupamento consome essa garantia sem repetir as quatro verificações de estrutura. Cada grupo é ordenado uma vez; o nome exibido continua vindo da primeira cobrança em ordem cronológica. |
+| Fronteiras e adaptadores | Comandos do painel fazem um único parse com o schema da ação, seguido da comparação CSRF. O serviço recebe o UUID validado. `boundedJson` reutiliza o JSON exato já validado; a releitura de saldo confia na checagem de identidade do adaptador. Retry de rate limit consome `Fault`, sem parse do erro interno. A CLI de migração deixa a validação da linha completa verificar a ausência do pai. |
+| Preparação e publicação | `finance/entity-preparation.ts` coordena comparação, normalização e regras com dependências explícitas, sem SQL ou bindings. `entityPersistence` lê o estado e monta builders. A composição fornece relógio e implementações; os fluxos recebem a função de preparação por operação, sem importar a implementação da composição. Reaplicação avalia regras antes de montar os statements, usando entrada nomeada. |
+
+### Donos das garantias
+
+- A normalização verifica a representação canônica e o limite de 30 dígitos ao
+  produzir cada campo monetário, inclusive medidas secundárias. A projeção comum
+  não varre novamente todos os campos `Minor`. A entrada legada conserva essa
+  verificação porque não passa pela normalização. Filtros monetários validam sua
+  própria entrada antes de gerar a chave de ordenação SQL.
+- O domínio continua responsável pela política de correção, inclusive a presença
+  da chave de tag e os valores permitidos de `ignored`. O repositório mantém a
+  autorização e verifica a existência da entidade e da categoria; não repete a
+  política do flag `ignored`.
+- Preparação recebe `observedAt`, `operationId`, `referenceDay`, `rulesRevision` e
+  `renormalize`, sem o objeto de operação inteiro. Ausência de pai nesse contrato
+  interno usa `undefined`; `null` continua onde representa uma linha SQL ausente.
+- O repositório reúne o predicado de identidade da entidade e usa o tipo de insert
+  inferido do Drizzle. Continua devolvendo builders não executados. Dados,
+  derivados, progresso, checkpoint e recibo permanecem no batch externo.
+
+### Verificações mantidas de propósito
+
+`ProviderRecord` e `FinanceRecord` continuam preservando campos extras; a revisão
+não criou uma família de modelos por simetria. O catálogo dinâmico do provedor
+ainda precisa validar os valores não descritos pelos campos conhecidos.
+`typeof` também continua adequado nos operadores de regras, que recebem fatos de
+tipos diferentes, e na leitura da projeção legada.
+
+Datas e quantias opcionais ainda podem ser ausentes ou inadequadas para uma análise
+específica. A recorrência continua registrando essas exclusões e separando moedas;
+um tipo `string` sozinho não estabelece validade financeira. Checagens de escopo,
+consentimento, expiração, identidade de origem e cancelamento após `await` foram
+mantidas. O parsing do contexto OAuth permanece uma fronteira de confiança.
+
+Os fluxos React/SDK mantêm controle de geração, cancelamento e descarte de respostas
+atrasadas. Essa inspeção não exige alterar sua estrutura quando as responsabilidades
+já estão separadas. Nenhuma regra de lint foi afrouxada e nenhuma dependência foi
+adicionada.
+
+### Evidência desta continuação
+
+Os testes de comportamento acrescentam cobertura para limite monetário em medidas
+secundárias, campos de regras ausentes e escalares, caminhos de erro de conversão,
+observação sem reclassificação, preservação de `first_seen_at`, ressurreição de
+excluídos e mudança relevante do pai. A cobertura existente de agrupamento agora
+recebe registros fora de ordem; a do adaptador verifica divergência da conta na
+leitura pontual. Entrada legada inválida continua rejeitada antes de publicar.
+
+| Verificação desta continuação | Resultado |
+| --- | --- |
+| `mise run check:quick` | Passou: configuração, imports, tipos, formatação e lint |
+| `mise run check` | Passou, incluindo 41 testes Node e 49 testes Worker |
+| Build e runtime do check | Portal, Worker dry-run, D1/Workflows, OAuth sintético, subscribers e exportação/restauração local passaram |
+| `lint:fix` → `format` | Segunda aplicação sem novas alterações; nenhuma regra alterada |
+| Contratos e persistência | Catálogo MCP de referência, replay e rollback conjunto de dados/progresso/checkpoint/recibo passaram |
+
+A primeira execução restrita do teste da CLI recebeu stdout vazio de subprocessos;
+a suíte completa passou fora do sandbox. Os testes usam dados sintéticos e o runtime
+aplica migrações somente em bancos locais isolados. O build conserva os avisos de
+diretivas `use client` de dependências Kumo. Esta revisão não publicou o Worker,
+não migrou dados reais e não valida OAuth/Pluggy reais nem o host ChatGPT.

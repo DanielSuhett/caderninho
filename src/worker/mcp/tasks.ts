@@ -97,7 +97,7 @@ export async function listen(
   }: {
     id: string | number;
     ids: string[];
-    keepAlive?: ((lifetime: Promise<void>) => void) | undefined;
+    keepAlive?: (lifetime: Promise<void>) => void;
   },
 ) {
   if (ids.length < 1 || ids.length > 10 || new Set(ids).size !== ids.length) {

@@ -2,48 +2,45 @@ import { and, eq, sql } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 
 import type { Identity } from "#contracts/queries.ts";
-import {
-  entityFingerprint,
-  NORMALIZER,
-  projectEntity,
-} from "#domain/entity.ts";
+import type { projectEntity } from "#domain/entity.ts";
 import type { RecordChange } from "#domain/record-correction.ts";
-import {
-  type compileRules,
-  type Derived,
-  txContext,
-} from "#domain/rules/rules.ts";
-import type { FinanceRecord, ProviderRecord } from "#domain/schemas.ts";
-import { database, hash } from "#worker/database.ts";
+import type { Derived } from "#domain/rules/rules.ts";
+import type { ProviderRecord } from "#domain/schemas.ts";
+import { database } from "#worker/database.ts";
 import {
   moneyKey,
   requireResource,
   serializedEntity,
 } from "#worker/finance/repository.ts";
 import * as tables from "#worker/schema.ts";
-import type { Operation } from "#worker/sync/operation-storage.ts";
 
 export function derivedStatements(
   db: D1Database,
-  i: Identity,
-  revision: string,
-  d: Derived,
+  {
+    identity,
+    rulesRevision,
+    derived,
+  }: {
+    identity: Identity;
+    rulesRevision: string;
+    derived: Derived;
+  },
 ) {
   const out: BatchItem<"sqlite">[] = [
     database(db)
       .insert(tables.derived)
       .values({
-        item_id: i.itemId,
-        resource: i.resource,
-        parent_id: i.parentId,
-        id: i.id,
-        rules_revision: revision,
-        category: d.category,
-        category_id: d.category_id,
-        group_id: d.category_group_id,
-        description: d.description,
-        ignored: Number(d.ignored),
-        evidence: d.evidence,
+        item_id: identity.itemId,
+        resource: identity.resource,
+        parent_id: identity.parentId,
+        id: identity.id,
+        rules_revision: rulesRevision,
+        category: derived.category,
+        category_id: derived.category_id,
+        group_id: derived.category_group_id,
+        description: derived.description,
+        ignored: Number(derived.ignored),
+        evidence: derived.evidence,
       })
       .onConflictDoUpdate({
         target: [
@@ -66,21 +63,21 @@ export function derivedStatements(
       .delete(tables.tags)
       .where(
         and(
-          eq(tables.tags.item_id, i.itemId),
-          eq(tables.tags.resource, i.resource),
-          eq(tables.tags.parent_id, i.parentId),
-          eq(tables.tags.id, i.id),
+          eq(tables.tags.item_id, identity.itemId),
+          eq(tables.tags.resource, identity.resource),
+          eq(tables.tags.parent_id, identity.parentId),
+          eq(tables.tags.id, identity.id),
           eq(tables.tags.origin, "derived"),
         ),
       ),
   ];
-  for (const [tag, value] of Object.entries(d.tags)) {
+  for (const [tag, value] of Object.entries(derived.tags)) {
     out.push(
       database(db).insert(tables.tags).values({
-        item_id: i.itemId,
-        resource: i.resource,
-        parent_id: i.parentId,
-        id: i.id,
+        item_id: identity.itemId,
+        resource: identity.resource,
+        parent_id: identity.parentId,
+        id: identity.id,
         key: tag,
         value: value,
         origin: "derived",
@@ -90,157 +87,113 @@ export function derivedStatements(
   return out;
 }
 
-interface EntityInput {
+interface EntityObservation {
   identity: Identity;
   source: ProviderRecord;
-  parent: FinanceRecord | null | undefined;
-  operation: Pick<
-    Operation,
-    "id" | "input" | "reference_day" | "rules_revision"
-  >;
-  engine: ReturnType<typeof compileRules>;
-  legacyProjection?: FinanceRecord;
+  operationId: string;
+  observedAt: string;
 }
 
-export async function prepareEntity(
-  db: D1Database,
-  {
-    identity: i,
-    source: raw,
-    parent: parentInput,
-    operation,
-    engine,
-    legacyProjection,
-  }: EntityInput,
-) {
-  const parent = parentInput ?? undefined;
-  if (String(raw.id ?? raw.resourceId) !== i.id) {
-    throw new Error("SOURCE_ID_MISMATCH");
-  }
-  const digest = await hash(
-    entityFingerprint({ resource: i.resource, raw, parent, legacyProjection }),
-  );
-  const previous = await database(db)
-    .select({
-      relevant_hash: tables.entities.relevant_hash,
-      deleted: tables.entities.deleted,
-      seen_operation: tables.entities.seen_operation,
-    })
-    .from(tables.entities)
-    .where(
-      and(
-        eq(tables.entities.item_id, i.itemId),
-        eq(tables.entities.resource, i.resource),
-        eq(tables.entities.parent_id, i.parentId),
-        eq(tables.entities.id, i.id),
-      ),
-    )
-    .get();
-  const now = new Date().toISOString();
-  const forced = operation.input.renormalize === true;
-  if (!forced && previous?.relevant_hash === digest && previous.deleted === 0) {
-    return {
-      statements: [
-        database(db)
-          .update(tables.entities)
-          .set({
-            source: raw,
-            source_updated_at: raw.updatedAt ?? null,
-            observed_at: now,
-            seen_operation: operation.id,
-          })
-          .where(
-            and(
-              eq(tables.entities.item_id, i.itemId),
-              eq(tables.entities.resource, i.resource),
-              eq(tables.entities.parent_id, i.parentId),
-              eq(tables.entities.id, i.id),
-            ),
-          ),
-      ],
-      seenInOperation: previous.seen_operation === operation.id,
-      state: "unchanged",
-      classified: 0,
-    };
-  }
-  const projection = projectEntity({
-    resource: i.resource,
-    raw,
-    parent,
-    referenceDay: operation.reference_day,
-    ...(legacyProjection === undefined ? {} : { legacyProjection }),
-  });
-  const value = entityValues({
-    identity: i,
-    source: raw,
-    operation,
-    projection,
-    legacyProjection,
-    digest,
-    now,
-  });
-  // Preserve first_seen_at when a source identity is updated.
-  const { first_seen_at: _firstSeen, ...updated } = value;
-  const statements: BatchItem<"sqlite">[] = [
-    database(db)
-      .insert(tables.entities)
-      .values(value)
-      .onConflictDoUpdate({
-        target: [
-          tables.entities.item_id,
-          tables.entities.resource,
-          tables.entities.parent_id,
-          tables.entities.id,
-        ],
-        set: updated,
-      }),
-  ];
-  if (i.resource === "transactions") {
-    statements.push(
-      ...derivedStatements(
-        db,
-        i,
-        operation.rules_revision,
-        await engine.evaluate(txContext(projection.record)),
-      ),
-    );
-  }
+interface EntityPublication extends EntityObservation {
+  projection: ReturnType<typeof projectEntity>;
+  digest: string;
+  normalizer: string;
+  rulesRevision: string;
+  derived: Derived | undefined;
+}
+
+export function entityPersistence(db: D1Database) {
   return {
-    statements,
-    seenInOperation: previous?.seen_operation === operation.id,
-    state: previous ? "changed" : "new",
-    classified: Number(i.resource === "transactions"),
+    read: (identity: Identity) =>
+      database(db)
+        .select({
+          relevant_hash: tables.entities.relevant_hash,
+          deleted: tables.entities.deleted,
+          seen_operation: tables.entities.seen_operation,
+        })
+        .from(tables.entities)
+        .where(entityIdentity(identity))
+        .get(),
+    observe: ({
+      identity,
+      source,
+      operationId,
+      observedAt,
+    }: EntityObservation) => [
+      database(db)
+        .update(tables.entities)
+        .set({
+          source,
+          source_updated_at: source.updatedAt ?? null,
+          observed_at: observedAt,
+          seen_operation: operationId,
+        })
+        .where(entityIdentity(identity)),
+    ],
+    save(input: EntityPublication) {
+      const value = entityValues(input);
+      // Preserve first_seen_at when a source identity is updated.
+      const { first_seen_at: _firstSeen, ...updated } = value;
+      const statements: BatchItem<"sqlite">[] = [
+        database(db)
+          .insert(tables.entities)
+          .values(value)
+          .onConflictDoUpdate({
+            target: [
+              tables.entities.item_id,
+              tables.entities.resource,
+              tables.entities.parent_id,
+              tables.entities.id,
+            ],
+            set: updated,
+          }),
+      ];
+      if (input.derived) {
+        statements.push(
+          ...derivedStatements(db, {
+            identity: input.identity,
+            rulesRevision: input.rulesRevision,
+            derived: input.derived,
+          }),
+        );
+      }
+      return statements;
+    },
   };
 }
 
+function entityIdentity(identity: Identity) {
+  return and(
+    eq(tables.entities.item_id, identity.itemId),
+    eq(tables.entities.resource, identity.resource),
+    eq(tables.entities.parent_id, identity.parentId),
+    eq(tables.entities.id, identity.id),
+  );
+}
+
 function entityValues({
-  identity: i,
-  source: raw,
-  operation,
+  identity,
+  source,
+  operationId,
+  observedAt,
   projection,
-  legacyProjection,
+  normalizer,
   digest,
-  now,
-}: Omit<EntityInput, "parent" | "engine" | "legacyProjection"> & {
-  projection: ReturnType<typeof projectEntity>;
-  legacyProjection: FinanceRecord | undefined;
-  digest: string;
-  now: string;
-}) {
+}: EntityPublication): typeof tables.entities.$inferInsert {
   const { record, amountText, date, eligible } = projection;
   return {
-    item_id: i.itemId,
-    resource: i.resource,
-    parent_id: i.parentId,
-    id: i.id,
-    source: raw,
+    item_id: identity.itemId,
+    resource: identity.resource,
+    parent_id: identity.parentId,
+    id: identity.id,
+    source,
     normalized: record,
     relevant_hash: digest,
-    normalizer: legacyProjection ? "legacy-projection-v1" : NORMALIZER,
-    source_created_at: raw.createdAt ?? null,
-    source_updated_at: raw.updatedAt ?? null,
-    first_seen_at: now,
-    observed_at: now,
+    normalizer,
+    source_created_at: source.createdAt ?? null,
+    source_updated_at: source.updatedAt ?? null,
+    first_seen_at: observedAt,
+    observed_at: observedAt,
     transaction_date: date,
     currency: projection.currency,
     amount_minor: amountText,
@@ -255,9 +208,9 @@ function entityValues({
     status: projection.status,
     original_category: projection.category,
     original_description: projection.description,
-    eligible,
+    eligible: Number(eligible),
     deleted: 0,
-    seen_operation: operation.id,
+    seen_operation: operationId,
   };
 }
 
@@ -271,20 +224,10 @@ export async function override(
   const exists = await database(db)
     .select({ id: tables.entities.id })
     .from(tables.entities)
-    .where(
-      and(
-        eq(tables.entities.item_id, i.itemId),
-        eq(tables.entities.resource, i.resource),
-        eq(tables.entities.parent_id, i.parentId),
-        eq(tables.entities.id, i.id),
-      ),
-    )
+    .where(entityIdentity(i))
     .get();
   if (!exists) {
     throw new Error("NOT_FOUND");
-  }
-  if (field === "ignored" && value !== null && !["0", "1"].includes(value)) {
-    throw new Error("ignored requires 0 or 1");
   }
   if (field === "category" && value !== null) {
     const category = await database(db)

@@ -10,6 +10,7 @@ import {
   RuleSchema,
   txContext,
 } from "#domain/rules/rules.ts";
+import { FinanceRecordSchema } from "#domain/schemas.ts";
 import { required } from "#testing/helpers.ts";
 
 const tx = (description = "CAFÉ") =>
@@ -34,6 +35,71 @@ const legacy = (when: object | boolean) => ({
       actions: [{ op: "set_description", value: "Converted" }],
     },
   ],
+});
+
+await test("rule context preserves exact scalar values and explicit absences after boundary validation", () => {
+  const context = txContext(
+    FinanceRecordSchema.parse({
+      id: "synthetic",
+      amount: "-9007199254740993.0100",
+      accountName: null,
+      "creditCardMetadata.installmentNumber": 0,
+      "creditCardMetadata.totalInstallments": 12,
+    }),
+  );
+  assert.equal(context.amount, "-9007199254740993.0100");
+  assert.equal(context.amount_abs, "9007199254740993.0100");
+  assert.equal(context.account_name, "");
+  assert.equal(context.installment_number, "0");
+  assert.equal(context.total_installments, "12");
+  assert.throws(() =>
+    FinanceRecordSchema.parse({
+      id: "synthetic",
+      accountName: { invalid: true },
+    }),
+  );
+  assert.throws(() =>
+    FinanceRecordSchema.parse({ id: "synthetic", amount: { invalid: true } }),
+  );
+});
+
+await test("rule import diagnostics retain a navigable source path for nested unsupported conditions", () => {
+  const report = importRules(
+    {
+      format: "securo-categorization-rules",
+      version: 1,
+      rules: [
+        {
+          name: "Synthetic",
+          priority: 0,
+          is_active: true,
+          conditions_op: "and",
+          conditions: [
+            {
+              op: "and",
+              conditions: [{ op: "equals", field: "unsupported", value: "x" }],
+            },
+          ],
+          actions: [{ op: "set_description", value: "Synthetic" }],
+        },
+      ],
+    },
+    EMPTY_RULES,
+  );
+  assert.equal(report.compatible, false);
+  assert.ok(
+    report.issues.some(
+      (issue) =>
+        issue.path === "rules.0.conditions.0.0" &&
+        issue.code === "FIELD_MAPPING_REQUIRED",
+    ),
+  );
+  const invalid = importRules({
+    format: "securo-categorization-rules",
+    version: 1,
+    rules: [{ name: 42 }],
+  });
+  assert.ok(invalid.issues.some((issue) => issue.path === "rules.0.name"));
 });
 
 await test("explicit v1 conversion preserves equivalent boolean combinations and exact predicates", async () => {

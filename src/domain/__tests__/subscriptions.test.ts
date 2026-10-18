@@ -172,9 +172,20 @@ await test("grouping is conservative: accounts/sources separated, whitespace/cas
     },
   });
 
-  const result = direct([...renamed, ...second, ...different, ...sameReceiver]);
+  const result = direct([
+    ...renamed.toReversed(),
+    ...second,
+    ...different,
+    ...sameReceiver,
+  ]);
   assert.equal(result.candidateCount, 4);
   assert.equal(result.totals.allCandidatesMinor, "12000");
+  assert.equal(
+    required(
+      result.candidates.find((candidate) => candidate.anchorRecordId === "m07"),
+    ).payee.name,
+    "  Serviço   Sintético ",
+  );
 
   const missing = direct(
     monthly("missing", {

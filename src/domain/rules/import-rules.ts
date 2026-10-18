@@ -2,16 +2,18 @@ import { isLosslessNumber, parse } from "lossless-json";
 import { z } from "zod/v4";
 
 import {
-  convertRules,
+  convertValidatedRules,
   LegacyRulesSchema,
 } from "#domain/rules/convert-rules.ts";
 import {
   compileRules,
+  compileValidatedRules,
   type Condition as RuleCondition,
   RuleSchema,
   type Rules,
   RulesSchema,
 } from "#domain/rules/rules.ts";
+import type { RuleImportReport } from "#domain/rules/rules-schema.ts";
 import { type JsonValue, JsonValueSchema } from "#shared/json.ts";
 
 const Condition = z
@@ -66,17 +68,18 @@ const fieldMap: Record<string, string> = {
 export function importRules(
   input: unknown,
   catalog?: Pick<Rules, "groups" | "categories">,
-) {
+): RuleImportReport {
   const native = RulesSchema.safeParse(input);
 
   if (native.success) {
-    compileRules(native.data);
+    compileValidatedRules(native.data);
 
     return { compatible: true, document: native.data, issues: [] };
   }
 
-  if (LegacyRulesSchema.safeParse(input).success) {
-    return convertRules(input);
+  const legacy = LegacyRulesSchema.safeParse(input);
+  if (legacy.success) {
+    return convertValidatedRules(legacy.data);
   }
   const parsed = Package.safeParse(input);
 
@@ -85,7 +88,7 @@ export function importRules(
       compatible: false,
       document: null,
       issues: parsed.error.issues.map((i) => ({
-        path: i.path.join("../../../../apps/worker/application"),
+        path: i.path.join("."),
         code: "INVALID_PACKAGE",
         message: i.message,
       })),
@@ -275,7 +278,7 @@ function groupCondition(
   }
 
   const children = c.conditions.map((v, i) =>
-    condition(v, `${path}../../../../apps/worker/application${i}`, issues),
+    condition(v, `${path}.${i}`, issues),
   );
 
   return c.op === "and" ? { all: children } : { any: children };

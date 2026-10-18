@@ -61,7 +61,7 @@ export function productState(
 
   if (
     product &&
-    Array.isArray(item.connector.products) &&
+    item.connector.products != null &&
     !item.connector.products.includes(product) &&
     !(
       resource === Resource.accounts &&
@@ -73,7 +73,7 @@ export function productState(
 
   if (
     product &&
-    Array.isArray(item.products) &&
+    item.products != null &&
     !item.products.includes(product) &&
     !(
       resource === Resource.accounts &&

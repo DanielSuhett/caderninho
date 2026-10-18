@@ -1,7 +1,10 @@
 import { type Resource, TransactionStatus } from "#domain/enums.ts";
 import { accountingDay, assertMinor } from "#domain/exact.ts";
-import { normalizeValidatedResource } from "#domain/finance-model.ts";
-import providerFields from "#domain/provider-fields.json" with { type: "json" };
+import {
+  normalizeValidatedResource,
+  providerFieldValue,
+} from "#domain/finance-model.ts";
+import providerFields from "#domain/provider-fields.ts";
 import type { FinanceRecord, ProviderRecord } from "#domain/schemas.ts";
 
 export function projectEntity({
@@ -25,32 +28,28 @@ export function projectEntity({
     record.accountName = parent?.name ?? null;
   }
 
-  for (const [field, value] of Object.entries(record)) {
-    if (field.endsWith("Minor") && typeof value === "string") {
-      assertMinor(value);
+  // Legacy records bypass normalization; their monetary guarantees start here.
+  if (legacyProjection) {
+    for (const [field, value] of Object.entries(legacyProjection)) {
+      if (field.endsWith("Minor") && typeof value === "string") {
+        assertMinor(value);
+      }
     }
   }
 
-  const amount =
+  const amountText =
     record.amountMinor ??
     record.balanceMinor ??
     record.totalAmountMinor ??
     record.contractAmountMinor ??
     null;
 
-  const amountText = amount;
-
-  if (amountText !== null) {
-    assertMinor(amountText);
-  }
-
   const date = entityDate(record);
 
-  const eligible = Number(
+  const eligible =
     date !== null &&
-      date <= referenceDay &&
-      record.status !== TransactionStatus.PENDING,
-  );
+    date <= referenceDay &&
+    record.status !== TransactionStatus.PENDING;
 
   return {
     record,
@@ -128,7 +127,7 @@ function relevantSource(
     if (["updatedAt", "createdAt", "balance"].includes(path)) {
       continue;
     }
-    const value = providerValue(raw, path);
+    const value = providerFieldValue(raw, path);
 
     if (value !== undefined) {
       relevant[path] = value;
@@ -142,25 +141,12 @@ function relevantSource(
   return relevant;
 }
 
-function providerValue(raw: ProviderRecord, path: string): unknown {
-  let value: unknown = raw;
-
-  for (const segment of path.split(".")) {
-    if (!value || typeof value !== "object" || Array.isArray(value)) {
-      return undefined;
-    }
-    value = Object.entries(value).find(([key]) => key === segment)?.[1];
-  }
-
-  return value;
-}
-
 function entityDate(record: FinanceRecord) {
-  if (typeof record.accountingDate === "string") {
+  if (record.accountingDate != null) {
     return record.accountingDate;
   }
 
-  if (typeof record.date === "string") {
+  if (record.date != null) {
     return accountingDay(record.date);
   }
 

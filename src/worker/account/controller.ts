@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { deleteCookie, getCookie } from "hono/cookie";
+import type { z } from "zod/v4";
 
 import {
   AccountActionSchema,
@@ -68,44 +69,51 @@ export function accountRoutes(accessRoutes: Hono<PortalEnv>) {
       origin: requestOrigin(c.req.raw),
     } satisfies AccountResponse),
   );
-  const command = async (request: Request, csrf: string) => {
-    const input = await boundedJson(request, 8192);
-    const parsed = AccountActionSchema.loose().parse(input);
+  const command = async <T extends { csrf: string }>(
+    request: Request,
+    csrf: string,
+    schema: z.ZodType<T>,
+  ) => {
+    const parsed = schema.parse(await boundedJson(request, 8192));
     if (parsed.csrf !== csrf) {
       throw new Error("SESSION_REQUIRED");
     }
-    return input;
+    return parsed;
   };
   app.post("/api/account/connect-token", async (c) => {
-    const input = ConnectTokenActionSchema.parse(
-      await command(c.req.raw, c.get("session").csrf),
+    const input = await command(
+      c.req.raw,
+      c.get("session").csrf,
+      ConnectTokenActionSchema,
     );
     return c.json(await accountService(c.env).token(input.itemId));
   });
   app.post("/api/account/items", async (c) => {
-    const input = ItemActionSchema.parse(
-      await command(c.req.raw, c.get("session").csrf),
+    const input = await command(
+      c.req.raw,
+      c.get("session").csrf,
+      ItemActionSchema,
     );
     await accountService(c.env).connectItem(input.itemId);
     return c.json({ ok: true });
   });
   app.post("/api/account/pause", async (c) => {
-    AccountActionSchema.parse(await command(c.req.raw, c.get("session").csrf));
+    await command(c.req.raw, c.get("session").csrf, AccountActionSchema);
     await accountService(c.env).pause();
     return c.json({ ok: true });
   });
   app.post("/api/account/resume", async (c) => {
-    AccountActionSchema.parse(await command(c.req.raw, c.get("session").csrf));
+    await command(c.req.raw, c.get("session").csrf, AccountActionSchema);
     await accountService(c.env).resume();
     return c.json({ ok: true });
   });
   app.post("/api/account/sync", async (c) => {
-    AccountActionSchema.parse(await command(c.req.raw, c.get("session").csrf));
+    await command(c.req.raw, c.get("session").csrf, AccountActionSchema);
     const queued = await accountService(c.env).requestSync();
     return c.json({ ok: true, queued });
   });
   app.post("/api/account/disconnect-assistants", async (c) => {
-    AccountActionSchema.parse(await command(c.req.raw, c.get("session").csrf));
+    await command(c.req.raw, c.get("session").csrf, AccountActionSchema);
     const grants: string[] = [];
     let cursor: string | undefined;
     do {
@@ -122,7 +130,7 @@ export function accountRoutes(accessRoutes: Hono<PortalEnv>) {
     return c.json({ ok: true });
   });
   app.post("/api/account/logout", async (c) => {
-    AccountActionSchema.parse(await command(c.req.raw, c.get("session").csrf));
+    await command(c.req.raw, c.get("session").csrf, AccountActionSchema);
     const id = getCookie(c, sessionCookie);
     if (id) {
       await authService(c.env).revokeSession(id);

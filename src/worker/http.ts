@@ -41,7 +41,9 @@ export async function boundedJson(
   if (body.tooLarge) {
     throw new Error("BODY_LIMIT");
   }
-  return z.json().parse((losslessRules ? parseRuleJson : exactJSON)(body.text));
+  return losslessRules
+    ? z.json().parse(parseRuleJson(body.text))
+    : exactJSON(body.text);
 }
 
 export async function boundedForm(request: Request) {

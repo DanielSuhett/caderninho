@@ -114,31 +114,33 @@ export async function reapplyRules({
         .all();
       const edits = (
         await Promise.all(
-          selected.map(async (r) => [
-            ...derivedStatements(
-              db,
-              {
-                itemId: r.item_id,
-                resource: r.resource,
-                parentId: r.parent_id,
-                id: r.id,
-              },
-              op.rules_revision,
-              await engine.evaluate(txContext(r.normalized)),
-            ),
-            database(db)
-              .update(tables.operation_targets)
-              .set({ processed: 1 })
-              .where(
-                and(
-                  eq(tables.operation_targets.operation_id, id),
-                  eq(tables.operation_targets.item_id, r.item_id),
-                  eq(tables.operation_targets.resource, r.resource),
-                  eq(tables.operation_targets.parent_id, r.parent_id),
-                  eq(tables.operation_targets.id, r.id),
+          selected.map(async (entity) => {
+            const derived = await engine.evaluate(txContext(entity.normalized));
+            return [
+              ...derivedStatements(db, {
+                identity: {
+                  itemId: entity.item_id,
+                  resource: entity.resource,
+                  parentId: entity.parent_id,
+                  id: entity.id,
+                },
+                rulesRevision: op.rules_revision,
+                derived,
+              }),
+              database(db)
+                .update(tables.operation_targets)
+                .set({ processed: 1 })
+                .where(
+                  and(
+                    eq(tables.operation_targets.operation_id, id),
+                    eq(tables.operation_targets.item_id, entity.item_id),
+                    eq(tables.operation_targets.resource, entity.resource),
+                    eq(tables.operation_targets.parent_id, entity.parent_id),
+                    eq(tables.operation_targets.id, entity.id),
+                  ),
                 ),
-              ),
-          ]),
+            ];
+          }),
         )
       ).flat();
       const progress = progressWithDefaults(

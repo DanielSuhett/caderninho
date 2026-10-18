@@ -184,10 +184,10 @@ function cadence(rows: EligibleRecurrenceRecord[]): Cadence | null {
 }
 
 function nameFor(row: FinanceRecord) {
-  for (const source of ["merchant.name", "counterparty"]) {
+  for (const source of ["merchant.name", "counterparty"] as const) {
     const value = row[source];
 
-    if (typeof value === "string" && value.trim()) {
+    if (value?.trim()) {
       return { source, value, normalized: normalizeName(value) };
     }
   }
@@ -195,27 +195,32 @@ function nameFor(row: FinanceRecord) {
   return null; // Descriptions and numeric/name suffixes are never stripped to invent a payee.
 }
 
-function exclusionReason(row: FinanceRecord, asOfDay: string) {
+type RecurrenceEntry =
+  | { reason: string }
+  | { record: EligibleRecurrenceRecord; name: RecurrenceGroup["name"] };
+
+function recurrenceEntry(row: FinanceRecord, asOfDay: string): RecurrenceEntry {
   if (row.type !== TransactionType.DEBIT) {
-    return "credit_or_refund_not_netted";
+    return { reason: "credit_or_refund_not_netted" };
   }
 
   if (row.status !== TransactionStatus.POSTED) {
-    return "not_posted";
+    return { reason: "not_posted" };
   }
 
+  let accountingDate: string;
   try {
-    day(row.accountingDate);
+    accountingDate = day(row.accountingDate);
   } catch {
-    return "missing_or_invalid_date";
+    return { reason: "missing_or_invalid_date" };
   }
 
-  if (row.accountingDate && row.accountingDate > asOfDay) {
-    return "future";
+  if (accountingDate > asOfDay) {
+    return { reason: "future" };
   }
 
   if (row.classification && excludedClassifications.has(row.classification)) {
-    return row.classification;
+    return { reason: row.classification };
   }
 
   // Providers may omit totalInstallments. installmentNumber alone is already a warning.
@@ -226,40 +231,47 @@ function exclusionReason(row: FinanceRecord, asOfDay: string) {
     (installment != null && Number(installment) > 0) ||
     (total != null && Number(total) > 1)
   ) {
-    return "installment_metadata";
+    return { reason: "installment_metadata" };
   }
 
-  if (
-    typeof row.absoluteAmountMinor !== "string" ||
-    !/^\d+$/.test(row.absoluteAmountMinor)
-  ) {
-    return "missing_or_invalid_amount";
+  const absoluteAmountMinor = row.absoluteAmountMinor;
+  if (absoluteAmountMinor == null || !/^\d+$/.test(absoluteAmountMinor)) {
+    return { reason: "missing_or_invalid_amount" };
   }
 
-  if (BigInt(row.absoluteAmountMinor) === 0n) {
-    return "zero_amount";
+  if (BigInt(absoluteAmountMinor) === 0n) {
+    return { reason: "zero_amount" };
   }
 
   if (!row.accountId) {
-    return "missing_account";
+    return { reason: "missing_account" };
   }
 
-  if (!nameFor(row)) {
-    return "missing_payee";
+  const name = nameFor(row);
+  if (!name) {
+    return { reason: "missing_payee" };
   }
 
-  return null;
+  if (row.currencyCode == null) {
+    return { reason: "missing_or_invalid_amount" };
+  }
+  return {
+    name,
+    record: {
+      ...row,
+      accountingDate,
+      absoluteAmountMinor,
+      accountId: row.accountId,
+      currencyCode: row.currencyCode,
+    },
+  };
 }
 
 function candidate(
   group: RecurrenceGroup,
   pattern: Cadence,
 ): SubscriptionCandidate {
-  const rows = [...group.rows].sort(
-    (a, b) =>
-      a.accountingDate.localeCompare(b.accountingDate) ||
-      a.id.localeCompare(b.id),
-  );
+  const rows = group.rows;
 
   const first = rows[0];
 
@@ -268,7 +280,6 @@ function candidate(
   }
 
   const payee = nameFor(first);
-
   if (!payee) {
     fail(FaultCode.INVALID_RESPONSE);
   }
@@ -287,9 +298,7 @@ function candidate(
 
   const categories = [
     ...new Set(
-      rows
-        .map((row) => row.category)
-        .filter((value) => typeof value === "string"),
+      rows.map((row) => row.category).filter((value) => value != null),
     ),
   ].sort();
 
@@ -421,8 +430,7 @@ export function detectSubscriptions(
   rows: FinanceRecord[],
   { from, to, currency, asOfDay, limit = 20, offset = 0 }: RecurrenceOptions,
 ): RecurrenceResult {
-  const groups = new Map<string, RecurrenceGroup>(),
-    exclusions = new Map<string, Exclusion>();
+  const exclusions = new Map<string, Exclusion>();
 
   const exclude = (row: FinanceRecord, reason: string) => {
     const item = exclusions.get(reason) ?? {
@@ -435,7 +443,7 @@ export function detectSubscriptions(
     item.count++;
 
     if (
-      typeof row.absoluteAmountMinor === "string" &&
+      row.absoluteAmountMinor != null &&
       /^\d+$/.test(row.absoluteAmountMinor)
     ) {
       item.knownAmountMinor = (
@@ -449,7 +457,7 @@ export function detectSubscriptions(
     exclusions.set(reason, item);
   };
 
-  collectRecurrenceGroups(rows, { currency, asOfDay }, groups, exclude);
+  const groups = collectRecurrenceGroups({ rows, currency, asOfDay, exclude });
 
   const candidates: SubscriptionCandidate[] = [];
 
@@ -609,52 +617,32 @@ function recurrenceOutcome(count: number, historyDays: number) {
   return "no_candidates_in_snapshot";
 }
 
-function collectRecurrenceGroups(
-  rows: FinanceRecord[],
-  { currency, asOfDay }: Pick<RecurrenceOptions, "currency" | "asOfDay">,
-  groups: Map<string, RecurrenceGroup>,
-  exclude: (row: FinanceRecord, reason: string) => void,
-) {
+function collectRecurrenceGroups({
+  rows,
+  currency,
+  asOfDay,
+  exclude,
+}: Pick<RecurrenceOptions, "currency" | "asOfDay"> & {
+  rows: FinanceRecord[];
+  exclude: (row: FinanceRecord, reason: string) => void;
+}) {
+  const groups = new Map<string, RecurrenceGroup>();
   for (const row of rows) {
-    const reason = exclusionReason(row, asOfDay);
-
-    if (reason) {
-      exclude(row, reason);
+    const entry = recurrenceEntry(row, asOfDay);
+    if ("reason" in entry) {
+      exclude(row, entry.reason);
       continue;
     }
-
-    const name = nameFor(row);
-
-    if (!name) {
-      exclude(row, "missing_payee");
-      continue;
-    }
-
-    if (
-      typeof row.accountingDate !== "string" ||
-      typeof row.absoluteAmountMinor !== "string" ||
-      typeof row.accountId !== "string" ||
-      typeof row.currencyCode !== "string"
-    ) {
-      exclude(row, "missing_or_invalid_amount");
-      continue;
-    }
-
+    const { record, name } = entry;
     const key = JSON.stringify([
-      row.accountId,
+      record.accountId,
       currency,
       name.source,
       name.normalized,
     ]);
-
     const group = groups.get(key) ?? { name, rows: [] };
-    group.rows.push({
-      ...row,
-      accountingDate: row.accountingDate,
-      absoluteAmountMinor: row.absoluteAmountMinor,
-      accountId: row.accountId,
-      currencyCode: row.currencyCode,
-    });
+    group.rows.push(record);
     groups.set(key, group);
   }
+  return groups;
 }

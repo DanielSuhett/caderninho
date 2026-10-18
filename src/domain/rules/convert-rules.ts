@@ -4,9 +4,10 @@ import {
   ActionSchema,
   CatalogSchema,
   type Condition,
-  compileRules,
+  compileValidatedRules,
   RulesSchema,
 } from "#domain/rules/rules.ts";
+import type { RuleImportReport } from "#domain/rules/rules-schema.ts";
 import { type JsonValue, JsonValueSchema } from "#shared/json.ts";
 
 export const LegacyRulesSchema = CatalogSchema.extend({
@@ -250,7 +251,7 @@ function convertFactPredicate(
   fail(path, `Operator ${op} has no equivalent conversion`);
 }
 
-export function convertRules(input: unknown) {
+export function convertRules(input: unknown): RuleImportReport {
   const parsed = LegacyRulesSchema.safeParse(input);
 
   if (!parsed.success) {
@@ -264,10 +265,16 @@ export function convertRules(input: unknown) {
       })),
     };
   }
+  return convertValidatedRules(parsed.data);
+}
+
+export function convertValidatedRules(
+  document: z.infer<typeof LegacyRulesSchema>,
+): RuleImportReport {
   const issues: { path: string; code: string; message: string }[] = [];
   const rules = [];
 
-  for (const [index, rule] of parsed.data.rules.entries()) {
+  for (const [index, rule] of document.rules.entries()) {
     try {
       const condition = convertPredicate(rule.when, `rules.${index}.when`);
       rules.push({
@@ -293,10 +300,10 @@ export function convertRules(input: unknown) {
   }
 
   try {
-    const document = RulesSchema.parse({ ...parsed.data, version: 2, rules });
-    compileRules(document);
+    const converted = RulesSchema.parse({ ...document, version: 2, rules });
+    compileValidatedRules(converted);
 
-    return { compatible: true, document, issues };
+    return { compatible: true, document: converted, issues };
   } catch (error) {
     return {
       compatible: false,

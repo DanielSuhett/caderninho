@@ -169,3 +169,33 @@ await test("normalization uses the operation reference day rather than the wall 
     "1000",
   );
 });
+
+await test("normalization establishes the persisted monetary range for primary and secondary amounts", () => {
+  const overflow = "10000000000000000000000000000";
+  for (const fields of [{ balance: overflow }, { amountProfit: overflow }]) {
+    assert.throws(
+      () =>
+        normalizeResource(
+          "investments",
+          {
+            id: "synthetic-investment",
+            currencyCode: "BRL",
+            ...fields,
+          },
+          undefined,
+          { referenceDay: null },
+        ),
+      /canonical integer, at most 30 digits/,
+    );
+  }
+  assert.throws(
+    () =>
+      normalizeResource(
+        "transactions",
+        tx("overflow", cid, "DEBIT", 10, { balance: overflow }),
+        { id: cid, type: "CREDIT" },
+        { referenceDay: "2026-09-30" },
+      ),
+    /canonical integer, at most 30 digits/,
+  );
+});

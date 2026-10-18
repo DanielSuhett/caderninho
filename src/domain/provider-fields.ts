@@ -1,4 +1,7 @@
-{
+import type { Resource } from "#domain/enums.ts";
+import type { ProviderField } from "#domain/provider.types.ts";
+
+const providerFields = {
   "accounts": {
     "id": {
       "kind": "scalar"
@@ -1295,4 +1298,6 @@
       "kind": "scalar"
     }
   }
-}
+} as const satisfies Record<Resource, Record<string, ProviderField>>;
+
+export default providerFields;

@@ -2,11 +2,30 @@
 
 Data: 18 de outubro de 2026. Biome 2.5.15, Node 24.
 
-Lint: **630 erros, 3 warnings e 86 informações**, em 78 arquivos com diagnósticos. O comando continua reprovando por violações, não por erro de configuração.
+Estado atual após correção: **0 erros, 0 warnings e 0 informações** em 113
+arquivos verificados. `mise run lint` passa com as mesmas regras e
+`--error-on-warnings`, sem supressões.
 
-Não houve correção em massa das violações da aplicação. Foram aplicadas somente as cinco diferenças detectadas pelo formatter, além da configuração e dos testes de tooling migrados. format:check agora passa.
+O baseline abaixo registra o momento imediatamente após a migração:
+**630 erros, 3 warnings e 86 informações**, em 78 arquivos com diagnósticos.
+Naquele momento, só as cinco diferenças do formatter tinham sido aplicadas.
 
-## Diagnósticos por regra
+## Correções posteriores
+
+- Chaves em todas as cláusulas, organização de imports, templates e acesso por
+  chave literal; correções automáticas limitadas às regras revisadas.
+- Projeção de campos, conversão/aplicação de regras, leitura limitada de streams,
+  filtros e fluxos de sync separados em funções locais com responsabilidades
+  explícitas. Mantidos batches atômicos e nomes dos passos de Workflow.
+- Estado mutável de autenticação e React explicitamente tipado; leitura de
+  cancelamento preservada após awaits. Contagem recursiva de manifests passa
+  pelo retorno da função em vez de depender de mutação capturada.
+- Promessas Drizzle de fixtures executadas com `.run()`, respostas terminais
+  tipadas pelo retorno do parser existente e callbacks sem retornos indevidos.
+- Seletor CSS geral antes dos específicos e parâmetro OAuth não usado removido,
+  com seus chamadores atualizados.
+
+## Diagnósticos do baseline por regra
 
 | Regra | Quantidade |
 | --- | ---: |
@@ -24,7 +43,7 @@ Não houve correção em massa das violações da aplicação. Foram aplicadas s
 | `lint/correctness/noUnusedFunctionParameters` | 1 |
 | `lint/nursery/noMisusedPromises` | 1 |
 
-## Warnings que também bloqueiam o comando
+## Warnings do baseline que também bloqueavam o comando
 
 | Local | Regra | Mensagem |
 | --- | --- | --- |
@@ -32,7 +51,7 @@ Não houve correção em massa das violações da aplicação. Foram aplicadas s
 | `src/web/account/use-account.ts:94:5` | `lint/complexity/useOptionalChain` | Change to an optional chain. |
 | `src/worker/auth/controller.ts:29:23` | `lint/correctness/noUnusedFunctionParameters` | This parameter env is unused. |
 
-## Arquivos com diagnósticos
+## Arquivos com diagnósticos no baseline
 
 | Arquivo | Erros | Warnings | Informações |
 | --- | ---: | ---: | ---: |
@@ -134,6 +153,10 @@ A saída JSON limpa desta sessão está em `/tmp/caderninho-biome-final.json`. E
 | npm run typecheck / npm run check:imports / npm run format:check | Passaram |
 | npm run build / npm run test:product:runtime | Passaram; dry-run e runtime sintético local |
 
-O teste de imports/formatação executa uma segunda aplicação do Biome em fixtures e verifica igualdade do resultado, aliases, comentários, imports só de tipos, atributos JSX e ordem dos imports com efeitos colaterais. Não foi aplicado lint:fix na aplicação.
+O teste de imports/formatação executa uma segunda aplicação do Biome em fixtures
+e verifica igualdade do resultado, aliases, comentários, imports só de tipos,
+atributos JSX e ordem dos imports com efeitos colaterais. Na correção posterior,
+`lint:fix` foi aplicado à aplicação; correções marcadas como inseguras foram
+limitadas às regras de chaves, templates, chaves literais e optional chaining.
 
 Os resultados não são prova de deploy, OAuth real ou execução em um cliente MCP externo. O mapa completo de cobertura está em [biome-migration.md](../biome-migration.md).

@@ -84,13 +84,7 @@ export async function main(args = process.argv.slice(2)) {
         for (const record of data.records) {
           const parent = DEFINITIONS[collection.resource].parent;
           const parentId = parent
-            ? z
-                .string()
-                .parse(
-                  parent === "investments"
-                    ? record.investmentId
-                    : record.accountId,
-                )
+            ? record[parent === "investments" ? "investmentId" : "accountId"]
             : "";
           const row = MigrationRowSchema.parse({
             sourceKey: `${collection.dataKey}#${record.id}`,

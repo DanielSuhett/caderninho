@@ -101,8 +101,9 @@ Instalação limpa, 38 testes Node, 47 testes Worker, typecheck, fronteiras de i
 formatação, build dry-run e runtime sintético passaram. Os testes de tooling
 validam convergência em fixtures, aliases, comentários e efeitos colaterais.
 
-O lint permanece reprovando com 630 erros e 3 warnings; há ainda
-86 diagnósticos informativos do preset nativo. O [relatório da migração](reports/biome-migration.md)
-registra as regras e os arquivos afetados. Nenhuma regra foi desativada para
-esconder esses diagnósticos. As diferenças sem equivalente foram aceitas
+O baseline tinha 630 erros, 3 warnings e 86 diagnósticos informativos do preset
+nativo. A correção posterior zerou os erros, warnings e informações. O
+[relatório da migração](reports/biome-migration.md) preserva o inventário inicial
+e descreve as correções. Nenhuma regra foi desativada para esconder diagnósticos.
+As diferenças sem equivalente foram aceitas
 explicitamente na escolha por regras nativas.
