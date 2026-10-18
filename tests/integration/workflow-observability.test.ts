@@ -161,39 +161,65 @@ for (const code of [
   FaultCode.UPSTREAM_RATE_LIMIT,
   FaultCode.UPSTREAM_TIMEOUT,
 ]) {
-  test(`${code} persists deferral and produces one warning without altering the exception`, async () => {
-    const op = await startOperation(env.DB, "deferred-request", {
-      itemIds: ["private-item-marker"],
-      kind: "sync",
-    });
-    const error = new Fault(code);
-    error.message = "private-upstream-marker";
-    error.details = { retryAfterSeconds: 31 };
-    const captured = capture();
-    await assert.rejects(
-      withObservation({ ...captured.context, operationId: op.id }, () =>
-        runOperation(
-          {
-            ...synchronizationDependencies(settings()),
-            source: () => Promise.reject(error),
-          },
-          op.id,
-          immediateSteps(),
+  for (const replayed of [false, true]) {
+    test(`${code} persists deferral with cached=${replayed} without altering the exception`, async () => {
+      const op = await startOperation(env.DB, "deferred-request", {
+        itemIds: ["private-item-marker"],
+        kind: "sync",
+      });
+      const error = new Fault(code);
+      error.message = "private-upstream-marker";
+      error.details = { retryAfterSeconds: 31 };
+      const captured = capture();
+      let opened = 0;
+      const durable = immediateSteps();
+      const steps: Steps = {
+        ...durable,
+        do(name, callback) {
+          if (replayed && name === "page-private-item-marker-connections--0") {
+            // A persisted stopped envelope throws outside its skipped work callback.
+            return Promise.reject(error);
+          }
+          return callback();
+        },
+      };
+      await assert.rejects(
+        withObservation({ ...captured.context, operationId: op.id }, () =>
+          runOperation(
+            {
+              ...synchronizationDependencies(settings()),
+              source: () => {
+                opened += 1;
+                return Promise.reject(error);
+              },
+            },
+            op.id,
+            steps,
+          ),
         ),
-      ),
-      (actual) => actual === error,
-    );
-    assert.equal((await getOperation(env.DB, op.id)).result?.isError, true);
-    assert.equal(captured.lines.length, 1);
-    assert.ok(captured.lines[0]?.includes('"outcome":"deferred"'));
-    assert.ok(captured.lines[0]?.includes('"delayMs":31000'));
-    assert.ok(captured.lines[0]?.includes('"level":40'));
-    assert.equal(
-      captured.spans.find((span) => span.name === "pluggy.read")?.outcome,
-      "deferred",
-    );
-    assert.ok(!JSON.stringify(captured).includes("private-"));
-  });
+        (actual) => actual === error,
+      );
+      assert.equal((await getOperation(env.DB, op.id)).result?.isError, true);
+      assert.equal(captured.lines.length, 1);
+      assert.ok(captured.lines[0]?.includes('"outcome":"deferred"'));
+      assert.ok(captured.lines[0]?.includes('"delayMs":31000'));
+      assert.ok(captured.lines[0]?.includes('"level":40'));
+      assert.equal(opened, replayed ? 0 : 1);
+      assert.ok(captured.lines[0]?.includes('"phase":"collect"'));
+      if (replayed) {
+        assert.equal(
+          captured.spans.filter((span) => span.name === "pluggy.read").length,
+          0,
+        );
+      } else {
+        assert.equal(
+          captured.spans.find((span) => span.name === "pluggy.read")?.outcome,
+          "deferred",
+        );
+      }
+      assert.ok(!JSON.stringify(captured).includes("private-"));
+    });
+  }
 }
 
 test("an unexpected source failure emits one safe terminal error and preserves the rejected exception", async () => {
