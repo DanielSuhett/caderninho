@@ -10,6 +10,7 @@ import type {
 import type {
   CoverageStatus,
   ExecutionPhase,
+  FaultCode,
   FinanceRecord,
   ItemAdmission,
   ProviderRecord,
@@ -292,7 +293,7 @@ export interface ExecutionRepository {
   finish: (
     op: Operation,
     status: FinishedOperationStatus,
-    error?: boolean,
+    error?: boolean | FaultCode,
   ) => Promise<void>;
   imported: (sourceKey: string, digest: string) => Promise<boolean>;
   items: (ids: string[]) => Promise<ConnectedItem[]>;

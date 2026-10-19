@@ -139,12 +139,28 @@ const TransactionPageSchema = PageSchema.extend({
     )
     .max(1000),
 });
+const ConsentPageSchema = PageSchema.extend({
+  results: z
+    .array(ProviderRecordSchema.extend({ itemId: z.string().min(1) }))
+    .max(1000),
+});
 const paged: Resource[] = [
+  Resource.consents,
   Resource.resources,
   Resource.investments,
   Resource.investment_transactions,
   Resource.bills,
 ];
+
+function parseSourcePage(resource: Resource, raw: unknown) {
+  if (resource === Resource.transactions) {
+    return TransactionPageSchema.parse(raw);
+  }
+  if (resource === Resource.consents) {
+    return ConsentPageSchema.parse(raw);
+  }
+  return PageSchema.parse(raw);
+}
 
 export function financialSource(client: PluggyClient): FinancialSource {
   return {
@@ -172,7 +188,7 @@ export function financialSource(client: PluggyClient): FinancialSource {
           client.fetchConnector(
             z.coerce.number().int().positive().parse(connectorId),
           ),
-        consents: () => client.fetchConsents(item),
+        consents: () => client.fetchConsents(item, options),
         identity: () => client.fetchIdentityByItemId(item),
         investment_transactions: () =>
           client.fetchInvestmentTransactions(parent, options),
@@ -201,11 +217,17 @@ export function financialSource(client: PluggyClient): FinancialSource {
         });
         return { next: null, records: [record] };
       }
-      const data = (
-        resource === Resource.transactions ? TransactionPageSchema : PageSchema
-      ).parse(raw);
+      const data = parseSourcePage(resource, raw);
       const { results: records } = data;
-      assertSourceRecords({ context: { item, parent, resource }, records });
+      assertSourceRecords({
+        context: {
+          item,
+          parent,
+          resource,
+          ...(connectorId && { connectorId }),
+        },
+        records,
+      });
       if (resource === Resource.transactions) {
         return {
           next: validateCursor(data.next, parent, cursor, floor),
@@ -264,8 +286,8 @@ function validateCursor(
   return next;
 }
 
-// Persist a provider cooldown/timeout as a successful step envelope. Throw outside
-// step.do so Workflow retry does not repeat the source request in this cycle.
+// Persist cooldowns, timeouts and identity failures as successful step envelopes.
+// Throw outside step.do so Workflow retry does not repeat those source requests.
 export function providerRetries(steps: Steps): Steps {
   return {
     async do<T extends StepValue<T>>(
@@ -276,6 +298,13 @@ export function providerRetries(steps: Steps): Steps {
         const { data, error } = await tryCatch(callback);
         if (!error) {
           return { kind: "success" as const, value: data };
+        }
+        if (
+          ["SOURCE_IDENTITY_MISMATCH", "SOURCE_SELECTION_MISMATCH"].includes(
+            error.message,
+          )
+        ) {
+          return { kind: "invalid" as const, message: error.message };
         }
         if (
           !(
@@ -295,6 +324,9 @@ export function providerRetries(steps: Steps): Steps {
       });
       if (outcome.kind === "success") {
         return outcome.value;
+      }
+      if (outcome.kind === "invalid") {
+        throw new Error(outcome.message);
       }
       const fault = new Fault(outcome.code);
       fault.details = { retryAfterSeconds: outcome.retryAfterSeconds };

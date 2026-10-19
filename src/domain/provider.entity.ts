@@ -1,4 +1,5 @@
 import type { JsonValue } from "../shared";
+import { PERSONAL_CONNECTOR_ID } from "./connection.entity";
 import { Availability, Product, Resource } from "./enums";
 import type {
   FinanceRecord,
@@ -223,6 +224,12 @@ export function assertSourceRecords({
 }) {
   const definition = DEFINITIONS[context.resource];
   for (const record of records) {
+    // MeuPluggy retains an upstream Item on consent records from the authenticated,
+    // item-filtered endpoint. Keep that source identity and the local proxy scope.
+    const proxyConsent =
+      context.resource === Resource.consents &&
+      context.connectorId === String(PERSONAL_CONNECTOR_ID) &&
+      !!record.itemId;
     if (context.resource === Resource.connections) {
       assertSourceIdentity({ expected: context.item, id: record.id });
     }
@@ -233,7 +240,9 @@ export function assertSourceRecords({
       });
     }
     if (
-      (record.itemId !== undefined && record.itemId !== context.item) ||
+      (record.itemId !== undefined &&
+        record.itemId !== context.item &&
+        !proxyConsent) ||
       (definition.parent === Resource.accounts &&
         record.accountId !== undefined &&
         record.accountId !== context.parent) ||

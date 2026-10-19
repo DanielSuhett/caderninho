@@ -188,7 +188,11 @@ export async function runOperation(
           executionError.details?.retryAfterSeconds ?? 0,
         );
       }
-      await repository.finish(op, OperationStatus.completed, true);
+      await repository.finish(
+        op,
+        OperationStatus.completed,
+        operationFailure(executionError),
+      );
       if (deferred) {
         summary.outcome = ExecutionResult.deferred;
       }
@@ -206,6 +210,21 @@ export async function runOperation(
   if (error) {
     throw error;
   }
+}
+
+function operationFailure(error: Error): FaultCode {
+  if (error instanceof Fault) {
+    return error.code;
+  }
+  if (
+    error.name === "ZodError" ||
+    ["SOURCE_IDENTITY_MISMATCH", "SOURCE_SELECTION_MISMATCH"].includes(
+      error.message,
+    )
+  ) {
+    return FaultCode.INVALID_RESPONSE;
+  }
+  return FaultCode.INTERNAL_ERROR;
 }
 
 function observePhase<T>(
@@ -827,7 +846,10 @@ async function fetchSourcePage(
 ) {
   const { repository } = execution;
   let connectorId: string | undefined;
-  if (identity.resource === Resource.connectors) {
+  if (
+    identity.resource === Resource.connectors ||
+    identity.resource === Resource.consents
+  ) {
     const connection = await repository.connectionSource(identity.itemId);
     if (!connection?.connector?.id) {
       throw new Error("CONNECTOR_MISSING");
