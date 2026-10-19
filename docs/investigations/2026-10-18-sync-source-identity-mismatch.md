@@ -276,6 +276,20 @@ reiniciar operações terminais. `last_import_at` continuava nulo. A importaçã
 financeira completa pelo Workflow publicado permanece pendente; a validação
 real efetuada nesta correção foi a leitura restrita pelo adapter.
 
+## Liberação pontual da nova tentativa
+
+Após solicitação do dono, em **19/10/2026 às 02:47:59 UTC**, ou **18/10 às
+23:47:59 em São Paulo**, foi antecipado somente `items.next_import_at` da conexão
+cuja primeira importação terminou em erro. O update guardou a operação terminal,
+o valor anterior do cooldown, `last_import_at` nulo e a ausência de operações
+ativas e locks; alterou exatamente uma linha. A releitura confirmou a conexão
+elegível para retry, zero operações ativas e zero locks.
+
+A operação com falha e seu histórico foram preservados. A política diária e
+`settings.next_sync_at` não foram alterados. Nenhum Workflow foi iniciado por
+essa intervenção; a importação completa ainda depende de uma nova admissão pelo
+botão **Sincronizar agora**.
+
 ## Referências
 
 - [Operação do produto: falhas e retenção](../cloudflare-product.md#falhas-upgrade-e-retenção).
