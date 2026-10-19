@@ -98,7 +98,6 @@ for (const code of [
   "BODY_REQUIRED",
   "BODY_LIMIT",
   "MEU_PLUGGY_REQUIRED",
-  "SOURCE_IDENTITY_MISMATCH",
   "ITEM_LIMIT",
   "IDEMPOTENCY_CONFLICT",
   "REAPPLICATION_CONFLICT_START_NEW_REQUEST",
@@ -125,6 +124,9 @@ for (const code of [
   "UNSAFE_RULE_NUMBER",
 ]) {
   failures.set(code, localFailures.INVALID_REQUEST);
+}
+for (const code of ["SOURCE_IDENTITY_MISMATCH", "SOURCE_SELECTION_MISMATCH"]) {
+  failures.set(code, FaultCode.INVALID_RESPONSE);
 }
 failures.set(
   "FINANCIAL_EXECUTOR_BUSY_RESUME_DISPATCH",

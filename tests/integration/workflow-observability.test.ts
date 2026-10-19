@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 
+import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, test, vi } from "vitest";
 import { z } from "zod/v4";
 
@@ -12,7 +13,7 @@ import {
 } from "../../src/worker/composition";
 import { database } from "../../src/worker/database";
 import { withObservation } from "../../src/worker/observability";
-import { inbox, items } from "../../src/worker/schema";
+import { entities, inbox, items, locks } from "../../src/worker/schema";
 import { type FinancialSource, runOperation } from "../../src/worker/sync";
 import type { ExecutionOutcome, Steps } from "../../src/worker/sync/entity";
 import { getOperation, startOperation } from "../../src/worker/sync/repository";
@@ -245,7 +246,11 @@ test("an unexpected source failure emits one safe terminal error and preserves t
     ),
     (actual) => actual === error,
   );
-  assert.equal((await getOperation(env.DB, op.id)).result?.isError, true);
+  const current = await getOperation(env.DB, op.id);
+  assert.equal(current.result?.isError, true);
+  assert.equal(current.progress.errors, 1);
+  assert.deepEqual(current.error, { code: "INTERNAL_ERROR" });
+  assert.equal((await database(env.DB).select().from(locks)).length, 0);
   assert.equal(captured.lines.length, 1);
   assert.ok(captured.lines[0]?.includes('"level":50'));
   assert.ok(captured.lines[0]?.includes('"failure":"INTERNAL_ERROR"'));
@@ -285,7 +290,10 @@ for (const invalid of ["schema", "identity"] as const) {
           : error instanceof Error &&
             error.message === "SOURCE_IDENTITY_MISMATCH",
     );
-    assert.equal((await getOperation(env.DB, op.id)).result?.isError, true);
+    const current = await getOperation(env.DB, op.id);
+    assert.equal(current.result?.isError, true);
+    assert.equal(current.progress.errors, 1);
+    assert.deepEqual(current.error, { code: "INVALID_RESPONSE" });
     assert.equal(captured.lines.length, 1);
     assert.ok(captured.lines[0]?.includes('"level":50'));
     assert.ok(captured.lines[0]?.includes('"failure":"INVALID_RESPONSE"'));
@@ -296,6 +304,131 @@ for (const invalid of ["schema", "identity"] as const) {
     assert.ok(!JSON.stringify(captured).includes("private-"));
   });
 }
+
+test("MeuPluggy consent scope reaches accounts and transactions, preserves identities and replays without reads", async () => {
+  const proxy = "private-item-marker";
+  const paths: string[] = [];
+  mockNetwork((input) => {
+    const url = sourceUrl(input);
+    paths.push(url.pathname);
+    if (url.pathname === "/auth") {
+      return Promise.resolve(Response.json({ apiKey: syntheticJwt() }));
+    }
+    if (url.pathname === `/items/${proxy}`) {
+      return Promise.resolve(
+        Response.json({
+          connector: { id: 200, isOpenFinance: false },
+          id: proxy,
+          products: ["ACCOUNTS", "TRANSACTIONS"],
+        }),
+      );
+    }
+    if (url.pathname === "/consents") {
+      assert.equal(url.searchParams.get("itemId"), proxy);
+      const page = Number(url.searchParams.get("page"));
+      return Promise.resolve(
+        Response.json({
+          page,
+          results: [
+            {
+              expiresAt: "2027-10-18T00:00:00Z",
+              id: `private-consent-${page}`,
+              itemId: "private-upstream-item",
+              products: ["ACCOUNTS", "TRANSACTIONS"],
+              revokedAt: null,
+            },
+          ],
+          total: 2,
+          totalPages: 2,
+        }),
+      );
+    }
+    if (url.pathname === "/connectors/200") {
+      return Promise.resolve(Response.json({ id: 200 }));
+    }
+    if (url.pathname === "/accounts") {
+      return Promise.resolve(
+        Response.json({
+          page: 1,
+          results: [
+            {
+              balance: "100.00",
+              currencyCode: "BRL",
+              id: "private-account",
+              itemId: proxy,
+              type: "BANK",
+            },
+          ],
+          total: 1,
+          totalPages: 1,
+        }),
+      );
+    }
+    if (url.pathname === "/v2/transactions") {
+      return Promise.resolve(
+        Response.json({
+          next: null,
+          results: [
+            {
+              accountId: "private-account",
+              amount: "-10.25",
+              createdAt: "2026-10-18T00:00:00Z",
+              currencyCode: "BRL",
+              date: "2026-10-18",
+              id: "private-tx",
+              itemId: proxy,
+              status: "POSTED",
+              type: "DEBIT",
+            },
+          ],
+        }),
+      );
+    }
+    return Promise.resolve(
+      Response.json({ page: 1, results: [], total: 0, totalPages: 0 }),
+    );
+  });
+  const op = await startOperation(env.DB, "proxy-consents", {
+    itemIds: [proxy],
+    kind: "reconcile",
+  });
+  const dependencies = synchronizationDependencies(settings());
+  await runOperation(dependencies, op.id, immediateSteps());
+  const current = await getOperation(env.DB, op.id);
+  assert.equal(current.phase, "completed");
+  assert.equal(current.result?.isError, false);
+  assert.equal(current.progress.errors, 0);
+  const stored = await database(env.DB).select().from(entities);
+  const consents = stored.filter(
+    (record) => record.resource === Resource.consents,
+  );
+  assert.equal(consents.length, 2);
+  assert.ok(
+    consents.every(
+      (record) =>
+        record.item_id === proxy &&
+        record.source.itemId === "private-upstream-item",
+    ),
+  );
+  const transaction = stored.find(
+    (record) => record.resource === Resource.transactions,
+  );
+  assert.equal(transaction?.item_id, proxy);
+  assert.equal(transaction?.amount_minor, "-1025");
+  assert.equal((await database(env.DB).select().from(locks)).length, 0);
+  const reads = paths.length;
+  await runOperation(dependencies, op.id, immediateSteps());
+  assert.equal(paths.length, reads);
+  assert.equal(
+    (
+      await database(env.DB)
+        .select()
+        .from(entities)
+        .where(eq(entities.resource, Resource.transactions))
+    ).length,
+    1,
+  );
+});
 
 test("pre-acquisition failure and cancellation each report their true outcome without opening the source", async () => {
   const op = await startOperation(env.DB, "cancelled-request", {

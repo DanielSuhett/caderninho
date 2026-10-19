@@ -98,3 +98,34 @@ await test("transaction selection rejects unrequested IDs and another account ev
     sourceSelectionMismatchPattern,
   );
 });
+
+await test("only MeuPluggy consent responses can retain a different upstream Item", () => {
+  const record = { id: "consent", itemId: "upstream-item" };
+  const context = {
+    connectorId: "200",
+    item: "proxy-item",
+    resource: "consents" as const,
+  };
+  assert.doesNotThrow(() =>
+    assertSourceRecords({ context, records: [record] }),
+  );
+  assert.equal(record.itemId, "upstream-item");
+  for (const other of [
+    { ...context, connectorId: "201" },
+    { item: context.item, resource: context.resource },
+    { ...context, resource: "accounts" as const },
+    { ...context, resource: "transactions" as const },
+  ]) {
+    assert.throws(
+      () => assertSourceRecords({ context: other, records: [record] }),
+      sourceIdentityMismatchPattern,
+    );
+  }
+  for (const itemId of [null, ""]) {
+    assert.throws(
+      () =>
+        assertSourceRecords({ context, records: [{ id: "consent", itemId }] }),
+      sourceIdentityMismatchPattern,
+    );
+  }
+});

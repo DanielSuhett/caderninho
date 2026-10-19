@@ -4,6 +4,7 @@ import { afterEach, beforeEach, test, vi } from "vitest";
 import { z } from "zod/v4";
 
 import { Fault } from "../../src/domain";
+import { tryCatch } from "../../src/shared";
 import {
   connectToken,
   createPluggyAdapter,
@@ -469,7 +470,7 @@ test("every financial resource uses the public SDK operation with one-page check
     return Promise.resolve(
       Response.json({
         page: url.searchParams.get("page") ?? 1,
-        results: [{ id: "record" }],
+        results: [{ id: "record", itemId: "item" }],
         total: 2,
         totalPages: url.searchParams.has("page") ? 2 : 1,
       }),
@@ -522,4 +523,104 @@ test("every financial resource uses the public SDK operation with one-page check
       );
     }
   }, Promise.resolve());
+});
+
+test("MeuPluggy consent pagination keeps upstream identity inside the requested proxy scope", async () => {
+  const paths: URL[] = [];
+  mockNetwork((input) => {
+    const url = sourceUrl(input);
+    if (url.pathname === "/auth") {
+      return Promise.resolve(auth());
+    }
+    paths.push(url);
+    return Promise.resolve(
+      Response.json({
+        page: Number(url.searchParams.get("page")),
+        results: [{ id: "consent", itemId: "upstream-item" }],
+        total: 2,
+        totalPages: 2,
+      }),
+    );
+  });
+  const source = financialSource(client());
+  const selection = {
+    connectorId: "200",
+    cursor: null,
+    floor: null,
+    item: "proxy-item",
+    parent: "",
+    resource: "consents" as const,
+  };
+  const first = await source.page(selection);
+  assert.equal(first.records[0]?.itemId, "upstream-item");
+  assert.equal(first.next, "2");
+  const second = await source.page({ ...selection, cursor: first.next });
+  assert.equal(second.next, null);
+  assert.deepEqual(
+    paths.map((url) => url.searchParams.get("itemId")),
+    ["proxy-item", "proxy-item"],
+  );
+  assert.deepEqual(
+    paths.map((url) => url.searchParams.get("page")),
+    ["1", "2"],
+  );
+  await assert.rejects(
+    source.page({ ...selection, connectorId: "201" }),
+    sourceIdentityMismatchPattern,
+  );
+});
+
+test("consents reject missing, null and empty Item identities at the provider boundary", async () => {
+  await [
+    { id: "consent" },
+    { id: "consent", itemId: null },
+    { id: "consent", itemId: "" },
+  ].reduce(async (previous, record) => {
+    await previous;
+    mockNetwork(async (input) =>
+      sourceUrl(input).pathname === "/auth"
+        ? auth()
+        : Response.json({
+            page: 1,
+            results: [record],
+            total: 1,
+            totalPages: 1,
+          }),
+    );
+    await assert.rejects(
+      financialSource(client()).page({
+        connectorId: "200",
+        cursor: null,
+        floor: null,
+        item: "proxy-item",
+        parent: "",
+        resource: "consents",
+      }),
+      (error) => error instanceof z.ZodError,
+    );
+  }, Promise.resolve());
+});
+
+test("identity failures stop outside the durable step instead of consuming transient retries", async () => {
+  let reads = 0;
+  const wrapped = providerRetries({
+    async do(_name, callback) {
+      return await [1, 2].reduce(async (previous) => {
+        const { data, error } = await tryCatch(previous);
+        if (error) {
+          return await callback();
+        }
+        return data;
+      }, callback());
+    },
+    sleep: () => Promise.resolve(),
+  });
+  await assert.rejects(
+    wrapped.do("source", () => {
+      reads += 1;
+      return Promise.reject(new Error("SOURCE_IDENTITY_MISMATCH"));
+    }),
+    sourceIdentityMismatchPattern,
+  );
+  assert.equal(reads, 1);
 });

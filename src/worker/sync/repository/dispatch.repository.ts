@@ -24,6 +24,7 @@ import {
 import {
   assertIdempotency,
   assertOperationInput,
+  FaultCode,
   localDay,
 } from "../../../domain";
 import { EMPTY_RULES } from "../../../domain/rules";
@@ -177,8 +178,10 @@ export async function finish(
   db: D1Database,
   op: Operation,
   status: FinishedOperationStatus,
-  isError = false,
+  error: boolean | FaultCode = false,
 ) {
+  const isError = !!error;
+  const failure = typeof error === "string" ? error : undefined;
   await database(db).batch([
     database(db)
       .update(itemsTable)
@@ -206,6 +209,10 @@ export async function finish(
     database(db)
       .update(operationsTable)
       .set({
+        ...(isError && {
+          error: { code: failure ?? FaultCode.UPSTREAM_ERROR },
+          progress: sql`json_set(${operationsTable.progress}, '$.errors', max(1, coalesce(json_extract(${operationsTable.progress}, '$.errors'),0)+${failure ? 1 : 0}))`,
+        }),
         phase: isError ? OperationPhase.error : status,
         result: {
           content: [

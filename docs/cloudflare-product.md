@@ -234,6 +234,9 @@ consultas pequenas/status continuam disponíveis. A reaplicação local oferece 
 
 ## Falhas, upgrade e retenção
 
+O [registro da falha de consentimentos de 18/10/2026](investigations/2026-10-18-sync-source-identity-mismatch.md)
+documenta a investigação remota, a pausa da instalação e as melhorias pendentes.
+
 A operação D1 e a criação do Workflow não formam uma transação. A operação canônica
 é o outbox e tem identidade idempotente; cron recupera dispatched=0. Resposta de
 create perdida é resolvida consultando a instância pelo mesmo ID. Cron também
