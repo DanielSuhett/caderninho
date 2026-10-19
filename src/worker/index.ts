@@ -5,8 +5,20 @@ import { tryCatch } from "../shared";
 import { authenticatedFetch } from "./auth/controller";
 import type { Bindings } from "./bindings";
 import { authService, scheduleSync, syncService } from "./composition";
-import { failureStatus, requestDiagnostic } from "./http";
+import { failureStatus, requestCategory } from "./http";
 import { fetchMcp } from "./mcp";
+import {
+  classifyFailure,
+  DiagnosticEvent,
+  markFailure,
+  Outcome,
+  observeSpan,
+  Recovery,
+  reportDiagnostic,
+  type SafeFields,
+  SpanName,
+  withObservation,
+} from "./observability";
 import { receiveWebhook } from "./sync/controller";
 
 export { receiveWebhook } from "./sync/controller";
@@ -14,31 +26,28 @@ export { FinanceWorkflow } from "./sync/workflow";
 
 function createRoutes(ctx: ExecutionContext) {
   const routes = new Hono<{ Bindings: Bindings }>();
-  routes.use("*", async (c, next) => {
+  routes.use("*", (c, next) => {
     const correlation = crypto.randomUUID();
-    const started = performance.now();
     c.header("X-Request-ID", correlation);
-    await next();
-    const { path } = c.req;
-    let route = "public-or-oauth";
-    if (path.startsWith("/api/")) {
-      route = "api";
-    } else if (path.startsWith("/account")) {
-      route = "account";
-    } else if (path === "/mcp") {
-      route = "mcp";
-    } else if (path === "/webhook") {
-      route = "webhook";
-    }
-    requestDiagnostic({
-      correlation,
-      durationMs: Math.round(performance.now() - started),
-      route,
-      status: c.res.status,
-    });
+    return withObservation({ correlation }, () =>
+      observeSpan(SpanName.httpRequest, async (span) => {
+        const started = performance.now();
+        await next();
+        c.header("X-Request-ID", correlation);
+        span.annotate(
+          reportDiagnostic({
+            durationMs: Math.round(performance.now() - started),
+            event: DiagnosticEvent.http,
+            ...requestCategory(c.req.path),
+            status: c.res.status,
+          }),
+        );
+      }),
+    );
   });
-  routes.onError((error, c) =>
-    c.json(
+  routes.onError((error, c) => {
+    markFailure(error, { phase: SpanName.httpRequest });
+    return c.json(
       {
         code:
           failureStatus(error) === 400
@@ -46,14 +55,18 @@ function createRoutes(ctx: ExecutionContext) {
             : FaultCode.INTERNAL_ERROR,
       },
       failureStatus(error),
-    ),
-  );
+    );
+  });
 
   routes.post("/webhook", async (c) => {
     const { data, error } = await tryCatch(() =>
       receiveWebhook(c.req.raw, c.env),
     );
     if (error) {
+      markFailure(error, {
+        phase: SpanName.admission,
+        recovery: Recovery.none,
+      });
       return new Response("Receipt not confirmed; retry", { status: 503 });
     }
     return data;
@@ -70,10 +83,47 @@ const worker = {
     return createRoutes(ctx).fetch(request, env, ctx);
   },
   async scheduled(event: ScheduledController, env: Bindings) {
-    await syncService(env).recover();
-    await scheduleSync(env, new Date(event.scheduledTime));
-    await syncService(env).compact();
-    await authService(env).compact();
+    return await withObservation({ runId: crypto.randomUUID() }, () =>
+      observeSpan(SpanName.scheduled, async (span) => {
+        let phase: SafeFields["phase"] = SpanName.recovery;
+        let action: SafeFields["action"];
+        const { data, error } = await tryCatch(async () => {
+          await syncService(env).recover();
+          phase = SpanName.scheduled;
+          await scheduleSync(env, new Date(event.scheduledTime));
+          phase = SpanName.maintenance;
+          action = "compact_sync";
+          await observeSpan(
+            SpanName.maintenance,
+            () => syncService(env).compact(),
+            { action },
+          );
+          action = "compact_auth";
+          await observeSpan(
+            SpanName.maintenance,
+            () => authService(env).compact(),
+            { action },
+          );
+        });
+        if (error) {
+          const fields: SafeFields = {
+            ...(action && { action }),
+            failure: classifyFailure(error),
+            outcome: Outcome.failed,
+            phase,
+            recovery: Recovery.none,
+          };
+          span.annotate(fields);
+          reportDiagnostic({ ...fields, event: DiagnosticEvent.scheduled });
+          throw error;
+        }
+        reportDiagnostic({
+          event: DiagnosticEvent.scheduled,
+          outcome: Outcome.completed,
+        });
+        return data;
+      }),
+    );
   },
 };
 

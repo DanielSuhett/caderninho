@@ -23,6 +23,7 @@ import {
   recordChange,
 } from "../../domain";
 import { type Derived, importRules, txContext } from "../../domain/rules";
+import { tryCatch } from "../../shared";
 import type {
   EntityInput,
   EntityPreparation,
@@ -118,7 +119,7 @@ export async function manageRules(actions: RuleActions, a: RuleCommand) {
     }
     return await actions.activate(a.revision);
   }
-  const report = importRules(a.document, a.catalog);
+  const report = await validateRuleInput(actions, a.document, a.catalog);
   if (a.action === RuleCommandAction.validate || !report.compatible) {
     return report;
   }
@@ -186,7 +187,11 @@ export async function importRuleDocument(
     mode: RuleImportMode;
   },
 ) {
-  const report = importRules(input.document, input.catalog);
+  const report = await validateRuleInput(
+    actions,
+    input.document,
+    input.catalog,
+  );
   if (!report.compatible || input.mode === RuleImportMode.dry_run) {
     return report;
   }
@@ -194,6 +199,19 @@ export async function importRuleDocument(
     report.document,
     input.mode === RuleImportMode.activate,
   );
+}
+
+async function validateRuleInput(
+  actions: RuleActions,
+  document: unknown,
+  catalog?: Parameters<typeof importRules>[1],
+) {
+  const { data, error } = await tryCatch(() => importRules(document, catalog));
+  if (error) {
+    actions.onValidationFailure?.(error);
+    throw error;
+  }
+  return data;
 }
 
 export async function prepareEntity(

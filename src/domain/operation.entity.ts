@@ -23,6 +23,18 @@ export type LongOperationKind =
   | typeof OperationKind.reconcile
   | typeof OperationKind.reapply;
 
+export const ExecutionPhase = {
+  acquire: "acquire",
+  collect: "collect",
+  complete: "complete",
+  mature: "mature",
+  process: "process",
+  publish: "publish",
+  select: "select",
+} as const;
+export type ExecutionPhase =
+  (typeof ExecutionPhase)[keyof typeof ExecutionPhase];
+
 export const OperationStatus = {
   cancelled: "cancelled",
   completed: "completed",

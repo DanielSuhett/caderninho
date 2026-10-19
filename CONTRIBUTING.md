@@ -180,17 +180,29 @@ Use o módulo `shared/logger`, por caminho relativo, para os logs da aplicação
 dos scripts. O Pino
 filtra níveis antes de serializar: `LOG_LEVEL` aceita `fatal`, `error`, `warn`,
 `info`, `debug`, `trace` ou `silent`; ausência ou valor inválido usa `warn`.
-Requisições com sucesso e redirecionamentos ficam em `debug`, respostas 4xx em
-`warn` e 5xx em `error`. Diagnósticos HTTP incluem apenas correlação, categoria
-da rota, status e duração, sem URLs, corpos, identidades ou texto de exceções.
+Sucesso, polling, recusas esperadas e cancelamento normal ficam em `debug`.
+Recuperações pendentes e resultados parciais geram resumos em `warn`; falhas
+inesperadas geram um diagnóstico primário em `error`. Classifique o resultado do
+processo: erros MCP também podem chegar com HTTP 200, e configuração incompleta
+pode responder 503 sem representar falha inesperada.
+
+No Worker, use a fronteira `worker/observability` para contexto isolado,
+classificação segura, deduplicação e spans nativos. Controllers e adapters
+instrumentam transporte; composição envolve as portas. Services comunicam
+recuperações por callbacks estreitos e continuam sem logger ou SDK de tracing.
+Use nomes fixos e contagens por lote. Logs e spans customizados não incluem URLs,
+corpos, identidades financeiras, argumentos ou texto arbitrário de exceções.
 
 No Node, a saída JSON usa escrita assíncrona com buffer limitado a 64 KiB;
 sob saturação, novas mensagens que excedem o limite são descartadas. No Worker,
 Wrangler seleciona o build browser do Pino, com objetos estruturados enviados ao
 logger nativo da plataforma. Essa saída não usa transportes Node nem buffer
-assíncrono próprio. O filtro de nível reduz o volume antes da saída; a amostragem
-configurada no Wrangler controla a retenção. Pino não elimina o custo de CPU dos
-logs. O lint impede chamadas diretas de `console` no código mantido pelo projeto.
+assíncrono próprio. O filtro de nível reduz o volume antes da saída. Logs têm
+amostragem 1 e traces 0.1 no Wrangler, com invocation logs desabilitados.
+Pino não elimina o custo de CPU dos logs. O lint impede chamadas diretas de
+`console` no código mantido pelo projeto. Consulte o
+[roteiro de observabilidade](docs/observability.md) para investigar processos e
+entender os limites da coleta nativa.
 
 ## Critério para testes
 

@@ -6,6 +6,16 @@ import { OperationStatus } from "../../../contracts";
 import { JsonValueSchema, tryCatch } from "../../../shared";
 import type { Bindings } from "../../bindings";
 import { reapplicationTask, syncService } from "../../composition";
+import {
+  captureObservation,
+  classifyFailure,
+  DiagnosticEvent,
+  Outcome,
+  openSpan,
+  Recovery,
+  reportDiagnostic,
+  SpanName,
+} from "../../observability";
 import type { OperationState } from "../../sync/entity";
 import schema from "../../vendor/ext-tasks/schema.json" with { type: "json" };
 import type { Task } from "../protocol.types";
@@ -118,12 +128,16 @@ export async function listen(
     release = resolve;
   });
   keepAlive?.(lifetime);
+  const inStream = captureObservation();
+  const streamSpan = openSpan(SpanName.mcpStream, {
+    action: "subscriptions_listen",
+  });
   let disposed = false,
     clientClosed = false;
   // Read live cancellation state after awaits; callbacks may change it meanwhile.
   const isClientClosed = () => clientClosed;
   const expires = setTimeout(() => dispose(), 300_000);
-  function dispose() {
+  function dispose(outcome: Outcome = Outcome.cancelled) {
     if (disposed) {
       return;
     }
@@ -132,12 +146,16 @@ export async function listen(
     clearTimeout(expires);
     polling?.[Symbol.dispose]();
     request.signal.removeEventListener("abort", abort);
+    streamSpan.end({ outcome });
   }
   function abort() {
     clientClosed = true;
     dispose();
   }
   request.signal.addEventListener("abort", abort, { once: true });
+  if (request.signal.aborted) {
+    abort();
+  }
   async function enqueueTaskUpdates() {
     if (!polling) {
       return true;
@@ -210,12 +228,25 @@ export async function listen(
                   resultType: "complete",
                 }),
               });
-              dispose();
+              dispose(Outcome.success);
             }
           }
           flushMessage(controller);
         });
         if (error && !isClientClosed()) {
+          inStream(() => {
+            const failure = classifyFailure(error);
+            streamSpan.end({ failure, outcome: Outcome.failed });
+            reportDiagnostic({
+              action: "subscriptions_listen",
+              additional: true,
+              event: DiagnosticEvent.stream,
+              failure,
+              outcome: Outcome.failed,
+              phase: SpanName.mcpStream,
+              recovery: Recovery.none,
+            });
+          });
           dispose();
           // Finish the SSE response with a protocol error. Erroring a response
           // stream can abort unrelated requests in the local RPC bridge.

@@ -9,6 +9,7 @@ import type {
 } from "../../../contracts";
 import type {
   CoverageStatus,
+  ExecutionPhase,
   FinanceRecord,
   ItemAdmission,
   ProviderRecord,
@@ -67,6 +68,22 @@ export interface OperationHandle {
   id: string;
   status: OperationStatus;
 }
+export interface WorkflowDispatcher {
+  create: (id: string) => Promise<void>;
+  status: (id: string) => Promise<string>;
+}
+export interface SyncRecoveryNotice {
+  error: Error;
+  operationId?: string;
+  phase: "dispatch" | "status" | "schedule";
+}
+export const WebhookReceipt = {
+  changed: "changed",
+  noop: "noop",
+  unknown: "unknown",
+} as const;
+export type WebhookReceipt =
+  (typeof WebhookReceipt)[keyof typeof WebhookReceipt];
 export interface AdmissionResult {
   items: ItemAdmission[];
   operation: Operation | null;
@@ -91,6 +108,14 @@ export interface ReapplicationRepository {
   release: (id: string) => Promise<void>;
   rules: (revision: string) => Promise<RuleEngine>;
   select: (run: LocalReapplication) => Promise<StoredEntity[]>;
+}
+
+export interface ReapplicationObservation {
+  batch: (
+    run: { operationId: string; batch: number },
+    callback: () => Promise<ReapplicationResult>,
+  ) => Promise<ReapplicationResult>;
+  phase: NonNullable<ExecutionDependencies["observePhase"]>;
 }
 
 export interface FinancialSource {
@@ -152,7 +177,10 @@ export interface OperationState {
   updatedAt: string;
 }
 export interface SyncRepository {
-  acceptWebhook: (event: WebhookEvent, receivedAt: string) => Promise<boolean>;
+  acceptWebhook: (
+    event: WebhookEvent,
+    receivedAt: string,
+  ) => Promise<WebhookReceipt>;
   admit: (
     key: string,
     input: OperationInput,
@@ -291,6 +319,41 @@ export interface ExecutionRepository {
   ) => Promise<void>;
 }
 export interface ExecutionDependencies {
+  observePhase?: <T>(
+    phase: ExecutionPhase,
+    callback: () => Promise<T>,
+    detail?: ExecutionPhaseDetail,
+  ) => Promise<T>;
+  onOutcome?: (outcome: ExecutionOutcome) => void;
+  onSourceFailure?: (status: CoverageStatus) => void;
   prepare: EntityPreparer;
   repository: ExecutionRepository;
 }
+
+export const ExecutionResult = {
+  cancelled: "cancelled",
+  completed: "completed",
+  deferred: "deferred",
+  failed: "failed",
+  noop: "noop",
+  partial: "partial",
+  replayed: "replayed",
+} as const;
+export type ExecutionResult =
+  (typeof ExecutionResult)[keyof typeof ExecutionResult];
+
+export interface ExecutionPhaseDetail {
+  outcome?: () => ExecutionResult;
+  processed?: number;
+  resource?: Resource;
+}
+
+export interface ExecutionOutcome {
+  error?: Error;
+  operationKind?: OperationKind;
+  outcome: ExecutionResult;
+  phase?: ExecutionPhase;
+  progress?: Progress;
+}
+
+export { ExecutionPhase } from "../../../domain";

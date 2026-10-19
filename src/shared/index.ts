@@ -13,4 +13,4 @@ export {
 } from "./http.types";
 export { JsonValueSchema, parseJson } from "./json";
 export type { JsonValue } from "./json.types";
-export { tryCatch } from "./result";
+export { type Result, tryCatch } from "./result";
