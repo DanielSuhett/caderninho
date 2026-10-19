@@ -213,7 +213,7 @@ não permite identificar nominalmente o Item upstream como sendo o original.
 Uma leitura adicional confirmou que as contas devolvidas mantêm o `itemId` igual
 ao proxy, sustentando a restrição da exceção aos consentimentos.
 
-A correção proposta trata a resposta do endpoint autenticado e filtrado por Item
+A correção implementada trata a resposta do endpoint autenticado e filtrado por Item
 como o conjunto de consentimentos do proxy consultado. O conector vem da conexão
 já validada e persistida. Somente consentimentos MeuPluggy podem manter um
 `itemId` upstream diferente: contas, transações, outros recursos e conectores
@@ -221,7 +221,7 @@ continuam sujeitos às comparações anteriores. O registro bruto mantém o ID d
 provedor; `entities.item_id` continua associado ao proxy local. Consentimentos
 sem `itemId`, com `null` ou string vazia são recusados na fronteira.
 
-Também foram preparados paginação de consentimentos pelo SDK, interrupção de
+Também foram implementados paginação de consentimentos pelo SDK, interrupção de
 retries determinísticos de identidade e diagnóstico terminal seguro no D1.
 Novas falhas guardam apenas um código conhecido em `operations.error`, com
 contador coerente, no mesmo batch que finaliza a operação e libera o lock.
@@ -231,13 +231,50 @@ Operações antigas não foram reescritas nem reiniciadas.
 Os testes sintéticos cobrem paginação, preservação das duas identidades, rejeição
 de identidades estrangeiras fora dessa exceção, passagem até contas/transações,
 dinheiro exato, replay sem nova leitura e erros terminais sem payload privado.
-Validação completa e publicação serão registradas nesta seção após a execução.
+A validação completa e a publicação estão registradas a seguir.
 
 O adapter corrigido também foi executado localmente contra a API real, somente
 por leitura: conexão correspondente, conector MeuPluggy, consentimento aceito com
 identidade upstream preservada e contas mantendo o vínculo com o proxy. As páginas
 consultadas terminaram sem continuação. Esse probe não iniciou Workflow, não
 gravou dados no D1 e não comprova uma importação financeira completa em produção.
+
+## Validação e publicação da correção
+
+| Evidência | Resultado |
+| --- | --- |
+| `TMPDIR=<local> VITEST_MAX_WORKERS=1 mise run check` | Passou: tipos, lint, formatação, 73 testes Node, 103 testes Worker em 11 arquivos, build dry-run e Workflow nativo com backup/restore D1 sintético |
+| CI GitHub do commit publicado | Run `39190648141`, conclusão `success` |
+| Código publicado | `b35df69cce36e6e9d59da9e08ca0a6103f6c716b`, branch `fix/meupluggy-consent-identity`, PR #3 |
+| Build Cloudflare | `20100836-62b2-45d8-a896-950df9c3d85e`, conclusão `success` |
+| Versão publicada a 100% | `db7ed9e1-bd31-4743-9547-8aec021e1ef5`, deploy em 19/10 às 02:37:29 UTC, ou 18/10 às 23:37:29 em São Paulo |
+
+A publicação usou a conexão Git autenticada já existente no Workers Builds. O
+repositório da instalação, `cloudflare-finance-mcp`, recebeu a mesma branch e SHA
+do repositório fonte; sua `main` não foi alterada. O trigger recebeu branch e
+commit explícitos. A tentativa anterior, com `seed_repo`, falhou na clonagem do
+repositório privado com código 128, antes de build ou publicação; seu ID era
+`75e11411-1d08-4839-a08b-3a34822168ed`. Não foi necessário alterar o código nem
+criar credenciais de deploy para resolver essa falha de transporte.
+
+O pipeline executou o comando `npm run deploy` existente e confirmou **nenhuma
+migração pendente**. O ambiente CI direcionou o nome genérico `caderninho` ao
+Worker instalado `cloudflare-finance-mcp`. Após publicar, a API confirmou os
+mesmos bindings D1, KV e Workflow, os mesmos nomes de secrets, logs com amostragem
+1 e traces com 0.1. Nenhum recurso de dados novo foi provisionado.
+
+A conferência remota às **02:38:10 UTC** confirmou a versão ativa, sincronização
+habilitada, zero operações ativas e zero locks. O smoke HTTP confirmou
+`/account/login` com 200 e `/api/account` sem sessão com 401; ambas as respostas
+incluíam `X-Request-ID`. Esses sinais comprovam publicação e fronteira de acesso,
+sem serem tratados como prova da importação completa.
+
+O estado encontrado após o deploy guardava `next_import_at` e `next_sync_at`
+em **20/10/2026 às 02:26:13 UTC**, ou **19/10 às 23:26:13 em São Paulo**.
+Essa janela observada foi preservada, sem antecipar admissão por SQL nem
+reiniciar operações terminais. `last_import_at` continuava nulo. A importação
+financeira completa pelo Workflow publicado permanece pendente; a validação
+real efetuada nesta correção foi a leitura restrita pelo adapter.
 
 ## Referências
 
@@ -246,3 +283,4 @@ gravou dados no D1 e não comprova uma importação financeira completa em produ
 - [Pluggy: lista de consentimentos](https://docs.pluggy.ai/en/reference/consent/consents-list).
 - [Pluggy: Item original e proxy MeuPluggy](https://docs.pluggy.ai/en/docs/connections/item).
 - [Cloudflare: retries e erros não recuperáveis em Workflows](https://developers.cloudflare.com/workflows/build/sleeping-and-retrying/).
+- [PR da correção](https://github.com/DanielSuhett/caderninho/pull/3).
