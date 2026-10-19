@@ -290,6 +290,52 @@ A operação com falha e seu histórico foram preservados. A política diária e
 essa intervenção; a importação completa ainda depende de uma nova admissão pelo
 botão **Sincronizar agora**.
 
+## Recuperação da configuração após exclusão manual
+
+Depois da liberação, o painel passou a responder `GET /api/account` com 500.
+Os traces da versão publicada indicaram `INSTALLATION_INCOMPLETE` durante a
+leitura da conta. A consulta direta confirmou `settings` sem linhas. O dono
+informou ter apagado linhas manualmente para tentar liberar o retry e autorizou
+o reparo direto no banco. A ausência de `settings.id=1` produz `SETTINGS_MISSING`;
+antecipar somente `items.next_import_at` não remove essa configuração.
+
+A inspeção encontrou uma conexão, duas operações terminais, um conjunto de
+regras pronto, um registro de conexão e duas coberturas. Ainda não havia contas
+nem transações importadas. As regras executáveis estavam vazias, como no conjunto
+inicial; não foram detectadas violações de chave estrangeira.
+
+Em **19/10/2026 às 02:56:45 UTC**, ou **18/10 às 23:56:45 em São Paulo**, foi
+recriada somente a linha singleton de `settings`, com insert condicionado à sua
+ausência, ao conjunto de regras esperado e à ausência de operações ativas e locks.
+Foi reaproveitado o conjunto de regras existente. `sync_enabled=1`, a agenda
+diária e a agenda de reconciliação vieram das leituras anteriores deste atendimento.
+Como o valor antigo de `connected_at` não estava registrado, foi usada a data da
+operação mais antiga preservada. A revisão de leitura recebeu um valor novo para
+invalidar cursores anteriores; não se trata de restauração exata da linha apagada.
+
+A intervenção alterou uma linha e não iniciou importação. Dados financeiros,
+conexão, operações, checkpoints, sessões e secrets não foram alterados. A liberação
+anterior de `items.next_import_at` não foi revertida pelo reparo. As consultas D1
+usadas pelo painel passaram na releitura às 02:57:43 UTC; a confirmação dessas
+leituras é separada da confirmação do HTTP autenticado.
+
+Uma nova admissão ocorreu às **02:57:15 UTC**, após a recriação da configuração.
+Às **02:58:01 UTC**, a operação `7d90374d-93b0-417e-a740-56a0c554472f` estava
+em execução na fase de transações, com três contas e **204 transações gravadas
+no D1**, além de consentimentos e metadados. O progresso tinha zero erros.
+Essa consulta leu somente contagens e metadados operacionais. A nova admissão
+reservou normalmente as próximas 24 horas. `last_import_at` ainda era nulo;
+essa evidência intermediária não representa conclusão integral do Workflow.
+
+Às **02:58:14 UTC**, o Workflow terminou em erro. As três tentativas da página
+seguinte de transações falharam com `Worker exceeded CPU time limit.`. A releitura
+do D1 às 02:58:51 UTC confirmou operação terminal, `progress.errors=1` e código
+seguro `INTERNAL_ERROR`, preservando as 204 transações já publicadas. Uma das três
+coberturas de transações permaneceu parcial. O problema de identidade dos
+consentimentos foi ultrapassado; o limite de CPU constitui um bloqueio posterior,
+que não é resolvido pela exclusão de linhas ou pela reconstrução de `settings`.
+Não houve nova liberação de cooldown nem reinício desse Workflow terminal.
+
 ## Referências
 
 - [Operação do produto: falhas e retenção](../cloudflare-product.md#falhas-upgrade-e-retenção).
