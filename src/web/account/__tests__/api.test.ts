@@ -22,7 +22,7 @@ await test("panel commands preserve CSRF and never retry after an uncertain writ
     calls += 1;
     return Promise.reject(new Error("Synthetic response lost"));
   });
-  await assert.rejects(uncertain.command("pause", "synthetic-csrf", signal));
+  await assert.rejects(uncertain.command("sync", "synthetic-csrf", signal));
   assert.equal(calls, 1);
 });
 await test("expired/redirected sessions and malformed panel responses never become valid state", async () => {

@@ -24,10 +24,8 @@ export function createInstallationService({
         count: state.connections.length,
         exists: state.connections.some((row) => row.id === id),
       });
-      await repository.register(connection, new Date().toISOString());
+      await repository.register(connection);
     },
-    pause: () => repository.enable(false),
-    resume: () => repository.enable(true),
     state: repository.state,
     async token(id?: string) {
       if (

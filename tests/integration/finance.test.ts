@@ -6,10 +6,12 @@ import {
   AggregateQuerySchema,
   TransactionQuerySchema,
 } from "../../src/contracts";
+import { normalizeAccount, normalizeTransaction } from "../../src/domain";
 import { createFinancialService } from "../../src/worker/finance";
 import { createFinancialRepository } from "../../src/worker/finance/repository";
+import { createInstallationRepository } from "../../src/worker/installation/repository";
 import { createSyncRepository } from "../../src/worker/sync/repository";
-import { account, collect, setup, source, transaction } from "./fixture";
+import { account, admit, collect, setup, source, transaction } from "./fixture";
 import { env } from "cloudflare:workers";
 
 const finance = () =>
@@ -214,4 +216,52 @@ test("admitting a new import invalidates cursors when selection quality changes"
   await assert.rejects(service.query({ cursor: page.cursor, limit: 1 }), {
     message: "RESTART_REQUIRED",
   });
+});
+
+test("selected pagination ignores unrelated imports and reconnects but rejects each committed page of the same import", async () => {
+  await collect(source([transaction({ id: "1" }), transaction({ id: "2" })]));
+  const service = finance();
+  const input = { filter: { connectionIds: ["c"] }, limit: 1 };
+  const first = await service.query(input);
+  assert.ok(first.cursor);
+  const installation = createInstallationRepository(env.DB);
+  await installation.register({ id: "d" });
+  const unselected = await createSyncRepository(env.DB).admit(
+    ["d"],
+    "2026-10-02T00:00:00.000Z",
+  );
+  assert.equal(unselected[0]?.status, "started");
+  await installation.register({ id: "c", status: "UPDATED" });
+  assert.equal(
+    (await service.query({ ...input, cursor: first.cursor })).records.length,
+    1,
+  );
+  const unfiltered = await service.query({ limit: 1 });
+  assert.ok(unfiltered.cursor);
+  await installation.register({ id: "new" });
+  await assert.rejects(service.query({ cursor: unfiltered.cursor, limit: 1 }), {
+    message: "RESTART_REQUIRED",
+  });
+  const repository = createSyncRepository(env.DB);
+  const id = await admit("2026-10-02T00:00:00.000Z");
+  await repository.start(id);
+  const beforePage = await service.query(input);
+  assert.ok(beforePage.cursor);
+  const run = await repository.read(id);
+  await repository.publish({
+    done: false,
+    next: run.checkpoint,
+    now: "2026-10-02T00:00:00.000Z",
+    run,
+    transactions: [
+      normalizeTransaction(
+        transaction({ description: "Changed", id: "1" }),
+        normalizeAccount(account(), "c"),
+      ),
+    ],
+  });
+  await assert.rejects(service.query({ ...input, cursor: beforePage.cursor }), {
+    message: "RESTART_REQUIRED",
+  });
+  assert.equal((await repository.read(id)).sequence, run.sequence + 1);
 });

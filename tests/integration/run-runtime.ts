@@ -8,6 +8,8 @@ import { promisify } from "node:util";
 
 import { z } from "zod/v4";
 
+import { TransactionQuerySchema } from "../../src/contracts";
+import type { Cursor } from "../../src/domain";
 import { tryCatch } from "../../src/shared";
 import { createLogger } from "../../src/shared/logger";
 import { poll, spawnManaged } from "../support/process";
@@ -132,9 +134,8 @@ await test("native Workflow, 10k/100k volume and persistent installation", {
   const { data: _data, error } = await tryCatch(async () => {
     await fetch(`${base}/setup`, { method: "POST" });
     const stateSchema = z.object({
-      runs: z.array(
-        z.object({ id: z.string(), records: z.number(), status: z.string() }),
-      ),
+      connections: z.array(z.object({ importStatus: z.string().nullable() })),
+      sequence: z.number(),
       totals: z.object({
         groups: z.array(
           z.object({
@@ -169,17 +170,24 @@ await test("native Workflow, 10k/100k volume and persistent installation", {
       intervalMs: 100,
       read: () => readState(),
       until: (value) =>
-        value.runs.some((run) => run.status === "running" && run.records > 2),
+        value.connections[0]?.importStatus === "running" &&
+        value.totals.groups.some((group) => BigInt(group.count) > 0n),
     });
     assert.equal(partial.totals.partial, true);
     const completed = await poll({
       attempts: 120,
       intervalMs: 250,
       read: () => readState(),
-      until: (value) => value.runs[0]?.status === "succeeded",
+      until: (value) => value.connections[0]?.importStatus === "succeeded",
     });
     assert.equal(completed.totals.partial, false);
-    assert.equal(completed.runs[0]?.records, 1202);
+    assert.equal(
+      completed.totals.groups.reduce(
+        (sum, group) => sum + BigInt(group.count),
+        0n,
+      ),
+      1200n,
+    );
     logger.info(
       "PASS: native Workflow completes all pages after the starting HTTP client disconnects",
     );
@@ -188,9 +196,15 @@ await test("native Workflow, 10k/100k volume and persistent installation", {
       attempts: 60,
       intervalMs: 250,
       read: () => readState("failure"),
-      until: (value) => value.runs[0]?.status === "failed",
+      until: (value) => value.connections[0]?.importStatus === "failed",
     });
-    assert.equal(failed.runs[0]?.records, 502);
+    assert.equal(
+      failed.totals.groups.reduce(
+        (sum, group) => sum + BigInt(group.count),
+        0n,
+      ),
+      500n,
+    );
     assert.equal(failed.totals.partial, true);
     assert.equal(
       failed.totals.groups.find((group) => group.currency === "USD")
@@ -211,11 +225,11 @@ await test("native Workflow, 10k/100k volume and persistent installation", {
       intervalMs: 250,
       read: () => readState("replay"),
       until: (value) =>
-        value.runs[0]?.status === "succeeded" ||
-        value.runs[0]?.status === "failed",
+        value.connections[0]?.importStatus === "succeeded" ||
+        value.connections[0]?.importStatus === "failed",
     });
-    assert.equal(replay.runs[0]?.status, "succeeded");
-    assert.equal(replay.runs[0]?.records, 1202);
+    assert.equal(replay.connections[0]?.importStatus, "succeeded");
+    assert.equal(replay.sequence, 6);
     assert.equal(replay.totals.partial, false);
     logger.info(
       "PASS: native retry recovers a committed page without querying the provider again",
@@ -228,17 +242,18 @@ await test("native Workflow, 10k/100k volume and persistent installation", {
         intervalMs: 250,
         read: () => readState("history"),
         until: (value) =>
-          value.runs.length === day &&
-          value.runs.every((run) =>
-            ["succeeded", "failed"].includes(run.status),
-          ),
+          value.connections[0]?.importStatus ===
+          (day === 5 ? "failed" : "succeeded"),
       });
       const expected = ["3000", "6500", "6500", "6500", "10700"];
       assert.equal(result.totals.groups[0]?.totalMinor, expected[day - 1]);
       const expectedCounts = ["2", "3", "3", "3", "4"];
       assert.equal(result.totals.groups[0]?.count, expectedCounts[day - 1]);
       assert.equal(result.totals.partial, day === 5);
-      assert.equal(result.runs[0]?.status, day === 5 ? "failed" : "succeeded");
+      assert.equal(
+        result.connections[0]?.importStatus,
+        day === 5 ? "failed" : "succeeded",
+      );
     }, Promise.resolve());
     logger.info(
       "PASS: native imports accumulate history through updates, repeats, empty windows and partial failure",
@@ -253,11 +268,17 @@ await test("native Workflow, 10k/100k volume and persistent installation", {
         intervalMs: 500,
         read: () => readState(connection),
         until: (value) =>
-          value.runs[0]?.status === "succeeded" ||
-          value.runs[0]?.status === "failed",
+          value.connections[0]?.importStatus === "succeeded" ||
+          value.connections[0]?.importStatus === "failed",
       });
-      assert.equal(result.runs[0]?.status, "succeeded");
-      assert.equal(result.runs[0]?.records, size + 2);
+      assert.equal(result.connections[0]?.importStatus, "succeeded");
+      assert.equal(
+        result.totals.groups.reduce(
+          (sum, group) => sum + BigInt(group.count),
+          0n,
+        ),
+        BigInt(size),
+      );
       assert.equal(result.totals.partial, false);
       const usd = 2 * Math.ceil(size / 2 / 3);
       const unit = 9007199254740993123456789012n;
@@ -271,6 +292,36 @@ await test("native Workflow, 10k/100k volume and persistent installation", {
           ?.totalMinor,
         (BigInt(size - usd) * unit).toString(),
       );
+      if (size === 100_000) {
+        const pageSchema = z.object({
+          cursor: TransactionQuerySchema.shape.cursor.unwrap().nullable(),
+          records: z.array(z.object({ accountId: z.string(), id: z.string() })),
+        });
+        const seen = new Set<string>();
+        async function readPage(cursor: Cursor | null): Promise<void> {
+          const response = await fetch(`${base}/query`, {
+            body: JSON.stringify({
+              filter: { connectionIds: [connection] },
+              limit: 200,
+              ...(cursor && { cursor }),
+            }),
+            headers: { "Content-Type": "application/json" },
+            method: "POST",
+          });
+          assert.equal(response.status, 200);
+          const page = pageSchema.parse(await response.json());
+          for (const row of page.records) {
+            const identity = JSON.stringify([row.accountId, row.id]);
+            assert.equal(seen.has(identity), false);
+            seen.add(identity);
+          }
+          if (page.cursor) {
+            await readPage(page.cursor);
+          }
+        }
+        await readPage(null);
+        assert.equal(seen.size, 100_000);
+      }
       logger.info(
         {
           elapsedMs: Math.round(performance.now() - started),
@@ -291,13 +342,21 @@ await test("native Workflow, 10k/100k volume and persistent installation", {
   try {
     const persisted = z
       .object({
-        runs: z.array(z.object({ records: z.number(), status: z.string() })),
+        connections: z.array(z.object({ importStatus: z.string().nullable() })),
+        sequence: z.number(),
+        totals: z.object({ groups: z.array(z.object({ count: z.string() })) }),
       })
       .parse(
         await (await fetch(`${base}/state?connection=volume-100000`)).json(),
       );
-    assert.equal(persisted.runs[0]?.status, "succeeded");
-    assert.equal(persisted.runs[0]?.records, 100_002);
+    assert.equal(persisted.connections[0]?.importStatus, "succeeded");
+    assert.equal(
+      persisted.totals.groups.reduce(
+        (sum, group) => sum + BigInt(group.count),
+        0n,
+      ),
+      100_000n,
+    );
     logger.info(
       { state },
       "PASS: restarting the local Worker preserves the installed financial database",

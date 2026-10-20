@@ -1,7 +1,6 @@
 import {
   and,
   asc,
-  desc,
   eq,
   exists,
   gt,
@@ -11,19 +10,61 @@ import {
   or,
   sql,
 } from "drizzle-orm";
-import type { BatchItem } from "drizzle-orm/batch";
 
-import type { Checkpoint } from "../../../domain";
 import { IMPORT_INTERVAL } from "../../../domain";
 import { tryCatch } from "../../../shared";
 import { database, required } from "../../database";
-import { accounts, connections, settings, sync_runs } from "../../schema";
-import type { Admission, SyncRepository } from "../entity";
+import { accounts, connections } from "../../schema";
+import type { Admission, SyncRepository, SyncRun } from "../entity";
 import { publicationData } from "./publication.repository";
 
-const active = () => inArray(sync_runs.status, ["pending", "running"]);
+const active = () => inArray(connections.importStatus, ["pending", "running"]);
+function current(row: typeof connections.$inferSelect | undefined): SyncRun {
+  if (
+    !(
+      row?.importId &&
+      row.importCheckpoint &&
+      row.importStatus &&
+      row.importAdmittedAt
+    )
+  ) {
+    throw new Error("STALE_COMMIT");
+  }
+  return {
+    admittedAt: row.importAdmittedAt,
+    checkpoint: row.importCheckpoint,
+    connectionId: row.id,
+    id: row.importId,
+    sequence: row.importSequence,
+    status: row.importStatus,
+  };
+}
+function replay(saved: SyncRun, expected: SyncRun) {
+  if (saved.id !== expected.id) {
+    throw new Error("STALE_COMMIT");
+  }
+  if (saved.sequence === expected.sequence + 1) {
+    return {
+      checkpoint: saved.checkpoint,
+      done: saved.status === "succeeded",
+      sequence: saved.sequence,
+    };
+  }
+  if (saved.sequence !== expected.sequence || saved.status !== "running") {
+    throw new Error("STALE_COMMIT");
+  }
+  return null;
+}
 export function createSyncRepository(binding: D1Database): SyncRepository {
   const db = database(binding);
+  const read = async (id: string) =>
+    current(
+      await db
+        .select()
+        .from(connections)
+        .where(eq(connections.importId, id))
+        .get(),
+    );
   return {
     async account(connectionId, id) {
       return required(
@@ -36,183 +77,109 @@ export function createSyncRepository(binding: D1Database): SyncRepository {
           .get(),
       );
     },
-    active: () =>
-      db.select().from(sync_runs).where(active()).orderBy(sync_runs.createdAt),
+    async active() {
+      return (
+        await db
+          .select()
+          .from(connections)
+          .where(active())
+          .orderBy(connections.id)
+      ).map(current);
+    },
     async admit(ids, now) {
       const selected = await db
-        .select()
+        .select({ id: connections.id })
         .from(connections)
-        .where(ids ? inArray(connections.id, ids) : undefined)
+        .where(ids && inArray(connections.id, ids))
         .orderBy(connections.id);
       if (ids && new Set(ids).size !== selected.length) {
         throw new Error("NOT_FOUND");
       }
+      const cutoff = new Date(Date.parse(now) - IMPORT_INTERVAL).toISOString();
       return Promise.all(
-        selected.map(async (connection): Promise<Admission> => {
+        selected.map(async ({ id: connectionId }): Promise<Admission> => {
           const id = crypto.randomUUID();
-          const candidate = db
-            .select({
-              checkpoint:
-                sql<Checkpoint>`'{"phase":"accounts","accountId":null,"cursor":null}'`.as(
-                  "checkpoint",
-                ),
-              connectionId: connections.id,
-              createdAt: sql<string>`${now}`.as("created_at"),
-              error: sql<string | null>`NULL`.as("error"),
-              id: sql<string>`${id}`.as("id"),
-              lastCommitId: sql<string | null>`NULL`.as("last_commit_id"),
-              lastResult: sql<null>`NULL`.as("last_result"),
-              records: sql<number>`0`.as("records"),
-              sequence: sql<number>`0`.as("sequence"),
-              status: sql<"pending">`'pending'`.as("status"),
-              updatedAt: sql<string>`${now}`.as("updated_at"),
-            })
-            .from(connections)
-            .where(
-              and(
-                eq(connections.id, connection.id),
-                or(
-                  isNull(connections.nextImportAt),
-                  lte(connections.nextImportAt, now),
-                ),
-                exists(
-                  db
-                    .select({ id: settings.id })
-                    .from(settings)
-                    .where(
-                      and(eq(settings.id, 1), eq(settings.syncEnabled, 1)),
-                    ),
-                ),
-              ),
-            );
-          await db.batch([
-            db.insert(sync_runs).select(candidate).onConflictDoNothing(),
+          const [, rows] = await db.batch([
             db
               .update(connections)
               .set({
-                lastAdmittedAt: now,
-                nextImportAt: new Date(
-                  Date.parse(now) + IMPORT_INTERVAL,
-                ).toISOString(),
+                importAdmittedAt: new Date(now).toISOString(),
+                importCheckpoint: {
+                  accountId: null,
+                  cursor: null,
+                  phase: "accounts",
+                },
+                importError: null,
+                importId: id,
+                importSequence: 0,
+                importStatus: "pending",
               })
               .where(
                 and(
-                  eq(connections.id, connection.id),
-                  exists(
-                    db
-                      .select({ id: sync_runs.id })
-                      .from(sync_runs)
-                      .where(eq(sync_runs.id, id)),
+                  eq(connections.id, connectionId),
+                  or(
+                    isNull(connections.importStatus),
+                    inArray(connections.importStatus, ["failed", "succeeded"]),
+                  ),
+                  or(
+                    isNull(connections.importAdmittedAt),
+                    lte(connections.importAdmittedAt, cutoff),
                   ),
                 ),
               ),
-            db
-              .update(settings)
-              .set({ revision: sql`${settings.revision}+1` })
-              .where(
-                and(
-                  eq(settings.id, 1),
-                  exists(
-                    db
-                      .select({ id: sync_runs.id })
-                      .from(sync_runs)
-                      .where(eq(sync_runs.id, id)),
-                  ),
-                ),
-              ),
-          ]);
-          const [runs, config, rows] = await db.batch([
-            db
-              .select()
-              .from(sync_runs)
-              .where(eq(sync_runs.connectionId, connection.id))
-              .orderBy(
-                sql`CASE WHEN status IN ('pending','running') THEN 0 ELSE 1 END`,
-                desc(sync_runs.createdAt),
-              )
-              .limit(1),
-            db.select().from(settings).where(eq(settings.id, 1)),
             db
               .select()
               .from(connections)
-              .where(eq(connections.id, connection.id)),
+              .where(eq(connections.id, connectionId)),
           ]);
-          const [run] = runs;
           const row = required(rows[0]);
           let status: Admission["status"] = "cooldown";
-          if (run?.id === id) {
+          if (row.importId === id) {
             status = "started";
           } else if (
-            run &&
-            (run.status === "pending" || run.status === "running")
+            row.importStatus === "pending" ||
+            row.importStatus === "running"
           ) {
             status = "working";
-          } else if (!required(config[0]).syncEnabled) {
-            status = "paused";
           }
           return {
-            connectionId: connection.id,
-            nextEligibleAt: row.nextImportAt,
-            runId: run?.id ?? null,
+            connectionId,
+            importId: row.importId,
+            nextEligibleAt: row.importAdmittedAt
+              ? new Date(
+                  Date.parse(row.importAdmittedAt) + IMPORT_INTERVAL,
+                ).toISOString()
+              : null,
             status,
           };
         }),
       );
     },
-    async compact(before) {
-      await db.delete(sync_runs).where(
-        inArray(
-          sync_runs.id,
-          db
-            .select({ id: sync_runs.id })
-            .from(sync_runs)
-            .where(
-              and(
-                inArray(sync_runs.status, ["succeeded", "failed"]),
-                lte(sync_runs.updatedAt, before),
-              ),
-            )
-            .orderBy(sync_runs.updatedAt)
-            .limit(200),
-        ),
-      );
-    },
-    async fail(id, code, now) {
-      const run = await db
-        .select()
-        .from(sync_runs)
-        .where(eq(sync_runs.id, id))
-        .get();
-      if (!(run && ["pending", "running"].includes(run.status))) {
-        return;
-      }
+    async fail(id, code) {
       await db.batch([
         db
-          .update(settings)
-          .set({ revision: sql`${settings.revision}+1` })
-          .where(
-            and(
-              eq(settings.id, 1),
-              exists(
-                db
-                  .select({ id: sync_runs.id })
-                  .from(sync_runs)
-                  .where(and(eq(sync_runs.id, id), active())),
-              ),
-            ),
-          ),
-        db
-          .update(sync_runs)
-          .set({ error: code, status: "failed", updatedAt: now })
-          .where(and(eq(sync_runs.id, id), active())),
+          .update(connections)
+          .set({ importError: code, importStatus: "failed" })
+          .where(and(eq(connections.importId, id), active())),
         db
           .update(accounts)
           .set({ collectionStatus: "partial", error: code })
           .where(
             and(
-              eq(accounts.connectionId, run.connectionId),
               eq(accounts.lastSeenRun, id),
               eq(accounts.collectionStatus, "collecting"),
+              exists(
+                db
+                  .select({ id: connections.id })
+                  .from(connections)
+                  .where(
+                    and(
+                      eq(connections.id, accounts.connectionId),
+                      eq(connections.importId, id),
+                      eq(connections.importStatus, "failed"),
+                    ),
+                  ),
+              ),
             ),
           ),
       ]);
@@ -238,103 +205,67 @@ export function createSyncRepository(binding: D1Database): SyncRepository {
     },
     async publish(input) {
       const { run, now, next, done } = input;
-      const commitId = `${run.id}:${run.sequence}`;
-      const saved = await db
-        .select()
-        .from(sync_runs)
-        .where(eq(sync_runs.id, run.id))
-        .get();
-      if (saved?.lastCommitId === commitId && saved.lastResult) {
-        return saved.lastResult;
+      const saved = replay(await read(run.id), run);
+      if (saved) {
+        return saved;
       }
-      const published =
-        (input.accounts?.length ?? 0) + (input.transactions?.length ?? 0);
-      const result = {
-        checkpoint: next,
-        done,
-        records: published,
-        sequence: run.sequence + 1,
-      };
+      const result = { checkpoint: next, done, sequence: run.sequence + 1 };
       const expected = exists(
         db
-          .select({ id: sync_runs.id })
-          .from(sync_runs)
+          .select({ id: connections.id })
+          .from(connections)
           .where(
             and(
-              eq(sync_runs.id, run.id),
-              eq(sync_runs.status, "running"),
-              eq(sync_runs.sequence, run.sequence),
+              eq(connections.id, run.connectionId),
+              eq(connections.importId, run.id),
+              eq(connections.importStatus, "running"),
+              eq(connections.importSequence, run.sequence),
             ),
           ),
       );
-      const configured = exists(
-        db.select({ id: settings.id }).from(settings).where(eq(settings.id, 1)),
-      );
-      const edits: BatchItem<"sqlite">[] = [
-        db
-          .insert(settings)
-          .values({
-            id: 1,
-            revision: sql`CASE WHEN ${and(expected, configured)} THEN 0 ELSE -1 END`,
-            syncEnabled: 0,
-          })
-          .onConflictDoUpdate({
-            set: { revision: sql`${settings.revision}+1` },
-            target: settings.id,
-          }),
-      ];
-      edits.push(...publicationData(db, input));
-      edits.push(
-        db
-          .update(sync_runs)
-          .set({
-            checkpoint: next,
-            lastCommitId: commitId,
-            lastResult: result,
-            records: sql`${sync_runs.records}+${published}`,
-            sequence: result.sequence,
-            status: done ? "succeeded" : "running",
-            updatedAt: now,
-          })
-          .where(eq(sync_runs.id, run.id)),
-      );
-      const [first, ...rest] = edits;
-      if (!first) {
-        throw new Error("EMPTY_PUBLICATION");
-      }
+      // A missing/replaced/stale connection fails its own CHECK, aborting every write.
+      const sequence = sql<number>`CASE WHEN ${expected} THEN ${result.sequence} ELSE -1 END`;
+      const guard = db
+        .insert(connections)
+        .values({ id: run.connectionId, importSequence: sequence })
+        .onConflictDoUpdate({
+          set: { importSequence: sequence },
+          target: connections.id,
+        });
       const { data: _data, error } = await tryCatch(() =>
-        db.batch([first, ...rest]),
+        db.batch([
+          guard,
+          ...publicationData(db, input),
+          db
+            .update(connections)
+            .set({
+              importCheckpoint: next,
+              importStatus: done ? "succeeded" : "running",
+              ...(done && { lastSuccessAt: now }),
+            })
+            .where(eq(connections.id, run.connectionId)),
+        ]),
       );
       if (error) {
-        const replay = await db
-          .select()
-          .from(sync_runs)
-          .where(eq(sync_runs.id, run.id))
-          .get();
-        if (replay?.lastCommitId === commitId && replay.lastResult) {
-          return replay.lastResult;
-        }
-        if (
-          !replay ||
-          replay.sequence !== run.sequence ||
-          replay.status !== "running"
-        ) {
-          throw new Error("STALE_COMMIT");
+        const committed = replay(await read(run.id), run);
+        if (committed) {
+          return committed;
         }
         throw error;
       }
       return result;
     },
-    async read(id) {
-      return required(
-        await db.select().from(sync_runs).where(eq(sync_runs.id, id)).get(),
-      );
-    },
-    async start(id, now) {
+    read,
+    async start(id) {
       await db
-        .update(sync_runs)
-        .set({ status: "running", updatedAt: now })
-        .where(and(eq(sync_runs.id, id), eq(sync_runs.status, "pending")));
+        .update(connections)
+        .set({ importStatus: "running" })
+        .where(
+          and(
+            eq(connections.importId, id),
+            eq(connections.importStatus, "pending"),
+          ),
+        );
     },
   };
 }

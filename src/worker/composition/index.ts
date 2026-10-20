@@ -109,7 +109,6 @@ export function syncService(env: Bindings, now: () => Date = () => new Date()) {
     },
   );
   return {
-    compact: service.compact,
     recover: () => observeSpan(SpanName.recovery, () => service.recover()),
     request: (ids?: string[]) =>
       observeSpan(SpanName.dispatch, () => {

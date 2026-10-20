@@ -6,12 +6,11 @@ import type {
   TransactionFilter,
 } from "../../../domain";
 import { MetricDefinition } from "../../../domain";
-import { database, required } from "../../database";
+import { hash } from "../../../shared";
+import { database } from "../../database";
 import {
   accounts as a,
   connections as c,
-  settings,
-  sync_runs,
   transactions as t,
 } from "../../schema";
 import type { FinancialRepository } from "../entity";
@@ -130,28 +129,24 @@ function total(value: Record<keyof ReturnType<typeof moneyTotal>, string>) {
     .reduce((sum, part) => sum * 1000n + BigInt(part), 0n)
     .toString();
 }
-function assertRevision(before: number, after: number, expected?: number) {
-  if (before !== after || (expected !== undefined && before !== expected)) {
-    throw new Error("RESTART_REQUIRED");
-  }
-}
 export function createFinancialRepository(
   binding: D1Database,
 ): FinancialRepository {
   const db = database(binding);
-  const revision = () =>
-    db
-      .select({ revision: settings.revision })
-      .from(settings)
-      .where(eq(settings.id, 1));
   const qualityAccounts = (filter?: TransactionFilter) =>
-    db.select(accountFields).from(a).where(accountWhere(filter));
+    db
+      .select(accountFields)
+      .from(a)
+      .where(accountWhere(filter))
+      .orderBy(a.connectionId, a.id);
   const qualityConnections = (filter: TransactionFilter = {}) =>
     db
       .select({
-        active: sql<number>`EXISTS(SELECT 1 FROM ${sync_runs} WHERE ${sync_runs.connectionId}=${c.id} AND ${sync_runs.status} IN ('pending','running'))`,
         id: c.id,
-        lastAdmittedAt: c.lastAdmittedAt,
+        importAdmittedAt: c.importAdmittedAt,
+        importId: c.importId,
+        importSequence: c.importSequence,
+        importStatus: c.importStatus,
         lastSuccessAt: c.lastSuccessAt,
       })
       .from(c)
@@ -161,22 +156,23 @@ export function createFinancialRepository(
           filter.accounts &&
             sql`${c.id} IN (SELECT json_extract(value,'$.connectionId') FROM json_each(${JSON.stringify(filter.accounts)}))`,
         ),
-      );
+      )
+      .orderBy(c.id);
   function partial(
     rows: { collectionStatus: string }[],
     connections: {
       lastSuccessAt: string | null;
-      lastAdmittedAt: string | null;
-      active: number;
+      importAdmittedAt: string | null;
+      importStatus: string | null;
     }[],
   ) {
     return (
       !connections.length ||
       connections.some(
         (row) =>
-          !!row.active ||
+          row.importStatus !== "succeeded" ||
           !row.lastSuccessAt ||
-          !!(row.lastAdmittedAt && row.lastAdmittedAt > row.lastSuccessAt),
+          !!(row.importAdmittedAt && row.importAdmittedAt > row.lastSuccessAt),
       ) ||
       rows.some((row) => row.collectionStatus !== "complete")
     );
@@ -218,35 +214,29 @@ export function createFinancialRepository(
       const group = input.groupBy
         ? groupings[input.groupBy]
         : sql<string | null>`NULL`;
-      const [before, groups, quality, connectionQuality, afterRevision] =
-        await db.batch([
-          revision(),
-          db
-            .select({
-              amount: moneyTotal(amount),
-              amountCount:
-                sql<string>`CAST(count(${t.amountMinor}) AS TEXT)`.as(
-                  "amount_count",
-                ),
-              count: sql<string>`CAST(count(*) AS TEXT)`.as("count"),
-              currency: t.currency,
-              group: group.as("group_value"),
-              unknownAmountCount:
-                sql<string>`CAST(sum(CASE WHEN ${t.amountMinor} IS NULL THEN 1 ELSE 0 END) AS TEXT)`.as(
-                  "unknown_amount_count",
-                ),
-            })
-            .from(t)
-            .innerJoin(a, joinAccount)
-            .where(and(filterWhere(input.filter), eligible, metricFilter))
-            .groupBy(t.currency, group)
-            .orderBy(t.currency, group),
-          qualityAccounts(input.filter),
-          qualityConnections(input.filter),
-          revision(),
-        ]);
-      const version = required(before[0]).revision;
-      assertRevision(version, required(afterRevision[0]).revision);
+      const [groups, quality, connectionQuality] = await db.batch([
+        db
+          .select({
+            amount: moneyTotal(amount),
+            amountCount: sql<string>`CAST(count(${t.amountMinor}) AS TEXT)`.as(
+              "amount_count",
+            ),
+            count: sql<string>`CAST(count(*) AS TEXT)`.as("count"),
+            currency: t.currency,
+            group: group.as("group_value"),
+            unknownAmountCount:
+              sql<string>`CAST(sum(CASE WHEN ${t.amountMinor} IS NULL THEN 1 ELSE 0 END) AS TEXT)`.as(
+                "unknown_amount_count",
+              ),
+          })
+          .from(t)
+          .innerJoin(a, joinAccount)
+          .where(and(filterWhere(input.filter), eligible, metricFilter))
+          .groupBy(t.currency, group)
+          .orderBy(t.currency, group),
+        qualityAccounts(input.filter),
+        qualityConnections(input.filter),
+      ]);
       return {
         accounts: quality,
         definition: MetricDefinition[input.metric],
@@ -265,7 +255,6 @@ export function createFinancialRepository(
           partial(quality, connectionQuality) ||
           groups.some((row) => BigInt(row.unknownAmountCount) > 0n),
         referenceDay,
-        revision: version,
       };
     },
     async query(input, scope, referenceDay) {
@@ -276,30 +265,29 @@ export function createFinancialRepository(
       const after = cursor
         ? sql`(${t.date},${t.connectionId},${t.accountId},${t.id})<(${cursor.date},${cursor.connectionId},${cursor.accountId},${cursor.id})`
         : undefined;
-      const [before, rows, quality, connectionQuality, afterRevision] =
-        await db.batch([
-          revision(),
-          db
-            .select(transactionFields)
-            .from(t)
-            .where(and(filterWhere(input.filter), after))
-            .orderBy(
-              desc(t.date),
-              desc(t.connectionId),
-              desc(t.accountId),
-              desc(t.id),
-            )
-            .limit(input.limit + 1),
-          qualityAccounts(input.filter),
-          qualityConnections(input.filter),
-          revision(),
-        ]);
-      const version = required(before[0]).revision;
-      assertRevision(
-        version,
-        required(afterRevision[0]).revision,
-        cursor?.revision,
-      );
+      const [rows, quality, connectionQuality] = await db.batch([
+        db
+          .select(transactionFields)
+          .from(t)
+          .where(and(filterWhere(input.filter), after))
+          .orderBy(
+            desc(t.date),
+            desc(t.connectionId),
+            desc(t.accountId),
+            desc(t.id),
+          )
+          .limit(input.limit + 1),
+        qualityAccounts(input.filter),
+        qualityConnections(input.filter),
+      ]);
+      const state = await hash({
+        accounts: quality,
+        connections: connectionQuality,
+        referenceDay,
+      });
+      if (cursor && cursor.state !== state) {
+        throw new Error("RESTART_REQUIRED");
+      }
       const records = rows.slice(0, input.limit);
       const last = records.at(-1);
       return {
@@ -311,14 +299,13 @@ export function createFinancialRepository(
                 connectionId: last.connectionId,
                 date: last.date,
                 id: last.id,
-                revision: version,
                 scope,
+                state,
               }
             : null,
         partial: partial(quality, connectionQuality),
         records,
         referenceDay,
-        revision: version,
       };
     },
   };

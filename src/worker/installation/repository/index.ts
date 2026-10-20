@@ -1,72 +1,34 @@
-import { and, desc, eq, inArray, notExists, sql } from "drizzle-orm";
+import { inArray } from "drizzle-orm";
 
+import { IMPORT_INTERVAL } from "../../../domain";
 import { tryCatch } from "../../../shared";
-import { database, required } from "../../database";
-import { accounts, connections, settings, sync_runs } from "../../schema";
+import { database } from "../../database";
+import { accounts, connections } from "../../schema";
 import type { InstallationRepository } from "../entity";
 export function createInstallationRepository(
   binding: D1Database,
 ): InstallationRepository {
   const db = database(binding);
   return {
-    enable(enabled) {
-      return db
-        .update(settings)
-        .set({ syncEnabled: Number(enabled) })
-        .where(eq(settings.id, 1))
-        .run()
-        .then(() => undefined);
-    },
-    async register(connection, now) {
-      const registration = db
-        .insert(connections)
-        .values({
-          id: connection.id,
-          name: connection.connector?.name ?? "Meu Pluggy",
-          observedAt: now,
-          status: connection.status ?? "unknown",
-        })
-        .onConflictDoUpdate({
-          set: {
-            name: connection.connector?.name ?? "Meu Pluggy",
-            observedAt: now,
-            status: connection.status ?? "unknown",
-          },
-          target: connections.id,
-        });
+    async register(connection) {
       const { data: _data, error } = await tryCatch(() =>
-        db.batch([
-          db
-            .update(settings)
-            .set({ revision: sql`${settings.revision}+1` })
-            .where(
-              and(
-                eq(settings.id, 1),
-                notExists(
-                  db
-                    .select({ id: connections.id })
-                    .from(connections)
-                    .where(eq(connections.id, connection.id)),
-                ),
-              ),
-            ),
-          registration,
-        ]),
+        db
+          .insert(connections)
+          .values({ id: connection.id })
+          .onConflictDoNothing()
+          .run(),
       );
       if (!error) {
         return;
       }
-      if (error.message.startsWith("D1_ERROR: ITEM_LIMIT: SQLITE_CONSTRAINT")) {
+      const cause = error.cause instanceof Error ? error.cause : error;
+      if (cause.message.startsWith("D1_ERROR: ITEM_LIMIT: SQLITE_CONSTRAINT")) {
         throw new Error("ITEM_LIMIT");
       }
       throw error;
     },
     async state(selection = {}) {
-      const [config, items, accountRows, runs] = await db.batch([
-        db
-          .select({ enabled: settings.syncEnabled })
-          .from(settings)
-          .where(eq(settings.id, 1)),
+      const [items, accountRows] = await db.batch([
         db
           .select()
           .from(connections)
@@ -100,35 +62,26 @@ export function createInstallationRepository(
               inArray(accounts.connectionId, selection.connectionIds),
           )
           .orderBy(accounts.connectionId, accounts.id),
-        db
-          .select({
-            connectionId: sync_runs.connectionId,
-            createdAt: sync_runs.createdAt,
-            error: sync_runs.error,
-            id: sync_runs.id,
-            records: sync_runs.records,
-            status: sync_runs.status,
-            updatedAt: sync_runs.updatedAt,
-          })
-          .from(sync_runs)
-          .where(
-            and(
-              selection.connectionIds &&
-                inArray(sync_runs.connectionId, selection.connectionIds),
-              selection.runIds && inArray(sync_runs.id, selection.runIds),
-            ),
-          )
-          .orderBy(
-            sql`CASE WHEN status IN ('pending','running') THEN 0 ELSE 1 END`,
-            desc(sync_runs.createdAt),
-          )
-          .limit(50),
       ]);
       return {
         accounts: accountRows,
-        connections: items,
-        enabled: !!required(config[0]).enabled,
-        runs,
+        connections: items.map((row) => ({
+          id: row.id,
+          importCheckpoint: row.importCheckpoint
+            ? {
+                accountId: row.importCheckpoint.accountId,
+                phase: row.importCheckpoint.phase,
+              }
+            : null,
+          importError: row.importError,
+          importStatus: row.importStatus,
+          lastSuccessAt: row.lastSuccessAt,
+          nextEligibleAt: row.importAdmittedAt
+            ? new Date(
+                Date.parse(row.importAdmittedAt) + IMPORT_INTERVAL,
+              ).toISOString()
+            : null,
+        })),
       };
     },
   };

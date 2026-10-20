@@ -9,16 +9,18 @@ acompanhe o estado das contas no painel.
 O Caderninho relê as contas e transações disponíveis na origem. Uma coleta
 concluída significa que essa enumeração terminou; a instituição pode disponibilizar
 somente parte do histórico. Uma falha preserva páginas confirmadas e aparece como
-coleta parcial. Última coleta bem-sucedida e tentativa atual têm horários distintos.
+coleta parcial. O painel e `caderninho_status` exibem a importação corrente de
+cada conexão: estado, fase, conta, último sucesso e código de erro seguro. O último
+sucesso é preservado quando uma tentativa posterior falha.
 
 Cada conexão só admite uma importação a cada 24 horas, contadas do pedido aceito,
 inclusive em falha. Pedido repetido reutiliza a execução ativa. A agenda diária
 roda às 09:00 UTC. **Próxima elegibilidade** informa quando uma nova importação
 pode ser admitida; não promete o horário exato da execução.
 
-Use **Reconectar** quando a origem exigir uma nova autorização. Pausar impede
-novas importações; importações iniciadas continuam. Retomar habilita novos pedidos
-e a agenda. Consultar status não inicia trabalho.
+Use **Reconectar** quando a origem exigir uma nova autorização. Consultar status
+não inicia trabalho. Despacho incerto recupera o mesmo ID de importação; falha ao
+consultar o Workflow mantém a importação ativa até confirmar seu estado.
 
 ## Assistente
 
@@ -70,8 +72,9 @@ categoria/descrição da origem e faixa de valor em unidades menores. Uma faixa
 monetária exige moeda. Agrupamentos são conta, categoria ou mês. Campos desconhecidos
 são recusados. A página tem até 200 registros; o padrão é 50.
 
-Use o cursor retornado com os mesmos filtros. Se a revisão financeira mudar,
-reinicie a paginação; não misture páginas de revisões distintas.
+Use o cursor retornado com os mesmos filtros. Se uma conexão selecionada publicar
+uma página ou mudar seu estado/metadados, reinicie a paginação. Importações de
+conexões fora da seleção não invalidam esse cursor.
 
 ## Manutenção do acesso
 

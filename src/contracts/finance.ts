@@ -58,8 +58,8 @@ export const TransactionQuerySchema = z
         connectionId: identifier,
         date: day,
         id: identifier,
-        revision: z.number().int().nonnegative(),
         scope: z.string().length(64),
+        state: z.string().length(64),
       })
       .strict()
       .optional(),
@@ -77,6 +77,4 @@ export const AggregateQuerySchema = z
 export const ConnectionSelectionSchema = z
   .object({ connectionIds: z.array(identifier).min(1).max(10).optional() })
   .strict();
-export const StatusInputSchema = ConnectionSelectionSchema.extend({
-  runIds: z.array(identifier).min(1).max(50).optional(),
-});
+export const StatusInputSchema = ConnectionSelectionSchema;

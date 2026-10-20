@@ -1,12 +1,11 @@
-import type { CollectionStatusType, RunStatus } from "../domain";
+import type { Checkpoint, CollectionStatusType, RunStatus } from "../domain";
 export interface ConnectionInfo {
   id: string;
-  lastAdmittedAt: string | null;
+  importCheckpoint: Pick<Checkpoint, "accountId" | "phase"> | null;
+  importError: string | null;
+  importStatus: RunStatus | null;
   lastSuccessAt: string | null;
-  name: string;
-  nextImportAt: string | null;
-  observedAt: string;
-  status: string;
+  nextEligibleAt: string | null;
 }
 export interface AccountInfo {
   balanceMinor: string | null;
@@ -26,20 +25,9 @@ export interface AccountInfo {
   sourceUpdatedAt: string | null;
   type: "BANK" | "CREDIT";
 }
-export interface RunInfo {
-  connectionId: string;
-  createdAt: string;
-  error: string | null;
-  id: string;
-  records: number;
-  status: RunStatus;
-  updatedAt: string;
-}
 export interface InstallationState {
   accounts: AccountInfo[];
   connections: ConnectionInfo[];
-  enabled: boolean;
-  runs: RunInfo[];
 }
 export interface PortalResponse extends InstallationState {
   configured: boolean;

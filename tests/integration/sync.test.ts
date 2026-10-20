@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 
-import { eq } from "drizzle-orm";
 import { beforeEach, test } from "vitest";
 
 import {
@@ -13,7 +12,7 @@ import { database } from "../../src/worker/database";
 import { createFinancialService } from "../../src/worker/finance";
 import { createFinancialRepository } from "../../src/worker/finance/repository";
 import { createInstallationRepository } from "../../src/worker/installation/repository";
-import { settings, sync_runs, transactions } from "../../src/worker/schema";
+import { connections } from "../../src/worker/schema";
 import { createSyncService, runImport } from "../../src/worker/sync";
 import { createSyncRepository } from "../../src/worker/sync/repository";
 import { account, admit, collect, setup, source, transaction } from "./fixture";
@@ -22,37 +21,35 @@ import { env } from "cloudflare:workers";
 const now = "2026-10-01T00:00:00.000Z";
 const finance = () => createFinancialService(createFinancialRepository(env.DB));
 beforeEach(setup);
-test("simultaneous manual/cron admissions are isolated by connection and enforce pause/24h even after failure", async () => {
+test("simultaneous manual/cron admissions are isolated by connection and enforce 24h even after failure", async () => {
   const installation = createInstallationRepository(env.DB);
-  await installation.register({ connector: { id: 200 }, id: "c" }, now);
-  await installation.register({ connector: { id: 200 }, id: "d" }, now);
+  await installation.register({ connector: { id: 200 }, id: "c" });
+  await installation.register({ connector: { id: 200 }, id: "d" });
   const repository = createSyncRepository(env.DB);
   const results = await Promise.all([
     repository.admit(["c"], now),
     repository.admit(["c"], now),
     repository.admit(["d"], now),
   ]);
-  assert.equal(results[0]?.[0]?.runId, results[1]?.[0]?.runId);
+  assert.equal(results[0]?.[0]?.importId, results[1]?.[0]?.importId);
   assert.equal((await repository.active()).length, 2);
-  const c = results[0]?.[0]?.runId;
+  const c = results[0]?.[0]?.importId;
   assert.ok(c);
-  await repository.fail(c, "SYNTHETIC_FAILURE", now);
+  await repository.fail(c, "SYNTHETIC_FAILURE");
   assert.equal((await repository.admit(["c"], now))[0]?.status, "cooldown");
-  await installation.enable(false);
   assert.equal(
-    (await repository.admit(["c"], "2026-10-03T00:00:00.000Z"))[0]?.status,
-    "paused",
+    (await repository.admit(["c"], "2026-10-01T23:59:59.999Z"))[0]?.status,
+    "cooldown",
   );
-  await installation.enable(true);
   assert.equal(
     (await repository.admit(["c"], "2026-10-02T00:00:00.000Z"))[0]?.status,
     "started",
   );
 });
-test("receipts survive response loss, races and completed-run replay; stale/nonexistent runs never write", async () => {
+test("connection checkpoints survive response loss, races and completed-run replay; stale/nonexistent runs never write", async () => {
   const repository = createSyncRepository(env.DB);
   const id = await admit();
-  await repository.start(id, now);
+  await repository.start(id);
   const run = await repository.read(id);
   const input = {
     accounts: [normalizeAccount(account(), "c")],
@@ -66,9 +63,9 @@ test("receipts survive response loss, races and completed-run replay; stale/none
     repository.publish(input),
   ]);
   assert.deepEqual(results[0], results[1]);
-  const version = (await finance().query({ limit: 10 })).revision;
+  const version = (await repository.read(id)).sequence;
   assert.deepEqual(await repository.publish(input), results[0]);
-  assert.equal((await finance().query({ limit: 10 })).revision, version);
+  assert.equal((await repository.read(id)).sequence, version);
   const latest = await repository.read(id);
   const done = {
     completeAccountId: "a",
@@ -84,7 +81,6 @@ test("receipts survive response loss, races and completed-run replay; stale/none
   assert.deepEqual(await repository.publish(done), {
     checkpoint: done.next,
     done: true,
-    records: 1,
     sequence: 2,
   });
   await assert.rejects(
@@ -104,14 +100,14 @@ test("receipts survive response loss, races and completed-run replay; stale/none
   );
   assert.equal((await finance().query({ limit: 10 })).records.length, 1);
 });
-test("a receipt/checkpoint failure rolls back records and revision in the same real D1 batch", async () => {
+test("a checkpoint failure rolls back financial data, metadata and sequence in the same real D1 batch", async () => {
   const repository = createSyncRepository(env.DB);
   const id = await admit();
-  await repository.start(id, now);
+  await repository.start(id);
   const run = await repository.read(id);
-  const version = (await finance().query({ limit: 10 })).revision;
+  const version = (await repository.read(id)).sequence;
   await env.DB.exec(
-    "CREATE TRIGGER fail_receipt BEFORE UPDATE ON sync_runs WHEN NEW.sequence>OLD.sequence BEGIN SELECT RAISE(ABORT,'synthetic receipt failure'); END;",
+    "CREATE TRIGGER fail_checkpoint BEFORE UPDATE ON connections WHEN NEW.import_checkpoint<>OLD.import_checkpoint BEGIN SELECT RAISE(ABORT,'synthetic receipt failure'); END;",
   );
   await assert.rejects(
     repository.publish({
@@ -124,7 +120,7 @@ test("a receipt/checkpoint failure rolls back records and revision in the same r
   );
   assert.equal((await finance().accounts()).length, 0);
   assert.equal((await repository.read(id)).sequence, 0);
-  assert.equal((await finance().query({ limit: 10 })).revision, version);
+  assert.equal((await repository.read(id)).sequence, version);
 });
 test("partial pages keep prior success and confirmed data, reject conflicting IDs, and do not restart terminal runs", async () => {
   await collect(source([transaction({ date: "2026-09-01", id: "old" })]));
@@ -167,7 +163,7 @@ test("partial pages keep prior success and confirmed data, reject conflicting ID
     (await finance().accounts())[0]?.lastCompletedFrom,
     "2026-09-01",
   );
-  assert.equal(state.runs[0]?.status, "failed");
+  assert.equal(state.connections[0]?.importStatus, "failed");
   assert.equal((await finance().query({ limit: 10 })).records.length, 2);
   assert.equal((await finance().aggregate({ metric: "debits" })).partial, true);
   await runImport(
@@ -208,10 +204,10 @@ test("dispatch uncertainty recovers the same ID and terminal native failures do 
   let native = "running";
   const ids: string[] = [];
   const repository = createSyncRepository(env.DB);
-  await createInstallationRepository(env.DB).register(
-    { connector: { id: 200 }, id: "c" },
-    now,
-  );
+  await createInstallationRepository(env.DB).register({
+    connector: { id: 200 },
+    id: "c",
+  });
   const service = createSyncService(
     repository,
     {
@@ -238,7 +234,7 @@ test("dispatch uncertainty recovers the same ID and terminal native failures do 
   assert.equal(creates, 2);
   assert.equal(new Set(ids).size, 1);
   await service.request(["c"]);
-  assert.equal(first.connections[0]?.runId, ids[2]);
+  assert.equal(first.connections[0]?.importId, ids[2]);
   native = "errored";
   await service.recover();
   assert.equal((await repository.active()).length, 0);
@@ -247,45 +243,86 @@ test("dispatch uncertainty recovers the same ID and terminal native failures do 
     "cooldown",
   );
 });
-test("retention removes only old terminal summaries and keeps financial references and active imports", async () => {
-  const terminal = await collect(source([transaction()]));
-  const active = await admit("2026-10-03T00:00:00.000Z");
-  await createSyncRepository(env.DB).compact("2026-11-03T00:00:00.000Z");
-  assert.equal(
-    await database(env.DB)
-      .select()
-      .from(sync_runs)
-      .where(eq(sync_runs.id, terminal))
-      .get(),
-    undefined,
-  );
-  assert.ok(
-    await database(env.DB)
-      .select()
-      .from(sync_runs)
-      .where(eq(sync_runs.id, active))
-      .get(),
-  );
-  assert.equal((await finance().query({ limit: 10 })).records.length, 1);
-  assert.equal((await database(env.DB).select().from(transactions)).length, 1);
-  assert.ok((await database(env.DB).select().from(settings))[0]);
-});
-
-test("a missing singleton cannot bypass the publication guard", async () => {
+test("a replaced or missing connection cannot publish, fail or restart an old executor", async () => {
   const repository = createSyncRepository(env.DB);
   const id = await admit();
-  await repository.start(id, now);
+  await repository.start(id);
   const run = await repository.read(id);
-  await database(env.DB).delete(settings);
-  await assert.rejects(
+  await repository.fail(id, "IMPORT_FAILED");
+  const replacement = await admit("2026-10-02T00:00:00.000Z");
+  const publish = () =>
     repository.publish({
       accounts: [normalizeAccount(account(), "c")],
       done: false,
-      next: { accountId: null, cursor: null, phase: "finish" },
+      next: { accountId: "a", cursor: null, phase: "transactions" },
       now,
       run,
-    }),
+    });
+  await assert.rejects(publish, { message: "STALE_COMMIT" });
+  await repository.fail(id, "OLD_EXECUTOR");
+  await repository.start(id);
+  assert.equal((await repository.read(replacement)).status, "pending");
+  assert.equal((await finance().accounts()).length, 0);
+  await database(env.DB).delete(connections);
+  await assert.rejects(publish, { message: "STALE_COMMIT" });
+  assert.equal((await finance().accounts()).length, 0);
+});
+
+test("a retried native step rebuilds the last committed page and terminal result before any source I/O", async () => {
+  const repository = createSyncRepository(env.DB);
+  const id = await admit();
+  let calls = 0;
+  const input = source([transaction()]);
+  await runImport(
+    {
+      now: () => now,
+      repository,
+      source: {
+        ...input,
+        transactions: (accountId, cursor) => {
+          calls += 1;
+          if (calls > 1) {
+            throw new Error("COMMITTED_PAGE_REFETCHED");
+          }
+          return input.transactions(accountId, cursor);
+        },
+      },
+      steps: {
+        do: async (_name, fn) => {
+          const result = await fn();
+          assert.deepEqual(await fn(), result);
+          assert.ok(JSON.stringify(result).length < 400);
+          return result;
+        },
+      },
+    },
+    id,
   );
-  assert.equal((await createFinancialRepository(env.DB).accounts()).length, 0);
-  assert.equal((await repository.read(id)).sequence, 0);
+  assert.equal(calls, 1);
+  assert.equal((await repository.read(id)).sequence, 3);
+  assert.equal((await finance().query({ limit: 10 })).records[0]?.id, "t");
+});
+
+test("an unavailable native status keeps a running import active past the 24h boundary", async () => {
+  const repository = createSyncRepository(env.DB);
+  const id = await admit();
+  await repository.start(id);
+  let creates = 0;
+  const service = createSyncService(
+    repository,
+    {
+      create: () => {
+        creates += 1;
+        return Promise.resolve();
+      },
+      status: () => Promise.reject(new Error("offline")),
+    },
+    () => new Date("2026-10-03T00:00:00.000Z"),
+  );
+  await service.recover();
+  assert.equal(creates, 0);
+  assert.equal((await repository.read(id)).status, "running");
+  const [admission] = await repository.admit(["c"], "2026-10-03T00:00:00.000Z");
+  assert.equal(admission?.status, "working");
+  assert.equal(admission?.importId, id);
 });
