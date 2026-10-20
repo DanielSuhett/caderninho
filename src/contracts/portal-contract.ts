@@ -12,6 +12,8 @@ export const PortalResponseSchema = z.object({
       error: z.string().nullable(),
       id: z.string(),
       lastAttemptAt: z.string().nullable(),
+      lastCompletedFrom: z.string().nullable(),
+      lastCompletedTo: z.string().nullable(),
       lastSuccessAt: z.string().nullable(),
       name: z.string(),
       observedAt: z.string(),

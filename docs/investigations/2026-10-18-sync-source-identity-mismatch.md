@@ -122,7 +122,7 @@ recurso. O SDK instalado, `pluggy-sdk@0.92.0`, envia `itemId` como filtro de
 `fetchConsents`.
 
 Em
-[`sync/execution.service.ts`](../../src/worker/sync/execution.service.ts),
+[`sync/execution.service.ts` no modelo anterior](https://github.com/DanielSuhett/caderninho/blob/f1f68760166fd79a8f22da18772a97477628def0/src/worker/sync/execution.service.ts),
 `resourceOrder` lê `connections`, depois `consents`, antes de contas e
 transações. A exceção de identidade interrompe a sequência. Isso explica o banco
 com apenas uma conexão mesmo quando a conexão do provedor aparece como atualizada.

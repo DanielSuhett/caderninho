@@ -122,7 +122,7 @@ test("a receipt/checkpoint failure rolls back records and revision in the same r
   assert.equal((await finance().query({ limit: 10 })).revision, version);
 });
 test("partial pages keep prior success and confirmed data, reject cursor loops/conflicting IDs, and do not restart terminal runs", async () => {
-  await collect(source([transaction({ id: "old" })]));
+  await collect(source([transaction({ date: "2026-09-01", id: "old" })]));
   const repository = createSyncRepository(env.DB);
   const id = await admit("2026-10-02T00:00:00.000Z");
   let calls = 0;
@@ -132,7 +132,7 @@ test("partial pages keep prior success and confirmed data, reject cursor loops/c
       calls += 1;
       return Promise.resolve({
         next: "same",
-        records: [transaction({ id: `page-${calls}` })],
+        records: [transaction({ date: "2026-10-02", id: `page-${calls}` })],
       });
     },
   };
@@ -151,6 +151,14 @@ test("partial pages keep prior success and confirmed data, reject cursor loops/c
   const state = await createInstallationRepository(env.DB).state();
   assert.equal(state.accounts[0]?.collectionStatus, "partial");
   assert.equal(state.accounts[0]?.lastSuccessAt, now);
+  assert.equal(state.accounts[0]?.observedFrom, "2026-10-02");
+  assert.equal(state.accounts[0]?.observedTo, "2026-10-02");
+  assert.equal(state.accounts[0]?.lastCompletedFrom, "2026-09-01");
+  assert.equal(state.accounts[0]?.lastCompletedTo, "2026-09-01");
+  assert.equal(
+    (await finance().accounts())[0]?.lastCompletedFrom,
+    "2026-09-01",
+  );
   assert.equal(state.runs[0]?.status, "failed");
   assert.equal((await finance().query({ limit: 10 })).records.length, 2);
   assert.equal((await finance().aggregate({ metric: "debits" })).partial, true);
@@ -177,6 +185,15 @@ test("partial pages keep prior success and confirmed data, reject cursor loops/c
     ),
     { message: "DUPLICATE_CHANGED" },
   );
+  await collect(source([]), "2026-10-04T00:00:00.000Z");
+  const {
+    accounts: [empty],
+  } = await createInstallationRepository(env.DB).state();
+  assert.equal(empty?.lastSuccessAt, "2026-10-04T00:00:00.000Z");
+  assert.equal(empty?.observedFrom, null);
+  assert.equal(empty?.observedTo, null);
+  assert.equal(empty?.lastCompletedFrom, null);
+  assert.equal(empty?.lastCompletedTo, null);
 });
 test("dispatch uncertainty recovers the same ID and terminal native failures do not free cooldown", async () => {
   let creates = 0;

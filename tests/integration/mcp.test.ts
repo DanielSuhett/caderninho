@@ -4,9 +4,18 @@ import { beforeEach, test } from "vitest";
 import { z } from "zod/v4";
 
 import { createLogger } from "../../src/shared/logger";
+import { createInstallationRepository } from "../../src/worker/installation/repository";
 import { withObservation } from "../../src/worker/observability";
-import { command, cookies, fixture, grant, login } from "./access-fixture";
+import {
+  command,
+  cookies,
+  fixture,
+  grant,
+  login,
+  settings,
+} from "./access-fixture";
 import { collect, setup, source, transaction } from "./fixture";
+import { env } from "cloudflare:workers";
 
 const wire = z.object({
   error: z.json().optional(),
@@ -92,6 +101,9 @@ test("official OAuth, six standard tools/defaults, protocol errors and grant rev
     ).json(),
   );
   assert.equal(invalid.result?.isError, true);
+  assert.deepEqual(JSON.parse(invalid.result?.content?.[0]?.text ?? "{}"), {
+    error: "INVALID_FILTER",
+  });
   const tasks = wire.parse(
     await (await call(second, "tasks/get", { taskId: "obsolete" })).json(),
   );
@@ -156,6 +168,12 @@ test("HTTP 200 tool failures remain visible and private arguments never enter di
   const body = await response.json();
   assert.equal(response.status, 200, JSON.stringify(body));
   assert.equal(wire.parse(body).result?.isError, true);
+  assert.deepEqual(
+    JSON.parse(wire.parse(body).result?.content?.[0]?.text ?? "{}"),
+    {
+      error: "NOT_FOUND",
+    },
+  );
   const serialized = JSON.stringify({ lines, spans });
   for (const secret of [
     "private-connection",
@@ -171,4 +189,61 @@ test("HTTP 200 tool failures remain visible and private arguments never enter di
       (line) => line.includes("MCP_REQUEST") && line.includes("rejected"),
     ),
   );
+  assert.ok(
+    lines.some(
+      (line) =>
+        line.includes(
+          `"correlation":"${response.headers.get("X-Request-ID")}"`,
+        ) && line.includes("MCP_REQUEST"),
+    ),
+  );
+});
+
+test("MCP reports missing configuration and durable import failures without reserving or leaking details", async () => {
+  const {
+    PLUGGY_CLIENT_ID: _clientId,
+    PLUGGY_CLIENT_SECRET: _clientSecret,
+    ...config
+  } = settings();
+  const app = fixture(config);
+  const token = await grant(app, cookies(await login(app)));
+  await createInstallationRepository(env.DB).register(
+    { id: "c" },
+    "2026-10-01T00:00:00Z",
+  );
+  const request = {
+    body: JSON.stringify({
+      id: 1,
+      jsonrpc: "2.0",
+      method: "tools/call",
+      params: { _meta: requestMeta, arguments: {}, name: "caderninho_sync" },
+    }),
+    headers: {
+      Accept: "application/json, text/event-stream",
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      "Mcp-Method": "tools/call",
+      "Mcp-Name": "caderninho_sync",
+      "Mcp-Protocol-Version": "2026-07-28",
+    },
+    method: "POST",
+  };
+  const missing = wire.parse(await (await app.request("/mcp", request)).json());
+  assert.equal(missing.result?.isError, true);
+  assert.deepEqual(JSON.parse(missing.result?.content?.[0]?.text ?? "{}"), {
+    error: "NOT_CONFIGURED",
+  });
+  const state = await createInstallationRepository(env.DB).state();
+  assert.deepEqual(state.runs, []);
+  assert.equal(state.connections[0]?.nextImportAt, null);
+  await env.DB.exec(
+    "CREATE TRIGGER reject_import BEFORE INSERT ON sync_runs BEGIN SELECT RAISE(ABORT,'private-database-failure'); END;",
+  );
+  const failed = wire.parse(
+    await (await fixture().request("/mcp", request)).json(),
+  );
+  assert.equal(failed.result?.isError, true);
+  assert.deepEqual(JSON.parse(failed.result?.content?.[0]?.text ?? "{}"), {
+    error: "IMPORT_FAILED",
+  });
 });

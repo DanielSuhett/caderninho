@@ -1,6 +1,6 @@
 # Spec: Caderninho simples para contas e transações
 
-Status: escopo implementado e validado localmente; revisão final em andamento, 19/10/2026.
+Status: escopo implementado, revisado e validado localmente, 19/10/2026.
 O escopo financeiro e a premissa de banco novo foram confirmados pelo usuário.
 A evidência está em [validação local](validation-refatoracao.md). Não há validação em produção nesta entrega.
 
@@ -100,6 +100,11 @@ de transações: disponibilidade, erro seguro, horário e intervalo efetivamente
 observado. Completude se refere ao conjunto oferecido pela origem naquela coleta,
 nunca a todo o histórico bancário. Conta ausente/inacessível não causa remoção em
 cascata de seu histórico.
+
+`observedFrom`/`observedTo` descrevem a tentativa atual;
+`lastCompletedFrom`/`lastCompletedTo`, a última enumeração concluída. Uma falha
+não substitui o intervalo concluído. Finalizar uma enumeração vazia promove um
+intervalo nulo, sem alegar que foram observadas datas ausentes na resposta.
 
 Conservar também o marcador `last_completed_run_id`. A presença das transações
 pode ser calculada comparando esse marcador com a execução que as observou.

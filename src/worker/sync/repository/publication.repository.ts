@@ -116,7 +116,9 @@ function coverageWrites(db: Database, input: Publication) {
         .set({
           collectionStatus: "complete",
           error: null,
+          lastCompletedFrom: accounts.observedFrom,
           lastCompletedRun: run.id,
+          lastCompletedTo: accounts.observedTo,
           lastSuccessAt: now,
         })
         .where(

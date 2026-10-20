@@ -124,6 +124,11 @@ export function syncService(env: Bindings, now: () => Date = () => new Date()) {
     compact: service.compact,
     recover: () => observeSpan(SpanName.recovery, () => service.recover()),
     request: (ids?: string[]) =>
-      observeSpan(SpanName.dispatch, () => service.request(ids)),
+      observeSpan(SpanName.dispatch, () => {
+        if (!source(env).configured) {
+          throw new Error("NOT_CONFIGURED");
+        }
+        return service.request(ids);
+      }),
   };
 }

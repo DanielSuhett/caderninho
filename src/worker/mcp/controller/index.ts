@@ -16,6 +16,7 @@ import {
   TransactionQuerySchema,
   tools,
 } from "../../../contracts";
+import { Fault } from "../../../domain";
 import { tryCatch } from "../../../shared";
 import type { Bindings } from "../../bindings";
 import {
@@ -73,10 +74,12 @@ async function invoke(env: Bindings, name: string, args: unknown) {
   }
 }
 const safeErrors = new Set([
+  "NOT_CONFIGURED",
   "NOT_FOUND",
   "RESTART_REQUIRED",
   "CURSOR_SCOPE_MISMATCH",
   "UNKNOWN_TOOL",
+  "IMPORT_FAILED",
 ]);
 export async function fetchMcp(request: Request, env: Bindings) {
   const handler = createMcpHandler(
@@ -150,7 +153,10 @@ function publicError(error: Error) {
     return error.message;
   }
   if (error instanceof z.ZodError) {
-    return "INVALID_REQUEST";
+    return "INVALID_FILTER";
   }
-  return "REQUEST_FAILED";
+  if (error instanceof Fault && error.code.startsWith("UPSTREAM_")) {
+    return "UPSTREAM_UNAVAILABLE";
+  }
+  return "IMPORT_FAILED";
 }

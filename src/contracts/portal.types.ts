@@ -16,6 +16,8 @@ export interface AccountInfo {
   error: string | null;
   id: string;
   lastAttemptAt: string | null;
+  lastCompletedFrom: string | null;
+  lastCompletedTo: string | null;
   lastSuccessAt: string | null;
   name: string;
   observedAt: string;

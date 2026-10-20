@@ -1,5 +1,6 @@
 import { and, desc, eq, inArray, notExists, sql } from "drizzle-orm";
 
+import { tryCatch } from "../../../shared";
 import { database, required } from "../../database";
 import { accounts, connections, settings, sync_runs } from "../../schema";
 import type { InstallationRepository } from "../entity";
@@ -16,7 +17,7 @@ export function createInstallationRepository(
         .run()
         .then(() => undefined);
     },
-    register(connection, now) {
+    async register(connection, now) {
       const registration = db
         .insert(connections)
         .values({
@@ -33,8 +34,8 @@ export function createInstallationRepository(
           },
           target: connections.id,
         });
-      return db
-        .batch([
+      const { data: _data, error } = await tryCatch(() =>
+        db.batch([
           db
             .update(settings)
             .set({ revision: sql`${settings.revision}+1` })
@@ -50,8 +51,15 @@ export function createInstallationRepository(
               ),
             ),
           registration,
-        ])
-        .then(() => undefined);
+        ]),
+      );
+      if (!error) {
+        return;
+      }
+      if (error.message.startsWith("D1_ERROR: ITEM_LIMIT: SQLITE_CONSTRAINT")) {
+        throw new Error("ITEM_LIMIT");
+      }
+      throw error;
     },
     async state(selection = {}) {
       const [config, items, accountRows, runs] = await db.batch([
@@ -76,6 +84,8 @@ export function createInstallationRepository(
             error: accounts.error,
             id: accounts.id,
             lastAttemptAt: accounts.lastAttemptAt,
+            lastCompletedFrom: accounts.lastCompletedFrom,
+            lastCompletedTo: accounts.lastCompletedTo,
             lastSuccessAt: accounts.lastSuccessAt,
             name: accounts.name,
             observedAt: accounts.observedAt,

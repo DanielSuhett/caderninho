@@ -18,6 +18,10 @@ Categorias indicativas e transferências sem prova permanecem débitos incertos.
 D1 real do harness demonstra disputa de admissão, pausa/cooldown, rollback de
 página, execução inexistente/encerrada, singleton ausente, replay concorrente,
 retenção e rejeição de cursor após mudança da revisão/qualidade.
+As regressões finais também verificam que a tentativa parcial conserva o intervalo
+da coleta anteriormente concluída, e que uma enumeração vazia concluída substitui
+esse intervalo por nulo. A disputa pela décima conexão usa o repositório real e
+verifica rollback da revisão, além de permitir reconectar um ID existente.
 
 ## Workflow nativo e volume
 
@@ -27,8 +31,8 @@ parcelas inteiras e reconstrução BigInt; os valores ultrapassam int64/Number s
 
 | Registros | Tempo observado | Pico RSS workerd |
 | --- | --- | --- |
-| 10.000 | 1.704 ms | 390.460 KiB |
-| 100.000 | 16.912 ms | 469.060 KiB |
+| 10.000 | 3.831 ms | 398.020 KiB |
+| 100.000 | 32.481 ms | 473.340 KiB |
 
 RSS mede o processo local completo, incluindo o emulador e o armazenamento D1.
 Não é medição isolada do heap do Worker e não comprova o orçamento de memória/CPU
@@ -61,12 +65,18 @@ OAuth sintético cobre autorização, tools e revogação de todos os grants. Lo
 cobre cookies, CSRF, origem, versão, expiração e chave do limiter por IP confiável.
 Diagnósticos verificam isolamento concorrente, erro MCP com HTTP 200, redação,
 falhas de stream e observadores que não alteram o resultado da aplicação.
+O erro MCP identifica filtro inválido, configuração ausente e falha da importação,
+sem incluir a mensagem privada do banco. Sem credenciais, uma nova importação
+é recusada antes de reservar a janela de 24 horas. A correlação do diagnóstico
+MCP também é comparada ao `X-Request-ID` da resposta HTTP real do harness.
 
 ## Checks e limites externos
 
-`mise run check` reúne tipos gerados, TypeScript, layout, lint, testes Node,
-integrados, build dry-run e Workflow nativo. O relatório final do commit registra
-a execução após as correções/revisão; logs transitórios ficam em `work/tmp`.
+`mise run check` passou após as correções da revisão: tipos gerados, TypeScript,
+layout, lint, 20 testes Node, 31 testes integrados, build dry-run e o harness
+nativo de Workflow/volume/persistência. O log local é
+`work/tmp/check-final-refatoracao.log`; a medição acima pertence a essa execução.
+A [revisão por Standards e Spec](review-refatoracao.md) encerrou sem achados abertos.
 
 Ainda exigem execução separada: Deploy Button em conta nova, Pluggy real, OAuth
 num host MCP real e telemetria/limites remotos. Nenhum deploy, push, merge,

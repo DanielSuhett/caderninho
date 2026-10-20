@@ -47,6 +47,8 @@ const accountFields = {
   error: a.error,
   id: a.id,
   lastAttemptAt: a.lastAttemptAt,
+  lastCompletedFrom: a.lastCompletedFrom,
+  lastCompletedTo: a.lastCompletedTo,
   lastSuccessAt: a.lastSuccessAt,
   name: a.name,
   observedAt: a.observedAt,

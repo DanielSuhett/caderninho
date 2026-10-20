@@ -62,6 +62,7 @@ const importErrors = new Set<string>([
   "REPEATED_CURSOR",
   "STALE_COMMIT",
   "INVALID_CHECKPOINT",
+  "NOT_CONFIGURED",
 ]);
 export function importFailure(error: Error) {
   if (error instanceof Fault) {

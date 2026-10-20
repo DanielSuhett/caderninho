@@ -3,8 +3,15 @@ import assert from "node:assert/strict";
 import { beforeEach, test } from "vitest";
 import { z } from "zod/v4";
 
+import { database } from "../../src/worker/database";
+import { failureStatus } from "../../src/worker/http";
 import { createInstallationService } from "../../src/worker/installation";
 import { createInstallationRepository } from "../../src/worker/installation/repository";
+import {
+  classifyFailure,
+  failureOutcome,
+} from "../../src/worker/observability";
+import { settings } from "../../src/worker/schema";
 import { runImport } from "../../src/worker/sync";
 import { createSyncRepository } from "../../src/worker/sync/repository";
 import { applyD1Migrations, reset } from "cloudflare:test";
@@ -134,4 +141,46 @@ test("only Meu Pluggy is accepted, identity is checked and ten connections remai
   await assert.rejects(mismatch.connect("requested"), {
     message: "SOURCE_IDENTITY_MISMATCH",
   });
+});
+
+test("D1 enforces ten connections atomically and rolls back rejected registration revisions", async () => {
+  const repository = createInstallationRepository(env.DB);
+  const now = "2026-10-01T00:00:00Z";
+  await Promise.all(
+    Array.from({ length: 9 }, (_, index) =>
+      repository.register({ id: `c-${index}` }, now),
+    ),
+  );
+  const revision = async () => {
+    const [row] = await database(env.DB)
+      .select({ value: settings.revision })
+      .from(settings);
+    return row?.value;
+  };
+  const results = await Promise.allSettled([
+    repository.register({ id: "tenth" }, now),
+    repository.register({ id: "eleventh" }, now),
+  ]);
+  assert.equal(
+    results.filter((result) => result.status === "fulfilled").length,
+    1,
+  );
+  for (const result of results) {
+    if (result.status === "rejected") {
+      assert.ok(result.reason instanceof Error);
+      assert.equal(result.reason.message, "ITEM_LIMIT");
+      assert.equal(failureStatus(result.reason), 409);
+      assert.equal(classifyFailure(result.reason), "INVALID_REQUEST");
+      assert.equal(failureOutcome(classifyFailure(result.reason)), "rejected");
+    }
+  }
+  assert.equal((await repository.state()).connections.length, 10);
+  assert.equal(await revision(), 10);
+  await repository.register({ id: "c-0", status: "UPDATED" }, now);
+  const state = await repository.state();
+  assert.equal(
+    state.connections.find((row) => row.id === "c-0")?.status,
+    "UPDATED",
+  );
+  assert.equal(await revision(), 10);
 });
