@@ -39,16 +39,37 @@ test("Pluggy setup rejects anonymous requests, forged sessions and MCP credentia
   for (const response of denied) {
     assert.equal(response.status, 401);
   }
-  assert.equal((await app.request("/authorize")).status, 302);
-  const consent = await app.request("/authorize", {
-    body: new URLSearchParams({ decision: "approve", handle: "forged" }),
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
-      Origin: origin,
-    },
-    method: "POST",
-  });
-  assert.equal(consent.status, 401);
+  const privateReads = await Promise.all(
+    credentials.map((headers) => app.request("/api/account", { headers })),
+  );
+  for (const response of privateReads) {
+    assert.equal(response.status, 401);
+  }
+  const consents = await Promise.all(
+    credentials.map((credential) =>
+      app.request("/authorize", {
+        body: new URLSearchParams({ decision: "approve", handle: "forged" }),
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          Origin: origin,
+          ...credential,
+        },
+        method: "POST",
+      }),
+    ),
+  );
+  for (const response of consents) {
+    assert.equal(response.status, 401);
+  }
+  const assistantHeaders = { Authorization: `Bearer ${assistant}` };
+  assert.equal(
+    (await app.request("/account", { headers: assistantHeaders })).status,
+    302,
+  );
+  assert.equal(
+    (await app.request("/authorize", { headers: assistantHeaders })).status,
+    302,
+  );
   assert.equal(upstream.mock.calls.length, 0);
   assert.deepEqual(
     (await createInstallationRepository(app.config.DB).state()).connections,
@@ -72,6 +93,14 @@ test("widget tokens require owner CSRF/origin, bind updates to a registered Item
     const path = new URL(request.url).pathname;
     if (path === "/auth") {
       return Response.json({ apiKey: syntheticJwt() });
+    }
+    if (path === "/items/registered") {
+      assert.equal(request.method, "GET");
+      return Response.json({
+        connector: { id: 200 },
+        id: "registered",
+        status: "UPDATED",
+      });
     }
     assert.equal(path, "/connect_token");
     assert.equal(request.method, "POST");
@@ -113,10 +142,20 @@ test("widget tokens require owner CSRF/origin, bind updates to a registered Item
   );
   assert.equal(calls, 0);
 
-  await createInstallationRepository(app.config.DB).register(
-    { connector: { id: 200 }, id: "registered" },
-    "2026-10-20T12:00:00Z",
+  const connected = await app.request("/api/account/items", {
+    body: JSON.stringify({ csrf, itemId: "registered" }),
+    headers: { ...headers, Cookie: cookie },
+    method: "POST",
+  });
+  assert.equal(connected.status, 200);
+  const state = PortalResponseSchema.parse(
+    await (
+      await app.request("/api/account", {
+        headers: { Cookie: cookie },
+      })
+    ).json(),
   );
+  assert.equal(state.connections[0]?.id, "registered");
   await [{ csrf }, { csrf, itemId: "registered" }].reduce(
     async (previous, body) => {
       await previous;

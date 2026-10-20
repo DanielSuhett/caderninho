@@ -1,1 +1,1 @@
-export { createAuthService } from "./service";
+export { adminConfigured, returnPath, token, verifyPassword } from "./service";

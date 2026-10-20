@@ -1,10 +1,12 @@
 import type { Context, Next } from "hono";
-import { getCookie, setCookie } from "hono/cookie";
+import { getSignedCookie, setSignedCookie } from "hono/cookie";
+import { z } from "zod/v4";
 
 import { PortalIssue } from "../../../contracts";
+import { hash } from "../../../shared";
 import type { Bindings } from "../../bindings";
-import { authService } from "../../composition";
 import type { PortalSession } from "../entity";
+import { adminConfigured, token } from "../service";
 
 export const sessionCookie = "__Host-caderninho";
 export const cookieOptions = {
@@ -18,19 +20,54 @@ export interface PortalEnv {
   Variables: { session: PortalSession };
 }
 
+const SessionSchema = z.object({
+  csrf: z.string().min(1),
+  expires: z.number().int().positive(),
+}) satisfies z.ZodType<PortalSession>;
+const sessionMaxAge = 28_800;
+
+function signingSecret<E extends { Bindings: Bindings }>(c: Context<E>) {
+  return hash({
+    password: c.env.ADMIN_PASSWORD,
+    purpose: sessionCookie,
+    version: c.env.CF_VERSION_METADATA.id,
+  });
+}
+
 export async function readSession<E extends { Bindings: Bindings }>(
   c: Context<E>,
 ) {
-  const id = getCookie(c, sessionCookie);
-  return await (id ? authService(c.env).readSession(id) : null);
+  if (!adminConfigured(c.env.ADMIN_PASSWORD)) {
+    return null;
+  }
+  const value = await getSignedCookie(c, await signingSecret(c), sessionCookie);
+  if (!value) {
+    return null;
+  }
+  try {
+    const session = SessionSchema.safeParse(JSON.parse(value));
+    if (!session.success || session.data.expires <= Date.now()) {
+      return null;
+    }
+    return session.data;
+  } catch {
+    return null;
+  }
 }
 export async function createSession<E extends { Bindings: Bindings }>(
   c: Context<E>,
 ) {
-  const id = await authService(c.env).createSession(
-    getCookie(c, sessionCookie),
+  const session: PortalSession = {
+    csrf: token(),
+    expires: Date.now() + sessionMaxAge * 1000,
+  };
+  await setSignedCookie(
+    c,
+    sessionCookie,
+    JSON.stringify(session),
+    await signingSecret(c),
+    { ...cookieOptions, maxAge: sessionMaxAge },
   );
-  setCookie(c, sessionCookie, id, { ...cookieOptions, maxAge: 28_800 });
 }
 export async function sessionMiddleware(c: Context<PortalEnv>, next: Next) {
   const session = await readSession(c);
