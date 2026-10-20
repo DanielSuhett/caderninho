@@ -1,13 +1,11 @@
 export {
   AggregateQuerySchema,
   ConnectionSelectionSchema,
-  StatusInputSchema,
   TransactionQuerySchema,
 } from "./finance";
 export { PRODUCT_INSTRUCTIONS, ToolName, tools } from "./mcp-contract";
 export type {
   AccountConnectToken,
-  ConnectionInfo,
   InstallationState,
   PortalResponse,
 } from "./portal.types";

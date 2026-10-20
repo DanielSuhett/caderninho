@@ -1,19 +1,8 @@
 import type { FaultCode } from "./enums";
 
-export interface ErrorDetails {
-  code?: FaultCode;
-  exception?: string;
-  operation?: string;
-  previousSnapshotPreserved?: boolean;
-  reason?: string;
-  resumeToken?: string;
-  retryAfterSeconds?: number;
-  stage?: string;
-}
-
 export class Fault extends Error {
   readonly code: FaultCode;
-  details?: ErrorDetails;
+  details?: { retryAfterSeconds?: number };
 
   constructor(code: FaultCode) {
     super(code);

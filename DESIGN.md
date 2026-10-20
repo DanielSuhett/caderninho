@@ -4,9 +4,9 @@ Direção visual das telas próprias do produto: conexão Pluggy, gestão e cons
 
 ## Produto e público
 
-Caderninho é um MCP financeiro pessoal para pessoas técnicas. O conteúdo deve explicar ferramentas, contratos, sincronização, autenticação e operação na própria Cloudflare. O wizard facilita a configuração; não transforma o produto em um chat financeiro para leigos.
+Caderninho é um MCP financeiro pessoal para pessoas técnicas. O conteúdo deve explicar ferramentas, contratos, sincronização, autenticação e operação na própria Cloudflare. O painel facilita a conexão e a autorização do assistente; não transforma o produto em um chat financeiro para leigos.
 
-Nomeie componentes e ações concretamente: cliente MCP, Pluggy, D1, Workflows, OAuth, sincronizar, validar credenciais, consultar cobertura. Não invente dashboards, funções de orçamento ou aconselhamento. Exemplos são identificados como fictícios e não executam operações.
+Nomeie componentes e ações concretamente: cliente MCP, Pluggy, D1, Workflows, OAuth, sincronizar, validar credenciais, consultar parcialidade. Não invente dashboards, funções de orçamento ou aconselhamento. Exemplos são identificados como fictícios e não executam operações.
 
 ## Tokens
 
@@ -45,7 +45,7 @@ Superfícies só para agrupar trabalho relacionado. Raios: 10 px nos grupos; 6 p
 
 CTAs descrevem o destino: “Instalar na minha Cloudflare” abre o formulário nativo da Cloudflare; “Entrar nesta instância” vai para `/account`. Exemplos MCP exibem nomes e argumentos do contrato real. Identificar recortes de respostas; não representar exemplos como conexões ou resultados reais.
 
-Manter validações, proteção CSRF, campos ocultos e decisões OAuth ao alterar a apresentação. O widget Pluggy é de terceiros; não aplicar CSS do produto dentro delas.
+Manter validações, proteção CSRF, campos ocultos e decisões OAuth ao alterar a apresentação. O widget Pluggy é de terceiros; não aplicar CSS do produto dentro dele.
 
 ## Verificação
 

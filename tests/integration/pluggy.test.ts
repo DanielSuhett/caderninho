@@ -26,7 +26,11 @@ test("official SDK preserves numeric lexemes and only reads concrete account/tra
     }
     if (url.pathname === "/items/c") {
       return Promise.resolve(
-        Response.json({ connector: { id: 200 }, id: "c" }),
+        Response.json({
+          connector: { id: 200, name: "Unused connector name" },
+          id: "c",
+          status: "UPDATED",
+        }),
       );
     }
     if (url.pathname === "/accounts") {
@@ -38,6 +42,7 @@ test("official SDK preserves numeric lexemes and only reads concrete account/tra
               ...account(),
               privateMetadata: { ownerDocument: "synthetic-private" },
               taxNumber: "11122233344",
+              updatedAt: "2026-10-02T00:00:00Z",
             },
           ],
           total: 1,
@@ -55,7 +60,10 @@ test("official SDK preserves numeric lexemes and only reads concrete account/tra
     throw new Error("Unexpected endpoint");
   });
   const source = adapter();
-  await source.connection("c");
+  assert.deepEqual(await source.connection("c"), {
+    connector: { id: "200" },
+    id: "c",
+  });
   const [a] = await source.accounts("c");
   assert.ok(a);
   const page = await source.transactions("a", null);

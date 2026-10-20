@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
@@ -12,6 +12,7 @@ import { TransactionQuerySchema } from "../../src/contracts";
 import type { Cursor } from "../../src/domain";
 import { tryCatch } from "../../src/shared";
 import { createLogger } from "../../src/shared/logger";
+import { syntheticJwt } from "../support";
 import { poll, spawnManaged } from "../support/process";
 
 const whitespacePattern = /\s+/;
@@ -131,10 +132,16 @@ await test("native Workflow, 10k/100k volume and persistent installation", {
     peakWorkerdRssKiB = Math.max(peakWorkerdRssKiB, memory);
   }
 
+  let historySuccess: string | null = null;
   const { data: _data, error } = await tryCatch(async () => {
     await fetch(`${base}/setup`, { method: "POST" });
     const stateSchema = z.object({
-      connections: z.array(z.object({ importStatus: z.string().nullable() })),
+      connections: z.array(
+        z.object({
+          importStatus: z.string().nullable(),
+          lastSuccessAt: z.string().nullable(),
+        }),
+      ),
       sequence: z.number(),
       totals: z.object({
         groups: z.array(
@@ -250,6 +257,12 @@ await test("native Workflow, 10k/100k volume and persistent installation", {
       const expectedCounts = ["2", "3", "3", "3", "4"];
       assert.equal(result.totals.groups[0]?.count, expectedCounts[day - 1]);
       assert.equal(result.totals.partial, day === 5);
+      if (day === 4) {
+        historySuccess = result.connections[0]?.lastSuccessAt ?? null;
+      }
+      if (day === 5) {
+        assert.equal(result.connections[0]?.lastSuccessAt, historySuccess);
+      }
       assert.equal(
         result.connections[0]?.importStatus,
         day === 5 ? "failed" : "succeeded",
@@ -356,6 +369,81 @@ await test("native Workflow, 10k/100k volume and persistent installation", {
         0n,
       ),
       100_000n,
+    );
+    const history = z
+      .object({
+        connections: z.array(
+          z.object({
+            importStatus: z.string().nullable(),
+            lastSuccessAt: z.string().nullable(),
+          }),
+        ),
+        totals: z.object({
+          groups: z.array(
+            z.object({ count: z.string(), totalMinor: z.string().nullable() }),
+          ),
+          partial: z.boolean(),
+        }),
+      })
+      .parse(await (await fetch(`${base}/state?connection=history`)).json());
+    assert.equal(history.connections[0]?.importStatus, "failed");
+    assert.ok(historySuccess);
+    assert.equal(history.connections[0]?.lastSuccessAt, historySuccess);
+    assert.equal(history.totals.groups[0]?.count, "4");
+    assert.equal(history.totals.groups[0]?.totalMinor, "10700");
+    assert.equal(history.totals.partial, true);
+    const historyPage = z
+      .object({
+        records: z.array(
+          z.object({ amountMinor: z.string().nullable(), id: z.string() }),
+        ),
+      })
+      .parse(
+        await (
+          await fetch(`${base}/query`, {
+            body: JSON.stringify({
+              filter: { connectionIds: ["history"] },
+              limit: 200,
+            }),
+            headers: { "Content-Type": "application/json" },
+            method: "POST",
+          })
+        ).json(),
+      );
+    assert.deepEqual(
+      historyPage.records.map((row) => [row.id, row.amountMinor]).sort(),
+      [
+        ["00000000-0000-4000-8000-000000500067", "-1000"],
+        ["00000000-0000-4000-8000-000000500068", "-2700"],
+        ["00000000-0000-4000-8000-000000500069", "-3000"],
+        ["00000000-0000-4000-8000-000000500070", "-4000"],
+      ],
+    );
+    const assetRoot = join(cwd, "dist/web");
+    const assets = await readdir(assetRoot, {
+      recursive: true,
+      withFileTypes: true,
+    });
+    const contents = await Promise.all(
+      assets
+        .filter((asset) => asset.isFile())
+        .map((asset) => readFile(join(asset.parentPath, asset.name), "utf8")),
+    );
+    assert.ok(contents.length > 0);
+    for (const secret of [
+      "synthetic-personal-password",
+      "synthetic-client",
+      "synthetic-secret",
+      syntheticJwt("installation-private-api-key"),
+      "synthetic-limited-widget-token",
+    ]) {
+      assert.equal(
+        contents.some((content) => content.includes(secret)),
+        false,
+      );
+    }
+    logger.info(
+      "PASS: restart preserves cumulative history, exact totals and partial failure; built assets omit synthetic credentials",
     );
     logger.info(
       { state },

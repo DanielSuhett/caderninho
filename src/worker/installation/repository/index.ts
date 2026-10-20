@@ -10,13 +10,9 @@ export function createInstallationRepository(
 ): InstallationRepository {
   const db = database(binding);
   return {
-    async register(connection) {
+    async register(id) {
       const { data: _data, error } = await tryCatch(() =>
-        db
-          .insert(connections)
-          .values({ id: connection.id })
-          .onConflictDoNothing()
-          .run(),
+        db.insert(connections).values({ id }).onConflictDoNothing().run(),
       );
       if (!error) {
         return;

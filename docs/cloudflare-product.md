@@ -81,3 +81,81 @@ separada. [D1 batch](https://developers.cloudflare.com/d1/worker-api/d1-database
 [Workflows](https://developers.cloudflare.com/workflows/build/sleeping-and-retrying/)
 e [rate limit](https://developers.cloudflare.com/workers/runtime-apis/bindings/rate-limit/)
 são as referências das garantias de plataforma.
+
+## Contrato mínimo e consumidores
+
+As dezoito colunas têm consumidores observáveis. D1 não autentica o proprietário;
+a senha e a versão assinam o cookie, e grants OAuth continuam no KV existente.
+
+| Coluna de `connections` | Uso |
+| --- | --- |
+| `id` | Item verificado, reconexão e seleção da importação |
+| `accounts` | Status/saldos, filtro por conexão e fluxo BANK |
+| `import_id` | Recuperar o mesmo Workflow após despacho incerto |
+| `import_status` | Admissão concorrente, estado e parcialidade |
+| `import_admitted_at` | Cooldown derivado de 24 horas, inclusive em falha |
+| `import_sequence` | Guarda CHECK atômica, replay e invalidação de cursor |
+| `import_checkpoint` | Retomada por `phase`, `accountId` e `cursor`, somente |
+| `import_error` | Diagnóstico seguro da tentativa corrente |
+| `last_success_at` | Último término completo preservado após falha |
+
+| Coluna de `transactions` | Uso |
+| --- | --- |
+| `id` | Atualização idempotente pelo ID Pluggy e desempate de paginação |
+| `account_id` | Seleção, agrupamento e vínculo ao mapa da conexão |
+| `date` | Dia financeiro, filtro, ordenação e elegibilidade |
+| `amount_minor` | Dinheiro exato; `null` conserva valor desconhecido |
+| `currency` | Totais separados, inclusive moeda diferente da conta |
+| `direction` | Débito/crédito da origem, mesmo com zero/desconhecido |
+| `status` | Consulta de pendentes e elegibilidade de confirmados |
+| `description` | Consulta e filtro pelo texto da origem |
+| `category` | Filtro e agrupamento pela categoria da origem |
+
+Cada chave de `accounts` é o ID Pluggy. Os únicos cinco valores são `name`
+(rótulo do saldo), `type` (BANK/CREDIT e fluxo BANK), `currency` (moeda do saldo),
+`balanceMinor` (saldo exato/desconhecido) e `balanceObservedAt` (quando foi lido).
+Não há cópia de ID, vínculo, erros ou marcadores por conta. Metadados ausentes
+conservam a referência anterior; a parcialidade pertence à conexão.
+
+A prova vertical em `tests/integration/installation.test.ts` começa com D1 vazio,
+usa login HTTP, a API do painel e o adapter real do widget com SDK visual sintético.
+Ela conecta/reconecta, dispara a importação com o adapter HTTP Pluggy real sobre
+respostas sintéticas, consulta páginas/totais via MCP e autoriza/revoga OAuth.
+A/B → B atualizado/C conserva A e resulta em `900719925474099306` unidades BRL,
+acima da precisão de Number. O binding de despacho executa o importador localmente;
+os steps nativos, falhas/replay, 100 mil registros e reinício são uma prova separada
+em `tests/integration/run-runtime.ts`. Nenhuma delas demonstra provedor ou host real.
+
+A inspeção de D1 verifica exclusivamente o contrato de persistência: duas tabelas,
+nove colunas cada, cinco valores por conta e três no checkpoint. O comportamento
+financeiro é verificado por HTTP/MCP, não pela leitura de fontes ou configurações.
+Respostas/logs são conferidos com credenciais sintéticas, inclusive falha da origem;
+o harness verifica também os assets construídos. Cookies expirados/adulterados,
+visitantes e bearer MCP isolado não chegam aos endpoints owner da Pluggy/consentimento.
+
+## Redução de código e modelo
+
+| Medida | Baseline `cc59a79` | Produto mínimo |
+| --- | --- | --- |
+| Tabelas de aplicação | 6 | 2 |
+| Colunas por transação | 20 | 9 |
+| Tools MCP | 6 | 4 |
+| Arquivos TypeScript | 77 | 73 |
+| Linhas TypeScript | 6.615 | 5.243 |
+
+Método reproduzível: `git ls-tree -r --name-only REV src`; contar somente `.ts`
+e `.tsx`, excluindo `src/worker/runtime.d.ts` e caminhos com `/__tests__/`.
+Somar as linhas desses blobs com `git show REV:PATH`. Não é uma medida de assets
+ou testes. A base integrada `d810f748` (mesma medição de `90b1113`, antes do 05)
+tinha 76 arquivos e 5.442 linhas; este ticket retira três arquivos e 199 linhas.
+Desde o baseline, são 1.372 linhas a menos (20,74%).
+
+A auditoria retirou nome/status de Item sem consumidor, validadores/serializadores
+JSON e comparadores sem uso, detalhes de erro genéricos, opções HTTP sustentadas
+apenas pelos seus testes, aliases/exports e o botão de link sem consumidor. Índices
+restantes atendem data/conta/status/categoria; não há índice composto por conexão
+nem join para tabelas removidas. A dependência direta `@cfworker/json-schema` saiu:
+o SDK MCP já incorpora o validador. Os scripts npm `check`/`fix`, duplicados sem
+consumidores, também saíram; as tasks mise e dependências restantes atendem o
+produto e os checks. Relatórios obsoletos com migrações/overrides/recibos removidos
+foram retirados junto dos links ativos.

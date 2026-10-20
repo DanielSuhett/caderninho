@@ -4,9 +4,8 @@ export interface Credentials {
 }
 export type MoneyInput = string | number | null | undefined;
 export interface ProviderConnection {
-  connector?: { id: string | number; name?: string | undefined } | undefined;
+  connector?: { id: string | number } | undefined;
   id: string;
-  status?: string | undefined;
 }
 export interface ProviderAccount {
   balance?: MoneyInput;

@@ -13,9 +13,8 @@ export const PluggyCredentialsSchema = z.object({
   clientSecret: z.string().min(1),
 }) satisfies z.ZodType<Credentials>;
 export const ProviderConnectionSchema = z.object({
-  connector: z.object({ id: money, name: z.string().optional() }).optional(),
+  connector: z.object({ id: money }).optional(),
   id: z.string(),
-  status: z.string().optional(),
 }) satisfies z.ZodType<ProviderConnection>;
 export const ProviderAccountSchema = z.object({
   balance: money.nullish(),

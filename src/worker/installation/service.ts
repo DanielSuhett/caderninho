@@ -24,7 +24,7 @@ export function createInstallationService({
         count: state.connections.length,
         exists: state.connections.some((row) => row.id === id),
       });
-      await repository.register(connection);
+      await repository.register(id);
     },
     state: repository.state,
     async token(id?: string) {

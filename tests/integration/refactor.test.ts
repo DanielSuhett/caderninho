@@ -29,10 +29,7 @@ beforeEach(async () => {
 });
 
 test("one import publishes exact transactions and repeating the request reuses the active run", async () => {
-  await createInstallationRepository(env.DB).register({
-    connector: { id: 200 },
-    id: "c",
-  });
+  await createInstallationRepository(env.DB).register("c");
   const repository = createSyncRepository(env.DB);
   const first = await repository.admit(["c"], "2026-10-01T00:00:00Z");
   const repeated = await repository.admit(["c"], "2026-10-01T00:00:00Z");
@@ -87,7 +84,7 @@ test("a new installation registers only verified personal connections and keeps 
     source: {
       configured: true,
       connection: async (id) => ({
-        connector: { id: 200, name: "Synthetic bank" },
+        connector: { id: 200 },
         id,
       }),
       token: async () => ({ accessToken: "synthetic" }),
@@ -143,13 +140,11 @@ test("only Meu Pluggy is accepted, identity is checked and ten connections remai
 test("D1 enforces ten connections atomically and keeps reconnection idempotent", async () => {
   const repository = createInstallationRepository(env.DB);
   await Promise.all(
-    Array.from({ length: 9 }, (_, index) =>
-      repository.register({ id: `c-${index}` }),
-    ),
+    Array.from({ length: 9 }, (_, index) => repository.register(`c-${index}`)),
   );
   const results = await Promise.allSettled([
-    repository.register({ id: "tenth" }),
-    repository.register({ id: "eleventh" }),
+    repository.register("tenth"),
+    repository.register("eleventh"),
   ]);
   assert.equal(
     results.filter((result) => result.status === "fulfilled").length,
@@ -166,7 +161,7 @@ test("D1 enforces ten connections atomically and keeps reconnection idempotent",
   }
   assert.equal((await repository.state()).connections.length, 10);
   const before = await repository.state();
-  await repository.register({ id: "c-0", status: "UPDATED" });
+  await repository.register("c-0");
   const state = await repository.state();
   assert.deepEqual(state, before);
 });

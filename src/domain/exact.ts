@@ -2,16 +2,14 @@ import Big from "big.js";
 import { parse } from "lossless-json";
 import { z } from "zod/v4";
 
-import { JsonValueSchema } from "../shared";
 import { FaultCode } from "./enums";
 import { fail } from "./fault.entity";
-import type { MoneyInput } from "./finance.entity";
-import { parseDomain } from "./validation";
+import type { MoneyInput } from "./provider.entity";
 
+const json = z.json();
 const canonicalMinorPattern = /^-?(0|[1-9]\d{0,29})$/;
 const decimalPattern = /^[-+]?\d+(?:\.\d+)?(?:e[-+]?\d+)?$/i;
 const dayPattern = /^\d{4}-\d{2}-\d{2}$/;
-const identifierPattern = /^[a-zA-Z0-9_-]{1,128}$/;
 
 export function assertMinor(value: string) {
   if (!canonicalMinorPattern.test(value)) {
@@ -23,7 +21,7 @@ export function assertMinor(value: string) {
 
 // Preserve JSON numeric lexemes before JavaScript can round amounts, quantities or rates.
 export function exactJSON(text: string) {
-  return JsonValueSchema.parse(parse(text, null, (lexeme) => lexeme));
+  return json.parse(parse(text, null, (lexeme) => lexeme));
 }
 
 export function decimal(value: MoneyInput) {
@@ -86,7 +84,7 @@ export function minor(value: MoneyInput, currency: string) {
   ).toString();
 }
 
-export function day(value: unknown) {
+function day(value: unknown) {
   if (
     typeof value !== "string" ||
     !dayPattern.test(value) ||
@@ -102,21 +100,6 @@ export function day(value: unknown) {
 export const accountingDay = (value: string | null | undefined) =>
   value === null || value === undefined ? null : day(value.slice(0, 10));
 
-export function isMatureDate({
-  date,
-  referenceDay,
-}: {
-  date: string | null | undefined;
-  referenceDay: string | null;
-}) {
-  return (
-    date !== null &&
-    date !== undefined &&
-    referenceDay !== null &&
-    date <= referenceDay
-  );
-}
-
 export function localDay(value: Date) {
   return new Intl.DateTimeFormat("en-CA", {
     day: "2-digit",
@@ -124,27 +107,4 @@ export function localDay(value: Date) {
     timeZone: "America/Sao_Paulo",
     year: "numeric",
   }).format(value);
-}
-
-export function id(value: unknown) {
-  return parseDomain(
-    z.string().regex(identifierPattern),
-    value,
-    FaultCode.INVALID_ID,
-  );
-}
-
-export function compareDecimal(a: MoneyInput, b: MoneyInput) {
-  const x = decimal(a);
-
-  if (x === null) {
-    fail(FaultCode.INVALID_DECIMAL);
-  }
-  const y = decimal(b);
-
-  if (y === null) {
-    fail(FaultCode.INVALID_DECIMAL);
-  }
-
-  return new Big(x).cmp(y);
 }

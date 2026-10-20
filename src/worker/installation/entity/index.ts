@@ -4,7 +4,7 @@ export interface StatusSelection {
   connectionIds?: string[] | undefined;
 }
 export interface InstallationRepository {
-  register: (connection: ProviderConnection) => Promise<void>;
+  register: (id: string) => Promise<void>;
   state: (selection?: StatusSelection) => Promise<InstallationState>;
 }
 export interface InstallationSource {

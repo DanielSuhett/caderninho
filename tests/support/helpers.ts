@@ -1,33 +1,15 @@
-import { z } from "zod/v4";
-
-// MCP transport probes retain unrecognized JSON fields for wire parity checks.
-const ResultSchema = z
-  .object({
-    content: z
-      .array(
-        z.object({ text: z.string().optional(), type: z.string() }).loose(),
-      )
-      .optional(),
-    isError: z.boolean().optional(),
-  })
-  .loose();
-const EnvelopeSchema = z
-  .object({
-    error: z
-      .object({
-        code: z.number(),
-        data: z.json().optional(),
-        message: z.string(),
-      })
-      .optional(),
-    id: z.union([z.string(), z.number(), z.null()]),
-    jsonrpc: z.string(),
-    result: ResultSchema.optional(),
-  })
-  .loose();
-export async function responseJson(response: Response) {
-  return EnvelopeSchema.parse(await response.json());
+// Syntactically valid JWT for the official SDK's expiry check; not a real credential.
+export function syntheticJwt(subject = "synthetic") {
+  const encode = (value: string) =>
+    btoa(value).replaceAll("=", "").replaceAll("+", "-").replaceAll("/", "_");
+  return (
+    encode('{"alg":"HS256","typ":"JWT"}') +
+    "." +
+    encode(JSON.stringify({ exp: 4_102_444_800, sub: subject })) +
+    ".synthetic"
+  );
 }
+
 export function required<T>(value: T): NonNullable<T> {
   if (value === null || value === undefined) {
     throw new Error("expected a present value");

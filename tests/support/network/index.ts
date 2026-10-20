@@ -1,16 +1,6 @@
 import { vi } from "vitest";
 
-// Syntactically valid JWT for the official SDK's expiry check; not a real credential.
-export function syntheticJwt(subject = "synthetic") {
-  const encode = (value: string) =>
-    btoa(value).replaceAll("=", "").replaceAll("+", "-").replaceAll("/", "_");
-  return (
-    encode('{"alg":"HS256","typ":"JWT"}') +
-    "." +
-    encode(JSON.stringify({ exp: 4_102_444_800, sub: subject })) +
-    ".synthetic"
-  );
-}
+export { syntheticJwt } from "../helpers";
 
 // Both Ky and workerd's node:http client use Fetch. Normalize their Request forms
 // so fixtures exercise the real clients without network access or private data.

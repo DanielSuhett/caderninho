@@ -4,9 +4,9 @@ Use o `X-Request-ID` da resposta para uma requisição e o ID de importação ex
 pelo painel/status para o trabalho durável. D1 é a fonte do estado financeiro;
 HTTP 200 ou Workflow nativo terminado não comprovam sucesso financeiro.
 
-1. Confira `sync_runs.status`, erro seguro e horários pelo painel/status.
-2. Compare qualidade da conta, última tentativa, último sucesso e intervalo
-   observado. `partial` não representa uma enumeração concluída.
+1. Confira estado/fase/conta da importação corrente e erro seguro pelo painel/status.
+2. Compare último sucesso, próxima elegibilidade e horário de leitura do saldo.
+   `partial` não representa uma enumeração concluída.
 3. Busque a correlação em logs e abra o trace amostrado, quando disponível.
 4. Em despacho incerto, repita o pedido de importação ou aguarde o cron. Não apague
    dados nem altere a janela de admissão para forçar uma tentativa.
@@ -20,14 +20,15 @@ logger ou SDK de tracing; a composição envolve portas e recebe resumos estreit
 para recuperações incertas.
 
 Spans têm nomes fixos: requisição HTTP, autenticação, ação MCP/financeira,
-leitura Pluggy, admissão, despacho, publicação, execução e manutenção. Cada página
+leitura Pluggy, admissão, despacho, publicação, execução e recuperação. Cada página
 produz um resumo; não há span por transação. O encerramento do stream MCP tem
 tratamento próprio de falha, cancelamento e liberação do handler.
 
 Erros de tool são classificados pelo resultado, mesmo em HTTP 200. Recusas
 esperadas e sucesso usam debug; recuperações incertas usam warn; falhas inesperadas
 usam error. Uma publicação já confirmada é replay e não implica nova leitura ou
-novo commit. A revisão/recibo no D1 continua sendo a prova da confirmação.
+novo commit. O mesmo ID de importação com sequência N+1 no D1 comprova a última
+página confirmada; sequências mais avançadas recusam o executor obsoleto.
 
 A instrumentação própria exclui secrets, URLs, corpos, cursores, argumentos,
 resultados de tools, identidades financeiras e texto arbitrário de exceções.
@@ -53,8 +54,7 @@ Os testes sintéticos exercitam OAuth/MCP HTTP 200 com erro, correlação isolad
 redação, streams, replay, rollback, recuperação, precisão financeira e Workflow
 nativo. `mise run check` inclui o harness local e volume de 10 mil/100 mil registros.
 Isso não valida automaticamente Pluggy, OAuth em host MCP, provisionamento ou
-telemetria remota. A [investigação anterior](investigations/2026-10-18-sync-source-identity-mismatch.md)
-é histórica e descreve o modelo anterior à refatoração.
+telemetria remota.
 
 Referências: [spans Cloudflare](https://developers.cloudflare.com/workers/observability/traces/custom-spans/),
 [amostragem](https://developers.cloudflare.com/workers/observability/traces/#sampling)

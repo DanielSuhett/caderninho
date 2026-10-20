@@ -10,7 +10,6 @@ import {
   AggregateQuerySchema,
   ConnectionSelectionSchema,
   PRODUCT_INSTRUCTIONS,
-  StatusInputSchema,
   ToolName,
   TransactionQuerySchema,
   tools,
@@ -45,7 +44,7 @@ async function invoke(env: Bindings, name: string, args: unknown) {
   const finance = financialService(env);
   switch (name) {
     case ToolName.status: {
-      const input = StatusInputSchema.parse(args);
+      const input = ConnectionSelectionSchema.parse(args);
       const installation = installationService(env);
       return {
         configured: installation.configured,

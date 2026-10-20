@@ -17,7 +17,7 @@ transações. As consultas e a importação estão descritas no [guia de uso](us
 
 | Módulo Worker | Responsabilidade |
 | --- | --- |
-| `installation` | Conexões e configuração da instalação; dados do painel |
+| `installation` | Conexões e dados do painel |
 | `auth` | Senha, cookies assinados, OAuth oficial e revogação de assistentes |
 | `finance` | Contas, transações, consultas e totais objetivos |
 | `sync` | Admissão diária, despacho, páginas e commits duráveis |
@@ -44,6 +44,8 @@ direction, status, description e category. O ID do recurso Pluggy identifica a
 transação nesta instalação com uma aplicação Pluggy. A conexão e o tipo BANK
 são resolvidos pelo mapa pequeno de contas, sem repetir esses dados no histórico.
 Não são guardados documentos pessoais, payloads ou marcadores de qualidade por conta.
+A [referência técnica](cloudflare-product.md#contrato-mínimo-e-consumidores)
+registra o consumidor de cada coluna e dos cinco valores por conta.
 
 ## Importação
 
@@ -104,7 +106,7 @@ America/Sao_Paulo. Pendentes e futuros ficam fora dos totais monetários e
 continuam consultáveis. Contagem inclui todos os registros da seleção; débitos e
 créditos são magnitudes da direção da origem e cash_flow é o fluxo assinado BANK.
 Débito não equivale a gasto e crédito não equivale a renda. Valores desconhecidos
-permanecem null e a qualidade da coleta acompanha consultas e agregações.
+permanecem null e a parcialidade da coleta acompanha consultas e agregações.
 
 ## Acesso e operação
 

@@ -9,16 +9,26 @@ import { cookies, fixture, grant, login, origin } from "./access-fixture";
 import { setup } from "./fixture";
 
 beforeEach(setup);
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
 
-test("Pluggy setup rejects anonymous requests, forged sessions and MCP credentials before contacting the provider", async () => {
+test("Pluggy setup rejects anonymous requests, tampered/expired cookies and MCP credentials before contacting the provider", async () => {
   const app = fixture();
-  const assistant = await grant(app, cookies(await login(app)));
+  const owner = cookies(await login(app));
+  const clock = vi
+    .spyOn(Date, "now")
+    .mockReturnValue(Date.now() - 8 * 60 * 60 * 1000);
+  const expired = cookies(await login(app));
+  clock.mockRestore();
+  const assistant = await grant(app, owner);
   const upstream = vi.fn(async () => new Response(null, { status: 500 }));
   mockNetwork(upstream);
   const credentials = [
     {},
-    { Cookie: "__Host-caderninho=forged" },
+    { Cookie: owner.replace("__Host-caderninho=", "__Host-caderninho=x") },
+    { Cookie: expired },
     { Authorization: `Bearer ${assistant}` },
   ];
   const denied = await Promise.all(
