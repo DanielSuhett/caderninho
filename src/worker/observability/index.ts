@@ -16,7 +16,6 @@ export const SpanName = {
   dispatch: "sync.dispatch",
   financeAction: "finance.action",
   httpRequest: "http.request",
-  maintenance: "sync.maintenance",
   mcpCall: "mcp.call",
   mcpStream: "mcp.stream",
   phase: "sync.phase",
@@ -56,7 +55,6 @@ export type Recovery = (typeof Recovery)[keyof typeof Recovery];
 export const DiagnosticEvent = {
   dispatch: "SYNC_DISPATCH",
   http: "HTTP_REQUEST",
-  maintenance: "MAINTENANCE",
   mcp: "MCP_REQUEST",
   operation: "SYNC_OPERATION",
   recovery: "SYNC_RECOVERY",
@@ -142,7 +140,6 @@ export function failureOutcome(failure: FailureCode): Outcome {
 export interface SafeFields {
   action?:
     | (typeof ToolName)[keyof typeof ToolName]
-    | "compact_sync"
     | "status"
     | "tools_list"
     | "read"
@@ -152,8 +149,6 @@ export interface SafeFields {
     | "authorize"
     | "token"
     | "connect"
-    | "pause"
-    | "resume"
     | "sync"
     | "disconnect"
     | "query"

@@ -49,7 +49,7 @@ test("personal login protects private reads and logout only clears the browser c
     headers: { Cookie: cookie },
   });
   const state = PortalResponseSchema.parse(await response.json());
-  assert.equal(state.enabled, true);
+  assert.deepEqual(state.connections, []);
   assert.equal(response.headers.get("Cache-Control"), "no-store");
   assert.ok(
     response.headers
@@ -207,7 +207,7 @@ test("panel commands require exact CSRF/origin/content type and GET status has n
     ).json(),
   );
   const request = (headers: HeadersInit, body = { csrf }) =>
-    app.request("/api/account/pause", {
+    app.request("/api/account/logout", {
       body: JSON.stringify(body),
       headers: { Cookie: cookie, ...headers },
       method: "POST",
@@ -234,22 +234,14 @@ test("panel commands require exact CSRF/origin/content type and GET status has n
     (await request({ "Content-Type": "text/plain", Origin: origin })).status,
     415,
   );
-  assert.equal((await command(app, cookie, "pause")).status, 200);
-  assert.equal(
-    PortalResponseSchema.parse(
-      await (
-        await app.request("/api/account", { headers: { Cookie: cookie } })
-      ).json(),
-    ).enabled,
-    false,
-  );
-  assert.equal((await command(app, cookie, "resume")).status, 200);
+  assert.equal((await command(app, cookie, "pause")).status, 404);
+  assert.equal((await command(app, cookie, "resume")).status, 404);
   assert.deepEqual(
     PortalResponseSchema.parse(
       await (
         await app.request("/api/account", { headers: { Cookie: cookie } })
       ).json(),
-    ).runs,
+    ).connections,
     [],
   );
 });

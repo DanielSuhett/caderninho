@@ -45,7 +45,6 @@ async function importAccounts(
   const [first] = prepared;
   return repository.publish({
     accounts: prepared,
-    connection,
     done: false,
     next: {
       accountId: first?.id ?? null,
@@ -88,13 +87,18 @@ async function importTransactions(
 async function importPage(dependencies: ImportDependencies, run: SyncRun) {
   const { repository, now } = dependencies;
   const replay = await repository.read(run.id);
-  if (
-    replay.lastCommitId === `${run.id}:${run.sequence}` &&
-    replay.lastResult
-  ) {
-    return replay.lastResult;
+  if (replay.id === run.id && replay.sequence === run.sequence + 1) {
+    return {
+      checkpoint: replay.checkpoint,
+      done: replay.status === "succeeded",
+      sequence: replay.sequence,
+    };
   }
-  if (replay.sequence !== run.sequence || replay.status !== "running") {
+  if (
+    replay.id !== run.id ||
+    replay.sequence !== run.sequence ||
+    replay.status !== "running"
+  ) {
     throw new Error("STALE_COMMIT");
   }
   switch (run.checkpoint.phase) {
@@ -115,8 +119,8 @@ export async function runImport(
   dependencies: ImportDependencies,
   id: string,
 ): Promise<void> {
-  const { repository, steps, now } = dependencies;
-  await repository.start(id, now());
+  const { repository, steps } = dependencies;
+  await repository.start(id);
   async function next(): Promise<void> {
     const run = await repository.read(id);
     if (run.status !== "running") {
@@ -129,7 +133,7 @@ export async function runImport(
   if (!error || error.message === "STALE_COMMIT") {
     return;
   }
-  await repository.fail(id, importFailure(error), now());
+  await repository.fail(id, importFailure(error));
   throw error;
 }
 export function createSyncService(
@@ -163,7 +167,7 @@ export function createSyncService(
       };
     }
     if (["errored", "terminated", "complete"].includes(data)) {
-      await repository.fail(run.id, "EXECUTOR_TERMINATED", now().toISOString());
+      await repository.fail(run.id, "EXECUTOR_TERMINATED");
     }
     return {
       dispatchPending: 0,
@@ -172,10 +176,6 @@ export function createSyncService(
     };
   }
   return {
-    compact: () =>
-      repository.compact(
-        new Date(now().getTime() - 30 * 86_400_000).toISOString(),
-      ),
     async recover() {
       const results = await Promise.all(
         (await repository.active()).map(recoverRun),
@@ -195,9 +195,9 @@ export function createSyncService(
       const admissions = await repository.admit(ids, now().toISOString());
       const pending = await Promise.all(
         admissions.map((admission) =>
-          admission.runId &&
+          admission.importId &&
           (admission.status === "started" || admission.status === "working")
-            ? dispatch(admission.runId)
+            ? dispatch(admission.importId)
             : false,
         ),
       );

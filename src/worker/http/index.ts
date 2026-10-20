@@ -35,8 +35,6 @@ const requestActions = new Map<string, NonNullable<SafeFields["action"]>>([
   ["/api/account", "read"],
   ["/api/account/connect-token", "token"],
   ["/api/account/items", "connect"],
-  ["/api/account/pause", "pause"],
-  ["/api/account/resume", "resume"],
   ["/api/account/sync", "sync"],
   ["/api/account/disconnect-assistants", "disconnect"],
   ["/api/account/logout", "logout"],

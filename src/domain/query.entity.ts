@@ -17,8 +17,8 @@ export interface Cursor {
   connectionId: string;
   date: string;
   id: string;
-  revision: number;
   scope: string;
+  state: string;
 }
 export interface TransactionQuery {
   cursor?: Cursor | undefined;

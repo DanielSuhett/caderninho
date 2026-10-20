@@ -2,25 +2,13 @@ import { and, eq, ne, sql } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 
 import type { database } from "../../database";
-import { accounts, connections, transactions } from "../../schema";
+import { accounts, transactions } from "../../schema";
 import type { Publication } from "../entity";
 
 type Database = ReturnType<typeof database>;
 function accountWrites(db: Database, input: Publication) {
   const { run, now } = input;
   const edits: BatchItem<"sqlite">[] = [];
-  if (input.connection) {
-    edits.push(
-      db
-        .update(connections)
-        .set({
-          name: input.connection.connector?.name ?? "Meu Pluggy",
-          observedAt: now,
-          status: input.connection.status ?? "unknown",
-        })
-        .where(eq(connections.id, run.connectionId)),
-    );
-  }
   if (input.accounts) {
     for (const account of input.accounts) {
       const value = {
@@ -84,7 +72,7 @@ function transactionWrites(db: Database, input: Publication) {
 }
 
 function coverageWrites(db: Database, input: Publication) {
-  const { run, now, done } = input;
+  const { run, now } = input;
   const edits: BatchItem<"sqlite">[] = [];
   const dates = input.transactions?.map((row) => row.date).sort();
   if (dates?.length && run.checkpoint.accountId) {
@@ -124,14 +112,6 @@ function coverageWrites(db: Database, input: Publication) {
             eq(accounts.id, input.completeAccountId),
           ),
         ),
-    );
-  }
-  if (done) {
-    edits.push(
-      db
-        .update(connections)
-        .set({ lastSuccessAt: now })
-        .where(eq(connections.id, run.connectionId)),
     );
   }
 

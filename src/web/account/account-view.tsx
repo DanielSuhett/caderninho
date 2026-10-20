@@ -12,7 +12,7 @@ import { UiButton } from "../ui";
 import { createAccountApi } from "./account-api";
 import { createConnectWidget } from "./connect-widget";
 
-const runLabels = {
+const importLabels = {
   failed: "Importação falhou",
   pending: "Aguardando importação",
   running: "Importando",
@@ -233,9 +233,23 @@ export function AccountView() {
         <ul>
           {snapshot.connections.map((connection) => (
             <li key={connection.id}>
-              <strong>{connection.name}</strong> · {connection.status}
+              <strong>Meu Pluggy</strong> ·{" "}
+              {connection.importStatus
+                ? importLabels[connection.importStatus]
+                : "Ainda não importada"}
               <br />
-              Próxima elegibilidade: {timestamp(connection.nextImportAt)}{" "}
+              Fase: {connection.importCheckpoint?.phase ?? "—"} · Conta:{" "}
+              {connection.importCheckpoint?.accountId ?? "—"}
+              <br />
+              Último sucesso: {timestamp(connection.lastSuccessAt)}
+              {!!connection.importError && (
+                <p>
+                  Erro: {connection.importError}. Confira a conexão e aguarde a
+                  próxima elegibilidade.
+                </p>
+              )}
+              <br />
+              Próxima elegibilidade: {timestamp(connection.nextEligibleAt)}{" "}
               <UiButton
                 disabled={busy}
                 onClick={handleConnect}
@@ -244,16 +258,6 @@ export function AccountView() {
               >
                 Reconectar
               </UiButton>
-            </li>
-          ))}
-        </ul>
-        <ul>
-          {snapshot.runs.slice(0, 10).map((run) => (
-            <li key={run.id}>
-              {runLabels[run.status]} · {run.records} registros ·{" "}
-              {timestamp(run.updatedAt)}
-              {!!run.error &&
-                ". Confira a conexão e aguarde a próxima elegibilidade."}
             </li>
           ))}
         </ul>
@@ -286,20 +290,6 @@ export function AccountView() {
       </section>
       <section aria-labelledby="maintenance-heading">
         <h2 id="maintenance-heading">3. Mantenha seu acesso</h2>
-        <p>
-          {snapshot.enabled
-            ? "Importação diária habilitada. A pausa impede novas importações."
-            : "Novas importações estão pausadas."}{" "}
-          Importações já iniciadas continuam.
-        </p>
-        <UiButton
-          disabled={busy}
-          onClick={handleCommand}
-          type="button"
-          value={snapshot.enabled ? "pause" : "resume"}
-        >
-          {snapshot.enabled ? "Pausar importações" : "Retomar importações"}
-        </UiButton>
         <UiButton
           disabled={busy}
           onClick={handleCommand}
