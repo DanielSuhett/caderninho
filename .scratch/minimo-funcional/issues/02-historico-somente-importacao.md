@@ -16,5 +16,7 @@
 
 - A branch `t3/cumulative-import-history` implementa esta fatia com cinco tools, mantendo `accounts`, `connection_id`, revisão e `sync_runs`. O checklist e a resolução ficam para a revisão do integrador.
 - MCP verifica A/B → A/B atualizado/C, repetição, janela vazia, invalidação de cursor e falha após página confirmada. Totais passam de 3000 para 6500 e, na falha parcial com B atualizado/D, 10700. Dinheiro exato, moedas, status, datas, zero e valores desconhecidos continuam cobertos.
-- O harness Workflow/D1 nativo repete esse cenário, valida replay/rollback e persistência após reinício, além de 10 mil/100 mil transações. Só usa dados sintéticos e recursos locais.
+- O D1 local verifica rollback do batch. O harness Workflow/D1 nativo repete esse cenário, valida replay e persistência após reinício, além de 10 mil/100 mil transações. Só usa dados sintéticos e recursos locais.
 - A fronteira Pluggy rejeita cursor inválido, de outra conta, repetido imediatamente ou com continuação vazia. A detecção antiga de páginas inteiras já vistas foi retirada junto de `transactions.last_seen_run`; ciclos arbitrários entre cursores distintos não têm ledger nem marcador substituto. A enumeração de contas ainda usa seu marcador próprio até os tickets 03/04.
+
+Validação integrada em `refactor/minimo-funcional` até `369144f`: `mise run check:quick`, Ultracite check/doctor e `PRODUCT_TEST_PORT=8917 mise run check` passaram. O check completo executou 18 testes Node, 33 testes de produto, build dry-run e harness nativo (incluindo 100 mil transações e reinício). Log local: `work/ticket02-check.log`. Nenhum deploy, push, provisionamento ou acesso remoto foi executado.
