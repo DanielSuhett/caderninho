@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { assertMinor, compareDecimal, decimal, minor } from "..";
+import { assertMinor, decimal, minor } from "..";
 
 const canonicalMinorErrorPattern = /canonical integer, at most 30 digits/;
 const invalidDecimalPattern = /INVALID_DECIMAL/;
@@ -56,7 +56,7 @@ await test("decimal canonical output preserves signs, exponent bounds and values
   }
 });
 
-await test("decimal rejection and comparison preserve left-to-right error precedence", () => {
+await test("decimal rejects malformed values and unbounded exponents", () => {
   for (const input of [
     "",
     "NaN",
@@ -73,22 +73,6 @@ await test("decimal rejection and comparison preserve left-to-right error preced
 
   for (const input of ["1e31", "1e-31", "1e99999999999999999"]) {
     assert.throws(() => decimal(input), decimalRangePattern);
-  }
-
-  assert.throws(() => compareDecimal(null, "1e31"), invalidDecimalPattern);
-  assert.throws(() => compareDecimal("1e31", null), decimalRangePattern);
-  assert.throws(() => compareDecimal("1", undefined), invalidDecimalPattern);
-
-  for (const [a, b, expected] of [
-    ["9007199254740993.29", "9007199254740993.28", 1],
-    ["-9007199254740993.29", "-9007199254740993.28", -1],
-    ["+001.23000", "123e-2", 0],
-    ["-0", "0", 0],
-    ["1e-30", "0", 1],
-    ["0", "1e30", -1],
-    ["0.12345678901234567891", "0.12345678901234567890", 1],
-  ] satisfies [string, string, number][]) {
-    assert.equal(compareDecimal(a, b), expected);
   }
 });
 

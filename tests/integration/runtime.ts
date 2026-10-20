@@ -193,7 +193,7 @@ export default {
       ) {
         return new Response("Invalid fixture", { status: 400 });
       }
-      await installation.register({ connector: { id: 200 }, id });
+      await installation.register(id);
       return Response.json({ ok: true });
     }
     if (path === "/start" && request.method === "POST") {

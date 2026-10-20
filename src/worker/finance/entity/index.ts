@@ -5,11 +5,9 @@ import type {
   TransactionQuery,
 } from "../../../domain";
 
-export interface Quality {
-  partial: boolean;
-}
-export interface QueryResult extends Quality {
+export interface QueryResult {
   cursor: Cursor | null;
+  partial: boolean;
   records: TransactionProjection[];
   referenceDay: string;
 }
@@ -20,10 +18,11 @@ export interface AggregateGroup {
   totalMinor: string | null;
   unknownAmountCount: string;
 }
-export interface AggregateResult extends Quality {
+export interface AggregateResult {
   definition: string;
   groups: AggregateGroup[];
   metric: AggregateQuery["metric"];
+  partial: boolean;
   referenceDay: string;
 }
 export interface FinancialRepository {

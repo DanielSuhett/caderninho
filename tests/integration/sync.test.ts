@@ -23,8 +23,8 @@ const finance = () => createFinancialService(createFinancialRepository(env.DB));
 beforeEach(setup);
 test("simultaneous manual/cron admissions are isolated by connection and enforce 24h even after failure", async () => {
   const installation = createInstallationRepository(env.DB);
-  await installation.register({ connector: { id: 200 }, id: "c" });
-  await installation.register({ connector: { id: 200 }, id: "d" });
+  await installation.register("c");
+  await installation.register("d");
   const repository = createSyncRepository(env.DB);
   const results = await Promise.all([
     repository.admit(["c"], now),
@@ -206,10 +206,7 @@ test("dispatch uncertainty recovers the same ID and terminal native failures do 
   let native = "running";
   const ids: string[] = [];
   const repository = createSyncRepository(env.DB);
-  await createInstallationRepository(env.DB).register({
-    connector: { id: 200 },
-    id: "c",
-  });
+  await createInstallationRepository(env.DB).register("c");
   const service = createSyncService(
     repository,
     {

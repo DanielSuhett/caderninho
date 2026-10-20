@@ -53,9 +53,6 @@ com `nvm use`, execute `npm ci` e os comandos de `package.json`.
 A CI executa os checks com dados sintéticos, SQLite e workerd locais. Não faz
 deploy nem consulta bancos reais. Build dry-run e execução local são provas distintas.
 
-O [relatório visual da sessão de 18/10/2026](docs/visuals/sessao-arquitetura-2026-10-18.html)
-registra as refatorações, evidências e arquivos alterados naquele ciclo.
-
 ## Layout e TypeScript
 
 Ultracite 8 usa Biome com os presets `core`, `react` e `vitest`. As regras próprias
@@ -136,8 +133,8 @@ em runtime.
 - Índices públicos exportam services e contratos. Implementações de persistência
   têm um índice próprio, acessível à composição e aos testes de integração.
 - `sync/service.ts` concentra o único fluxo de importação. Seu repository confirma
-  dados, qualidade, revisão e checkpoint no mesmo batch; `publication.repository.ts`
-  prepara os writes da página. Adapters Pluggy, OAuth e Workflow permanecem explícitos.
+  metadados, transações, estado, sequência e checkpoint no mesmo batch;
+  `publication.repository.ts` prepara os writes da página. Adapters Pluggy, OAuth e Workflow permanecem explícitos.
   Não crie camadas vazias para completar o layout.
 
 O lint restringe dependências; a revisão ainda precisa confirmar que decisões de
@@ -155,11 +152,11 @@ vazias, `!!valor` quando for necessário produzir um booleano e
 `...(condição && { campo })` para campos opcionais. Ausência e falsy são decisões
 diferentes: compare explicitamente `null` e `undefined` e use `valor ?? padrão` para
 preservar zero, falso e texto vazio. Mantenha comparações exatas quando o contrato
-exigir um sentinel específico, como IDs de JSON-RPC, exclusão de override e flags
-numéricas do banco. Um array vazio continua sendo um objeto presente.
+exigir um sentinel específico, como IDs de JSON-RPC e flags numéricas do banco.
+Um array vazio continua sendo um objeto presente.
 
-Prefira enums nos conjuntos fechados do produto, como `AccountType.BANK`,
-`RunStatus.running` e `Metric.cash_flow`. O padrão do projeto é um objeto
+Prefira enums nos conjuntos fechados do produto, como `RunStatus.running` e
+`Metric.cash_flow`. O padrão do projeto é um objeto
 `as const` com a união dos valores derivada quando necessária; ele funciona com
 `erasableSyntaxOnly` e a execução direta de TypeScript no Node. Declare o conjunto
 no módulo que o possui e reutilize os valores nos schemas Zod, tipos e regras.

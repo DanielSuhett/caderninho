@@ -3,7 +3,6 @@ import { z } from "zod/v4";
 import {
   AggregateQuerySchema,
   ConnectionSelectionSchema,
-  StatusInputSchema,
   TransactionQuerySchema,
 } from "./finance";
 export const ToolName = {
@@ -18,7 +17,7 @@ const definitions = [
       "Estado da instalação, contas e importações. Informa parcialidade e referência temporal; nunca inicia coleta.",
     name: ToolName.status,
     readOnly: true,
-    schema: StatusInputSchema,
+    schema: ConnectionSelectionSchema,
   },
   {
     description:

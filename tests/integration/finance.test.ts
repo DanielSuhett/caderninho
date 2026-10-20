@@ -225,20 +225,20 @@ test("selected pagination ignores unrelated imports and reconnects but rejects e
   const first = await service.query(input);
   assert.ok(first.cursor);
   const installation = createInstallationRepository(env.DB);
-  await installation.register({ id: "d" });
+  await installation.register("d");
   const unselected = await createSyncRepository(env.DB).admit(
     ["d"],
     "2026-10-02T00:00:00.000Z",
   );
   assert.equal(unselected[0]?.status, "started");
-  await installation.register({ id: "c", status: "UPDATED" });
+  await installation.register("c");
   assert.equal(
     (await service.query({ ...input, cursor: first.cursor })).records.length,
     1,
   );
   const unfiltered = await service.query({ limit: 1 });
   assert.ok(unfiltered.cursor);
-  await installation.register({ id: "new" });
+  await installation.register("new");
   await assert.rejects(service.query({ cursor: unfiltered.cursor, limit: 1 }), {
     message: "RESTART_REQUIRED",
   });

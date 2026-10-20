@@ -97,7 +97,7 @@ test("official OAuth, four standard tools/defaults, protocol errors and grant re
     })
     .parse(JSON.parse(transactions.result?.content?.[0]?.text ?? "{}"));
   assert.equal(payload.records[0]?.id, "t");
-  await createInstallationRepository(env.DB).register({ id: "unselected" });
+  await createInstallationRepository(env.DB).register("unselected");
   const status = wire.parse(
     await (
       await call(first, "tools/call", {
@@ -277,7 +277,7 @@ test("MCP reports missing configuration and durable import failures without rese
   } = settings();
   const app = fixture(config);
   const token = await grant(app, cookies(await login(app)));
-  await createInstallationRepository(env.DB).register({ id: "c" });
+  await createInstallationRepository(env.DB).register("c");
   const request = {
     body: JSON.stringify({
       id: 1,

@@ -2,41 +2,29 @@ export {
   assertConnectionCapacity,
   assertPersonalConnector,
   connectionPartial,
-  MAX_PERSONAL_CONNECTIONS,
   PERSONAL_CONNECTOR_ID,
 } from "./connection.entity";
-export {
-  AccountType,
-  FaultCode,
-  TransactionStatus,
-  TransactionType,
-} from "./enums";
+export { FaultCode } from "./enums";
 export {
   accountingDay,
   assertMinor,
-  compareDecimal,
   decimal,
   exactJSON,
-  isMatureDate,
   localDay,
   minor,
 } from "./exact";
-export { Fault, fail } from "./fault.entity";
+export { Fault } from "./fault.entity";
 export type {
   AccountMap,
   AccountMetadata,
   AccountProjection,
   TransactionProjection,
-  TransactionReference,
 } from "./finance.entity";
 export { normalizeAccount, normalizeTransaction } from "./finance-model";
 export type {
-  Credentials,
-  MoneyInput,
   ProviderAccount,
   ProviderConnection,
   ProviderTransaction,
-  TransactionPage,
 } from "./provider.entity";
 export {
   PluggyCredentialsSchema,

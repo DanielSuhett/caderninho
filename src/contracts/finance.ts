@@ -10,7 +10,7 @@ import { Metric } from "../domain";
 const identifier = z.string().min(1).max(128);
 const day = z.iso.date();
 const amount = z.string().regex(/^-?(0|[1-9]\d{0,29})$/);
-export const TransactionFilterSchema = z
+const TransactionFilterSchema = z
   .object({
     accountIds: z.array(identifier).min(1).max(100).optional(),
     category: z.string().max(2048).optional(),
@@ -73,4 +73,3 @@ export const AggregateQuerySchema = z
 export const ConnectionSelectionSchema = z
   .object({ connectionIds: z.array(identifier).min(1).max(10).optional() })
   .strict();
-export const StatusInputSchema = ConnectionSelectionSchema;

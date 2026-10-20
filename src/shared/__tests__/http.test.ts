@@ -1,8 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { z } from "zod/v4";
-
 import {
   HttpRequestError,
   httpClient,
@@ -78,63 +76,6 @@ await test("HTTP failures classify authorization, redirects and rate limits with
   });
 });
 
-await test("JSON validation and custom HTTP failure translation share one request", async () => {
-  let calls = 0;
-  const schema = z.object({ value: z.number() });
-  const client = httpClient.extend({
-    fetch: () => {
-      calls += 1;
-      return Promise.resolve(Response.json({ private: "discarded", value: 0 }));
-    },
-  });
-  assert.deepEqual(
-    await requestJson({ client, input: "https://synthetic.test", schema }),
-    { value: 0 },
-  );
-  assert.equal(calls, 1);
-  await Promise.all(
-    ["invalid JSON", JSON.stringify({ value: false })].map(async (body) => {
-      await assert.rejects(
-        requestJson({
-          client: client.extend({ fetch: async () => new Response(body) }),
-          input: "https://synthetic.test",
-          schema,
-        }),
-        (error) =>
-          error instanceof HttpRequestError &&
-          error.failure.kind === "invalid_response",
-      );
-    }),
-  );
-  const mapped = new Error("application failure");
-  await assert.rejects(
-    requestJson({
-      client: client.extend({
-        fetch: () => {
-          calls += 1;
-          return Promise.resolve(
-            Response.json(
-              { issue: "rate", private: "discarded" },
-              { status: 429 },
-            ),
-          );
-        },
-      }),
-      input: "https://synthetic.test",
-      async onHttpFailure({ failure, request }) {
-        assert.equal(failure.kind, "rate_limit");
-        assert.deepEqual(
-          await request.json(z.object({ issue: z.literal("rate") })),
-          { issue: "rate" },
-        );
-        return mapped;
-      },
-    }),
-    (error) => error === mapped,
-  );
-  assert.equal(calls, 2);
-});
-
 await test("transport failure normalization covers network, response size and a stalled body deadline", async () => {
   await assert.rejects(
     requestJson({
@@ -157,6 +98,17 @@ await test("transport failure normalization covers network, response size and a 
     }),
     (error) =>
       error instanceof HttpRequestError && error.failure.kind === "too_large",
+  );
+  await assert.rejects(
+    requestJson({
+      client: httpClient.extend({
+        fetch: async () => new Response("invalid JSON"),
+      }),
+      input: "https://synthetic.test",
+    }),
+    (error) =>
+      error instanceof HttpRequestError &&
+      error.failure.kind === "invalid_response",
   );
   let calls = 0;
   const client = httpClient.extend({

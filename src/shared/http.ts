@@ -1,9 +1,4 @@
-import ky, {
-  isNetworkError,
-  isResponseSizeError,
-  isTimeoutError,
-  SchemaValidationError,
-} from "ky";
+import ky, { isNetworkError, isResponseSizeError, isTimeoutError } from "ky";
 
 import {
   type HttpFailure,
@@ -19,7 +14,6 @@ const digitsPattern = /^\d+$/;
 const maximumRetryAfterSeconds = 86_400;
 
 export const rateLimitRetry = {
-  attempts: 7,
   delay({ attempt, retryAfterSeconds }: RetryDelayInput) {
     return Math.max(
       1,
@@ -102,9 +96,7 @@ export async function requestJson<T>({
   client,
   input,
   options,
-  schema,
-  onHttpFailure,
-}: JsonRequest<T>): Promise<T> {
+}: JsonRequest): Promise<T> {
   const { data, error } = await tryCatch(async () => {
     const pending = client(input, options);
     const response = await pending;
@@ -114,14 +106,8 @@ export async function requestJson<T>({
       type: response.type,
     });
     if (failure) {
-      try {
-        const translated = onHttpFailure
-          ? await onHttpFailure({ failure, request: pending })
-          : new HttpRequestError(failure);
-        throw translated;
-      } finally {
-        cancelResponse(response);
-      }
+      cancelResponse(response);
+      throw new HttpRequestError(failure);
     }
     const maximum = options?.maxResponseSize;
     if (
@@ -132,7 +118,7 @@ export async function requestJson<T>({
       cancelResponse(response);
       throw new HttpRequestError({ kind: HttpFailureKind.tooLarge });
     }
-    return schema ? pending.json(schema) : pending.json<T>();
+    return pending.json<T>();
   });
   if (error) {
     throw transportFailure(error);
@@ -150,7 +136,7 @@ function transportFailure(error: Error): Error {
   if (isNetworkError(error)) {
     return new HttpRequestError({ kind: HttpFailureKind.network });
   }
-  if (error instanceof SyntaxError || error instanceof SchemaValidationError) {
+  if (error instanceof SyntaxError) {
     return new HttpRequestError({ kind: HttpFailureKind.invalidResponse });
   }
   return error;

@@ -1,10 +1,4 @@
-import type {
-  Input,
-  KyInstance,
-  Options,
-  ResponsePromise,
-  StandardSchemaV1,
-} from "ky";
+import type { Input, KyInstance, Options } from "ky";
 
 export const HttpFailureKind = {
   forbidden: "forbidden",
@@ -35,17 +29,10 @@ export interface HttpResponseMetadata {
   type?: ResponseType;
 }
 
-export interface HttpFailureContext {
-  failure: HttpFailure;
-  request: ResponsePromise;
-}
-
-export interface JsonRequest<T> {
+export interface JsonRequest {
   client: KyInstance;
   input: Input;
-  onHttpFailure?: (context: HttpFailureContext) => Error | Promise<Error>;
   options?: Options;
-  schema?: StandardSchemaV1<unknown, T>;
 }
 
 export interface RetryDelayInput {

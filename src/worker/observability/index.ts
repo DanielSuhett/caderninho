@@ -113,10 +113,8 @@ const expected = new Set<FailureCode>([
   localFailures.INVALID_REQUEST,
   localFailures.SESSION_REQUIRED,
   localFailures.INSTALLATION_INCOMPLETE,
-  FaultCode.INVALID_ARGUMENT,
   FaultCode.INVALID_DATE,
   FaultCode.INVALID_DECIMAL,
-  FaultCode.INVALID_ID,
 ]);
 
 export function classifyFailure(error: Error): FailureCode {
