@@ -1,7 +1,9 @@
 # Investigar uma importação
 
-Use o `X-Request-ID` da resposta para uma requisição e o ID de importação exibido
-pelo painel/status para o trabalho durável. D1 é a fonte do estado financeiro;
+Use o `X-Request-ID` da resposta para uma requisição. Para o trabalho durável,
+obtenha `importId` na admissão devolvida por `caderninho_sync` ou pelo comando
+`POST /api/account/sync`; no D1, consulte `connections.import_id` pelo ID da conexão.
+O painel/status expõe o ID da conexão. D1 é a fonte do estado financeiro;
 HTTP 200 ou Workflow nativo terminado não comprovam sucesso financeiro.
 
 1. Confira estado/fase/conta da importação corrente e erro seguro pelo painel/status.

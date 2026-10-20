@@ -4,7 +4,12 @@ import { beforeEach, test } from "vitest";
 import { z } from "zod/v4";
 
 import { TransactionQuerySchema } from "../../src/contracts";
-import { type FinancialSource, ProviderAccountSchema } from "../../src/domain";
+import {
+  type CommitResult,
+  type FinancialSource,
+  ProviderAccountSchema,
+} from "../../src/domain";
+import { tryCatch } from "../../src/shared";
 import { createFinancialService } from "../../src/worker/finance";
 import { createFinancialRepository } from "../../src/worker/finance/repository";
 import { createInstallationRepository } from "../../src/worker/installation/repository";
@@ -41,9 +46,12 @@ test("status preserves absent accounts and unread balances with their original r
       [account(), account({ balance: "0", id: "card", type: "CREDIT" })],
     ),
   );
-  await collect(
-    source([], [account({ balance: undefined, name: "Renamed" })]),
-    "2026-10-02T00:00:00.000Z",
+  await assert.rejects(
+    collect(
+      source([], [account({ balance: undefined, name: "Renamed" })]),
+      "2026-10-02T00:00:00.000Z",
+    ),
+    { message: "SOURCE_ACCOUNTS_CHANGED" },
   );
   const app = fixture();
   const cookie = cookies(await login(app));
@@ -215,7 +223,7 @@ test("global Pluggy account IDs select connections and BANK totals without repea
   );
 });
 
-test("catalog rereads skip a disappearing account and conservatively report the connection as partial", async () => {
+test("catalog rereads stop at a disappearing account and preserve confirmed pages as partial", async () => {
   const id = await admit();
   let reads = 0;
   const requested: string[] = [];
@@ -229,30 +237,36 @@ test("catalog rereads skip a disappearing account and conservatively report the 
           : [account()],
       );
     },
-    transactions: (accountId) => {
+    transactions: (accountId, cursor) => {
       requested.push(accountId);
       if (accountId !== "a") {
         throw new Error("DISAPPEARED_ACCOUNT_FETCHED");
       }
-      return Promise.resolve({ next: null, records: [transaction()] });
+      return Promise.resolve({
+        next: cursor ? null : "next",
+        records: cursor ? [] : [transaction()],
+      });
     },
   };
-  await runImport(
-    {
-      now: () => "2026-10-01T00:00:00.000Z",
-      repository: createSyncRepository(env.DB),
-      source: provider,
-      steps: {
-        do: async (_name, fn) => {
-          const result = await fn();
-          assert.deepEqual(await fn(), result);
-          return result;
+  await assert.rejects(
+    runImport(
+      {
+        now: () => "2026-10-01T00:00:00.000Z",
+        repository: createSyncRepository(env.DB),
+        source: provider,
+        steps: {
+          do: async (_name, fn) => {
+            const result = await fn();
+            assert.deepEqual(await fn(), result);
+            return result;
+          },
         },
       },
-    },
-    id,
+      id,
+    ),
+    { message: "SOURCE_ACCOUNTS_CHANGED" },
   );
-  assert.deepEqual(requested, ["a"]);
+  assert.deepEqual(requested, ["a", "a"]);
   const status = await createInstallationRepository(env.DB).state();
   assert.equal(status.connections[0]?.partial, true);
   assert.equal(status.connections[0]?.importStatus, "failed");
@@ -268,6 +282,101 @@ test("catalog rereads skip a disappearing account and conservatively report the 
     (await finance.aggregate({ metric: "debits" })).groups[0]?.totalMinor,
     "1000",
   );
+});
+
+test("a temporarily missing account cannot complete an import after the catalog recovers", async () => {
+  const accounts = [
+    account(),
+    account({ balance: "42", id: "b" }),
+    account({ id: "c" }),
+  ];
+  await collect(
+    source(
+      accounts.map((row) =>
+        transaction({ accountId: row.id, id: `old-${row.id}` }),
+      ),
+      accounts,
+    ),
+  );
+  const now = "2026-10-02T00:00:00.000Z";
+  const id = await admit(now);
+  const repository = createSyncRepository(env.DB);
+  const requested: string[] = [];
+  const catalogs: string[][] = [];
+  const provider: FinancialSource = {
+    ...source([]),
+    accounts: () => {
+      const current =
+        catalogs.length === 1
+          ? accounts.filter((row) => row.id !== "b")
+          : accounts;
+      catalogs.push(current.map((row) => row.id));
+      return Promise.resolve(current);
+    },
+    transactions: (accountId, cursor) => {
+      requested.push(accountId);
+      if (accountId === "a" && !cursor) {
+        return Promise.resolve({
+          next: "next",
+          records: [transaction({ amount: "-7.00", id: "confirmed-page" })],
+        });
+      }
+      return Promise.resolve({ next: null, records: [] });
+    },
+  };
+  const dependencies = {
+    now: () => now,
+    repository,
+    source: provider,
+    steps: {
+      do: async (_name: string, fn: () => Promise<CommitResult>) => {
+        const result = await fn();
+        assert.deepEqual(await fn(), result);
+        return result;
+      },
+    },
+  };
+  const { data: _data, error } = await tryCatch(() =>
+    runImport(dependencies, id),
+  );
+  const { connections: status } = await createInstallationRepository(
+    env.DB,
+  ).state();
+  const [connection] = status;
+  assert.equal(
+    connection?.importStatus,
+    "failed",
+    `catalogs=${JSON.stringify(catalogs)}; transactions=${JSON.stringify(requested)}`,
+  );
+  assert.equal(error?.message, "SOURCE_ACCOUNTS_CHANGED");
+  assert.equal(connection?.importError, "SOURCE_ACCOUNTS_CHANGED");
+  assert.equal(connection?.partial, true);
+  assert.equal(connection?.lastSuccessAt, "2026-10-01T00:00:00.000Z");
+  assert.equal(connection?.accounts.b?.balanceMinor, "4200");
+  assert.equal(connection?.accounts.b?.balanceObservedAt, now);
+  assert.deepEqual(catalogs, [
+    ["a", "b", "c"],
+    ["a", "c"],
+  ]);
+  assert.deepEqual(
+    (await provider.accounts("c")).map((row) => row.id),
+    ["a", "b", "c"],
+  );
+  await runImport(dependencies, id);
+  assert.deepEqual(requested, ["a", "a"]);
+  assert.equal((await repository.read(id)).status, "failed");
+  const finance = createFinancialService(createFinancialRepository(env.DB));
+  const page = await finance.query({ limit: 10 });
+  assert.equal(page.partial, true);
+  assert.deepEqual(page.records.map((row) => row.id).sort(), [
+    "confirmed-page",
+    "old-a",
+    "old-b",
+    "old-c",
+  ]);
+  const total = await finance.aggregate({ metric: "debits" });
+  assert.equal(total.partial, true);
+  assert.equal(total.groups[0]?.totalMinor, "3700");
 });
 
 test("source Item and transaction account mismatches never publish records to another account", async () => {

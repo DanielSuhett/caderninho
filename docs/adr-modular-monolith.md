@@ -74,9 +74,10 @@ página e o término; sequências mais avançadas recusam o executor. Não há r
 persistidos, contadores de registros nem cópia adicional do checkpoint.
 
 A travessia relê o catálogo pequeno no limite entre contas. Contas preservadas no
-mapa não são marcadores de presença. Mudança no catálogo ou conta ausente conserva
-os dados já publicados e informa parcialidade na conexão, sem avançar o último
-sucesso completo. Saldo não relido mantém seu horário anterior.
+mapa não são marcadores de presença. Conta conhecida ausente nessa releitura
+interrompe a importação com erro seguro, mesmo que reapareça depois. Os dados já
+publicados são preservados, a conexão informa parcialidade e o último sucesso
+completo não avança. Saldo não relido mantém seu horário anterior.
 
 A origem pode mudar de ID ou reduzir a janela histórica. A importação atualiza
 IDs existentes e acrescenta os novos. Ausência não remove nem desqualifica registros:
