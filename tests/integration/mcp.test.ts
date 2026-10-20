@@ -51,8 +51,9 @@ test("official OAuth, five standard tools/defaults, protocol errors and grant re
     token: string,
     method: string,
     params: Record<string, unknown> = {},
+    target = app,
   ) =>
-    app.request("/mcp", {
+    target.request("/mcp", {
       body: JSON.stringify({
         id: 1,
         jsonrpc: "2.0",
@@ -114,14 +115,36 @@ test("official OAuth, five standard tools/defaults, protocol errors and grant re
     (await app.request("/mcp", { headers: { "x-user-id": "owner" } })).status,
     401,
   );
+  assert.equal((await command(app, cookie, "logout")).status, 200);
+  const rotated = fixture({
+    ...app.config,
+    ADMIN_PASSWORD: "rotated-synthetic-password",
+    CF_VERSION_METADATA: {
+      ...app.config.CF_VERSION_METADATA,
+      id: "rotated-version",
+    },
+  });
   assert.equal(
-    (await command(app, cookie, "disconnect-assistants")).status,
+    (await rotated.request("/api/account", { headers: { Cookie: cookie } }))
+      .status,
+    401,
+  );
+  assert.equal((await call(first, "tools/list", {}, rotated)).status, 200);
+  const rotatedCookie = cookies(
+    await login(rotated, "rotated-synthetic-password"),
+  );
+  assert.equal(
+    (await command(rotated, rotatedCookie, "disconnect-assistants")).status,
     200,
   );
-  assert.equal((await call(first, "tools/list")).status, 401);
-  assert.equal((await call(second, "tools/list")).status, 401);
+  assert.equal((await call(first, "tools/list", {}, rotated)).status, 401);
+  assert.equal((await call(second, "tools/list", {}, rotated)).status, 401);
   assert.equal(
-    (await app.request("/api/account", { headers: { Cookie: cookie } })).status,
+    (
+      await rotated.request("/api/account", {
+        headers: { Cookie: rotatedCookie },
+      })
+    ).status,
     200,
   );
 });

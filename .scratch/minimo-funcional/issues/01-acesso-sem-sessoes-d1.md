@@ -11,3 +11,19 @@
 - [ ] Sair apaga o cookie do navegador; uma cópia continua válida até a expiração. Trocar a senha ou a versão do Worker invalida todos os cookies anteriores. Não implementar revogação individual nem lista de bloqueio. A autorização OAuth do MCP tem vida independente e sua revogação explícita continua funcionando.
 - [ ] A tabela portal_sessions, seu repository e portas exclusivos, a limpeza periódica e os testes exclusivos desse armazenamento deixam de existir. O caminho de autenticação administrativa não acessa D1 nem grava sessões em KV ou outro armazenamento. O KV existente continua sendo usado pelo provedor OAuth.
 - [ ] Testes com dados sintéticos demonstram login, expiração, adulteração, troca de senha/versão, logout com a semântica declarada, consentimento OAuth e criação/reconexão do widget. Requisições anônimas ou com apenas credenciais MCP não chegam à Pluggy. Contratos de acesso, documentação e checks ficam coerentes com esse comportamento.
+
+## Implementação para revisão
+
+O cookie do painel usa HMAC SHA-256 do helper já instalado do Hono. A chave deriva
+exclusivamente de `ADMIN_PASSWORD`, da versão do Worker e do propósito do cookie.
+CSRF e expiração de oito horas ficam no conteúdo assinado, com validação no servidor.
+Login e abertura do painel funcionam com D1 ainda vazio, sem criar entradas no KV.
+Logout limpa o cookie local; grants OAuth permanecem independentes até revogação.
+
+A cobertura HTTP está em `tests/integration/auth.test.ts`,
+`tests/integration/pluggy-access.test.ts` e `tests/integration/mcp.test.ts`:
+expiração exata, adulteração, rotação, logout com cópia, limites/origem/CSRF,
+cadastro e criação/reconexão do widget, consentimento e revogação dos assistentes.
+`portal_sessions`, repository/portas e manutenção exclusivos foram removidos;
+as outras cinco tabelas permanecem neste recorte. Aceite e resolução ficam com
+o integrador após revisão.

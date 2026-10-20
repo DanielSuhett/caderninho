@@ -119,13 +119,3 @@ export const sync_runs = sqliteTable(
     check("checkpoint_json", sql`json_valid(checkpoint)`),
   ],
 );
-export const portal_sessions = sqliteTable(
-  "portal_sessions",
-  {
-    auth_version: text("auth_version").notNull(),
-    csrf: text("csrf").notNull(),
-    expires: integer("expires").notNull(),
-    id: text("id").primaryKey(),
-  },
-  (t) => [index("sessions_expiry").on(t.expires)],
-);

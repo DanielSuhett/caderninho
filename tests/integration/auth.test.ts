@@ -1,10 +1,8 @@
 import assert from "node:assert/strict";
 
-import { beforeEach, test } from "vitest";
+import { afterEach, beforeEach, test, vi } from "vitest";
 
 import { PortalResponseSchema } from "../../src/contracts";
-import { createAuthService } from "../../src/worker/auth";
-import { createAuthRepository } from "../../src/worker/auth/repository";
 import {
   command,
   cookies,
@@ -15,10 +13,25 @@ import {
   settings,
 } from "./access-fixture";
 import { setup } from "./fixture";
+import { reset } from "cloudflare:test";
 
 const sessionPattern = /__Host-caderninho=/;
 beforeEach(setup);
-test("personal login protects every private read and session cookies; logout/deployment/expiry revoke access", async () => {
+afterEach(() => vi.restoreAllMocks());
+test("owner can sign in and open the private panel before D1 is initialized", async () => {
+  await reset();
+  const app = fixture();
+  const response = await login(app);
+  assert.equal(response.status, 303);
+  assert.equal(response.headers.get("Cache-Control"), "no-store");
+  assert.deepEqual((await app.config.OAUTH_KV.list()).keys, []);
+  assert.equal(
+    (await app.request("/account", { headers: { Cookie: cookies(response) } }))
+      .status,
+    200,
+  );
+});
+test("personal login protects private reads and logout only clears the browser cookie", async () => {
   const app = fixture();
   assert.equal((await app.request("/account")).status, 302);
   assert.equal((await app.request("/api/account")).status, 401);
@@ -29,7 +42,7 @@ test("personal login protects every private read and session cookies; logout/dep
   const cookie = cookies(authenticated);
   assert.match(cookie, sessionPattern);
   const flags = authenticated.headers.getSetCookie().join(";");
-  for (const flag of ["HttpOnly", "Secure", "SameSite=Lax"]) {
+  for (const flag of ["HttpOnly", "Secure", "SameSite=Lax", "Path=/"]) {
     assert.ok(flags.includes(flag));
   }
   const response = await app.request("/api/account", {
@@ -46,36 +59,93 @@ test("personal login protects every private read and session cookies; logout/dep
   for (const secret of [password, "synthetic-secret", "synthetic-client"]) {
     assert.ok(!JSON.stringify(state).includes(secret));
   }
-  const changed = fixture({
-    ...app.config,
-    CF_VERSION_METADATA: {
-      ...app.config.CF_VERSION_METADATA,
-      id: "new-deploy",
-    },
-  });
+  const logout = await command(app, cookie, "logout");
+  assert.equal(logout.status, 200);
+  assert.ok(logout.headers.getSetCookie().join(";").includes("Max-Age=0"));
+  assert.equal((await app.request("/api/account")).status, 401);
   assert.equal(
-    (await changed.request("/api/account", { headers: { Cookie: cookie } }))
-      .status,
-    401,
+    (await app.request("/api/account", { headers: { Cookie: cookie } })).status,
+    200,
   );
-  assert.equal((await command(app, cookie, "logout")).status, 200);
+});
+test("owner cookies reject tampering, password/version rotation and missing configuration", async () => {
+  const app = fixture();
+  const cookie = cookies(await login(app));
+  const { ADMIN_PASSWORD: _password, ...missing } = app.config;
+  const denied = [
+    {
+      app,
+      cookie: cookie.replace("__Host-caderninho=", "__Host-caderninho=x"),
+    },
+    { app, cookie: "__Host-caderninho=forged" },
+    {
+      app: fixture({
+        ...app.config,
+        ADMIN_PASSWORD: "different-synthetic-password",
+      }),
+      cookie,
+    },
+    {
+      app: fixture({
+        ...app.config,
+        CF_VERSION_METADATA: {
+          ...app.config.CF_VERSION_METADATA,
+          id: "new-deploy",
+        },
+      }),
+      cookie,
+    },
+    { app: fixture(missing), cookie },
+  ];
+  const responses = await Promise.all(
+    denied.map((request) =>
+      request.app.request("/api/account", {
+        headers: { Cookie: request.cookie },
+      }),
+    ),
+  );
+  for (const response of responses) {
+    assert.equal(response.status, 401);
+    assert.equal(response.headers.get("Cache-Control"), "no-store");
+  }
+  const rotated = fixture({
+    ...app.config,
+    ADMIN_PASSWORD: "different-synthetic-password",
+  });
+  const renewed = await login(rotated, "different-synthetic-password");
+  assert.equal(renewed.status, 303);
+  assert.equal(
+    (
+      await rotated.request("/account", {
+        headers: { Cookie: cookies(renewed) },
+      })
+    ).status,
+    200,
+  );
+});
+test("server expires a copied owner cookie at exactly eight hours", async () => {
+  const now = vi.spyOn(Date, "now").mockReturnValue(1_792_411_200_000);
+  const app = fixture();
+  const response = await login(app);
+  const cookie = cookies(response);
+  assert.ok(
+    response.headers
+      .getSetCookie()
+      .some((value) => value.includes("Max-Age=28800")),
+  );
+  now.mockReturnValue(1_792_439_999_999);
+  assert.equal(
+    (await app.request("/api/account", { headers: { Cookie: cookie } })).status,
+    200,
+  );
+  now.mockReturnValue(1_792_440_000_000);
   assert.equal(
     (await app.request("/api/account", { headers: { Cookie: cookie } })).status,
     401,
   );
-  const auth = createAuthService(
-    createAuthRepository(app.config.DB),
-    "expiry",
-    () => 0,
-  );
-  const id = await auth.createSession();
   assert.equal(
-    await createAuthService(
-      createAuthRepository(app.config.DB),
-      "expiry",
-      () => 28_800_001,
-    ).readSession(id),
-    null,
+    (await app.request("/account", { headers: { Cookie: cookie } })).status,
+    302,
   );
 });
 test("native limiter uses only trusted IP and missing config/origin/CSRF fail closed", async () => {
@@ -93,6 +163,17 @@ test("native limiter uses only trusted IP and missing config/origin/CSRF fail cl
       },
     },
   });
+  const page = await app.request("/account/login");
+  const rejectedCsrf = await app.request("/account/login", {
+    body: new URLSearchParams({ csrf: "forged", password }),
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      Cookie: cookies(page),
+      Origin: origin,
+    },
+    method: "POST",
+  });
+  assert.equal(rejectedCsrf.status, 403);
   const forge = await app.request("/account/login", {
     body: new URLSearchParams({ password }),
     headers: {

@@ -1,5 +1,3 @@
-import { createAuthService } from "../auth";
-import { createAuthRepository } from "../auth/repository";
 import type { Bindings } from "../bindings";
 import { createFinancialService } from "../finance";
 import { createFinancialRepository } from "../finance/repository";
@@ -80,12 +78,6 @@ export function synchronizationDependencies(env: Bindings) {
     },
     source: source(env),
   };
-}
-export function authService(env: Bindings) {
-  return createAuthService(
-    createAuthRepository(env.DB),
-    env.CF_VERSION_METADATA.id,
-  );
 }
 export function syncService(env: Bindings, now: () => Date = () => new Date()) {
   const repository = createSyncRepository(env.DB);

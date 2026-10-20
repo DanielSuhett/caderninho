@@ -4,7 +4,7 @@ import { FaultCode } from "../domain";
 import { tryCatch } from "../shared";
 import { authenticatedFetch } from "./auth/controller";
 import type { Bindings } from "./bindings";
-import { authService, syncService } from "./composition";
+import { syncService } from "./composition";
 import { failureStatus, requestCategory } from "./http";
 import { fetchMcp } from "./mcp";
 import {
@@ -81,12 +81,6 @@ const worker = {
           await observeSpan(
             SpanName.maintenance,
             () => syncService(env).compact(),
-            { action },
-          );
-          action = "compact_auth";
-          await observeSpan(
-            SpanName.maintenance,
-            () => authService(env).compact(),
             { action },
           );
         });

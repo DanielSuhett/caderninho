@@ -76,10 +76,15 @@ reinicie a paginação; não misture páginas de revisões distintas.
 ## Manutenção do acesso
 
 **Revogar todos os assistentes** remove seus grants OAuth. A sessão do painel
-continua válida; novos acessos MCP precisam de consentimento. **Sair** revoga a
-sessão atual. Ela também expira em oito horas ou quando um deploy muda a versão
-do Worker. Altere ADMIN_PASSWORD nos secrets para trocar a senha e publique uma
-nova versão para invalidar sessões existentes.
+continua válida; novos acessos MCP precisam de consentimento. **Sair** apaga o
+cookie deste navegador. Uma cópia desse cookie continua válida até completar oito
+horas do login ou até trocar ADMIN_PASSWORD ou a versão do Worker. A expiração é
+conferida no servidor. A autenticação do painel não grava sessões no D1 ou KV.
+
+Altere ADMIN_PASSWORD nos secrets para trocar a senha: os cookies anteriores
+perdem a validade. Publicar outra versão do Worker também os invalida. Essas
+mudanças e o logout preservam as autorizações dos assistentes; use **Revogar todos
+os assistentes** para removê-las.
 
 A instalação desta versão exige um D1 novo. Deploys posteriores preservam o banco.
 O [guia técnico](cloudflare-product.md) descreve os recursos e a validação local.

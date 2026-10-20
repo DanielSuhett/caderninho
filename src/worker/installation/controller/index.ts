@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { deleteCookie, getCookie } from "hono/cookie";
+import { deleteCookie } from "hono/cookie";
 import type { z } from "zod/v4";
 
 import {
@@ -15,11 +15,7 @@ import {
   sessionCookie,
   sessionMiddleware,
 } from "../../auth/session";
-import {
-  authService,
-  installationService,
-  syncService,
-} from "../../composition";
+import { installationService, syncService } from "../../composition";
 import { boundedJson, requestOrigin } from "../../http";
 
 export function installationRoutes(access: Hono<PortalEnv>) {
@@ -111,10 +107,6 @@ export function installationRoutes(access: Hono<PortalEnv>) {
   });
   app.post("/api/account/logout", async (c) => {
     await command(c.req.raw, c.get("session").csrf, AccountActionSchema);
-    const id = getCookie(c, sessionCookie);
-    if (id) {
-      await authService(c.env).revokeSession(id);
-    }
     deleteCookie(c, sessionCookie, cookieOptions);
     return c.json({ ok: true });
   });

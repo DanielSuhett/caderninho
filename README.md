@@ -27,7 +27,7 @@ O provisionamento completo numa conta Cloudflare nova ainda exige validação re
 O software é gratuito; Cloudflare e Pluggy têm seus próprios limites e custos.
 
 O lançamento cobre contas BANK/CREDIT e transações, com histórico cumulativo
-alterado somente pela importação e totais objetivos exatos. O modelo usa seis
+alterado somente pela importação e totais objetivos exatos. O modelo usa cinco
 tabelas D1 e cinco tools MCP comuns; importações rodam no servidor, sem lotes
 coordenados pelo assistente.
 

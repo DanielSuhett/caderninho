@@ -12,5 +12,3 @@ CREATE INDEX transaction_category ON transactions(category);
 CREATE TABLE sync_runs(id TEXT PRIMARY KEY,connection_id TEXT NOT NULL REFERENCES connections(id),status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','running','succeeded','failed')),created_at TEXT NOT NULL,updated_at TEXT NOT NULL,sequence INTEGER NOT NULL DEFAULT 0 CHECK(sequence>=0),checkpoint TEXT NOT NULL CHECK(json_valid(checkpoint)),last_commit_id TEXT,last_result TEXT,records INTEGER NOT NULL DEFAULT 0,error TEXT);
 CREATE UNIQUE INDEX one_active_import ON sync_runs(connection_id) WHERE status IN ('pending','running');
 CREATE INDEX run_created ON sync_runs(created_at);
-CREATE TABLE portal_sessions(id TEXT PRIMARY KEY,csrf TEXT NOT NULL,expires INTEGER NOT NULL,auth_version TEXT NOT NULL);
-CREATE INDEX sessions_expiry ON portal_sessions(expires);
