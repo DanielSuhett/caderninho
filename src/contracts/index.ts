@@ -10,7 +10,6 @@ export type {
   ConnectionInfo,
   InstallationState,
   PortalResponse,
-  RunInfo,
 } from "./portal.types";
 export { PortalIssue } from "./portal.types";
 export {

@@ -1,13 +1,8 @@
 PRAGMA foreign_keys=ON;
-CREATE TABLE settings(id INTEGER PRIMARY KEY CHECK(id=1),sync_enabled INTEGER NOT NULL DEFAULT 1 CHECK(sync_enabled IN (0,1)),revision INTEGER NOT NULL DEFAULT 0 CHECK(revision>=0));
-INSERT INTO settings(id) VALUES(1);
-CREATE TABLE connections(id TEXT PRIMARY KEY,accounts TEXT NOT NULL DEFAULT '{}' CHECK(json_valid(accounts)),name TEXT NOT NULL,status TEXT NOT NULL,observed_at TEXT NOT NULL,last_admitted_at TEXT,next_import_at TEXT,last_success_at TEXT);
+CREATE TABLE connections(id TEXT PRIMARY KEY,accounts TEXT NOT NULL DEFAULT '{}' CHECK(json_valid(accounts)),import_id TEXT,import_status TEXT CHECK(import_status IN ('pending','running','succeeded','failed')),import_admitted_at TEXT,import_sequence INTEGER NOT NULL DEFAULT 0 CHECK(import_sequence>=0),import_checkpoint TEXT CHECK(import_checkpoint IS NULL OR json_valid(import_checkpoint)),import_error TEXT,last_success_at TEXT);
 CREATE TRIGGER connection_limit BEFORE INSERT ON connections WHEN (SELECT count(*) FROM connections)>=10 AND NOT EXISTS(SELECT 1 FROM connections WHERE id=NEW.id) BEGIN SELECT RAISE(ABORT,'ITEM_LIMIT'); END;
-CREATE TABLE transactions(id TEXT PRIMARY KEY,account_id TEXT NOT NULL,date TEXT NOT NULL,status TEXT NOT NULL CHECK(status IN ('PENDING','POSTED')),direction TEXT NOT NULL CHECK(direction IN ('DEBIT','CREDIT')),currency TEXT NOT NULL,amount_minor TEXT,description TEXT NOT NULL,category TEXT);
+CREATE TABLE transactions(id TEXT PRIMARY KEY NOT NULL,account_id TEXT NOT NULL,date TEXT NOT NULL,status TEXT NOT NULL CHECK(status IN ('PENDING','POSTED')),direction TEXT NOT NULL CHECK(direction IN ('DEBIT','CREDIT')),currency TEXT NOT NULL,amount_minor TEXT,description TEXT NOT NULL,category TEXT);
 CREATE INDEX transaction_date ON transactions(date,account_id,id);
 CREATE INDEX transaction_account ON transactions(account_id,date,id);
 CREATE INDEX transaction_status ON transactions(status,date);
 CREATE INDEX transaction_category ON transactions(category);
-CREATE TABLE sync_runs(id TEXT PRIMARY KEY,connection_id TEXT NOT NULL REFERENCES connections(id),status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','running','succeeded','failed')),created_at TEXT NOT NULL,updated_at TEXT NOT NULL,sequence INTEGER NOT NULL DEFAULT 0 CHECK(sequence>=0),checkpoint TEXT NOT NULL CHECK(json_valid(checkpoint)),last_commit_id TEXT,last_result TEXT,records INTEGER NOT NULL DEFAULT 0,error TEXT);
-CREATE UNIQUE INDEX one_active_import ON sync_runs(connection_id) WHERE status IN ('pending','running');
-CREATE INDEX run_created ON sync_runs(created_at);

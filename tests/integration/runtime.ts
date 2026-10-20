@@ -1,10 +1,14 @@
+import { eq } from "drizzle-orm";
 import { z } from "zod/v4";
 
+import { TransactionQuerySchema } from "../../src/contracts";
 import { Fault, FaultCode, type FinancialSource } from "../../src/domain";
 import type { Bindings } from "../../src/worker/bindings";
+import { database } from "../../src/worker/database";
 import { createFinancialService } from "../../src/worker/finance";
 import { createFinancialRepository } from "../../src/worker/finance/repository";
 import { createInstallationRepository } from "../../src/worker/installation/repository";
+import { connections } from "../../src/worker/schema";
 import { createSyncService, runImport } from "../../src/worker/sync";
 import { createSyncRepository } from "../../src/worker/sync/repository";
 import { workflowSteps } from "../../src/worker/sync/workflow";
@@ -14,11 +18,12 @@ import {
   type WorkflowStep,
 } from "cloudflare:workers";
 
-type RuntimeEnv = Pick<Bindings, "DB" | "FINANCE">;
+type RuntimeEnv = Pick<Bindings, "DB" | "FINANCE" | "OAUTH_KV">;
 function syntheticSource(
   connectionId: string,
+  instrumentation: KVNamespace,
+  importId: string,
   referenceDay: string,
-  responseLost: () => boolean,
 ): FinancialSource {
   const sizes: Record<string, number> = {
     "volume-10000": 10_000,
@@ -51,7 +56,7 @@ function syntheticSource(
         type: id === bankId ? "BANK" : "CREDIT",
       })),
     connection: async () => ({ connector: { id: 200 }, id: connectionId }),
-    transactions: (id, cursor) => {
+    transactions: async (id, cursor) => {
       if (connectionId === "history") {
         if (cursor) {
           throw new Fault(FaultCode.UPSTREAM_AUTH);
@@ -75,7 +80,7 @@ function syntheticSource(
             { amount: "-40", id: "D" },
           ],
         };
-        return Promise.resolve({
+        return {
           next: referenceDay === "2026-10-05" ? "next" : null,
           records: (pages[referenceDay] ?? []).map((row) => ({
             ...row,
@@ -87,13 +92,13 @@ function syntheticSource(
             status: "POSTED",
             type: "DEBIT",
           })),
-        });
+        };
       }
       if (
         connectionId === "replay" &&
         id === bankId &&
         !cursor &&
-        responseLost()
+        (await instrumentation.get(`test:committed:${importId}`))
       ) {
         throw new Error("COMMITTED_PAGE_REFETCHED");
       }
@@ -130,15 +135,15 @@ export class TestWorkflow extends WorkflowEntrypoint<
     const repository = createSyncRepository(this.env.DB);
     const run = await repository.read(event.payload.runId);
     const steps = workflowSteps(step);
-    let responseLost = false;
     await runImport(
       {
         now: () => new Date().toISOString(),
         repository,
         source: syntheticSource(
           run.connectionId,
-          run.createdAt.slice(0, 10),
-          () => responseLost,
+          this.env.OAUTH_KV,
+          run.id,
+          run.admittedAt.slice(0, 10),
         ),
         steps: {
           do: async (name, fn) => {
@@ -147,10 +152,9 @@ export class TestWorkflow extends WorkflowEntrypoint<
               if (
                 run.connectionId === "replay" &&
                 receipt.sequence === 2 &&
-                !responseLost
+                !(await this.env.OAUTH_KV.get(`test:committed:${run.id}`))
               ) {
-                // Test-only response loss stays outside persisted financial metadata.
-                responseLost = true;
+                await this.env.OAUTH_KV.put(`test:committed:${run.id}`, "true");
                 const lost = new Fault(FaultCode.UPSTREAM_RATE_LIMIT);
                 lost.details = { retryAfterSeconds: 0 };
                 throw lost;
@@ -189,10 +193,7 @@ export default {
       ) {
         return new Response("Invalid fixture", { status: 400 });
       }
-      await installation.register(
-        { connector: { id: 200 }, id },
-        new Date().toISOString(),
-      );
+      await installation.register({ connector: { id: 200 }, id });
       return Response.json({ ok: true });
     }
     if (path === "/start" && request.method === "POST") {
@@ -218,12 +219,27 @@ export default {
         ).request([id]),
       );
     }
+    if (path === "/query" && request.method === "POST") {
+      return Response.json(
+        await createFinancialService(createFinancialRepository(env.DB)).query(
+          TransactionQuerySchema.parse(await request.json()),
+        ),
+      );
+    }
     if (path === "/state") {
       const connection =
         new URL(request.url).searchParams.get("connection") ?? "c";
       const finance = createFinancialService(createFinancialRepository(env.DB));
       return Response.json({
         ...(await installation.state({ connectionIds: [connection] })),
+        sequence:
+          (
+            await database(env.DB)
+              .select({ value: connections.importSequence })
+              .from(connections)
+              .where(eq(connections.id, connection))
+              .get()
+          )?.value ?? 0,
         totals: await finance.aggregate({
           filter: { connectionIds: [connection] },
           metric: "debits",

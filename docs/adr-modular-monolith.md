@@ -33,10 +33,8 @@ universal, container de DI nem camadas vazias.
 
 | Tabela | Dados |
 | --- | --- |
-| `settings` | Singleton: importação habilitada e revisão financeira |
-| `connections` | Item, apresentação, mapa de contas/saldos e próxima admissão |
+| `connections` | Item, mapa de contas/saldos e importação corrente (nove colunas) |
 | `transactions` | Projeção financeira da origem, atualizada somente pela importação |
-| `sync_runs` | Intenção, estado, checkpoint e último commit confirmado |
 
 Contas usam seus IDs Pluggy como chaves do mapa JSON `connections.accounts`.
 Cada valor contém somente nome, tipo, moeda, saldo e horário de leitura do saldo.
@@ -49,10 +47,10 @@ Não são guardados documentos pessoais, payloads ou marcadores de qualidade por
 
 ## Importação
 
-Pedido manual ou cron às 09:00 UTC admite conexões elegíveis. Um batch insere a
-intenção `pending` e reserva 24 horas por conexão, inclusive em falha. Um índice
-único parcial impede duas execuções ativas da mesma conexão. A pausa impede novas
-admissões; não cancela trabalho iniciado. Não há lock mantido durante HTTP.
+Pedido manual ou cron às 09:00 UTC admite conexões elegíveis. Uma atualização
+condicional da conexão confirma o ID da importação e reserva 24 horas, inclusive
+em falha. O estado corrente impede duas execuções ativas; a elegibilidade deriva
+da admissão. Não há pausa global, histórico de jobs ou lock mantido durante HTTP.
 
 O Workflow usa o ID da execução. Despacho incerto conserva a intenção; o próximo
 cron ou pedido manual recupera o mesmo ID. GET/status nunca despacham trabalho.
@@ -67,17 +65,22 @@ step.do. Não depender de propriedades de Error após o RPC. HTTP, SDK e retries
 nativos adicionais não multiplicam as tentativas.
 
 `sync/repository/publication.repository.ts` prepara os writes da página.
-`sync/repository/index.ts` confirma dados, qualidade, revisão, checkpoint e último
-recibo no mesmo batch D1. Uma guarda de estado/sequence usa o CHECK da revisão
-para abortar todo o batch se o executor estiver obsoleto. Resposta perdida relê o
-recibo; página antiga não publica. Não há histórico ilimitado de recibos.
+`sync/repository/index.ts` confirma metadados, transações, checkpoint, sequência e
+estado no mesmo batch D1. A guarda de ID/estado/sequence usa o CHECK da sequência
+para abortar todo o batch obsoleto. Mesmo ID e sequência N+1 reconstroem a última
+página e o término; sequências mais avançadas recusam o executor. Não há recibos
+persistidos, contadores de registros nem cópia adicional do checkpoint.
+
+A travessia relê o catálogo pequeno no limite entre contas. Contas preservadas no
+mapa não são marcadores de presença. Mudança no catálogo ou conta ausente conserva
+os dados já publicados e informa parcialidade na conexão, sem avançar o último
+sucesso completo. Saldo não relido mantém seu horário anterior.
 
 A origem pode mudar de ID ou reduzir a janela histórica. A importação atualiza
 IDs existentes e acrescenta os novos. Ausência não remove nem desqualifica registros:
 A/B seguido de B atualizado/C resulta em A/B atualizado/C nos totais elegíveis.
 Não há classificação de consumo, edição local ou deduplicação por similaridade.
 Coleta parcial preserva páginas confirmadas e continua sinalizada como parcial.
-Execuções encerradas são retidas por 30 dias.
 
 O adapter rejeita cursores inválidos, de outra conta, repetidos imediatamente ou
 com continuação sem registros. Não há marcador por transação nem ledger de cursores
@@ -85,8 +88,10 @@ para detectar ciclos arbitrários entre páginas distintas.
 
 ## Consultas e dinheiro
 
-D1 é a fonte das leituras. Filtros fechados e paginação por data/conta/ID usam a
-revisão financeira: alteração entre páginas exige reiniciar a consulta. Totais
+D1 é a fonte das leituras. A paginação por data/conta/ID detecta mudanças no
+ID, sequência, estado e metadados das conexões selecionadas no batch da leitura.
+Alteração relevante exige reiniciar a consulta; importação não selecionada não
+invalida o cursor. Totais
 consideram toda a seleção SQL, não uma página. Moedas permanecem separadas.
 
 Valores monetários são inteiros em strings, com até 30 dígitos por registro. A

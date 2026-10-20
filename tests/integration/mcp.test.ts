@@ -97,10 +97,7 @@ test("official OAuth, four standard tools/defaults, protocol errors and grant re
     })
     .parse(JSON.parse(transactions.result?.content?.[0]?.text ?? "{}"));
   assert.equal(payload.records[0]?.id, "t");
-  await createInstallationRepository(env.DB).register(
-    { id: "unselected" },
-    "2026-10-01T00:00:00Z",
-  );
+  await createInstallationRepository(env.DB).register({ id: "unselected" });
   const status = wire.parse(
     await (
       await call(first, "tools/call", {
@@ -280,10 +277,7 @@ test("MCP reports missing configuration and durable import failures without rese
   } = settings();
   const app = fixture(config);
   const token = await grant(app, cookies(await login(app)));
-  await createInstallationRepository(env.DB).register(
-    { id: "c" },
-    "2026-10-01T00:00:00Z",
-  );
+  await createInstallationRepository(env.DB).register({ id: "c" });
   const request = {
     body: JSON.stringify({
       id: 1,
@@ -307,10 +301,10 @@ test("MCP reports missing configuration and durable import failures without rese
     error: "NOT_CONFIGURED",
   });
   const state = await createInstallationRepository(env.DB).state();
-  assert.deepEqual(state.runs, []);
-  assert.equal(state.connections[0]?.nextImportAt, null);
+  assert.equal(state.connections[0]?.importStatus, null);
+  assert.equal(state.connections[0]?.nextEligibleAt, null);
   await env.DB.exec(
-    "CREATE TRIGGER reject_import BEFORE INSERT ON sync_runs BEGIN SELECT RAISE(ABORT,'private-database-failure'); END;",
+    "CREATE TRIGGER reject_import BEFORE UPDATE OF import_id ON connections BEGIN SELECT RAISE(ABORT,'private-database-failure'); END;",
   );
   const failed = wire.parse(
     await (await fixture().request("/mcp", request)).json(),
@@ -395,8 +389,8 @@ test("MCP accumulates imported history and updates only matching source IDs", as
         accountId: z.string(),
         date: z.string(),
         id: z.string(),
-        revision: z.number(),
         scope: z.string(),
+        state: z.string(),
       })
       .nullable(),
     partial: z.boolean(),

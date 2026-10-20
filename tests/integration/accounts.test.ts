@@ -122,6 +122,14 @@ test("global Pluggy account IDs select connections and BANK totals without repea
   const now = "2026-10-01T00:00:00.000Z";
   await collect(provider, now, firstConnection);
   await collect(provider, now, secondConnection);
+  const imported = await createInstallationRepository(env.DB).state({
+    connectionIds: [firstConnection],
+  });
+  assert.equal(imported.connections[0]?.accounts[cardId]?.balanceMinor, null);
+  assert.equal(
+    imported.connections[0]?.accounts[cardId]?.balanceObservedAt,
+    null,
+  );
   const finance = createFinancialService(createFinancialRepository(env.DB));
   const selection = { connectionIds: [firstConnection] };
   const page = await finance.query(
@@ -234,13 +242,21 @@ test("catalog rereads skip a disappearing account and conservatively report the 
       now: () => "2026-10-01T00:00:00.000Z",
       repository: createSyncRepository(env.DB),
       source: provider,
-      steps: { do: (_name, fn) => fn() },
+      steps: {
+        do: async (_name, fn) => {
+          const result = await fn();
+          assert.deepEqual(await fn(), result);
+          return result;
+        },
+      },
     },
     id,
   );
   assert.deepEqual(requested, ["a"]);
   const status = await createInstallationRepository(env.DB).state();
   assert.equal(status.connections[0]?.partial, true);
+  assert.equal(status.connections[0]?.importStatus, "failed");
+  assert.equal(status.connections[0]?.importError, "SOURCE_ACCOUNTS_CHANGED");
   assert.equal(status.connections[0]?.accounts.z?.balanceMinor, "4200");
   assert.equal(
     status.connections[0]?.accounts.z?.balanceObservedAt,

@@ -13,6 +13,7 @@
       "migrations_dir": "../../migrations"
     }
   ],
+  "kv_namespaces": [{ "binding": "OAUTH_KV", "id": "local-oauth" }],
   "workflows": [
     {
       "name": "test-finance",

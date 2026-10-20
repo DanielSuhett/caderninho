@@ -71,22 +71,13 @@ const worker = {
     return await withObservation({ runId: crypto.randomUUID() }, () =>
       observeSpan(SpanName.scheduled, async (span) => {
         let phase: SafeFields["phase"] = SpanName.recovery;
-        let action: SafeFields["action"];
         const { data, error } = await tryCatch(async () => {
           await syncService(env).recover();
           phase = SpanName.scheduled;
           await syncService(env, () => new Date(event.scheduledTime)).request();
-          phase = SpanName.maintenance;
-          action = "compact_sync";
-          await observeSpan(
-            SpanName.maintenance,
-            () => syncService(env).compact(),
-            { action },
-          );
         });
         if (error) {
           const fields: SafeFields = {
-            ...(action && { action }),
             failure: classifyFailure(error),
             outcome: Outcome.failed,
             phase,

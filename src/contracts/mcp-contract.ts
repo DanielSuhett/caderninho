@@ -22,14 +22,14 @@ const definitions = [
   },
   {
     description:
-      "Importar contas e transações da origem. Retorna execução existente ou admissão/pausa/cooldown por conexão. Não exige coordenar páginas.",
+      "Importar contas e transações da origem. Retorna execução existente ou admissão/cooldown por conexão. Não exige coordenar páginas.",
     name: ToolName.sync,
     readOnly: false,
     schema: ConnectionSelectionSchema,
   },
   {
     description:
-      "Consultar histórico local por campos conhecidos. Cursor exige mesma revisão; categoria e descrição vêm da origem.",
+      "Consultar histórico local por campos conhecidos. Cursor exige mesmo estado da seleção; categoria e descrição vêm da origem.",
     name: ToolName.transactions,
     readOnly: true,
     schema: TransactionQuerySchema,

@@ -64,15 +64,15 @@ export async function admit(
   now = "2026-10-01T00:00:00.000Z",
   connectionId = "c",
 ) {
-  await createInstallationRepository(env.DB).register(
-    { connector: { id: 200 }, id: connectionId },
-    now,
-  );
+  await createInstallationRepository(env.DB).register({
+    connector: { id: 200 },
+    id: connectionId,
+  });
   const [admission] = await createSyncRepository(env.DB).admit(
     [connectionId],
     now,
   );
-  return required(admission?.runId);
+  return required(admission?.importId);
 }
 export async function collect(
   financialSource: FinancialSource,

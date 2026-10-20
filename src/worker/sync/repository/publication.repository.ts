@@ -10,18 +10,6 @@ type Database = ReturnType<typeof database>;
 export async function publicationData(db: Database, input: Publication) {
   const { run, now } = input;
   const edits: BatchItem<"sqlite">[] = [];
-  if (input.connection) {
-    edits.push(
-      db
-        .update(connections)
-        .set({
-          name: input.connection.connector?.name ?? "Meu Pluggy",
-          observedAt: now,
-          status: input.connection.status ?? "unknown",
-        })
-        .where(eq(connections.id, run.connectionId)),
-    );
-  }
   if (input.accounts) {
     const prior = required(
       await db
@@ -68,14 +56,6 @@ export async function publicationData(db: Database, input: Publication) {
         set: transaction,
         target: transactions.id,
       }),
-    );
-  }
-  if (input.done && input.complete !== false) {
-    edits.push(
-      db
-        .update(connections)
-        .set({ lastSuccessAt: now })
-        .where(eq(connections.id, run.connectionId)),
     );
   }
   return edits;

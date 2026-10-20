@@ -4,23 +4,28 @@ import type {
   Checkpoint,
   CommitResult,
   FinancialSource,
-  ProviderConnection,
+  RunStatus,
   TransactionProjection,
 } from "../../../domain";
 import { Fault, FaultCode } from "../../../domain";
-import type { sync_runs } from "../../schema";
-export type SyncRun = typeof sync_runs.$inferSelect;
+export interface SyncRun {
+  admittedAt: string;
+  checkpoint: Checkpoint;
+  connectionId: string;
+  id: string;
+  sequence: number;
+  status: RunStatus;
+}
 export interface Admission {
   connectionId: string;
+  importId: string | null;
   nextEligibleAt: string | null;
-  runId: string | null;
-  status: "started" | "working" | "paused" | "cooldown";
+  status: "started" | "working" | "cooldown";
 }
 export interface Publication {
   accounts?: AccountProjection[];
-  complete?: boolean;
-  connection?: ProviderConnection;
   done: boolean;
+  error?: string;
   next: Checkpoint;
   now: string;
   run: SyncRun;
@@ -29,12 +34,11 @@ export interface Publication {
 export interface SyncRepository {
   active: () => Promise<SyncRun[]>;
   admit: (ids: string[] | undefined, now: string) => Promise<Admission[]>;
-  compact: (before: string) => Promise<void>;
   connectionAccounts: (connectionId: string) => Promise<AccountMap>;
-  fail: (id: string, code: string, now: string) => Promise<void>;
+  fail: (id: string, code: string) => Promise<void>;
   publish: (input: Publication) => Promise<CommitResult>;
   read: (id: string) => Promise<SyncRun>;
-  start: (id: string, now: string) => Promise<void>;
+  start: (id: string) => Promise<void>;
 }
 export interface Steps {
   do: (name: string, fn: () => Promise<CommitResult>) => Promise<CommitResult>;

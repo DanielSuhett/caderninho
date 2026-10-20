@@ -18,7 +18,6 @@ export interface Checkpoint {
 export interface CommitResult {
   checkpoint: Checkpoint;
   done: boolean;
-  records: number;
   sequence: number;
 }
 export interface FinancialSource {

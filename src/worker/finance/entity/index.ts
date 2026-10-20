@@ -12,7 +12,6 @@ export interface QueryResult extends Quality {
   cursor: Cursor | null;
   records: TransactionProjection[];
   referenceDay: string;
-  revision: number;
 }
 export interface AggregateGroup {
   count: string;
@@ -26,7 +25,6 @@ export interface AggregateResult extends Quality {
   groups: AggregateGroup[];
   metric: AggregateQuery["metric"];
   referenceDay: string;
-  revision: number;
 }
 export interface FinancialRepository {
   aggregate: (

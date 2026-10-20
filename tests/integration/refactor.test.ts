@@ -3,7 +3,6 @@ import assert from "node:assert/strict";
 import { beforeEach, test } from "vitest";
 import { z } from "zod/v4";
 
-import { database } from "../../src/worker/database";
 import { failureStatus } from "../../src/worker/http";
 import { createInstallationService } from "../../src/worker/installation";
 import { createInstallationRepository } from "../../src/worker/installation/repository";
@@ -11,7 +10,6 @@ import {
   classifyFailure,
   failureOutcome,
 } from "../../src/worker/observability";
-import { settings } from "../../src/worker/schema";
 import { runImport } from "../../src/worker/sync";
 import { createSyncRepository } from "../../src/worker/sync/repository";
 import { applyD1Migrations, reset } from "cloudflare:test";
@@ -31,15 +29,15 @@ beforeEach(async () => {
 });
 
 test("one import publishes exact transactions and repeating the request reuses the active run", async () => {
-  await createInstallationRepository(env.DB).register(
-    { connector: { id: 200 }, id: "c" },
-    "2026-10-01T00:00:00Z",
-  );
+  await createInstallationRepository(env.DB).register({
+    connector: { id: 200 },
+    id: "c",
+  });
   const repository = createSyncRepository(env.DB);
   const first = await repository.admit(["c"], "2026-10-01T00:00:00Z");
   const repeated = await repository.admit(["c"], "2026-10-01T00:00:00Z");
-  assert.equal(first[0]?.runId, repeated[0]?.runId);
-  const id = first[0]?.runId;
+  assert.equal(first[0]?.importId, repeated[0]?.importId);
+  const id = first[0]?.importId;
   assert.ok(id);
   await runImport(
     {
@@ -78,7 +76,7 @@ test("one import publishes exact transactions and repeating the request reuses t
     id,
   );
   const state = await createInstallationRepository(env.DB).state();
-  assert.equal(state.runs[0]?.status, "succeeded");
+  assert.equal(state.connections[0]?.importStatus, "succeeded");
   assert.equal(state.connections[0]?.accounts.a?.balanceMinor, "12345");
 });
 
@@ -100,8 +98,7 @@ test("a new installation registers only verified personal connections and keeps 
   const state = await service.state();
   assert.equal(state.connections.length, 1);
   assert.equal(state.connections[0]?.id, "connection-a");
-  assert.equal(state.enabled, true);
-  assert.deepEqual(state.runs, []);
+  assert.equal(state.connections[0]?.importStatus, null);
 });
 
 test("only Meu Pluggy is accepted, identity is checked and ten connections remain idempotent", async () => {
@@ -143,23 +140,16 @@ test("only Meu Pluggy is accepted, identity is checked and ten connections remai
   });
 });
 
-test("D1 enforces ten connections atomically and rolls back rejected registration revisions", async () => {
+test("D1 enforces ten connections atomically and keeps reconnection idempotent", async () => {
   const repository = createInstallationRepository(env.DB);
-  const now = "2026-10-01T00:00:00Z";
   await Promise.all(
     Array.from({ length: 9 }, (_, index) =>
-      repository.register({ id: `c-${index}` }, now),
+      repository.register({ id: `c-${index}` }),
     ),
   );
-  const revision = async () => {
-    const [row] = await database(env.DB)
-      .select({ value: settings.revision })
-      .from(settings);
-    return row?.value;
-  };
   const results = await Promise.allSettled([
-    repository.register({ id: "tenth" }, now),
-    repository.register({ id: "eleventh" }, now),
+    repository.register({ id: "tenth" }),
+    repository.register({ id: "eleventh" }),
   ]);
   assert.equal(
     results.filter((result) => result.status === "fulfilled").length,
@@ -175,12 +165,8 @@ test("D1 enforces ten connections atomically and rolls back rejected registratio
     }
   }
   assert.equal((await repository.state()).connections.length, 10);
-  assert.equal(await revision(), 10);
-  await repository.register({ id: "c-0", status: "UPDATED" }, now);
+  const before = await repository.state();
+  await repository.register({ id: "c-0", status: "UPDATED" });
   const state = await repository.state();
-  assert.equal(
-    state.connections.find((row) => row.id === "c-0")?.status,
-    "UPDATED",
-  );
-  assert.equal(await revision(), 10);
+  assert.deepEqual(state, before);
 });

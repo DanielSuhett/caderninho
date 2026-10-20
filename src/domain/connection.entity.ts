@@ -28,22 +28,22 @@ export function assertConnectionCapacity({
 export function connectionPartial(connection: {
   accounts: AccountMap;
   importStatus: RunStatus | null;
-  lastAdmittedAt: string | null;
+  importAdmittedAt: string | null;
   lastSuccessAt: string | null;
 }) {
   return (
-    !!(connection.importStatus && connection.importStatus !== "succeeded") ||
+    connection.importStatus !== "succeeded" ||
     !connection.lastSuccessAt ||
     !!(
-      connection.lastAdmittedAt &&
-      connection.lastAdmittedAt > connection.lastSuccessAt
+      connection.importAdmittedAt &&
+      connection.importAdmittedAt > connection.lastSuccessAt
     ) ||
     Object.values(connection.accounts).some(
       (account) =>
         !account.balanceObservedAt ||
         !!(
-          connection.lastAdmittedAt &&
-          account.balanceObservedAt < connection.lastAdmittedAt
+          connection.importAdmittedAt &&
+          account.balanceObservedAt < connection.importAdmittedAt
         ),
     )
   );

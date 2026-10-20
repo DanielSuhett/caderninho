@@ -1,28 +1,16 @@
-import type { AccountMap, RunStatus } from "../domain";
+import type { AccountMap, Checkpoint, RunStatus } from "../domain";
 export interface ConnectionInfo {
   accounts: AccountMap;
   id: string;
-  lastAdmittedAt: string | null;
+  importCheckpoint: Pick<Checkpoint, "accountId" | "phase"> | null;
+  importError: string | null;
+  importStatus: RunStatus | null;
   lastSuccessAt: string | null;
-  name: string;
-  nextImportAt: string | null;
-  observedAt: string;
+  nextEligibleAt: string | null;
   partial: boolean;
-  status: string;
-}
-export interface RunInfo {
-  connectionId: string;
-  createdAt: string;
-  error: string | null;
-  id: string;
-  records: number;
-  status: RunStatus;
-  updatedAt: string;
 }
 export interface InstallationState {
   connections: ConnectionInfo[];
-  enabled: boolean;
-  runs: RunInfo[];
 }
 export interface PortalResponse extends InstallationState {
   configured: boolean;

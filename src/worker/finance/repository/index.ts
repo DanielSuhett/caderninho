@@ -3,17 +3,12 @@ import { and, desc, eq, inArray, type SQL, sql } from "drizzle-orm";
 import type {
   AggregateQuery,
   Metric,
-  RunStatus,
   TransactionFilter,
 } from "../../../domain";
 import { connectionPartial, MetricDefinition } from "../../../domain";
-import { database, required } from "../../database";
-import {
-  connections as c,
-  settings,
-  sync_runs,
-  transactions as t,
-} from "../../schema";
+import { hash } from "../../../shared";
+import { database } from "../../database";
+import { connections as c, transactions as t } from "../../schema";
 import type { FinancialRepository } from "../entity";
 
 const transactionFields = {
@@ -110,27 +105,19 @@ function total(value: Record<keyof ReturnType<typeof moneyTotal>, string>) {
     .reduce((sum, part) => sum * 1000n + BigInt(part), 0n)
     .toString();
 }
-function assertRevision(before: number, after: number, expected?: number) {
-  if (before !== after || (expected !== undefined && before !== expected)) {
-    throw new Error("RESTART_REQUIRED");
-  }
-}
 export function createFinancialRepository(
   binding: D1Database,
 ): FinancialRepository {
   const db = database(binding);
-  const revision = () =>
-    db
-      .select({ revision: settings.revision })
-      .from(settings)
-      .where(eq(settings.id, 1));
   const qualityConnections = (filter: TransactionFilter = {}) =>
     db
       .select({
         accounts: c.accounts,
         id: c.id,
-        importStatus: sql<RunStatus | null>`(SELECT ${sync_runs.status} FROM ${sync_runs} WHERE ${sync_runs.connectionId}=${c.id} ORDER BY ${sync_runs.createdAt} DESC LIMIT 1)`,
-        lastAdmittedAt: c.lastAdmittedAt,
+        importAdmittedAt: c.importAdmittedAt,
+        importId: c.importId,
+        importSequence: c.importSequence,
+        importStatus: c.importStatus,
         lastSuccessAt: c.lastSuccessAt,
       })
       .from(c)
@@ -140,7 +127,8 @@ export function createFinancialRepository(
           filter.accountIds &&
             sql`EXISTS(SELECT 1 FROM json_each(${c.accounts}) AS account WHERE account.key IN (${selectedAccounts(filter.accountIds)}))`,
         ),
-      );
+      )
+      .orderBy(c.id);
   function partial(rows: Awaited<ReturnType<typeof qualityConnections>>) {
     return !rows.length || rows.some(connectionPartial);
   }
@@ -175,34 +163,27 @@ export function createFinancialRepository(
       const group = input.groupBy
         ? groupings[input.groupBy]
         : sql<string | null>`NULL`;
-      const [before, groups, connectionQuality, afterRevision] = await db.batch(
-        [
-          revision(),
-          db
-            .select({
-              amount: moneyTotal(amount),
-              amountCount:
-                sql<string>`CAST(count(${t.amountMinor}) AS TEXT)`.as(
-                  "amount_count",
-                ),
-              count: sql<string>`CAST(count(*) AS TEXT)`.as("count"),
-              currency: t.currency,
-              group: group.as("group_value"),
-              unknownAmountCount:
-                sql<string>`CAST(sum(CASE WHEN ${t.amountMinor} IS NULL THEN 1 ELSE 0 END) AS TEXT)`.as(
-                  "unknown_amount_count",
-                ),
-            })
-            .from(t)
-            .where(and(filterWhere(input.filter), eligible, metricFilter))
-            .groupBy(t.currency, group)
-            .orderBy(t.currency, group),
-          qualityConnections(input.filter),
-          revision(),
-        ],
-      );
-      const version = required(before[0]).revision;
-      assertRevision(version, required(afterRevision[0]).revision);
+      const [groups, connectionQuality] = await db.batch([
+        db
+          .select({
+            amount: moneyTotal(amount),
+            amountCount: sql<string>`CAST(count(${t.amountMinor}) AS TEXT)`.as(
+              "amount_count",
+            ),
+            count: sql<string>`CAST(count(*) AS TEXT)`.as("count"),
+            currency: t.currency,
+            group: group.as("group_value"),
+            unknownAmountCount:
+              sql<string>`CAST(sum(CASE WHEN ${t.amountMinor} IS NULL THEN 1 ELSE 0 END) AS TEXT)`.as(
+                "unknown_amount_count",
+              ),
+          })
+          .from(t)
+          .where(and(filterWhere(input.filter), eligible, metricFilter))
+          .groupBy(t.currency, group)
+          .orderBy(t.currency, group),
+        qualityConnections(input.filter),
+      ]);
       return {
         definition: MetricDefinition[input.metric],
         groups: groups.map((row) => ({
@@ -220,7 +201,6 @@ export function createFinancialRepository(
           partial(connectionQuality) ||
           groups.some((row) => BigInt(row.unknownAmountCount) > 0n),
         referenceDay,
-        revision: version,
       };
     },
     async query(input, scope, referenceDay) {
@@ -231,8 +211,7 @@ export function createFinancialRepository(
       const after = cursor
         ? sql`(${t.date},${t.accountId},${t.id})<(${cursor.date},${cursor.accountId},${cursor.id})`
         : undefined;
-      const [before, rows, connectionQuality, afterRevision] = await db.batch([
-        revision(),
+      const [rows, connectionQuality] = await db.batch([
         db
           .select(transactionFields)
           .from(t)
@@ -240,14 +219,14 @@ export function createFinancialRepository(
           .orderBy(desc(t.date), desc(t.accountId), desc(t.id))
           .limit(input.limit + 1),
         qualityConnections(input.filter),
-        revision(),
       ]);
-      const version = required(before[0]).revision;
-      assertRevision(
-        version,
-        required(afterRevision[0]).revision,
-        cursor?.revision,
-      );
+      const state = await hash({
+        connections: connectionQuality,
+        referenceDay,
+      });
+      if (cursor && cursor.state !== state) {
+        throw new Error("RESTART_REQUIRED");
+      }
       const records = rows.slice(0, input.limit);
       const last = records.at(-1);
       return {
@@ -257,14 +236,13 @@ export function createFinancialRepository(
                 accountId: last.accountId,
                 date: last.date,
                 id: last.id,
-                revision: version,
                 scope,
+                state,
               }
             : null,
         partial: partial(connectionQuality),
         records,
         referenceDay,
-        revision: version,
       };
     },
   };

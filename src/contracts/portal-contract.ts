@@ -19,29 +19,21 @@ export const PortalResponseSchema = z.object({
           .strict(),
       ),
       id: z.string(),
-      lastAdmittedAt: z.string().nullable(),
+      importCheckpoint: z
+        .object({
+          accountId: z.string().nullable(),
+          phase: z.enum(["accounts", "transactions", "finish"]),
+        })
+        .nullable(),
+      importError: z.string().nullable(),
+      importStatus: z.enum(RunStatus).nullable(),
       lastSuccessAt: z.string().nullable(),
-      name: z.string(),
-      nextImportAt: z.string().nullable(),
-      observedAt: z.string(),
+      nextEligibleAt: z.string().nullable(),
       partial: z.boolean(),
-      status: z.string(),
     }),
   ),
   csrf: z.string(),
-  enabled: z.boolean(),
   origin: z.string(),
-  runs: z.array(
-    z.object({
-      connectionId: z.string(),
-      createdAt: z.string(),
-      error: z.string().nullable(),
-      id: z.string(),
-      records: z.number(),
-      status: z.enum(RunStatus),
-      updatedAt: z.string(),
-    }),
-  ),
 }) satisfies z.ZodType<PortalResponse>;
 export const AccountConnectTokenSchema = z.object({
   accessToken: z.string(),
