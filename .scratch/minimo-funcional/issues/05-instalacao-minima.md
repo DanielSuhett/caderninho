@@ -4,20 +4,37 @@
 
 **Blocked by:** 01 — Acessar o painel e autorizar o MCP sem sessões no D1; 03 — Consultar transações sem repetir dados da conexão ou da conta; 04 — Importar e retomar pelo estado corrente da conexão.
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] O schema inicial aplicado em D1 vazio cria somente connections e transactions como tabelas da aplicação, com as nove colunas de cada contrato mínimo. Não esconder os campos cortados em JSON: contas usam somente os cinco valores conhecidos por chave de conta; checkpoint usa somente fase, conta e cursor. Tabelas internas da plataforma não entram na contagem. Não há seed de settings, migrações legadas nem reset automático em deploy. Os dados persistem após reiniciar o Worker.
-- [ ] Um cenário integrado com dados sintéticos cobre login, widget de conexão/reconexão, importação, consulta paginada, totais exatos e autorização/revogação OAuth. O MCP anuncia somente status, sync, transactions e aggregate. Reimportar uma origem com janela menor preserva o histórico e seus totais elegíveis, inclusive após reinício.
-- [ ] Provar o limite de segurança com a instalação final: visitantes, cookies adulterados/expirados e tokens MCP isolados não emitem Connect Tokens, não cadastram conexões e não aprovam consentimento como proprietário. Credenciais Pluggy e a senha não aparecem em respostas, logs ou assets. O Connect Token limitado continua sendo o único segredo Pluggy entregue ao widget.
-- [ ] Cada campo persistido tem uma justificativa observável: consulta financeira, saldo com referência temporal, autenticação da origem ou retomada da importação. Eliminar serializadores, filtros, tipos, índices e joins dedicados aos campos cortados, incluindo seletores que exigiam connection_id junto do account_id. Remover código, exports, portas, wrappers, dependências, fixtures, tarefas e testes sem consumidor; não esconder a mesma complexidade em JSON/camadas genéricas. Atualizar documentação ativa, glossário e instalação sem restaurar documentos históricos apagados. Registrar redução de tabelas, colunas de transação, ferramentas e código, sem metatestes de fontes/configuração.
-- [ ] Checks locais completos e o harness nativo passam, incluindo importação de 100 mil registros, precisão monetária, paginação, replay, recuperação de falha e persistência após reinício. Relatar separadamente evidência sintética/local e o que depende de provedor/host reais. Este ticket não autoriza deploy, provisionamento, reset ou escrita em recursos remotos; a reinstalação Cloudflare anteriormente cancelada permanece fora do escopo.
+- [x] O schema inicial aplicado em D1 vazio cria somente connections e transactions como tabelas da aplicação, com as nove colunas de cada contrato mínimo. Não esconder os campos cortados em JSON: contas usam somente os cinco valores conhecidos por chave de conta; checkpoint usa somente fase, conta e cursor. Tabelas internas da plataforma não entram na contagem. Não há seed de settings, migrações legadas nem reset automático em deploy. Os dados persistem após reiniciar o Worker.
+- [x] Um cenário integrado com dados sintéticos cobre login, widget de conexão/reconexão, importação, consulta paginada, totais exatos e autorização/revogação OAuth. O MCP anuncia somente status, sync, transactions e aggregate. Reimportar uma origem com janela menor preserva o histórico e seus totais elegíveis, inclusive após reinício.
+- [x] Provar o limite de segurança com a instalação final: visitantes, cookies adulterados/expirados e tokens MCP isolados não emitem Connect Tokens, não cadastram conexões e não aprovam consentimento como proprietário. Credenciais Pluggy e a senha não aparecem em respostas, logs ou assets. O Connect Token limitado continua sendo o único segredo Pluggy entregue ao widget.
+- [x] Cada campo persistido tem uma justificativa observável: consulta financeira, saldo com referência temporal, autenticação da origem ou retomada da importação. Eliminar serializadores, filtros, tipos, índices e joins dedicados aos campos cortados, incluindo seletores que exigiam connection_id junto do account_id. Remover código, exports, portas, wrappers, dependências, fixtures, tarefas e testes sem consumidor; não esconder a mesma complexidade em JSON/camadas genéricas. Atualizar documentação ativa, glossário e instalação sem restaurar documentos históricos apagados. Registrar redução de tabelas, colunas de transação, ferramentas e código, sem metatestes de fontes/configuração.
+- [x] Checks locais completos e o harness nativo passam, incluindo importação de 100 mil registros, precisão monetária, paginação, replay, recuperação de falha e persistência após reinício. Relatar separadamente evidência sintética/local e o que depende de provedor/host reais. Este ticket não autoriza deploy, provisionamento, reset ou escrita em recursos remotos; a reinstalação Cloudflare anteriormente cancelada permanece fora do escopo.
 
-## Evidência para revisão do integrador
+## Evidência de conclusão
 
-- Base confirmada: `d810f748`, tip de `refactor/minimo-funcional`, worktree limpa antes do 05. O aceite/resolução deste ticket permanece com o integrador.
-- TDD: a fronteira SDK falhou transportando nome/status de Item; a regressão agora verifica somente identidade/connector, retirando também `updatedAt` da conta. Auditoria eliminou helpers, opções HTTP, tipos/exports, dependência direta redundante e scripts sem consumidores; docs ativos e links foram atualizados sem restaurar históricos apagados.
-- `tests/integration/installation.test.ts` verifica D1 novo (2 × 9 colunas; JSON conta 5/checkpoint 3), login → widget conexão/reconexão → importação paginada → MCP/totais exatos → grant/revogação OAuth. A/B → B atualizado/C conserva A e total BRL `900719925474099306`. SDK visual e binding de despacho são sintéticos; adapter HTTP Pluggy, serviços, D1 e OAuth oficial são reais locais.
-- Segurança final cobre cookie adulterado/expirado, visitante e bearer MCP isolado nos comandos owner e consentimento sem chamada Pluggy. Respostas/headers, logs e assets construídos omitem credenciais sintéticas; falha da origem contém canários privados para verificar redação. Rotação/logout/OAuth independente mantêm a cobertura HTTP anterior.
-- `mise run check:quick`, `lint:fix`/`format` convergentes e `PRODUCT_TEST_PORT=8925 mise run check` completos passaram com Node 24: 17 testes Node, 41 de produto, build dry-run e harness nativo. 100 mil registros, páginas de 500 e travessia integral de 200: 14.297 ms; pico workerd 418.744 KiB. Replay, rollback, falha parcial e reinício preservam valores/último sucesso; histórico após reinício mantém A/B atualizado/C/D e total `10700`. Log local: `work/ticket05-check.log`.
-- Redução por `git ls-tree -r REV src`, somente `.ts`/`.tsx`, excluindo runtime gerado e `/__tests__/`: baseline `cc59a79` 77 arquivos/6.615 linhas → 73/5.243; antes do 05, `90b1113`/`d810f748` tinham 76/5.442. Modelo: 6 → 2 tabelas, 20 → 9 colunas de transação, 6 → 4 tools. Não é contagem de assets/testes.
-- Nenhum push, deploy, provisionamento, migração/acesso remoto Cloudflare ou reinstalação foi executado. Pluggy real, instalação em conta nova, OAuth/cliente MCP em host real e telemetria remota continuam fora da evidência local.
+`installation.test.ts` verifica D1 vazio (duas tabelas × nove colunas; JSON de conta
+com cinco valores e checkpoint com três), login → widget conexão/reconexão →
+importação paginada → MCP/totais exatos → grant/revogação OAuth. A/B → B atualizado/C
+conserva A e total BRL `900719925474099306`. SDK visual e despacho são sintéticos;
+adapter HTTP Pluggy, serviços, D1 e biblioteca OAuth executam localmente.
+
+Testes HTTP e o harness verificam a barreira do proprietário, ausência de
+credenciais em respostas/logs/assets, precisão, replay, rollback, falha parcial,
+100 mil transações, paginação e reinício. `mise run check` completo passou com
+17 testes Node e 42 de integração, build dry-run e harness nativo. As revisões
+Standards/Spec tiveram um achado cada, corrigidos e reconferidos sem pendências.
+A regressão de catálogo temporariamente incompleto preserva páginas confirmadas e
+o último sucesso. Evidência local: `work/implementation/minimo-funcional/`.
+
+Redução desde `cc59a79`: seis → duas tabelas, vinte → nove colunas por transação,
+seis → quatro tools, 77 → 73 arquivos TS e 6.615 → 5.246 linhas TS (−20,70%). O
+método considera `.ts`/`.tsx` em `src`, excluindo testes e tipos gerados. Contratos,
+documentação ativa e justificativa de cada campo estão em
+`docs/cloudflare-product.md`; código e documentos sem consumidor foram removidos.
+
+Aceito na integração `refactor/minimo-funcional`, código final `6635a75`. Não houve
+push, deploy, provisionamento, migração ou acesso remoto Cloudflare. Pluggy real,
+instalação em conta nova e consentimento em host MCP real permanecem fora da
+evidência local; a reinstalação cancelada não foi retomada.
