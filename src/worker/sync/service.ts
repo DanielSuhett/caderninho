@@ -75,12 +75,15 @@ async function importTransactions(
   );
   let following: string | null = accountId;
   if (!page.next) {
-    // Reread the small current catalog; retained metadata is not a traversal marker.
+    // Missing known accounts are partial even if a later catalog restores them.
     const [current, saved] = await Promise.all([
       catalog(source, run.connectionId),
       repository.connectionAccounts(run.connectionId),
     ]);
-    if (current.some((account) => !saved[account.id])) {
+    if (
+      current.length !== Object.keys(saved).length ||
+      current.some((account) => !saved[account.id])
+    ) {
       throw new Error("SOURCE_ACCOUNTS_CHANGED");
     }
     following = current.find((account) => account.id > accountId)?.id ?? null;

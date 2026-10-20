@@ -43,6 +43,8 @@ reconciliações separados. Importações atualizam o mesmo ID e acrescentam nov
 Ausência na origem preserva o histórico e sua elegibilidade nos totais objetivos.
 Consultas e totais informam parcialidade por conexão e valores desconhecidos.
 Contas ausentes e saldos não relidos preservam o valor e a referência antigos.
+Conta conhecida ausente na releitura entre contas encerra a tentativa com erro
+seguro e parcialidade, mesmo que reapareça depois, sem avançar o último sucesso.
 
 ## Segurança e diagnóstico
 
@@ -141,14 +143,14 @@ visitantes e bearer MCP isolado não chegam aos endpoints owner da Pluggy/consen
 | Colunas por transação | 20 | 9 |
 | Tools MCP | 6 | 4 |
 | Arquivos TypeScript | 77 | 73 |
-| Linhas TypeScript | 6.615 | 5.243 |
+| Linhas TypeScript | 6.615 | 5.246 |
 
 Método reproduzível: `git ls-tree -r --name-only REV src`; contar somente `.ts`
 e `.tsx`, excluindo `src/worker/runtime.d.ts` e caminhos com `/__tests__/`.
 Somar as linhas desses blobs com `git show REV:PATH`. Não é uma medida de assets
 ou testes. A base integrada `d810f748` (mesma medição de `90b1113`, antes do 05)
-tinha 76 arquivos e 5.442 linhas; este ticket retira três arquivos e 199 linhas.
-Desde o baseline, são 1.372 linhas a menos (20,74%).
+tinha 76 arquivos e 5.442 linhas; agora são três arquivos e 196 linhas a menos.
+Desde o baseline, são 1.369 linhas a menos (20,70%).
 
 A auditoria retirou nome/status de Item sem consumidor, validadores/serializadores
 JSON e comparadores sem uso, detalhes de erro genéricos, opções HTTP sustentadas
