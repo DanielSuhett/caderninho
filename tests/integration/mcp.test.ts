@@ -3,9 +3,12 @@ import assert from "node:assert/strict";
 import { beforeEach, test } from "vitest";
 import { z } from "zod/v4";
 
+import { Fault, FaultCode, type FinancialSource } from "../../src/domain";
 import { createLogger } from "../../src/shared/logger";
 import { createInstallationRepository } from "../../src/worker/installation/repository";
 import { withObservation } from "../../src/worker/observability";
+import { runImport } from "../../src/worker/sync";
+import { createSyncRepository } from "../../src/worker/sync/repository";
 import {
   command,
   cookies,
@@ -14,7 +17,7 @@ import {
   login,
   settings,
 } from "./access-fixture";
-import { collect, setup, source, transaction } from "./fixture";
+import { admit, collect, setup, source, transaction } from "./fixture";
 import { env } from "cloudflare:workers";
 
 const wire = z.object({
@@ -38,7 +41,7 @@ const requestMeta = {
   "io.modelcontextprotocol/protocolVersion": "2026-07-28",
 };
 beforeEach(setup);
-test("official OAuth, six standard tools/defaults, protocol errors and grant revocation work together", async () => {
+test("official OAuth, five standard tools/defaults, protocol errors and grant revocation work together", async () => {
   await collect(source([transaction()]));
   const app = fixture();
   const cookie = cookies(await login(app));
@@ -74,7 +77,6 @@ test("official OAuth, six standard tools/defaults, protocol errors and grant rev
   assert.deepEqual(listing.result?.tools?.map((tool) => tool.name).sort(), [
     "caderninho_accounts",
     "caderninho_aggregate",
-    "caderninho_correct_transaction",
     "caderninho_status",
     "caderninho_sync",
     "caderninho_transactions",
@@ -146,12 +148,18 @@ test("HTTP 200 tool failures remain visible and private arguments never enter di
           params: {
             _meta: requestMeta,
             arguments: {
-              accountId: "private-account",
-              connectionId: "private-connection",
-              id: "private-id",
-              patch: { description: "private-description" },
+              filter: {
+                accounts: [
+                  {
+                    accountId: "private-account",
+                    connectionId: "private-connection",
+                  },
+                ],
+                description: "private-description",
+                minAmountMinor: "0",
+              },
             },
-            name: "caderninho_correct_transaction",
+            name: "caderninho_transactions",
           },
         }),
         headers: {
@@ -159,7 +167,7 @@ test("HTTP 200 tool failures remain visible and private arguments never enter di
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
           "Mcp-Method": "tools/call",
-          "Mcp-Name": "caderninho_correct_transaction",
+          "Mcp-Name": "caderninho_transactions",
           "Mcp-Protocol-Version": "2026-07-28",
         },
         method: "POST",
@@ -171,14 +179,13 @@ test("HTTP 200 tool failures remain visible and private arguments never enter di
   assert.deepEqual(
     JSON.parse(wire.parse(body).result?.content?.[0]?.text ?? "{}"),
     {
-      error: "NOT_FOUND",
+      error: "INVALID_FILTER",
     },
   );
   const serialized = JSON.stringify({ lines, spans });
   for (const secret of [
     "private-connection",
     "private-account",
-    "private-id",
     "private-description",
     token,
   ]) {
@@ -246,4 +253,191 @@ test("MCP reports missing configuration and durable import failures without rese
   assert.deepEqual(JSON.parse(failed.result?.content?.[0]?.text ?? "{}"), {
     error: "IMPORT_FAILED",
   });
+});
+
+test("MCP accumulates imported history and updates only matching source IDs", async () => {
+  await collect(
+    source([
+      transaction({ amount: "-10", id: "A" }),
+      transaction({ amount: "-20", id: "B" }),
+    ]),
+  );
+  const app = fixture();
+  const token = await grant(app, cookies(await login(app)));
+  const call = async (
+    name: string,
+    args: object = {},
+    expectedError = false,
+  ) => {
+    const response = await app.request("/mcp", {
+      body: JSON.stringify({
+        id: 1,
+        jsonrpc: "2.0",
+        method: "tools/call",
+        params: { _meta: requestMeta, arguments: args, name },
+      }),
+      headers: {
+        Accept: "application/json, text/event-stream",
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+        "Mcp-Method": "tools/call",
+        "Mcp-Name": name,
+        "Mcp-Protocol-Version": "2026-07-28",
+      },
+      method: "POST",
+    });
+    const { result } = wire.parse(await response.json());
+    assert.equal(result?.isError, expectedError);
+    return z.json().parse(JSON.parse(result?.content?.[0]?.text ?? "{}"));
+  };
+  const firstPage = z
+    .object({ cursor: z.json() })
+    .parse(await call("caderninho_transactions", { limit: 1 }));
+  const changedB = transaction({
+    amount: "-25",
+    category: "Updated",
+    description: "Updated by source",
+    id: "B",
+  });
+  const updated: FinancialSource = {
+    ...source([]),
+    transactions: (_account, cursor) => {
+      if (cursor === "last") {
+        return Promise.resolve({
+          next: null,
+          records: [transaction({ amount: "-30", id: "C" })],
+        });
+      }
+      return Promise.resolve({
+        next: cursor ? "last" : "overlap",
+        records: [changedB],
+      });
+    },
+  };
+  await collect(updated, "2026-10-02T00:00:00.000Z");
+  assert.deepEqual(
+    await call(
+      "caderninho_transactions",
+      { cursor: firstPage.cursor, limit: 1 },
+      true,
+    ),
+    { error: "RESTART_REQUIRED" },
+  );
+  const query = z.object({
+    cursor: z
+      .object({
+        accountId: z.string(),
+        connectionId: z.string(),
+        date: z.string(),
+        id: z.string(),
+        revision: z.number(),
+        scope: z.string(),
+      })
+      .nullable(),
+    partial: z.boolean(),
+    records: z.array(
+      z
+        .object({
+          accountId: z.string(),
+          amountMinor: z.string().nullable(),
+          category: z.string().nullable(),
+          connectionId: z.string(),
+          currency: z.string(),
+          date: z.string(),
+          description: z.string(),
+          direction: z.enum(["DEBIT", "CREDIT"]),
+          id: z.string(),
+          status: z.enum(["POSTED", "PENDING"]),
+        })
+        .strict(),
+    ),
+  });
+  const aggregate = z.object({
+    groups: z.array(
+      z.object({ count: z.string(), totalMinor: z.string().nullable() }),
+    ),
+    partial: z.boolean(),
+  });
+  const page = query.parse(await call("caderninho_transactions"));
+  assert.deepEqual(page.records.map((row) => row.id).sort(), ["A", "B", "C"]);
+  assert.equal(
+    page.records.find((row) => row.id === "B")?.description,
+    "Updated by source",
+  );
+  assert.equal(page.records.find((row) => row.id === "B")?.category, "Updated");
+  const totals = aggregate.parse(
+    await call("caderninho_aggregate", { metric: "debits" }),
+  );
+  assert.equal(totals.groups[0]?.totalMinor, "6500");
+  assert.equal(totals.partial, false);
+  await Promise.all(
+    [
+      { filter: { ignored: true } },
+      { filter: { presence: "not_observed" } },
+    ].map(async (args) => {
+      assert.deepEqual(await call("caderninho_transactions", args, true), {
+        error: "INVALID_FILTER",
+      });
+    }),
+  );
+  assert.deepEqual(
+    await call("caderninho_aggregate", { metric: "known_spending" }, true),
+    { error: "INVALID_FILTER" },
+  );
+  await collect(updated, "2026-10-03T00:00:00.000Z");
+  await collect(source([]), "2026-10-04T00:00:00.000Z");
+  assert.equal(
+    aggregate.parse(await call("caderninho_aggregate", { metric: "debits" }))
+      .groups[0]?.totalMinor,
+    "6500",
+  );
+  assert.equal(
+    aggregate.parse(await call("caderninho_aggregate", { metric: "count" }))
+      .groups[0]?.count,
+    "3",
+  );
+  assert.equal(
+    query.parse(await call("caderninho_transactions")).partial,
+    false,
+  );
+  const id = await admit("2026-10-05T00:00:00.000Z");
+  await assert.rejects(
+    runImport(
+      {
+        now: () => "2026-10-05T00:00:00.000Z",
+        repository: createSyncRepository(env.DB),
+        source: {
+          ...source([]),
+          transactions: (_account, cursor) => {
+            if (cursor) {
+              return Promise.reject(new Fault(FaultCode.UPSTREAM_AUTH));
+            }
+            return Promise.resolve({
+              next: "next",
+              records: [
+                transaction({ amount: "-27", id: "B" }),
+                transaction({ amount: "-40", id: "D" }),
+              ],
+            });
+          },
+        },
+        steps: { do: (_name, fn) => fn() },
+      },
+      id,
+    ),
+    { code: "UPSTREAM_AUTH" },
+  );
+  const partialPage = query.parse(await call("caderninho_transactions"));
+  assert.deepEqual(partialPage.records.map((row) => row.id).sort(), [
+    "A",
+    "B",
+    "C",
+    "D",
+  ]);
+  assert.equal(partialPage.partial, true);
+  const partialTotal = aggregate.parse(
+    await call("caderninho_aggregate", { metric: "debits" }),
+  );
+  assert.equal(partialTotal.groups[0]?.totalMinor, "10700");
+  assert.equal(partialTotal.partial, true);
 });

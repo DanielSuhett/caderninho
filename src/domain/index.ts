@@ -6,9 +6,7 @@ export {
 } from "./connection.entity";
 export {
   AccountType,
-  Classification,
   FaultCode,
-  PaymentMethod,
   TransactionStatus,
   TransactionType,
 } from "./enums";
@@ -27,7 +25,6 @@ export type {
   AccountProjection,
   AccountReference,
   CollectionStatus as CollectionStatusType,
-  TransactionCorrection,
   TransactionProjection,
   TransactionReference,
 } from "./finance.entity";

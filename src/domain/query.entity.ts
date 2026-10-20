@@ -7,10 +7,8 @@ export interface TransactionFilter {
   description?: string | undefined;
   direction?: "DEBIT" | "CREDIT" | undefined;
   from?: string | undefined;
-  ignored?: boolean | undefined;
   maxAmountMinor?: string | undefined;
   minAmountMinor?: string | undefined;
-  presence?: "observed" | "not_observed" | undefined;
   status?: "PENDING" | "POSTED" | undefined;
   to?: string | undefined;
 }
@@ -32,7 +30,6 @@ export const Metric = {
   count: "count",
   credits: "credits",
   debits: "debits",
-  known_spending: "known_spending",
 } as const;
 export type Metric = (typeof Metric)[keyof typeof Metric];
 export interface AggregateQuery {
@@ -42,14 +39,8 @@ export interface AggregateQuery {
 }
 
 export const MetricDefinition: Record<Metric, string> = {
-  cash_flow:
-    "Creditos menos debitos POSTED, maduros e nao ignorados, somente de contas BANK.",
-  count:
-    "Registros da selecao; contagens confirmadas e nao confirmadas separadas.",
-  credits:
-    "Magnitude dos creditos POSTED, maduros e nao ignorados; nao equivale a renda.",
-  debits:
-    "Magnitude dos debitos POSTED, maduros e nao ignorados; nao equivale a gasto.",
-  known_spending:
-    "Consumo com evidencia deterministica; debitos incertos informados separadamente.",
+  cash_flow: "Creditos menos debitos POSTED, maduros, somente de contas BANK.",
+  count: "Todos os registros da selecao, inclusive pendentes e futuros.",
+  credits: "Magnitude dos creditos POSTED, maduros; nao equivale a renda.",
+  debits: "Magnitude dos debitos POSTED, maduros; nao equivale a gasto.",
 };

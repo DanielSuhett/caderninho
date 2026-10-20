@@ -63,16 +63,14 @@ function accountWrites(db: Database, input: Publication) {
 }
 
 function transactionWrites(db: Database, input: Publication) {
-  const { run, now } = input;
   const edits: BatchItem<"sqlite">[] = [];
   for (const tx of input.transactions ?? []) {
-    const value = { ...tx, lastSeenRun: run.id, observedAt: now };
     edits.push(
       db
         .insert(transactions)
-        .values(value)
+        .values(tx)
         .onConflictDoUpdate({
-          set: value,
+          set: tx,
           target: [
             transactions.connectionId,
             transactions.accountId,
@@ -117,7 +115,6 @@ function coverageWrites(db: Database, input: Publication) {
           collectionStatus: "complete",
           error: null,
           lastCompletedFrom: accounts.observedFrom,
-          lastCompletedRun: run.id,
           lastCompletedTo: accounts.observedTo,
           lastSuccessAt: now,
         })

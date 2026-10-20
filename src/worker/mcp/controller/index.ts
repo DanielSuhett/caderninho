@@ -9,7 +9,6 @@ import { z } from "zod/v4";
 import {
   AggregateQuerySchema,
   ConnectionSelectionSchema,
-  CorrectionSchema,
   PRODUCT_INSTRUCTIONS,
   StatusInputSchema,
   ToolName,
@@ -67,8 +66,6 @@ async function invoke(env: Bindings, name: string, args: unknown) {
       return finance.query(TransactionQuerySchema.parse(args));
     case ToolName.aggregate:
       return finance.aggregate(AggregateQuerySchema.parse(args));
-    case ToolName.correct:
-      return finance.correct(CorrectionSchema.parse(args));
     default:
       throw new Error("UNKNOWN_TOOL");
   }

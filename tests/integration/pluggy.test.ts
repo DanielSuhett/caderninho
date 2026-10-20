@@ -33,7 +33,13 @@ test("official SDK preserves numeric lexemes and only reads concrete account/tra
       return Promise.resolve(
         Response.json({
           page: 1,
-          results: [account()],
+          results: [
+            {
+              ...account(),
+              privateMetadata: { ownerDocument: "synthetic-private" },
+              taxNumber: "11122233344",
+            },
+          ],
           total: 1,
           totalPages: 1,
         }),
@@ -42,7 +48,7 @@ test("official SDK preserves numeric lexemes and only reads concrete account/tra
     if (url.pathname === "/v2/transactions") {
       return Promise.resolve(
         new Response(
-          '{"results":[{"id":"t","accountId":"a","amount":90071992547409931234567890.12,"currencyCode":"BRL","date":"2026-10-01T00:00:00.000Z","description":"Synthetic","type":"DEBIT"}],"next":null}',
+          '{"results":[{"id":"t","accountId":"a","amount":90071992547409931234567890.12,"currencyCode":"BRL","date":"2026-10-01T00:00:00.000Z","description":"Synthetic","type":"DEBIT","updatedAt":"2026-10-02T00:00:00Z","paymentData":{"payer":{"documentNumber":{"value":"11122233344"}}},"merchant":{"name":"Synthetic shop"},"privateMetadata":"synthetic-private"}],"next":null}',
         ),
       );
     }
@@ -59,7 +65,17 @@ test("official SDK preserves numeric lexemes and only reads concrete account/tra
     normalizeTransaction(tx, normalizeAccount(a, "c")).amountMinor,
     "9007199254740993123456789012",
   );
-  assert.equal(tx.status, "POSTED");
+  assert.deepEqual(a, account());
+  assert.deepEqual(tx, {
+    accountId: "a",
+    amount: "90071992547409931234567890.12",
+    currencyCode: "BRL",
+    date: "2026-10-01T00:00:00.000Z",
+    description: "Synthetic",
+    id: "t",
+    status: "POSTED",
+    type: "DEBIT",
+  });
   assert.equal(paths.filter((path) => path === "/auth").length, 1);
   assert.equal(paths.length, 4);
 });
@@ -72,12 +88,23 @@ test("missing/mismatched cursor scope and incomplete account listings cannot bec
   );
   const source = adapter();
   await assert.rejects(source.transactions("a", null));
+  response = {
+    next: "https://untrusted.example/?accountId=a&after=x",
+    results: [transaction()],
+  };
+  await assert.rejects(source.transactions("a", null), {
+    message: "INVALID_PAGINATION",
+  });
   response = { next: "?accountId=other&after=x", results: [transaction()] };
   await assert.rejects(source.transactions("a", null), {
     message: "CURSOR_SCOPE_MISMATCH",
   });
   response = { next: "?accountId=a&after=old", results: [transaction()] };
   await assert.rejects(source.transactions("a", "old"), {
+    message: "REPEATED_CURSOR",
+  });
+  response = { next: "?accountId=a&after=new", results: [] };
+  await assert.rejects(source.transactions("a", null), {
     message: "REPEATED_CURSOR",
   });
   response = { page: 1, results: [account()], total: 2, totalPages: 2 };

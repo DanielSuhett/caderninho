@@ -44,27 +44,3 @@ export const TransactionStatus = {
 
 export type TransactionStatus =
   (typeof TransactionStatus)[keyof typeof TransactionStatus];
-
-export const Classification = {
-  bill_payment: "bill_payment",
-  bill_payment_category: "bill_payment_category",
-  consumption_evidence: "consumption_evidence",
-  own_transfer: "own_transfer",
-  patrimonial_category: "patrimonial_category",
-  refund: "refund",
-  transfer_uncertain: "transfer_uncertain",
-  unknown: "unknown",
-} as const;
-
-export type Classification =
-  (typeof Classification)[keyof typeof Classification];
-
-export const PaymentMethod = {
-  BOLETO: "BOLETO",
-  DOC: "DOC",
-  PIX: "PIX",
-  TED: "TED",
-  TEV: "TEV",
-} as const;
-
-export type PaymentMethod = (typeof PaymentMethod)[keyof typeof PaymentMethod];

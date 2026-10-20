@@ -66,22 +66,9 @@ async function importTransactions(
   }
   const account = await repository.account(run.connectionId, accountId);
   const page = await source.transactions(accountId, cursor);
-  if (page.next !== null && (page.next === cursor || !page.records.length)) {
-    throw new Error("REPEATED_CURSOR");
-  }
   const prepared = (await unique(page.records)).map((row) =>
     normalizeTransaction(row, account),
   );
-  if (
-    page.next &&
-    (await repository.alreadySeen(
-      run,
-      accountId,
-      prepared.map((row) => row.id),
-    ))
-  ) {
-    throw new Error("REPEATED_CURSOR");
-  }
   const following = page.next
     ? accountId
     : await repository.nextAccount(run, accountId);

@@ -2,7 +2,7 @@
 
 Uma instalação pessoal usa Worker, D1, KV OAuth, Workflow, assets e o binding
 nativo de rate limit. O painel fica em `/account`; o MCP com OAuth fica em `/mcp`.
-A [spec](spec-refatoracao.md) define o lançamento de contas BANK/CREDIT e transações.
+O lançamento cobre contas BANK/CREDIT e transações.
 
 ## Instalação
 
@@ -19,9 +19,10 @@ reset automático em deploys posteriores. Não execute a migração em bancos an
 ## Dados e execução
 
 São seis tabelas de aplicação: settings, connections, accounts, transactions,
-sync_runs e portal_sessions. Contas/transações têm identidade composta; detalhes
-da origem ficam em JSON privado e campos consultados em SQL têm colunas concretas.
-Correções são três overrides conhecidos na transação.
+sync_runs e portal_sessions. Contas/transações têm identidade composta e campos
+financeiros concretos em SQL. Não são guardados payloads genéricos, documentos
+pessoais ou marcadores de importação por transação. O histórico é alterado somente
+pela importação; categoria e descrição são as da origem.
 
 A intenção de importação e a reserva de 24 horas são confirmadas antes do despacho.
 O índice único parcial de sync_runs impede duas execuções ativas por conexão.
@@ -35,10 +36,11 @@ O Workflow limita retries e os clientes HTTP não repetem operações por conta
 própria. Não há lock durante rede nem expiração artificial de executor.
 
 Uma releitura integral por admissão substitui caminhos incrementais, webhooks e
-reconciliações separados. Ausência na origem não remove histórico. Consultas e
-totais distinguem observação confirmada de registros não encontrados e qualidade
-parcial. Execuções encerradas são limpas após 30 dias, em lotes de até 200; sessões
-expiradas também são limpas em lotes de 200.
+reconciliações separados. Importações atualizam o mesmo ID e acrescentam novos IDs.
+Ausência na origem preserva o histórico e sua elegibilidade nos totais objetivos.
+Consultas e totais informam coleta parcial e valores desconhecidos. Execuções
+encerradas são limpas após 30 dias, em lotes de até 200; sessões expiradas também
+são limpas em lotes de 200.
 
 ## Segurança e diagnóstico
 

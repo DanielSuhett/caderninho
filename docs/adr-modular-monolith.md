@@ -3,13 +3,13 @@
 Um pacote npm e um deploy Cloudflare atendem painel, OAuth, MCP e importação.
 O produto é pessoal: uma instalação pertence a uma pessoa e pode ter até dez
 conexões Meu Pluggy. O primeiro lançamento importa somente contas BANK/CREDIT e
-transações. A decisão completa está na [spec](spec-refatoracao.md).
+transações. As consultas e a importação estão descritas no [guia de uso](usage.md).
 
 ## Código
 
 | Área | Responsabilidade |
 | --- | --- |
-| `src/domain` | Conexões, dinheiro exato, classificação financeira, consultas e importação |
+| `src/domain` | Conexões, dinheiro exato, consultas e importação |
 | `src/contracts` | Entradas externas Zod e contratos do painel/MCP |
 | `src/worker` | Casos de uso, D1, OAuth, SDKs e transporte Cloudflare |
 | `src/web` | Painel React e páginas públicas |
@@ -19,9 +19,9 @@ transações. A decisão completa está na [spec](spec-refatoracao.md).
 | --- | --- |
 | `installation` | Conexões e configuração da instalação; dados do painel |
 | `auth` | Senha, sessões, OAuth oficial e revogação |
-| `finance` | Contas, transações, consultas, totais e correções |
+| `finance` | Contas, transações, consultas e totais objetivos |
 | `sync` | Admissão diária, despacho, páginas e commits duráveis |
-| `mcp` | Seis tools comuns do SDK |
+| `mcp` | Cinco tools comuns do SDK |
 
 Controllers validam transporte. Services coordenam casos de uso por portas em
 `entity/index.ts`, sem SQL, HTTP ou Bindings. Repositories implementam essas portas
@@ -35,19 +35,16 @@ universal, container de DI nem camadas vazias.
 | --- | --- |
 | `settings` | Singleton: importação habilitada e revisão financeira |
 | `connections` | Item, apresentação e janela da próxima admissão |
-| `accounts` | Conta, saldo observado, origem privada e qualidade da coleta |
-| `transactions` | Origem, projeção consultável, marcador de presença e três overrides |
+| `accounts` | Conta, saldo observado e qualidade da coleta |
+| `transactions` | Projeção financeira da origem, atualizada somente pela importação |
 | `sync_runs` | Intenção, estado, checkpoint e último commit confirmado |
 | `portal_sessions` | Sessões hasheadas, CSRF, expiração e versão do Worker |
 
 Contas usam `(connection_id,id)`; transações usam
 `(connection_id,account_id,id)`. Não assumir unicidade global dos IDs externos.
-Detalhes sem filtro frequente ficam no JSON privado do registro. Contas e
-transações continuam linhas SQL; não são um extrato inteiro em JSON/R2.
-
-Correções são colunas de categoria, descrição e ignorado, com precedência sobre a
-origem. Importação não escreve nessas colunas. `null` remove um override; ausência
-preserva o campo. Descrição vazia e `false` são valores válidos.
+Contas e transações são linhas SQL com campos concretos, sem payload genérico,
+documentos pessoais ou versões antigas. Transações guardam a data financeira;
+horários de coleta e referência do saldo ficam nas contas/conexões.
 
 ## Importação
 
@@ -74,13 +71,16 @@ recibo no mesmo batch D1. Uma guarda de estado/sequence usa o CHECK da revisão
 para abortar todo o batch se o executor estiver obsoleto. Resposta perdida relê o
 recibo; página antiga não publica. Não há histórico ilimitado de recibos.
 
-A origem pode mudar de ID ou reduzir a janela histórica. A enumeração concluída
-da conta troca `last_completed_run`; registros não encontrados ficam
-`not_observed`, preservados e consultáveis. Coleta parcial mantém páginas já
-confirmadas, sem promover o marcador de sucesso. Não há rollback da execução
-inteira, correspondência por similaridade ou migração automática de overrides.
-Execuções encerradas são retidas por 30 dias; marcadores financeiros não são FKs
-para essas execuções.
+A origem pode mudar de ID ou reduzir a janela histórica. A importação atualiza
+IDs existentes e acrescenta os novos. Ausência não remove nem desqualifica registros:
+A/B seguido de B atualizado/C resulta em A/B atualizado/C nos totais elegíveis.
+Não há classificação de consumo, edição local ou deduplicação por similaridade.
+Coleta parcial preserva páginas confirmadas e continua sinalizada como parcial.
+Execuções encerradas são retidas por 30 dias.
+
+O adapter rejeita cursores inválidos, de outra conta, repetidos imediatamente ou
+com continuação sem registros. Não há marcador por transação nem ledger de cursores
+para detectar ciclos arbitrários entre páginas distintas.
 
 ## Consultas e dinheiro
 
@@ -94,9 +94,11 @@ REAL nem converte valores financeiros para Number. Precisão/moeda não suportad
 fica desconhecida, sem arredondar para zero.
 
 Dia financeiro da origem é preservado. Elegibilidade usa o dia corrente em
-America/Sao_Paulo. Pendentes, futuros e ignorados ficam fora das métricas
-financeiras. Débito, fluxo BANK e consumo comprovado têm significados distintos;
-transferência própria e pagamento de cartão não viram consumo.
+America/Sao_Paulo. Pendentes e futuros ficam fora dos totais monetários e
+continuam consultáveis. Contagem inclui todos os registros da seleção; débitos e
+créditos são magnitudes da direção da origem e cash_flow é o fluxo assinado BANK.
+Débito não equivale a gasto e crédito não equivale a renda. Valores desconhecidos
+permanecem null e a qualidade da coleta acompanha consultas e agregações.
 
 ## Acesso e operação
 

@@ -1,7 +1,7 @@
 # Caderninho
 
 MCP financeiro pessoal para consultar contas e transações importadas.
-Vocabulário do lançamento definido em [spec](docs/spec-refatoracao.md).
+Vocabulário do lançamento descrito no [guia de uso](docs/usage.md).
 
 ## Linguagem
 
@@ -20,16 +20,13 @@ Seu saldo tem moeda e referência temporal.
 
 **Transação**:
 Registro financeiro associado a uma conta e identificado pela origem.
-Pode ser pendente, confirmado ou deixar de ser observado em uma coleta posterior.
-
-**Correção local**:
-Categoria, descrição ou indicação de ignorado escolhida pelo proprietário,
-com prioridade sobre o valor importado, sem modificar a instituição financeira.
+Pode ser pendente ou confirmado. Uma nova importação atualiza o mesmo ID e
+preserva os registros ausentes na janela atual da origem.
 
 **Importação**:
 Coleta de contas e transações disponibilizadas pela origem para uma conexão.
 Sua conclusão não implica disponibilidade de todo o histórico bancário.
 
 **Referência temporal**:
-Data ou horário que permite distinguir quando o dado foi informado pela origem
-e quando foi observado pelo Caderninho.
+Dia financeiro da transação ou horário da coleta da conexão e da leitura do saldo.
+Transações não têm marcadores individuais de frescor.

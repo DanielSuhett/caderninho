@@ -21,8 +21,8 @@ export function Consent({
       ) : null}
       <p>
         O assistente poderá consultar seus dados financeiros, solicitar
-        sincronizações e alterar regras e correções locais. Os resultados
-        consultados serão enviados ao serviço autorizado.
+        importações. Os resultados consultados serão enviados ao serviço
+        autorizado.
       </p>
       <form method="post">
         <input

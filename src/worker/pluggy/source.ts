@@ -114,6 +114,9 @@ export function financialSource(client: PersonalPluggyClient): FinancialSource {
           ),
         );
       const next = transactionCursor(page.next, accountId, cursor);
+      if (next && !page.results.length) {
+        throw new Error("REPEATED_CURSOR");
+      }
       return { next, records: page.results };
     },
   };

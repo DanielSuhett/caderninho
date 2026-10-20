@@ -14,10 +14,8 @@ export interface ProviderAccount {
   id: string;
   itemId: string;
   name: string;
-  taxNumber?: string | null | undefined;
   type: "BANK" | "CREDIT";
   updatedAt?: string | null | undefined;
-  [field: string]: unknown;
 }
 export interface ProviderTransaction {
   accountId: string;
@@ -27,36 +25,8 @@ export interface ProviderTransaction {
   date: string;
   description: string;
   id: string;
-  merchant?: { name?: string | null | undefined } | null | undefined;
-  operationType?: string | null | undefined;
-  paymentData?:
-    | {
-        paymentMethod?: string | null | undefined;
-        payer?:
-          | {
-              documentNumber?:
-                | { value?: string | null | undefined }
-                | null
-                | undefined;
-            }
-          | null
-          | undefined;
-        receiver?:
-          | {
-              documentNumber?:
-                | { value?: string | null | undefined }
-                | null
-                | undefined;
-            }
-          | null
-          | undefined;
-      }
-    | null
-    | undefined;
   status: "PENDING" | "POSTED";
   type: "DEBIT" | "CREDIT";
-  updatedAt?: string | null | undefined;
-  [field: string]: unknown;
 }
 export interface TransactionPage {
   next: string | null;

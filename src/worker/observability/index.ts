@@ -159,7 +159,6 @@ export interface SafeFields {
     | "disconnect"
     | "query"
     | "aggregate"
-    | "correct"
     | "unknown";
   attempt?: number;
   batch?: number;

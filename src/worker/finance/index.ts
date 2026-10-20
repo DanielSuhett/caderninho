@@ -3,6 +3,5 @@ export type {
   AggregateResult,
   FinancialRepository,
   QueryResult,
-  TransactionView,
 } from "./entity";
 export { createFinancialService } from "./service";

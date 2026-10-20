@@ -29,11 +29,6 @@ export interface SyncRepository {
   account: (connectionId: string, id: string) => Promise<AccountProjection>;
   active: () => Promise<SyncRun[]>;
   admit: (ids: string[] | undefined, now: string) => Promise<Admission[]>;
-  alreadySeen: (
-    run: SyncRun,
-    accountId: string,
-    ids: string[],
-  ) => Promise<boolean>;
   compact: (before: string) => Promise<void>;
   fail: (id: string, code: string, now: string) => Promise<void>;
   nextAccount: (run: SyncRun, after: string) => Promise<string | null>;
