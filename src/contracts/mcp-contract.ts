@@ -3,14 +3,12 @@ import { z } from "zod/v4";
 import {
   AggregateQuerySchema,
   ConnectionSelectionSchema,
-  CorrectionSchema,
   StatusInputSchema,
   TransactionQuerySchema,
 } from "./finance";
 export const ToolName = {
   accounts: "caderninho_accounts",
   aggregate: "caderninho_aggregate",
-  correct: "caderninho_correct_transaction",
   status: "caderninho_status",
   sync: "caderninho_sync",
   transactions: "caderninho_transactions",
@@ -39,7 +37,7 @@ const definitions = [
   },
   {
     description:
-      "Consultar histórico local por campos conhecidos. Cursor exige mesma revisão; valores originais e correções são distintos.",
+      "Consultar histórico local por campos conhecidos. Cursor exige mesma revisão; categoria e descrição vêm da origem.",
     name: ToolName.transactions,
     readOnly: true,
     schema: TransactionQuerySchema,
@@ -50,13 +48,6 @@ const definitions = [
     name: ToolName.aggregate,
     readOnly: true,
     schema: AggregateQuerySchema,
-  },
-  {
-    description:
-      "Corrigir categoria, descrição ou ignorado localmente. null remove o override. Não escreve na instituição financeira.",
-    name: ToolName.correct,
-    readOnly: false,
-    schema: CorrectionSchema,
   },
 ];
 export const tools = definitions.map((d) => ({
@@ -70,4 +61,4 @@ export const tools = definitions.map((d) => ({
   name: d.name,
 }));
 export const PRODUCT_INSTRUCTIONS =
-  "Consulte contas e transações locais. Use aggregate para totais exatos, nunca some uma página. Preserve moedas e a semântica BANK/CREDIT, pendentes e transferências. Não chame subtotal incerto de total definitivo. Saldo tem referência temporal. Inicie sync explicitamente e acompanhe por status; nunca coordene páginas Pluggy. Correções são locais, null restaura a origem. Não peça secrets ao proprietário.";
+  "Consulte contas e transações locais. Use aggregate para totais exatos, nunca some uma página. Preserve moedas e a semântica BANK/CREDIT, pendentes e transferências. Não chame subtotal incerto de total definitivo. Saldo tem referência temporal. Inicie sync explicitamente e acompanhe por status; nunca coordene páginas Pluggy. O histórico acumula registros e só muda pela importação. Débito não é gasto e crédito não é renda. Não peça secrets ao proprietário.";

@@ -1,7 +1,6 @@
 import {
   and,
   asc,
-  count,
   desc,
   eq,
   exists,
@@ -18,13 +17,7 @@ import type { Checkpoint } from "../../../domain";
 import { IMPORT_INTERVAL } from "../../../domain";
 import { tryCatch } from "../../../shared";
 import { database, required } from "../../database";
-import {
-  accounts,
-  connections,
-  settings,
-  sync_runs,
-  transactions,
-} from "../../schema";
+import { accounts, connections, settings, sync_runs } from "../../schema";
 import type { Admission, SyncRepository } from "../entity";
 import { publicationData } from "./publication.repository";
 
@@ -165,20 +158,6 @@ export function createSyncRepository(binding: D1Database): SyncRepository {
           };
         }),
       );
-    },
-    async alreadySeen(run, accountId, ids) {
-      const [row] = await db
-        .select({ count: count() })
-        .from(transactions)
-        .where(
-          and(
-            eq(transactions.connectionId, run.connectionId),
-            eq(transactions.accountId, accountId),
-            eq(transactions.lastSeenRun, run.id),
-            sql`${transactions.id} IN (SELECT value FROM json_each(${JSON.stringify(ids)}))`,
-          ),
-        );
-      return !!ids.length && row?.count === ids.length;
     },
     async compact(before) {
       await db.delete(sync_runs).where(

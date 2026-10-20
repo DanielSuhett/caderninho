@@ -1,7 +1,6 @@
 export {
   AggregateQuerySchema,
   ConnectionSelectionSchema,
-  CorrectionSchema,
   StatusInputSchema,
   TransactionQuerySchema,
 } from "./finance";

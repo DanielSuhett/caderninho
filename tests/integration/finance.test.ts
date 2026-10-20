@@ -4,7 +4,6 @@ import { beforeEach, test } from "vitest";
 
 import {
   AggregateQuerySchema,
-  CorrectionSchema,
   TransactionQuerySchema,
 } from "../../src/contracts";
 import { createFinancialService } from "../../src/worker/finance";
@@ -26,20 +25,28 @@ test("SQL totals keep 30 digits, currencies, BANK/CREDIT semantics and eligibili
         transaction({
           amount: "-90071992547409931234567890.12",
           id: "huge",
-          merchant: { name: "Shop" },
         }),
-        transaction({ amount: "15.01", id: "income", type: "CREDIT" }),
-        transaction({ amount: "0", id: "zero" }),
+        transaction({ amount: "-15.01", id: "income", type: "CREDIT" }),
+        transaction({
+          amount: "0",
+          category: "Zero",
+          description: "",
+          id: "zero",
+        }),
         transaction({ amount: "-2.34", id: "unknown" }),
         transaction({ accountId: "credit", amount: "-20", id: "card" }),
         transaction({
           amount: "-20",
           id: "bill",
-          operationType: "PAGAMENTO_FATURA",
         }),
         transaction({ amount: "-500", id: "pending", status: "PENDING" }),
         transaction({ amount: "-500", date: "2026-10-02", id: "future" }),
         transaction({ amount: "-3.21", currencyCode: "USD", id: "usd" }),
+        transaction({
+          amount: "-1",
+          currencyCode: "ZZZ",
+          id: "unknown-currency",
+        }),
         transaction({
           amount: "1.001",
           currencyCode: "BRL",
@@ -67,115 +74,74 @@ test("SQL totals keep 30 digits, currencies, BANK/CREDIT semantics and eligibili
     flow.groups.find((g) => g.currency === "BRL")?.totalMinor,
     "-9007199254740993123456789745",
   );
-  const consumption = await service.aggregate({ metric: "known_spending" });
-  assert.equal(
-    consumption.groups.find((g) => g.currency === "BRL")?.totalMinor,
-    "9007199254740993123456791012",
-  );
-  assert.equal(
-    consumption.groups.find((g) => g.currency === "BRL")
-      ?.unclassifiedDebitMinor,
-    "234",
-  );
   assert.equal(flow.partial, true, "unsupported precision must be explicit");
-  const counts = await service.aggregate({ metric: "count" });
-  assert.equal(counts.groups.find((g) => g.currency === "BRL")?.count, "9");
-});
-test("field corrections preserve empty descriptions/false, restore with null and invalidate cursors only on changes", async () => {
-  await collect(
-    source([
-      transaction({ category: "Original", id: "1" }),
-      transaction({ id: "2" }),
-    ]),
-  );
-  const service = finance();
-  const first = await service.query({ limit: 1 });
-  assert.ok(first.cursor);
-  const corrected = await service.correct({
-    accountId: "a",
-    connectionId: "c",
-    id: "1",
-    patch: { category: "Local", description: "", ignored: false },
-  });
-  assert.equal(corrected.effectiveDescription, "");
-  assert.equal(corrected.ignored, false);
-  await assert.rejects(service.query({ cursor: first.cursor, limit: 1 }), {
-    message: "RESTART_REQUIRED",
-  });
-  const revised = await service.query({ limit: 1 });
-  assert.ok(revised.cursor);
-  await service.correct({
-    accountId: "a",
-    connectionId: "c",
-    id: "1",
-    patch: { category: "Local", description: "", ignored: false },
-  });
-  await service.query({ cursor: revised.cursor, limit: 1 });
-  await collect(
-    source([
-      transaction({
-        category: "Changed",
-        description: "Source changed",
-        id: "1",
-      }),
-      transaction({ id: "2" }),
-    ]),
-    "2026-10-02T00:00:00.000Z",
-  );
-  const [row] = (
-    await service.query({ filter: { category: "Local" }, limit: 20 })
-  ).records;
-  assert.equal(row?.effectiveDescription, "");
-  assert.equal(row?.category, "Changed");
-  const reset = await service.correct({
-    accountId: "a",
-    connectionId: "c",
-    id: "1",
-    patch: { category: null, description: null, ignored: null },
-  });
-  assert.equal(reset.effectiveDescription, "Source changed");
-  assert.equal(reset.effectiveCategory, "Changed");
-});
-test("new IDs and shorter history leave uncertain originals and never duplicate confirmed spending", async () => {
-  await collect(
-    source([
-      transaction({ amount: "-10", id: "old", merchant: { name: "Shop" } }),
-    ]),
-  );
-  await finance().correct({
-    accountId: "a",
-    connectionId: "c",
-    id: "old",
-    patch: { category: "Keep" },
-  });
-  await collect(
-    source([
-      transaction({ amount: "-10", id: "new", merchant: { name: "Shop" } }),
-    ]),
-    "2026-10-02T00:00:00.000Z",
-  );
-  const result = await finance().aggregate({ metric: "known_spending" });
-  assert.equal(result.groups[0]?.totalMinor, "1000");
-  assert.equal(result.groups[0]?.unconfirmed, "1");
-  assert.equal(result.partial, true);
-  const old = await finance().query({
-    filter: { presence: "not_observed" },
-    limit: 10,
-  });
-  assert.equal(old.records[0]?.id, "old");
-  assert.equal(old.records[0]?.effectiveCategory, "Keep");
-  await collect(source([]), "2026-10-03T00:00:00.000Z");
   assert.equal(
-    (await finance().aggregate({ metric: "debits" })).groups[0]?.totalMinor,
+    debits.groups.find((g) => g.currency === "BRL")?.unknownAmountCount,
+    "1",
+  );
+  assert.deepEqual(
+    debits.groups.find((g) => g.currency === "ZZZ"),
+    {
+      count: "1",
+      currency: "ZZZ",
+      group: null,
+      totalMinor: null,
+      unknownAmountCount: "1",
+    },
+  );
+  assert.equal(
+    (await service.aggregate({ metric: "credits" })).groups[0]?.totalMinor,
+    "1501",
+  );
+  const zero = await service.aggregate({
+    filter: { category: "Zero" },
+    metric: "debits",
+  });
+  assert.equal(zero.groups[0]?.totalMinor, "0");
+  assert.equal(zero.partial, false);
+  assert.equal(
+    (await service.query({ filter: { category: "Zero" }, limit: 10 }))
+      .records[0]?.description,
+    "",
+  );
+  assert.equal(
+    (await service.query({ filter: { status: "PENDING" }, limit: 10 })).records
+      .length,
+    1,
+  );
+  assert.equal(
+    (await service.query({ filter: { from: "2026-10-02" }, limit: 10 })).records
+      .length,
+    1,
+  );
+  assert.deepEqual(
+    (
+      await service.aggregate({
+        filter: { from: "2026-10-02" },
+        metric: "debits",
+      })
+    ).groups,
+    [],
+  );
+  assert.equal(
+    (await service.query({ filter: { currency: "ZZZ" }, limit: 10 })).records[0]
+      ?.amountMinor,
     null,
   );
+  const counts = await service.aggregate({ metric: "count" });
+  assert.equal(counts.groups.find((g) => g.currency === "BRL")?.count, "9");
 });
 test("strict filters, scoped cursors and signed magnitude filters preserve unknowns", async () => {
   await collect(
     source([
       transaction({ amount: "-10", id: "negative" }),
       transaction({ amount: "10", id: "positive", type: "CREDIT" }),
-      transaction({ amount: "0", id: "zero" }),
+      transaction({
+        amount: "0",
+        category: "Zero",
+        description: "",
+        id: "zero",
+      }),
     ]),
   );
   const service = finance();
@@ -220,15 +186,6 @@ test("strict filters, scoped cursors and signed magnitude filters preserve unkno
     AggregateQuerySchema.safeParse({ metric: "spending" }).success,
     false,
   );
-  assert.equal(
-    CorrectionSchema.safeParse({
-      accountId: "a",
-      connectionId: "c",
-      id: "t",
-      patch: {},
-    }).success,
-    false,
-  );
 });
 
 test("100 account references remain a valid bounded query within D1 parameter limits", async () => {
@@ -257,41 +214,4 @@ test("admitting a new import invalidates cursors when selection quality changes"
   await assert.rejects(service.query({ cursor: page.cursor, limit: 1 }), {
     message: "RESTART_REQUIRED",
   });
-});
-
-test("category hints and unproven transfers remain uncertain spending even after a complete collection", async () => {
-  await collect(
-    source([
-      transaction({
-        amount: "-100",
-        id: "purchase",
-        merchant: { name: "Shop" },
-      }),
-      transaction({
-        amount: "-10",
-        category: "Investments",
-        id: "investment-hint",
-      }),
-      transaction({
-        amount: "-20",
-        category: "Credit card payment",
-        id: "bill-hint",
-      }),
-      transaction({ amount: "-5", id: "transfer", operationType: "PIX" }),
-      transaction({
-        amount: "-30",
-        id: "proven-bill",
-        operationType: "PAGAMENTO_FATURA",
-      }),
-    ]),
-  );
-  const result = await finance().aggregate({ metric: "known_spending" });
-  assert.equal(result.accounts[0]?.collectionStatus, "complete");
-  assert.equal(result.partial, true);
-  assert.equal(result.groups[0]?.totalMinor, "10000");
-  assert.equal(result.groups[0]?.unclassifiedDebitMinor, "3500");
-  assert.equal(
-    (await finance().aggregate({ metric: "debits" })).partial,
-    false,
-  );
 });

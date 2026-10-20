@@ -24,7 +24,7 @@ e a agenda. Consultar status não inicia trabalho.
 
 Copie a URL `https://SEU-WORKER/mcp` exibida no painel, configure seu conector MCP
 e aprove o OAuth no Caderninho. Cada assistente recebe sua própria autorização.
-Há seis ferramentas:
+Há cinco ferramentas:
 
 | Tool | Uso |
 | --- | --- |
@@ -33,7 +33,6 @@ Há seis ferramentas:
 | `caderninho_accounts` | Contas e saldos observados |
 | `caderninho_transactions` | Página filtrada de transações |
 | `caderninho_aggregate` | Totais exatos por moeda em toda a seleção |
-| `caderninho_correct_transaction` | Correções locais de categoria, descrição e ignorado |
 
 Exemplo de agregado:
 
@@ -45,47 +44,34 @@ Exemplo de agregado:
 }
 ```
 
-`count` conta registros. `debits`/`credits` são magnitudes por direção da origem.
-`cash_flow` é o fluxo assinado de contas BANK. `known_spending` só inclui consumo
-com evidência suficiente e informa também débitos de natureza incerta.
-Pendentes, futuros e ignorados não entram nas métricas financeiras. Saldo de
-cartão não representa patrimônio disponível.
+`count` conta todos os registros da seleção. `debits`/`credits` são magnitudes
+por direção da origem: débito não equivale a gasto e crédito não equivale a renda.
+`cash_flow` é o fluxo assinado de contas BANK. Pendentes e futuros continuam
+consultáveis, mas ficam fora dos totais monetários. Saldo de cartão não representa
+patrimônio disponível.
 
 Valores em `amountMinor`/`totalMinor` são strings de unidades menores da moeda.
 Nunca some moedas diferentes nem use uma página para calcular o total do período.
-A resposta informa referência temporal e parcialidade. Um subtotal conhecido pode
-ser ausente quando não há registros confirmados; isso não equivale a zero.
+Valor desconhecido é `null`; `unknownAmountCount` informa quantos valores são
+desconhecidos no agregado. Um subtotal sem valores conhecidos é `null`, não zero.
+A resposta informa o dia de referência e a parcialidade da coleta.
 
-A origem pode substituir IDs ou reduzir a janela histórica. Registros antigos
-não encontrados ficam `not_observed`, sem remoção física. Eles continuam
-consultáveis, mas não são somados como valores confirmados junto dos novos IDs.
-Correções não são copiadas para outro ID por semelhança.
+O histórico é cumulativo. Importar A/B e depois B atualizado/C resulta em
+A/B atualizado/C. Uma janela menor ou vazia não remove registros nem os exclui
+dos totais elegíveis. IDs diferentes são registros diferentes, mesmo que os dados
+se pareçam. Categoria e descrição vêm da origem e só mudam por outra importação.
+O frescor é informado pela conexão e pela leitura do saldo, sem auditoria individual
+de transações.
 
-## Filtros e correções
+## Filtros
 
 Filtros aceitos: conexões, referências de contas, período, moeda, direção, status,
-categoria/descrição efetivas, ignorado, presença e faixa de valor em unidades
-menores. Uma faixa monetária exige moeda. Agrupamentos são conta, categoria ou mês.
-Campos desconhecidos são recusados. A página tem até 200 registros; o padrão é 50.
+categoria/descrição da origem e faixa de valor em unidades menores. Uma faixa
+monetária exige moeda. Agrupamentos são conta, categoria ou mês. Campos desconhecidos
+são recusados. A página tem até 200 registros; o padrão é 50.
 
 Use o cursor retornado com os mesmos filtros. Se a revisão financeira mudar,
 reinicie a paginação; não misture páginas de revisões distintas.
-
-Uma correção identifica conexão, conta e transação:
-
-```json
-{
-  "connectionId": "item-da-origem",
-  "accountId": "conta-da-origem",
-  "id": "transacao-da-origem",
-  "patch": { "category": "Mercado", "description": "", "ignored": false }
-}
-```
-
-Campos omitidos não mudam. `null` remove aquela correção e restaura o valor da
-origem; `ignored=false` e descrição vazia são escolhas válidas. Importações futuras
-atualizam a origem e preservam as correções locais. Nada é escrito no banco ou
-cartão da instituição financeira.
 
 ## Manutenção do acesso
 

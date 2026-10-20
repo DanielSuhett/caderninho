@@ -152,11 +152,14 @@ await test("native Workflow, 10k/100k volume and persistent installation", {
         await (await fetch(`${base}/state?connection=${connection}`)).json(),
       );
     };
-    const startRun = async (connection = "c") => {
+    const startRun = async (connection = "c", day = 1) => {
       await fetch(`${base}/setup?connection=${connection}`, { method: "POST" });
-      const response = await fetch(`${base}/start?connection=${connection}`, {
-        method: "POST",
-      });
+      const response = await fetch(
+        `${base}/start?connection=${connection}&day=${day}`,
+        {
+          method: "POST",
+        },
+      );
       assert.equal(response.status, 200);
       await response.body?.cancel();
     };
@@ -189,6 +192,16 @@ await test("native Workflow, 10k/100k volume and persistent installation", {
     });
     assert.equal(failed.runs[0]?.records, 502);
     assert.equal(failed.totals.partial, true);
+    assert.equal(
+      failed.totals.groups.find((group) => group.currency === "USD")
+        ?.totalMinor,
+      "1504202275541745851617283765004",
+    );
+    assert.equal(
+      failed.totals.groups.find((group) => group.currency === "BRL")
+        ?.totalMinor,
+      "2999397351828750710111110740996",
+    );
     logger.info(
       "PASS: native terminal provider failure preserves committed pages and fails the import",
     );
@@ -206,6 +219,29 @@ await test("native Workflow, 10k/100k volume and persistent installation", {
     assert.equal(replay.totals.partial, false);
     logger.info(
       "PASS: native retry recovers a committed page without querying the provider again",
+    );
+    await [1, 2, 3, 4, 5].reduce(async (previous, day) => {
+      await previous;
+      await startRun("history", day);
+      const result = await poll({
+        attempts: 120,
+        intervalMs: 250,
+        read: () => readState("history"),
+        until: (value) =>
+          value.runs.length === day &&
+          value.runs.every((run) =>
+            ["succeeded", "failed"].includes(run.status),
+          ),
+      });
+      const expected = ["3000", "6500", "6500", "6500", "10700"];
+      assert.equal(result.totals.groups[0]?.totalMinor, expected[day - 1]);
+      const expectedCounts = ["2", "3", "3", "3", "4"];
+      assert.equal(result.totals.groups[0]?.count, expectedCounts[day - 1]);
+      assert.equal(result.totals.partial, day === 5);
+      assert.equal(result.runs[0]?.status, day === 5 ? "failed" : "succeeded");
+    }, Promise.resolve());
+    logger.info(
+      "PASS: native imports accumulate history through updates, repeats, empty windows and partial failure",
     );
     await [10_000, 100_000].reduce(async (previous, size) => {
       await previous;

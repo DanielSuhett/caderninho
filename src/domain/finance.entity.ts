@@ -1,6 +1,3 @@
-import type { Classification } from "./enums";
-import type { ProviderAccount, ProviderTransaction } from "./provider.entity";
-
 export type { MoneyInput } from "./provider.entity";
 export interface AccountReference {
   accountId: string;
@@ -15,21 +12,16 @@ export interface AccountProjection {
   currency: string;
   id: string;
   name: string;
-  source: ProviderAccount;
   sourceUpdatedAt: string | null;
   type: "BANK" | "CREDIT";
 }
 export interface TransactionProjection extends TransactionReference {
   amountMinor: string | null;
   category: string | null;
-  classification: Classification;
   currency: string;
   date: string;
   description: string;
   direction: "DEBIT" | "CREDIT";
-  evidence: string[];
-  source: ProviderTransaction;
-  sourceUpdatedAt: string | null;
   status: "PENDING" | "POSTED";
 }
 export const CollectionStatus = {
@@ -41,10 +33,3 @@ export const CollectionStatus = {
 } as const;
 export type CollectionStatus =
   (typeof CollectionStatus)[keyof typeof CollectionStatus];
-export interface TransactionCorrection extends TransactionReference {
-  patch: {
-    category?: string | null | undefined;
-    description?: string | null | undefined;
-    ignored?: boolean | null | undefined;
-  };
-}

@@ -1,22 +1,11 @@
-import type { SQL } from "drizzle-orm";
-import {
-  and,
-  count,
-  desc,
-  eq,
-  inArray,
-  isNull,
-  ne,
-  or,
-  sql,
-} from "drizzle-orm";
+import { and, desc, eq, inArray, type SQL, sql } from "drizzle-orm";
 
 import type {
   AggregateQuery,
   Metric,
   TransactionFilter,
 } from "../../../domain";
-import { Classification, MetricDefinition } from "../../../domain";
+import { MetricDefinition } from "../../../domain";
 import { database, required } from "../../database";
 import {
   accounts as a,
@@ -25,16 +14,8 @@ import {
   sync_runs,
   transactions as t,
 } from "../../schema";
-import type { FinancialRepository, TransactionView } from "../entity";
+import type { FinancialRepository } from "../entity";
 
-const category = sql<
-  string | null
->`coalesce(${t.categoryOverride},${t.category})`;
-const description = sql<string>`coalesce(${t.descriptionOverride},${t.description})`;
-const ignored = sql<number>`coalesce(${t.ignoredOverride},0)`;
-const presence = sql<
-  "observed" | "not_observed"
->`CASE WHEN ${a.lastCompletedRun}=${t.lastSeenRun} THEN 'observed' ELSE 'not_observed' END`;
 const joinAccount = and(
   eq(a.connectionId, t.connectionId),
   eq(a.id, t.accountId),
@@ -61,24 +42,12 @@ const transactionFields = {
   accountId: t.accountId,
   amountMinor: t.amountMinor,
   category: t.category,
-  categoryOverride: t.categoryOverride,
-  classification: t.classification,
   connectionId: t.connectionId,
-  correctedAt: t.correctedAt,
   currency: t.currency,
   date: t.date,
   description: t.description,
-  descriptionOverride: t.descriptionOverride,
   direction: t.direction,
-  effectiveCategory: category,
-  effectiveDescription: description,
-  evidence: t.evidence,
   id: t.id,
-  ignored,
-  ignoredOverride: t.ignoredOverride,
-  observedAt: t.observedAt,
-  presence,
-  sourceUpdatedAt: t.sourceUpdatedAt,
   status: t.status,
 };
 function accountWhere(filter: TransactionFilter = {}) {
@@ -103,14 +72,11 @@ function amountComparison(bound: string, minimum: boolean) {
     ? sql`(${t.amountMinor} NOT LIKE '-%' AND ${greater})`
     : sql`(${t.amountMinor} LIKE '-%' OR (${t.amountMinor} NOT LIKE '-%' AND ${smaller}))`;
 }
-function presenceWhere(value: "observed" | "not_observed") {
-  return value === "observed"
-    ? eq(t.lastSeenRun, a.lastCompletedRun)
-    : or(isNull(a.lastCompletedRun), ne(t.lastSeenRun, a.lastCompletedRun));
-}
 function filterWhere(filter: TransactionFilter = {}) {
   return and(
-    accountWhere(filter),
+    filter.connectionIds && inArray(t.connectionId, filter.connectionIds),
+    filter.accounts &&
+      sql`EXISTS(SELECT 1 FROM json_each(${JSON.stringify(filter.accounts)}) AS selected WHERE json_extract(selected.value,'$.connectionId')=${t.connectionId} AND json_extract(selected.value,'$.accountId')=${t.accountId})`,
     filter.from === undefined ? undefined : sql`${t.date}>=${filter.from}`,
     filter.to === undefined ? undefined : sql`${t.date}<=${filter.to}`,
     filter.currency === undefined ? undefined : eq(t.currency, filter.currency),
@@ -118,16 +84,10 @@ function filterWhere(filter: TransactionFilter = {}) {
       ? undefined
       : eq(t.direction, filter.direction),
     filter.status === undefined ? undefined : eq(t.status, filter.status),
-    filter.category === undefined
-      ? undefined
-      : sql`${category}=${filter.category}`,
+    filter.category === undefined ? undefined : eq(t.category, filter.category),
     filter.description === undefined
       ? undefined
-      : sql`instr(lower(${description}),lower(${filter.description}))>0`,
-    filter.ignored === undefined
-      ? undefined
-      : sql`${ignored}=${Number(filter.ignored)}`,
-    filter.presence === undefined ? undefined : presenceWhere(filter.presence),
+      : sql`instr(lower(${t.description}),lower(${filter.description}))>0`,
     filter.minAmountMinor === undefined
       ? undefined
       : amountComparison(filter.minAmountMinor, true),
@@ -136,10 +96,10 @@ function filterWhere(filter: TransactionFilter = {}) {
       : amountComparison(filter.maxAmountMinor, false),
   );
 }
-const moneyTotal = (value: SQL<string | null>, prefix: string) => {
+const moneyTotal = (value: SQL<string | null>) => {
   const limb = (offset: number) =>
     sql<string>`CAST(coalesce(sum(CASE WHEN ${value} LIKE '-%' THEN -1 ELSE 1 END * CAST(substr(substr('000000000000000000000000000000'||replace(${value},'-',''),-30),${offset + 1},3) AS INTEGER)),0) AS TEXT)`.as(
-      `${prefix}_${offset}`,
+      `amount_${offset}`,
     );
   return {
     a: limb(0),
@@ -169,19 +129,6 @@ function total(value: Record<keyof ReturnType<typeof moneyTotal>, string>) {
   ]
     .reduce((sum, part) => sum * 1000n + BigInt(part), 0n)
     .toString();
-}
-function publicTransaction(
-  row: Omit<TransactionView, "ignored" | "ignoredOverride"> & {
-    ignored: number;
-    ignoredOverride: number | null;
-  },
-): TransactionView {
-  return {
-    ...row,
-    ignored: !!row.ignored,
-    ignoredOverride:
-      row.ignoredOverride === null ? null : !!row.ignoredOverride,
-  };
 }
 function assertRevision(before: number, after: number, expected?: number) {
   if (before !== after || (expected !== undefined && before !== expected)) {
@@ -246,17 +193,12 @@ export function createFinancialRepository(
       const eligible =
         input.metric === "count"
           ? undefined
-          : and(
-              eq(t.status, "POSTED"),
-              sql`${t.date}<=${referenceDay}`,
-              sql`${ignored}=0`,
-            );
+          : and(eq(t.status, "POSTED"), sql`${t.date}<=${referenceDay}`);
       const metricFilters: Record<Metric, SQL | undefined> = {
         cash_flow: eq(a.type, "BANK"),
         count: undefined,
         credits: eq(t.direction, "CREDIT"),
         debits: eq(t.direction, "DEBIT"),
-        known_spending: eq(t.direction, "DEBIT"),
       };
       const metricFilter = metricFilters[input.metric];
       let amount: SQL<string | null> = absolute;
@@ -265,49 +207,33 @@ export function createFinancialRepository(
           string | null
         >`CASE WHEN ${t.direction}='DEBIT' AND ${absolute}<>'0' THEN '-'||${absolute} ELSE ${absolute} END`;
       }
-      if (input.metric === "known_spending") {
-        amount = sql<
-          string | null
-        >`CASE WHEN ${t.classification}=${Classification.consumption_evidence} THEN ${absolute} ELSE NULL END`;
-      }
-      const known = sql<
-        string | null
-      >`CASE WHEN ${presence}='observed' THEN ${amount} ELSE NULL END`;
-      const uncertain = sql<
-        string | null
-      >`CASE WHEN ${presence}='observed' AND ${t.direction}='DEBIT' AND ${t.classification} IN ('unknown','transfer_uncertain','bill_payment_category','patrimonial_category') THEN ${absolute} ELSE NULL END`;
       const groupings: Record<
         NonNullable<AggregateQuery["groupBy"]>,
         SQL<string | null>
       > = {
         account: sql`json_array(${t.connectionId},${t.accountId})`,
-        category,
+        category: sql`${t.category}`,
         month: sql`substr(${t.date},1,7)`,
       };
       const group = input.groupBy
         ? groupings[input.groupBy]
         : sql<string | null>`NULL`;
-      const knownCount =
-        input.metric === "count"
-          ? sql<string>`CAST(sum(CASE WHEN ${presence}='observed' THEN 1 ELSE 0 END) AS TEXT)`
-          : sql<string>`CAST(sum(CASE WHEN ${known} IS NOT NULL THEN 1 ELSE 0 END) AS TEXT)`;
       const [before, groups, quality, connectionQuality, afterRevision] =
         await db.batch([
           revision(),
           db
             .select({
-              amount: moneyTotal(known, "amount"),
+              amount: moneyTotal(amount),
+              amountCount:
+                sql<string>`CAST(count(${t.amountMinor}) AS TEXT)`.as(
+                  "amount_count",
+                ),
               count: sql<string>`CAST(count(*) AS TEXT)`.as("count"),
               currency: t.currency,
               group: group.as("group_value"),
-              known: knownCount.as("known"),
-              uncertain: moneyTotal(uncertain, "uncertain"),
-              uncertainCount: sql<string>`CAST(count(${uncertain}) AS TEXT)`.as(
-                "uncertain_count",
-              ),
-              unconfirmed:
-                sql<string>`CAST(sum(CASE WHEN ${presence}<>'observed' OR ${t.amountMinor} IS NULL THEN 1 ELSE 0 END) AS TEXT)`.as(
-                  "unconfirmed",
+              unknownAmountCount:
+                sql<string>`CAST(sum(CASE WHEN ${t.amountMinor} IS NULL THEN 1 ELSE 0 END) AS TEXT)`.as(
+                  "unknown_amount_count",
                 ),
             })
             .from(t)
@@ -328,78 +254,19 @@ export function createFinancialRepository(
           count: row.count,
           currency: row.currency,
           group: row.group,
-          known: row.known,
           totalMinor:
-            input.metric !== "count" && BigInt(row.known) > 0n
+            input.metric !== "count" && BigInt(row.amountCount) > 0n
               ? total(row.amount)
               : null,
-          unclassifiedDebitMinor:
-            input.metric === "known_spending" && BigInt(row.uncertainCount) > 0n
-              ? total(row.uncertain)
-              : null,
-          unconfirmed: row.unconfirmed,
+          unknownAmountCount: row.unknownAmountCount,
         })),
         metric: input.metric,
         partial:
           partial(quality, connectionQuality) ||
-          groups.some(
-            (row) =>
-              BigInt(row.unconfirmed) > 0n ||
-              (input.metric === "known_spending" &&
-                BigInt(row.uncertainCount) > 0n),
-          ),
+          groups.some((row) => BigInt(row.unknownAmountCount) > 0n),
         referenceDay,
         revision: version,
       };
-    },
-    async correct(input, now) {
-      const { patch } = input;
-      const changes = {
-        ...(patch.category !== undefined && {
-          categoryOverride: patch.category,
-        }),
-        ...(patch.description !== undefined && {
-          descriptionOverride: patch.description,
-        }),
-        ...(patch.ignored !== undefined && {
-          ignoredOverride:
-            patch.ignored === null ? null : Number(patch.ignored),
-        }),
-        correctedAt: now,
-      };
-      const identity = and(
-        eq(t.connectionId, input.connectionId),
-        eq(t.accountId, input.accountId),
-        eq(t.id, input.id),
-      );
-      const changed = or(
-        patch.category === undefined
-          ? undefined
-          : sql`${t.categoryOverride} IS NOT ${patch.category}`,
-        patch.description === undefined
-          ? undefined
-          : sql`${t.descriptionOverride} IS NOT ${patch.description}`,
-        patch.ignored === undefined
-          ? undefined
-          : sql`${t.ignoredOverride} IS NOT ${patch.ignored === null ? null : Number(patch.ignored)}`,
-      );
-      const [_edit, _revision, rows] = await db.batch([
-        db.update(t).set(changes).where(and(identity, changed)),
-        db
-          .update(settings)
-          .set({ revision: sql`${settings.revision}+1` })
-          .where(and(eq(settings.id, 1), sql`changes()>0`)),
-        db
-          .select(transactionFields)
-          .from(t)
-          .innerJoin(a, joinAccount)
-          .where(identity),
-      ]);
-      const [row] = rows;
-      if (!row) {
-        throw new Error("NOT_FOUND");
-      }
-      return publicTransaction(row);
     },
     async query(input, scope, referenceDay) {
       if (input.cursor && input.cursor.scope !== scope) {
@@ -409,43 +276,31 @@ export function createFinancialRepository(
       const after = cursor
         ? sql`(${t.date},${t.connectionId},${t.accountId},${t.id})<(${cursor.date},${cursor.connectionId},${cursor.accountId},${cursor.id})`
         : undefined;
-      const [
-        before,
-        rows,
-        quality,
-        connectionQuality,
-        uncertain,
-        afterRevision,
-      ] = await db.batch([
-        revision(),
-        db
-          .select(transactionFields)
-          .from(t)
-          .innerJoin(a, joinAccount)
-          .where(and(filterWhere(input.filter), after))
-          .orderBy(
-            desc(t.date),
-            desc(t.connectionId),
-            desc(t.accountId),
-            desc(t.id),
-          )
-          .limit(input.limit + 1),
-        qualityAccounts(input.filter),
-        qualityConnections(input.filter),
-        db
-          .select({ count: count() })
-          .from(t)
-          .innerJoin(a, joinAccount)
-          .where(and(filterWhere(input.filter), eq(presence, "not_observed"))),
-        revision(),
-      ]);
+      const [before, rows, quality, connectionQuality, afterRevision] =
+        await db.batch([
+          revision(),
+          db
+            .select(transactionFields)
+            .from(t)
+            .where(and(filterWhere(input.filter), after))
+            .orderBy(
+              desc(t.date),
+              desc(t.connectionId),
+              desc(t.accountId),
+              desc(t.id),
+            )
+            .limit(input.limit + 1),
+          qualityAccounts(input.filter),
+          qualityConnections(input.filter),
+          revision(),
+        ]);
       const version = required(before[0]).revision;
       assertRevision(
         version,
         required(afterRevision[0]).revision,
         cursor?.revision,
       );
-      const records = rows.slice(0, input.limit).map(publicTransaction);
+      const records = rows.slice(0, input.limit);
       const last = records.at(-1);
       return {
         accounts: quality,
@@ -460,7 +315,7 @@ export function createFinancialRepository(
                 scope,
               }
             : null,
-        partial: partial(quality, connectionQuality) || !!uncertain[0]?.count,
+        partial: partial(quality, connectionQuality),
         records,
         referenceDay,
         revision: version,

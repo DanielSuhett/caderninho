@@ -12,11 +12,8 @@ import {
 
 import type {
   Checkpoint,
-  Classification,
   CollectionStatus,
   CommitResult,
-  ProviderAccount,
-  ProviderTransaction,
   RunStatus,
 } from "../../domain";
 export const settings = sqliteTable(
@@ -56,7 +53,6 @@ export const accounts = sqliteTable(
     id: text("id").notNull(),
     lastAttemptAt: text("last_attempt_at"),
     lastCompletedFrom: text("last_completed_from"),
-    lastCompletedRun: text("last_completed_run"),
     lastCompletedTo: text("last_completed_to"),
     lastSeenRun: text("last_seen_run").notNull(),
     lastSuccessAt: text("last_success_at"),
@@ -64,14 +60,10 @@ export const accounts = sqliteTable(
     observedAt: text("observed_at").notNull(),
     observedFrom: text("observed_from"),
     observedTo: text("observed_to"),
-    source: text("source", { mode: "json" }).$type<ProviderAccount>().notNull(),
     sourceUpdatedAt: text("source_updated_at"),
     type: text("type").$type<"BANK" | "CREDIT">().notNull(),
   },
-  (t) => [
-    primaryKey({ columns: [t.connectionId, t.id] }),
-    check("account_json", sql`json_valid(source)`),
-  ],
+  (t) => [primaryKey({ columns: [t.connectionId, t.id] })],
 );
 export const transactions = sqliteTable(
   "transactions",
@@ -79,24 +71,12 @@ export const transactions = sqliteTable(
     accountId: text("account_id").notNull(),
     amountMinor: text("amount_minor"),
     category: text("category"),
-    categoryOverride: text("category_override"),
-    classification: text("classification").$type<Classification>().notNull(),
     connectionId: text("connection_id").notNull(),
-    correctedAt: text("corrected_at"),
     currency: text("currency").notNull(),
     date: text("date").notNull(),
     description: text("description").notNull(),
-    descriptionOverride: text("description_override"),
     direction: text("direction").$type<"DEBIT" | "CREDIT">().notNull(),
-    evidence: text("evidence", { mode: "json" }).$type<string[]>().notNull(),
     id: text("id").notNull(),
-    ignoredOverride: integer("ignored_override"),
-    lastSeenRun: text("last_seen_run").notNull(),
-    observedAt: text("observed_at").notNull(),
-    source: text("source", { mode: "json" })
-      .$type<ProviderTransaction>()
-      .notNull(),
-    sourceUpdatedAt: text("source_updated_at"),
     status: text("status").$type<"PENDING" | "POSTED">().notNull(),
   },
   (t) => [
@@ -107,21 +87,8 @@ export const transactions = sqliteTable(
     }),
     index("transaction_date").on(t.date, t.connectionId, t.accountId, t.id),
     index("transaction_account").on(t.connectionId, t.accountId, t.date, t.id),
-    index("transaction_presence").on(
-      t.connectionId,
-      t.accountId,
-      t.lastSeenRun,
-      t.date,
-      t.id,
-    ),
     index("transaction_status").on(t.status, t.date),
-    index("transaction_category").on(sql`coalesce(category_override,category)`),
-    check("transaction_json", sql`json_valid(source)`),
-    check("evidence_json", sql`json_valid(evidence)`),
-    check(
-      "ignored_boolean",
-      sql`ignored_override IS NULL OR ignored_override IN (0,1)`,
-    ),
+    index("transaction_category").on(t.category),
   ],
 );
 export const sync_runs = sqliteTable(

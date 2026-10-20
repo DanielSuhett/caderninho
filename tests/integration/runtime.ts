@@ -1,4 +1,5 @@
 import { eq } from "drizzle-orm";
+import { z } from "zod/v4";
 
 import { Fault, FaultCode, type FinancialSource } from "../../src/domain";
 import type { Bindings } from "../../src/worker/bindings";
@@ -20,6 +21,7 @@ type RuntimeEnv = Pick<Bindings, "DB" | "FINANCE">;
 function syntheticSource(
   connectionId: string,
   db: D1Database,
+  referenceDay: string,
 ): FinancialSource {
   const sizes: Record<string, number> = {
     "volume-10000": 10_000,
@@ -29,7 +31,7 @@ function syntheticSource(
   const perAccount = count / 2;
   return {
     accounts: async () =>
-      ["a", "b"].map((id) => ({
+      (connectionId === "history" ? ["a"] : ["a", "b"]).map((id) => ({
         balance: "123.45",
         currencyCode: "BRL",
         id,
@@ -39,6 +41,42 @@ function syntheticSource(
       })),
     connection: async () => ({ connector: { id: 200 }, id: connectionId }),
     transactions: async (id, cursor) => {
+      if (connectionId === "history") {
+        if (cursor) {
+          throw new Fault(FaultCode.UPSTREAM_AUTH);
+        }
+        const pages: Record<string, { id: string; amount: string }[]> = {
+          "2026-10-01": [
+            { amount: "-10", id: "A" },
+            { amount: "-20", id: "B" },
+          ],
+          "2026-10-02": [
+            { amount: "-25", id: "B" },
+            { amount: "-30", id: "C" },
+          ],
+          "2026-10-03": [
+            { amount: "-25", id: "B" },
+            { amount: "-30", id: "C" },
+          ],
+          "2026-10-04": [],
+          "2026-10-05": [
+            { amount: "-27", id: "B" },
+            { amount: "-40", id: "D" },
+          ],
+        };
+        return {
+          next: referenceDay === "2026-10-05" ? "next" : null,
+          records: (pages[referenceDay] ?? []).map((row) => ({
+            ...row,
+            accountId: id,
+            currencyCode: "BRL",
+            date: "2026-10-01",
+            description: "Synthetic history",
+            status: "POSTED",
+            type: "DEBIT",
+          })),
+        };
+      }
       if (connectionId === "replay" && id === "a" && !cursor) {
         const connection = await database(db)
           .select({ status: connections.status })
@@ -65,9 +103,7 @@ function syntheticSource(
             currencyCode: index % 3 === 0 ? "USD" : "BRL",
             date: "2026-10-01",
             description: "Synthetic transaction",
-            details: "synthetic ".repeat(50),
             id: `tx-${String(index).padStart(6, "0")}`,
-            merchant: { name: "Synthetic merchant" },
             status: "POSTED",
             type: "DEBIT",
           };
@@ -88,7 +124,11 @@ export class TestWorkflow extends WorkflowEntrypoint<
       {
         now: () => new Date().toISOString(),
         repository,
-        source: syntheticSource(run.connectionId, this.env.DB),
+        source: syntheticSource(
+          run.connectionId,
+          this.env.DB,
+          run.createdAt.slice(0, 10),
+        ),
         steps: {
           do: async (name, fn) => {
             const result = await steps.do(name, async () => {
@@ -129,9 +169,14 @@ export default {
     if (path === "/setup" && request.method === "POST") {
       const id = new URL(request.url).searchParams.get("connection") ?? "c";
       if (
-        !["c", "volume-10000", "volume-100000", "failure", "replay"].includes(
-          id,
-        )
+        ![
+          "c",
+          "volume-10000",
+          "volume-100000",
+          "failure",
+          "replay",
+          "history",
+        ].includes(id)
       ) {
         return new Response("Invalid fixture", { status: 400 });
       }
@@ -143,14 +188,25 @@ export default {
     }
     if (path === "/start" && request.method === "POST") {
       const id = new URL(request.url).searchParams.get("connection") ?? "c";
+      const day = z
+        .enum(["1", "2", "3", "4", "5"])
+        .parse(new URL(request.url).searchParams.get("day") ?? "1");
+      const now = () =>
+        id === "history"
+          ? new Date(`2026-10-0${day}T00:00:00.000Z`)
+          : new Date();
       return Response.json(
-        await createSyncService(createSyncRepository(env.DB), {
-          create: async (runId) => {
-            await env.FINANCE.create({ id: runId, params: { runId } });
+        await createSyncService(
+          createSyncRepository(env.DB),
+          {
+            create: async (runId) => {
+              await env.FINANCE.create({ id: runId, params: { runId } });
+            },
+            status: async (runId) =>
+              (await (await env.FINANCE.get(runId)).status()).status,
           },
-          status: async (runId) =>
-            (await (await env.FINANCE.get(runId)).status()).status,
-        }).request([id]),
+          now,
+        ).request([id]),
       );
     }
     if (path === "/state") {

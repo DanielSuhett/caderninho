@@ -3,7 +3,12 @@ import assert from "node:assert/strict";
 import { eq } from "drizzle-orm";
 import { beforeEach, test } from "vitest";
 
-import { normalizeAccount, normalizeTransaction } from "../../src/domain";
+import {
+  Fault,
+  FaultCode,
+  normalizeAccount,
+  normalizeTransaction,
+} from "../../src/domain";
 import { database } from "../../src/worker/database";
 import { createFinancialService } from "../../src/worker/finance";
 import { createFinancialRepository } from "../../src/worker/finance/repository";
@@ -121,17 +126,20 @@ test("a receipt/checkpoint failure rolls back records and revision in the same r
   assert.equal((await repository.read(id)).sequence, 0);
   assert.equal((await finance().query({ limit: 10 })).revision, version);
 });
-test("partial pages keep prior success and confirmed data, reject cursor loops/conflicting IDs, and do not restart terminal runs", async () => {
+test("partial pages keep prior success and confirmed data, reject conflicting IDs, and do not restart terminal runs", async () => {
   await collect(source([transaction({ date: "2026-09-01", id: "old" })]));
   const repository = createSyncRepository(env.DB);
   const id = await admit("2026-10-02T00:00:00.000Z");
   let calls = 0;
-  const invalid = {
+  const partialSource = {
     ...source([]),
     transactions: () => {
       calls += 1;
+      if (calls === 2) {
+        return Promise.reject(new Fault(FaultCode.UPSTREAM_AUTH));
+      }
       return Promise.resolve({
-        next: "same",
+        next: "next",
         records: [transaction({ date: "2026-10-02", id: `page-${calls}` })],
       });
     },
@@ -141,12 +149,12 @@ test("partial pages keep prior success and confirmed data, reject cursor loops/c
       {
         now: () => "2026-10-02T00:00:00.000Z",
         repository,
-        source: invalid,
+        source: partialSource,
         steps: { do: (_name, fn) => fn() },
       },
       id,
     ),
-    { message: "REPEATED_CURSOR" },
+    { code: "UPSTREAM_AUTH" },
   );
   const state = await createInstallationRepository(env.DB).state();
   assert.equal(state.accounts[0]?.collectionStatus, "partial");
@@ -166,7 +174,7 @@ test("partial pages keep prior success and confirmed data, reject cursor loops/c
     {
       now: () => now,
       repository,
-      source: invalid,
+      source: partialSource,
       steps: { do: (_name, fn) => fn() },
     },
     id,
@@ -280,35 +288,4 @@ test("a missing singleton cannot bypass the publication guard", async () => {
   );
   assert.equal((await createFinancialRepository(env.DB).accounts()).length, 0);
   assert.equal((await repository.read(id)).sequence, 0);
-});
-test("publication racing a manual edit never overwrites a correction", async () => {
-  await collect(source([transaction()]));
-  const repository = createSyncRepository(env.DB);
-  const id = await admit("2026-10-02T00:00:00.000Z");
-  await repository.start(id, now);
-  const run = await repository.read(id);
-  await Promise.all([
-    repository.publish({
-      done: false,
-      next: { accountId: null, cursor: null, phase: "finish" },
-      now,
-      run,
-      transactions: [
-        normalizeTransaction(
-          transaction({ description: "Updated source" }),
-          normalizeAccount(account(), "c"),
-        ),
-      ],
-    }),
-    finance().correct({
-      accountId: "a",
-      connectionId: "c",
-      id: "t",
-      patch: { description: "Manual", ignored: true },
-    }),
-  ]);
-  const [tx] = (await finance().query({ limit: 10 })).records;
-  assert.equal(tx?.effectiveDescription, "Manual");
-  assert.equal(tx?.description, "Updated source");
-  assert.equal(tx?.ignored, true);
 });

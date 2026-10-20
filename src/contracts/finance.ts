@@ -2,7 +2,6 @@ import { z } from "zod/v4";
 
 import type {
   AggregateQuery,
-  TransactionCorrection,
   TransactionFilter,
   TransactionQuery,
 } from "../domain";
@@ -14,9 +13,6 @@ const amount = z.string().regex(/^-?(0|[1-9]\d{0,29})$/);
 export const AccountReferenceSchema = z
   .object({ accountId: identifier, connectionId: identifier })
   .strict();
-export const TransactionReferenceSchema = AccountReferenceSchema.extend({
-  id: identifier,
-});
 export const TransactionFilterSchema = z
   .object({
     accounts: z.array(AccountReferenceSchema).min(1).max(100).optional(),
@@ -26,10 +22,8 @@ export const TransactionFilterSchema = z
     description: z.string().max(2048).optional(),
     direction: z.enum(["DEBIT", "CREDIT"]).optional(),
     from: day.optional(),
-    ignored: z.boolean().optional(),
     maxAmountMinor: amount.optional(),
     minAmountMinor: amount.optional(),
-    presence: z.enum(["observed", "not_observed"]).optional(),
     status: z.enum(["PENDING", "POSTED"]).optional(),
     to: day.optional(),
   })
@@ -80,16 +74,6 @@ export const AggregateQuerySchema = z
     metric: z.enum(Metric).default("count"),
   })
   .strict() satisfies z.ZodType<AggregateQuery>;
-export const CorrectionSchema = TransactionReferenceSchema.extend({
-  patch: z
-    .object({
-      category: z.string().max(2048).nullable().optional(),
-      description: z.string().max(2048).nullable().optional(),
-      ignored: z.boolean().nullable().optional(),
-    })
-    .strict()
-    .refine((value) => Object.keys(value).length > 0, "Empty correction"),
-}).strict() satisfies z.ZodType<TransactionCorrection>;
 export const ConnectionSelectionSchema = z
   .object({ connectionIds: z.array(identifier).min(1).max(10).optional() })
   .strict();

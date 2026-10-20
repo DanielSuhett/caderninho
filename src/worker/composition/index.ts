@@ -57,10 +57,6 @@ export function financialService(env: Bindings) {
       observeSpan(SpanName.financeAction, () => service.aggregate(input), {
         action: "aggregate",
       }),
-    correct: (input: Parameters<typeof service.correct>[0]) =>
-      observeSpan(SpanName.financeAction, () => service.correct(input), {
-        action: "correct",
-      }),
     query: (input: Parameters<typeof service.query>[0]) =>
       observeSpan(SpanName.financeAction, () => service.query(input), {
         action: "query",
