@@ -18,9 +18,9 @@ reset automático em deploys posteriores. Não execute a migração em bancos an
 
 ## Dados e execução
 
-São seis tabelas de aplicação: settings, connections, accounts, transactions,
-sync_runs e portal_sessions. Contas/transações têm identidade composta; detalhes
-da origem ficam em JSON privado e campos consultados em SQL têm colunas concretas.
+São cinco tabelas de aplicação: settings, connections, accounts, transactions e
+sync_runs. Contas/transações têm identidade composta; detalhes da origem ficam
+em JSON privado e campos consultados em SQL têm colunas concretas.
 Correções são três overrides conhecidos na transação.
 
 A intenção de importação e a reserva de 24 horas são confirmadas antes do despacho.
@@ -37,14 +37,22 @@ própria. Não há lock durante rede nem expiração artificial de executor.
 Uma releitura integral por admissão substitui caminhos incrementais, webhooks e
 reconciliações separados. Ausência na origem não remove histórico. Consultas e
 totais distinguem observação confirmada de registros não encontrados e qualidade
-parcial. Execuções encerradas são limpas após 30 dias, em lotes de até 200; sessões
-expiradas também são limpas em lotes de 200.
+parcial. Execuções encerradas são limpas após 30 dias, em lotes de até 200.
 
 ## Segurança e diagnóstico
 
-Sessões do painel duram oito horas, usam IDs hasheados, CSRF, cookies
-HttpOnly/Secure/SameSite e versão do Worker. Comandos exigem origem exata. OAuth
-usa a biblioteca oficial e guarda grants no KV da instalação. Não há ACL por conta.
+O painel usa cookies assinados HMAC SHA-256 pelo helper do Hono, sem acessar D1
+ou KV para autenticação administrativa. O cookie contém CSRF e expiração de oito
+horas, conferida no servidor, com HttpOnly, Secure, SameSite=Lax e Path=/.
+A chave é derivada de ADMIN_PASSWORD e da versão do Worker, sem secret adicional;
+alterar qualquer um invalida os cookies anteriores. Sem senha configurada, o
+acesso privado é recusado. Comandos exigem origem exata e CSRF.
+
+Sair limpa somente o cookie do navegador: uma cópia permanece válida até expirar
+ou ocorrer rotação. OAuth usa a biblioteca oficial e guarda grants no KV da
+instalação, com vida independente do cookie. Revogar assistentes remove esses
+grants explicitamente; credenciais MCP não autenticam o painel nem o widget.
+Metadados e registro de clientes OAuth permanecem públicos. Não há ACL por conta.
 
 LOGIN_LIMITER admite inicialmente dez tentativas por minuto por IP fornecido pela
 Cloudflare. O binding é permissivo e por localização; não é um contador global

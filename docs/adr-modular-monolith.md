@@ -18,7 +18,7 @@ transações. A decisão completa está na [spec](spec-refatoracao.md).
 | Módulo Worker | Responsabilidade |
 | --- | --- |
 | `installation` | Conexões e configuração da instalação; dados do painel |
-| `auth` | Senha, sessões, OAuth oficial e revogação |
+| `auth` | Senha, cookies assinados, OAuth oficial e revogação de assistentes |
 | `finance` | Contas, transações, consultas, totais e correções |
 | `sync` | Admissão diária, despacho, páginas e commits duráveis |
 | `mcp` | Seis tools comuns do SDK |
@@ -38,7 +38,6 @@ universal, container de DI nem camadas vazias.
 | `accounts` | Conta, saldo observado, origem privada e qualidade da coleta |
 | `transactions` | Origem, projeção consultável, marcador de presença e três overrides |
 | `sync_runs` | Intenção, estado, checkpoint e último commit confirmado |
-| `portal_sessions` | Sessões hasheadas, CSRF, expiração e versão do Worker |
 
 Contas usam `(connection_id,id)`; transações usam
 `(connection_id,account_id,id)`. Não assumir unicidade global dos IDs externos.
@@ -101,7 +100,11 @@ transferência própria e pagamento de cartão não viram consumo.
 ## Acesso e operação
 
 Os três secrets são ADMIN_PASSWORD, PLUGGY_CLIENT_ID e PLUGGY_CLIENT_SECRET.
-Sessão de oito horas e OAuth oficial protegem toda a instalação. Não há usuários,
+O painel usa cookie assinado, com expiração de oito horas conferida no servidor;
+o MCP usa OAuth oficial. Autenticação administrativa não usa D1/KV. A chave deriva da
+senha e da versão do Worker; trocar qualquer um invalida os cookies. Sair apenas
+limpa o cookie local; a cópia continua válida até expirar ou ocorrer rotação.
+Grants OAuth têm vida independente e revogação explícita. Não há usuários,
 tenants, permissões por conta ou credenciais no D1. Login usa rate limit nativo
 por IP confiável e por localização; não há tabela de tentativas.
 

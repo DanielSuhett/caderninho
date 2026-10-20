@@ -143,7 +143,6 @@ export interface SafeFields {
   action?:
     | (typeof ToolName)[keyof typeof ToolName]
     | "compact_sync"
-    | "compact_auth"
     | "status"
     | "tools_list"
     | "read"
