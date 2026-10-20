@@ -1,31 +1,14 @@
-import { and, eq, gt, inArray, lte, sql } from "drizzle-orm";
+import { and, eq, gt, inArray, lte } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 
 import { hash } from "../../../shared";
 import { database } from "../../database";
-import { login_attempts, portal_sessions } from "../../schema";
+import { portal_sessions } from "../../schema";
 import type { AuthRepository } from "../entity";
 
 export function createAuthRepository(binding: D1Database): AuthRepository {
   const db = database(binding);
   return {
-    async allowLoginAttempt(now: number) {
-      const [row] = await db
-        .insert(login_attempts)
-        .values({ attempts: 1, expires: now + 60_000, id: "admin" })
-        .onConflictDoUpdate({
-          set: {
-            attempts: sql`case when ${login_attempts.expires} <= ${now} then 1 else ${login_attempts.attempts} + 1 end`,
-            expires: sql`case when ${login_attempts.expires} <= ${now} then excluded.expires else ${login_attempts.expires} end`,
-          },
-          target: login_attempts.id,
-        })
-        .returning({ attempts: login_attempts.attempts });
-      if (!row) {
-        throw new Error("LOGIN_ATTEMPT_NOT_SAVED");
-      }
-      return row.attempts <= 10;
-    },
     compact: () => compactAccess(binding),
     async revokeSession(id: string) {
       await db
@@ -92,6 +75,5 @@ export async function compactAccess(binding: D1Database) {
             .limit(200),
         ),
       ),
-    db.delete(login_attempts).where(lte(login_attempts.expires, now)),
   ]);
 }

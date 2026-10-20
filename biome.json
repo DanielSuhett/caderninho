@@ -351,7 +351,7 @@
                   },
                   {
                     "group": [
-                      "**/account",
+                      "**/installation",
                       "**/auth",
                       "**/finance",
                       "**/sync",
@@ -451,7 +451,7 @@
                   },
                   {
                     "group": [
-                      "**/account",
+                      "**/installation",
                       "**/auth",
                       "**/finance",
                       "**/sync",
@@ -583,7 +583,6 @@
         "!src/worker/auth/session/index.ts",
         "!src/worker/auth/grants/index.ts",
         "!src/worker/pluggy/**",
-        "!src/worker/mcp/tasks/index.ts",
         "!src/worker/sync/workflow/index.ts",
         "!src/worker/index.ts",
         "!src/worker/composition/index.ts",
@@ -593,7 +592,6 @@
         "!src/worker/http/index.ts",
         "!src/worker/observability/index.ts",
         "!src/worker/runtime.d.ts",
-        "!src/worker/vendor/**",
         "!src/worker/**/__tests__/**",
         "!src/worker/mcp/index.ts"
       ],

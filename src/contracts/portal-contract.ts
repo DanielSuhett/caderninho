@@ -1,90 +1,65 @@
 import { z } from "zod/v4";
 
-import { AccountSyncOutcome, AdmissionStatus } from "../domain";
-import {
-  type AccountConnectToken,
-  type AccountPanel,
-  type AccountResponse,
-  AccountStep,
-  type InstallationChecks,
-} from "./portal.types";
-import { WizardStateSchema } from "./wizard-contract";
-
-const InstallationChecksSchema = z.object({
-  database: z.boolean(),
-  migrations: z.boolean(),
-  oauth: z.boolean(),
-  workflow: z.boolean(),
-}) satisfies z.ZodType<InstallationChecks>;
-const AccountPanelSchema = z.object({
-  initialStep: z.union([
-    z.literal(AccountStep.connect),
-    z.literal(AccountStep.assistant),
-  ]),
-  polling: z
-    .object({
-      intervalMs: z.number().int().positive(),
-      retryIntervalMs: z.number().int().positive(),
-    })
-    .nullable(),
-  support: z.object({
-    connectorId: z.number().int().positive(),
-    diagnostic: WizardStateSchema.extend({ issue: z.null() }),
-  }),
-  sync: z.enum(AccountSyncOutcome),
-}) satisfies z.ZodType<AccountPanel>;
-
+import { CollectionStatus, RunStatus } from "../domain";
+import type { AccountConnectToken, PortalResponse } from "./portal.types";
+export const PortalResponseSchema = z.object({
+  accounts: z.array(
+    z.object({
+      balanceMinor: z.string().nullable(),
+      collectionStatus: z.enum(CollectionStatus),
+      connectionId: z.string(),
+      currency: z.string(),
+      error: z.string().nullable(),
+      id: z.string(),
+      lastAttemptAt: z.string().nullable(),
+      lastSuccessAt: z.string().nullable(),
+      name: z.string(),
+      observedAt: z.string(),
+      observedFrom: z.string().nullable(),
+      observedTo: z.string().nullable(),
+      sourceUpdatedAt: z.string().nullable(),
+      type: z.enum(["BANK", "CREDIT"]),
+    }),
+  ),
+  configured: z.boolean(),
+  connections: z.array(
+    z.object({
+      id: z.string(),
+      lastAdmittedAt: z.string().nullable(),
+      lastSuccessAt: z.string().nullable(),
+      name: z.string(),
+      nextImportAt: z.string().nullable(),
+      observedAt: z.string(),
+      status: z.string(),
+    }),
+  ),
+  csrf: z.string(),
+  enabled: z.boolean(),
+  origin: z.string(),
+  runs: z.array(
+    z.object({
+      connectionId: z.string(),
+      createdAt: z.string(),
+      error: z.string().nullable(),
+      id: z.string(),
+      records: z.number(),
+      status: z.enum(RunStatus),
+      updatedAt: z.string(),
+    }),
+  ),
+}) satisfies z.ZodType<PortalResponse>;
 export const AccountConnectTokenSchema = z.object({
-  accessToken: z.string().min(1),
+  accessToken: z.string(),
   configuration: z.object({
-    connectorIds: z.array(z.number().int().positive()).min(1),
+    connectorIds: z.array(z.number()),
     includeSandbox: z.boolean(),
-    selectedConnectorId: z.number().int().positive(),
+    selectedConnectorId: z.number(),
   }),
 }) satisfies z.ZodType<AccountConnectToken>;
-
-export const AccountResponseSchema = z.object({
-  checkedAt: z.string(),
-  checks: InstallationChecksSchema,
-  csrf: z.string(),
-  freshness: z
-    .object({
-      items: z.array(
-        z.object({
-          id: z.string(),
-          lastAdmissionAt: z.string().nullable(),
-          lastImportAt: z.string().nullable(),
-          nextEligibleAt: z.string().nullable(),
-          operationId: z.string().nullable(),
-          status: z.enum(AdmissionStatus).optional(),
-        }),
-      ),
-      nextAutomaticAt: z.string(),
-    })
-    .optional(),
-  items: z.array(z.object({ id: z.string() })),
-  latest: z
-    .object({ phase: z.string(), status: z.string(), updated_at: z.string() })
-    .nullable(),
-  localApplications: z
-    .array(
-      z.object({
-        batch: z.number().int().nonnegative(),
-        operationId: z.string(),
-        totalProcessed: z.number().int().nonnegative(),
-      }),
-    )
-    .optional(),
-  origin: z.string(),
-  panel: AccountPanelSchema,
-  status: WizardStateSchema,
-}) satisfies z.ZodType<AccountResponse>;
-export const AccountActionSchema = z
-  .object({ csrf: z.string().min(1) })
-  .strict();
+export const AccountActionSchema = z.object({ csrf: z.string() }).strict();
 export const ItemActionSchema = AccountActionSchema.extend({
-  itemId: z.uuid(),
+  itemId: z.string().min(1).max(128),
 });
 export const ConnectTokenActionSchema = AccountActionSchema.extend({
-  itemId: z.uuid().optional(),
+  itemId: z.string().min(1).max(128).optional(),
 });

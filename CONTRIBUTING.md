@@ -4,7 +4,7 @@ O produto usa Cloudflare Workers, OAuth, D1 e Workflows. O domínio em `src/doma
 não depende do transporte nem do framework. Consulte
 [a arquitetura](docs/adr-modular-monolith.md) antes de alterar essa fronteira.
 
-Comece pelo módulo da funcionalidade em `src/worker`: `account`, `auth`,
+Comece pelo módulo da funcionalidade em `src/worker`: `installation`, `auth`,
 `finance`, `sync` ou `mcp`. Mantenha funções relacionadas no mesmo arquivo;
 controllers cuidam do transporte, services coordenam ações e repositories
 encapsulam SQL. Passe dependências por funções ou factories. Preserve entradas
@@ -121,7 +121,7 @@ O check executa o Biome diretamente.
 ### Camadas dos módulos
 
 Use `entity/index.ts`, `controller/index.ts`, `service.ts`, `repository/` e
-`__tests__` como estrutura padrão de `account`, `auth`, `finance` e `sync`. As entidades locais
+`__tests__` como estrutura padrão de `installation`, `auth`, `finance` e `sync`. As entidades locais
 definem os contratos de dependências; as regras puras compartilhadas continuam
 em `src/domain/*.entity.ts`. Types de linhas podem ser inferidos de Drizzle por
 imports exclusivamente de tipo em `entity/index.ts`, sem carregar o schema
@@ -135,10 +135,10 @@ em runtime.
   services, controllers, composição ou rede. A composição injeta cada porta.
 - Índices públicos exportam services e contratos. Implementações de persistência
   têm um índice próprio, acessível à composição e aos testes de integração.
-- `sync/execution.service.ts` concentra os steps duráveis e
-  `sync/repository/execution.repository.ts` concentra sua persistência atômica.
-  Os repositories especializados de `finance`, os adapters Pluggy/OAuth e os transportes MCP e
-  Workflow são exceções por responsabilidade; não precisam de camadas vazias.
+- `sync/service.ts` concentra o único fluxo de importação. Seu repository confirma
+  dados, qualidade, revisão e checkpoint no mesmo batch; `publication.repository.ts`
+  prepara os writes da página. Adapters Pluggy, OAuth e Workflow permanecem explícitos.
+  Não crie camadas vazias para completar o layout.
 
 O lint restringe dependências; a revisão ainda precisa confirmar que decisões de
 produto estão em entidades ou casos de uso. Mudar um nome de arquivo não justifica
@@ -147,7 +147,7 @@ misturar rede, regra e persistência em um repository.
 ```ts
 // A partir de src/worker/composition/index.ts:
 import { hash } from "../../shared";
-import { createAccountService } from "../account";
+import { createInstallationService } from "../installation";
 ```
 
 Use `if (objeto)` e `if (!lista.length)` para presença de objetos e coleções
@@ -158,8 +158,8 @@ preservar zero, falso e texto vazio. Mantenha comparações exatas quando o cont
 exigir um sentinel específico, como IDs de JSON-RPC, exclusão de override e flags
 numéricas do banco. Um array vazio continua sendo um objeto presente.
 
-Prefira enums nos conjuntos fechados do produto, como `Resource.transactions`,
-`OperationKind.sync` e `RuleAction.set_category`. O padrão do projeto é um objeto
+Prefira enums nos conjuntos fechados do produto, como `AccountType.BANK`,
+`RunStatus.running` e `Metric.cash_flow`. O padrão do projeto é um objeto
 `as const` com a união dos valores derivada quando necessária; ele funciona com
 `erasableSyntaxOnly` e a execução direta de TypeScript no Node. Declare o conjunto
 no módulo que o possui e reutilize os valores nos schemas Zod, tipos e regras.
@@ -171,8 +171,7 @@ Para revisar performance, use dados sintéticos e compare resultados além do te
 Benchmarks pontuais não entram na CI nem definem asserts de duração. Medições
 no Node não estimam latência de rede ou CPU do Worker em produção.
 Agrupe leituras de I/O independentes; mantenha paginação, publicação e checkpoints
-na ordem exigida pelo fluxo. Evite acumular engines de regras com `Promise.all`
-em trabalho que só executa CPU JavaScript, e preserve os batches atômicos.
+na ordem exigida pelo fluxo. `Promise.all` não paraleliza CPU JavaScript. Preserve os batches atômicos.
 
 ## Logs
 

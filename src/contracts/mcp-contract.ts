@@ -1,188 +1,73 @@
 import { z } from "zod/v4";
 
 import {
-  CorrectionInputSchema,
-  FilterSchema,
-  RecordReferenceSchema,
-} from "../domain";
-import {
-  LiveBalanceInputSchema,
-  PreviewInputSchema,
-  RuleCommandSchema,
-  SubscriptionInputSchema,
+  AggregateQuerySchema,
+  ConnectionSelectionSchema,
+  CorrectionSchema,
+  StatusInputSchema,
+  TransactionQuerySchema,
 } from "./finance";
-import { type ToolCall, ToolName } from "./mcp.types";
-import { AggregateSchema, QuerySchema } from "./queries";
-
-export const LongInput = z
-  .object({
-    filter: FilterSchema.optional(),
-    itemIds: z.array(z.string()).min(1).max(100),
-    renormalize: z.boolean().optional(),
-    requestKey: z.string().min(1).max(200),
-  })
-  .strict();
-export const ReapplicationInputSchema = LongInput.extend({
-  batches: z.boolean().optional(),
-  continuation: z
-    .object({ batch: z.number().int().nonnegative(), operationId: z.string() })
-    .strict()
-    .optional(),
-});
-const declarations = [
+export const ToolName = {
+  accounts: "caderninho_accounts",
+  aggregate: "caderninho_aggregate",
+  correct: "caderninho_correct_transaction",
+  status: "caderninho_status",
+  sync: "caderninho_sync",
+  transactions: "caderninho_transactions",
+} as const;
+const definitions = [
   {
     description:
-      "Diagnóstico de configuração sem credenciais, identificadores ou dados bancários. Oriente uma ação por vez. Nunca peça secrets, senhas ou prints de chaves. Não inicia importação.",
-    name: ToolName.setup_status,
-    schema: z.object({}).strict(),
-  },
-  {
-    description:
-      "Importar Items elegíveis, uma admissão por Item a cada 24 horas; informa cooldown, pausa e operação existente. Primeira carga integral, depois incremento. MCP Task durável.",
-    name: ToolName.sync,
-    schema: LongInput,
-  },
-  {
-    description:
-      "Reconciliação dentro da mesma janela de 24 horas por Item; durante cooldown registra intenção para o próximo ciclo. MCP Task quando admitida.",
-    name: ToolName.reconcile,
-    schema: LongInput,
-  },
-  {
-    description:
-      "Reaplicar regras locais sincronamente, até 5 registros, preservando overrides. Para seleções maiores use batches:true e envie a continuation devolvida com a mesma requestKey e seleção. Cada chamada confirma só um lote. Sem Workflow; Task terminal se negociada. Mudanças externas exigem nova execução.",
-    name: ToolName.reapply,
-    schema: ReapplicationInputSchema,
-  },
-  {
-    description:
-      "Consultar cobertura D1, operações e backlog; sem iniciar importação.",
+      "Estado da instalação, contas e importações. Informa parcialidade e referência temporal; nunca inicia coleta.",
     name: ToolName.status,
-    schema: z.object({}).strict(),
+    readOnly: true,
+    schema: StatusInputSchema,
   },
   {
     description:
-      "Consultar registros no D1. Campos original.* e effective.* são distintos. Cursor exige mesma revisão.",
-    name: ToolName.query,
-    schema: QuerySchema,
+      "Importar contas e transações da origem. Retorna execução existente ou admissão/pausa/cooldown por conexão. Não exige coordenar páginas.",
+    name: ToolName.sync,
+    readOnly: false,
+    schema: ConnectionSelectionSchema,
   },
   {
     description:
-      "Totais exatos por moeda do universo SQL. metric aceita count, amount, cashFlow (BANK), consumption_v1 ou unclassifiedDebits para transações e métricas próprias de cada recurso. Métricas flow excluem pendentes/futuros; valores ignorados são excluídos. Sem metric, soma bruta assinada da origem.",
+      "Contas BANK/CREDIT e saldo observado com moeda e referência temporal. Saldo de cartão não é patrimônio disponível.",
+    name: ToolName.accounts,
+    readOnly: true,
+    schema: ConnectionSelectionSchema,
+  },
+  {
+    description:
+      "Consultar histórico local por campos conhecidos. Cursor exige mesma revisão; valores originais e correções são distintos.",
+    name: ToolName.transactions,
+    readOnly: true,
+    schema: TransactionQuerySchema,
+  },
+  {
+    description:
+      "Totais exatos por moeda sobre todo o universo filtrado. Débito não equivale a gasto. Informe parcialidade, desconhecidos e referência temporal.",
     name: ToolName.aggregate,
-    schema: AggregateSchema,
+    readOnly: true,
+    schema: AggregateQuerySchema,
   },
   {
     description:
-      "Importar/validar, criar/editar versão completa, ativar, desativar ou ordenar regras. Importação dry-run por padrão; activate publica versão sem recategorizar o passado.",
-    name: ToolName.rules,
-    schema: RuleCommandSchema,
+      "Corrigir categoria, descrição ou ignorado localmente. null remove o override. Não escreve na instituição financeira.",
+    name: ToolName.correct,
+    readOnly: false,
+    schema: CorrectionSchema,
   },
-  {
-    description:
-      "Simular regras no mesmo filtro usado por reaplicação. Quantidade total SQL; diferenças da amostra identificada, sem alterar dados.",
-    name: ToolName.preview,
-    schema: PreviewInputSchema,
-  },
-  {
-    description:
-      "Corrigir campo local; value=null remove override e volta à herança. Não escreve na Pluggy.",
-    name: ToolName.override,
-    schema: CorrectionInputSchema,
-  },
-  {
-    description:
-      "Explicar origem, versão, regras aplicadas e overrides da transação.",
-    name: ToolName.explain,
-    schema: RecordReferenceSchema,
-  },
-  {
-    description:
-      "Detectar recorrências na base D1 completa do período solicitado. Recusa universo maior que o limite de análise; não inventa totais de amostra.",
-    name: ToolName.get_subscriptions,
-    schema: SubscriptionInputSchema,
-  },
-  {
-    description:
-      "Leitura pontual da conta na Pluggy, sem sync ou PATCH. Informa horário da leitura e referência da origem; não garante saldo bancário em tempo real.",
-    name: ToolName.live_balance,
-    schema: LiveBalanceInputSchema,
-  },
-] as const;
-export const tools = declarations.map((t) => ({
+];
+export const tools = definitions.map((d) => ({
   annotations: {
     destructiveHint: false,
-    openWorldHint: [
-      ToolName.sync,
-      ToolName.reconcile,
-      ToolName.live_balance,
-    ].some((name) => name === t.name),
-    readOnlyHint: ![
-      ToolName.sync,
-      ToolName.reconcile,
-      ToolName.reapply,
-      ToolName.rules,
-      ToolName.override,
-    ].some((name) => name === t.name),
+    openWorldHint: d.name === ToolName.sync,
+    readOnlyHint: d.readOnly,
   },
-  description: t.description,
-  inputSchema: z.toJSONSchema(t.schema),
-  name: t.name,
+  description: d.description,
+  inputSchema: z.toJSONSchema(d.schema, { io: "input" }),
+  name: d.name,
 }));
-export const ToolCallSchema = z.discriminatedUnion("name", [
-  z.object({
-    input: declarations[0].schema,
-    name: z.literal(ToolName.setup_status),
-  }),
-  z.object({
-    input: declarations[1].schema,
-    name: z.literal(ToolName.sync),
-  }),
-  z.object({
-    input: declarations[2].schema,
-    name: z.literal(ToolName.reconcile),
-  }),
-  z.object({
-    input: declarations[3].schema,
-    name: z.literal(ToolName.reapply),
-  }),
-  z.object({
-    input: declarations[4].schema,
-    name: z.literal(ToolName.status),
-  }),
-  z.object({
-    input: declarations[5].schema,
-    name: z.literal(ToolName.query),
-  }),
-  z.object({
-    input: declarations[6].schema,
-    name: z.literal(ToolName.aggregate),
-  }),
-  z.object({
-    input: declarations[7].schema,
-    name: z.literal(ToolName.rules),
-  }),
-  z.object({
-    input: declarations[8].schema,
-    name: z.literal(ToolName.preview),
-  }),
-  z.object({
-    input: declarations[9].schema,
-    name: z.literal(ToolName.override),
-  }),
-  z.object({
-    input: declarations[10].schema,
-    name: z.literal(ToolName.explain),
-  }),
-  z.object({
-    input: declarations[11].schema,
-    name: z.literal(ToolName.get_subscriptions),
-  }),
-  z.object({
-    input: declarations[12].schema,
-    name: z.literal(ToolName.live_balance),
-  }),
-]) satisfies z.ZodType<ToolCall>;
-
 export const PRODUCT_INSTRUCTIONS =
-  "Consulte a base financeira D1 com query e prefira aggregate para totais exatos por moeda. Nunca coordene páginas Pluggy. Verifique cobertura quando ausente/parcial; inicie sync explicitamente. Sync normal carrega todos os recursos dos Items selecionados inicialmente e depois mantém mudanças. Original é o valor da origem; efetivo aplica override, regras e origem nessa ordem. Valide/simule regras antes da ativação solicitada. Alterar regras não recategoriza o passado; reapply recebe uma seleção explícita e preserva overrides. Sync e reconcile respeitam 24 horas por Item e retornam Tasks com negociação io.modelcontextprotocol/tasks, ou estado de cooldown/pausa sem nova tarefa. Reapply é síncrono até 5 transações; seleções maiores exigem batches:true e continuação explícita com mesma chave e seleção. Com Tasks negociadas, cada lote confirmado tem Task terminal. Acompanhe ingestão por tasks/get ou subscriptions/listen; fechar a escuta não cancela processamento. Recorrências são candidatos, não contratos confirmados. Saldo persistido tem referência temporal; live_balance é intenção pontual distinta e não garante tempo real.";
+  "Consulte contas e transações locais. Use aggregate para totais exatos, nunca some uma página. Preserve moedas e a semântica BANK/CREDIT, pendentes e transferências. Não chame subtotal incerto de total definitivo. Saldo tem referência temporal. Inicie sync explicitamente e acompanhe por status; nunca coordene páginas Pluggy. Correções são locais, null restaura a origem. Não peça secrets ao proprietário.";

@@ -1,64 +1,55 @@
-import type {
-  AccountSyncOutcome,
-  AdmissionStatus,
-  WizardState,
-} from "../domain";
-
-export const AccountStep = { assistant: 2, connect: 1 } as const;
-export type AccountStep = (typeof AccountStep)[keyof typeof AccountStep];
-
-export interface AccountDiagnostic extends WizardState {
-  issue: null;
+import type { CollectionStatusType, RunStatus } from "../domain";
+export interface ConnectionInfo {
+  id: string;
+  lastAdmittedAt: string | null;
+  lastSuccessAt: string | null;
+  name: string;
+  nextImportAt: string | null;
+  observedAt: string;
+  status: string;
 }
-
-export interface AccountPanel {
-  initialStep: AccountStep;
-  polling: { intervalMs: number; retryIntervalMs: number } | null;
-  support: { diagnostic: AccountDiagnostic; connectorId: number };
-  sync: AccountSyncOutcome;
+export interface AccountInfo {
+  balanceMinor: string | null;
+  collectionStatus: CollectionStatusType;
+  connectionId: string;
+  currency: string;
+  error: string | null;
+  id: string;
+  lastAttemptAt: string | null;
+  lastSuccessAt: string | null;
+  name: string;
+  observedAt: string;
+  observedFrom: string | null;
+  observedTo: string | null;
+  sourceUpdatedAt: string | null;
+  type: "BANK" | "CREDIT";
 }
-
-export interface ConnectConfiguration {
-  connectorIds: number[];
-  includeSandbox: boolean;
-  selectedConnectorId: number;
+export interface RunInfo {
+  connectionId: string;
+  createdAt: string;
+  error: string | null;
+  id: string;
+  records: number;
+  status: RunStatus;
+  updatedAt: string;
 }
-
+export interface InstallationState {
+  accounts: AccountInfo[];
+  connections: ConnectionInfo[];
+  enabled: boolean;
+  runs: RunInfo[];
+}
+export interface PortalResponse extends InstallationState {
+  configured: boolean;
+  csrf: string;
+  origin: string;
+}
 export interface AccountConnectToken {
   accessToken: string;
-  configuration: ConnectConfiguration;
+  configuration: {
+    connectorIds: number[];
+    includeSandbox: boolean;
+    selectedConnectorId: number;
+  };
 }
-
-export interface InstallationChecks {
-  database: boolean;
-  migrations: boolean;
-  oauth: boolean;
-  workflow: boolean;
-}
-
-export interface AccountResponse {
-  checkedAt: string;
-  checks: InstallationChecks;
-  csrf: string;
-  freshness?:
-    | {
-        nextAutomaticAt: string;
-        items: {
-          id: string;
-          lastImportAt: string | null;
-          lastAdmissionAt: string | null;
-          nextEligibleAt: string | null;
-          operationId: string | null;
-          status?: AdmissionStatus | undefined;
-        }[];
-      }
-    | undefined;
-  items: { id: string }[];
-  latest: { status: string; phase: string; updated_at: string } | null;
-  localApplications?:
-    | { operationId: string; batch: number; totalProcessed: number }[]
-    | undefined;
-  origin: string;
-  panel: AccountPanel;
-  status: WizardState;
-}
+export const PortalIssue = { session: "session", unknown: "unknown" } as const;

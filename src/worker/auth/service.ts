@@ -33,7 +33,6 @@ export function createAuthService(
   now: () => number = Date.now,
 ) {
   return {
-    allowLoginAttempt: () => repository.allowLoginAttempt(now()),
     compact: repository.compact,
     async createSession(prior?: string) {
       const id = token();

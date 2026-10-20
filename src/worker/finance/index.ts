@@ -1,10 +1,8 @@
-export {
-  correctFinancialRecord,
-  createFinancialService,
-  type FinancialQueries,
-  importRuleDocument,
-  manageRules,
-  prepareEntity,
-  previewRules,
-  readSubscriptions,
-} from "./service";
+export type {
+  AggregateGroup,
+  AggregateResult,
+  FinancialRepository,
+  QueryResult,
+  TransactionView,
+} from "./entity";
+export { createFinancialService } from "./service";

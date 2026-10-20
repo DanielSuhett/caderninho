@@ -9,12 +9,6 @@ const ResultSchema = z
       )
       .optional(),
     isError: z.boolean().optional(),
-    result: z.object({ isError: z.boolean().optional() }).loose().optional(),
-    resultType: z.string().optional(),
-    status: z.string().optional(),
-    statusMessage: z.string().optional(),
-    task: z.json().optional(),
-    taskId: z.string().optional(),
   })
   .loose();
 const EnvelopeSchema = z

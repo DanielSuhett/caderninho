@@ -1,5 +1,7 @@
 # Sincronização interrompida em consentimentos MeuPluggy
 
+> Registro histórico do modelo anterior. Para a arquitetura atual, consulte [a spec](../spec-refatoracao.md).
+
 Data: 18/10/2026. Investigação feita pelos MCPs Cloudflare, com leitura do código
 local. Horários locais usam `America/Sao_Paulo` (UTC−3).
 

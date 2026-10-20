@@ -1,355 +1,330 @@
-import { Button } from "@cloudflare/kumo/components/button";
-import { Input } from "@cloudflare/kumo/components/input";
 import {
   type MouseEvent,
-  type ReactNode,
   useCallback,
   useEffect,
   useRef,
+  useState,
 } from "react";
 
-import type { AdmissionStatus } from "../../domain";
-import {
-  type AccountActions,
-  type AccountState,
-  type LoadState,
-  LoadStatus,
-} from "./account.types";
-import { SYNC_PRESENTATION, supportPrompt } from "./account-presentation";
+import type { PortalResponse } from "../../contracts";
+import { tryCatch } from "../../shared";
+import { UiButton } from "../ui";
+import { createAccountApi } from "./account-api";
+import { createConnectWidget } from "./connect-widget";
 
-const labels = ["Conectar bancos", "Conectar assistente"];
-const admissionLabels: Record<AdmissionStatus, string> = {
-  cooldown: "Intervalo de 24 horas",
-  eligible: "Disponível",
-  paused: "Pausada",
-  started: "Iniciada",
-  working: "Em andamento",
+const runLabels = {
+  failed: "Importação falhou",
+  pending: "Aguardando importação",
+  running: "Importando",
+  succeeded: "Importação concluída",
 };
-const firstQuestion =
-  "Use caderninho_setup_status e caderninho_status. Explique a cobertura, a atualização e eventuais falhas, sem apresentar saldos ou transações.";
-
-function Action({
-  children,
-  onClick,
-  disabled = false,
-  value,
-}: {
-  children: ReactNode;
-  onClick: (event: MouseEvent<HTMLButtonElement>) => void;
-  disabled?: boolean;
-  value?: string;
-}) {
-  return (
-    <Button
-      disabled={disabled}
-      onClick={onClick}
-      size="lg"
-      type="button"
-      value={value}
-      variant="secondary"
-    >
-      {children}
-    </Button>
-  );
+const collectionLabels = {
+  collecting: "Atualizando; dados parciais",
+  complete: "Dados disponíveis na última coleta",
+  never: "Ainda não importada",
+  partial: "Coleta parcial; tente novamente após a próxima elegibilidade",
+  unavailable: "Conta indisponível na origem",
+};
+function timestamp(value: string | null) {
+  return value ? new Date(value).toLocaleString("pt-BR") : "Ainda não ocorreu";
 }
-
-export function AccountView({
-  snapshot,
-  load,
-  step,
-  message,
-  busy,
-  actions,
-}: AccountState & { actions: AccountActions }) {
-  const heading = useRef<HTMLHeadingElement>(null);
-  const previous = useRef(step);
-  const diagnostic = snapshot ? supportPrompt(snapshot.panel.support) : "";
-  const origin = snapshot?.origin;
-  const selectStep = useCallback(
-    (event: MouseEvent<HTMLButtonElement>) => {
-      actions.selectStep(Number(event.currentTarget.value));
+export function AccountView() {
+  const [snapshot, setSnapshot] = useState<PortalResponse>();
+  const [message, setMessage] = useState("");
+  const [busy, setBusy] = useState(false);
+  const lifetime = useRef<AbortController | null>(null);
+  const locked = useRef(false);
+  const [api] = useState(() => createAccountApi(location.origin));
+  const [widget] = useState(createConnectWidget);
+  const refresh = useCallback(
+    async (signal: AbortSignal) => {
+      const state = await api.read(signal);
+      if (!signal.aborted) {
+        setSnapshot(state);
+      }
     },
-    [actions],
-  );
-  const connect = useCallback(() => actions.connectItem(), [actions]);
-  const reconnect = useCallback(
-    (event: MouseEvent<HTMLButtonElement>) => {
-      actions.connectItem(event.currentTarget.value);
-    },
-    [actions],
-  );
-  const connectAssistant = useCallback(() => actions.selectStep(2), [actions]);
-  const copyAddress = useCallback(
-    () => actions.copy(`${origin}/mcp`),
-    [actions, origin],
-  );
-  const copyQuestion = useCallback(
-    () => actions.copy(firstQuestion),
-    [actions],
-  );
-  const copyDiagnostic = useCallback(
-    () => actions.copy(diagnostic),
-    [actions, diagnostic],
+    [api],
   );
   useEffect(() => {
-    if (previous.current === step) {
-      return;
+    const controller = new AbortController();
+    lifetime.current = controller;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    async function read() {
+      const { data: _data, error } = await tryCatch(() =>
+        refresh(controller.signal),
+      );
+      if (controller.signal.aborted) {
+        return;
+      }
+      if (error) {
+        setMessage(
+          "Não foi possível atualizar. Recarregue a página ou entre novamente.",
+        );
+      }
+      timer = setTimeout(read, 5000);
     }
-    previous.current = step;
-    heading.current?.focus();
-  }, [step]);
+    background(read);
+    return () => {
+      controller.abort();
+      clearTimeout(timer);
+      lifetime.current = null;
+      tryCatch(() => widget.destroy()).then(
+        ({ data: _data, error: _error }) => undefined,
+        () => undefined,
+      );
+    };
+  }, [refresh, widget]);
+  const command = useCallback(
+    async (action: string, itemId?: string) => {
+      const signal = lifetime.current?.signal;
+      if (!(snapshot && signal) || locked.current) {
+        return;
+      }
+      locked.current = true;
+      setBusy(true);
+      setMessage("");
+      const { data: _data, error } = await tryCatch(async () => {
+        await api.command(action, snapshot.csrf, signal, itemId);
+        if (signal.aborted) {
+          return;
+        }
+        if (action === "logout") {
+          location.assign("/account/login");
+          return;
+        }
+        await refresh(signal);
+        setMessage(
+          action === "sync"
+            ? "Pedido registrado. Confira a importação e a próxima elegibilidade abaixo."
+            : "Alteração salva.",
+        );
+      });
+      if (signal.aborted) {
+        return;
+      }
+      locked.current = false;
+      setBusy(false);
+      if (error) {
+        setMessage(
+          "Não foi possível concluir. Atualize o painel para conferir o estado antes de repetir.",
+        );
+      }
+    },
+    [snapshot, refresh, api],
+  );
+  const connect = useCallback(
+    async (itemId?: string) => {
+      const signal = lifetime.current?.signal;
+      if (!(snapshot && signal) || locked.current) {
+        return;
+      }
+      const previous = document.activeElement;
+      locked.current = true;
+      setBusy(true);
+      setMessage("");
+      let finished = false;
+      let saved = false;
+      const release = () => {
+        if (finished || signal.aborted) {
+          return false;
+        }
+        finished = true;
+        locked.current = false;
+        setBusy(false);
+        if (previous instanceof HTMLElement) {
+          previous.focus();
+        }
+        return true;
+      };
+      const { data: _data, error } = await tryCatch(async () => {
+        const token = await api.token(snapshot.csrf, signal, itemId);
+        if (signal.aborted) {
+          return;
+        }
+        await widget.open({
+          ...token,
+          ...(itemId && { itemId }),
+          onClose: () => {
+            release();
+          },
+          onError: () => {
+            if (release()) {
+              setMessage(
+                "A conexão não foi concluída. Abra novamente o Meu Pluggy.",
+              );
+            }
+          },
+          onSuccess: (id) => {
+            if (saved || signal.aborted) {
+              return;
+            }
+            saved = true;
+            release();
+            background(() => command("items", id));
+          },
+        });
+      });
+      if (error && release()) {
+        setMessage(
+          "Não foi possível abrir o Meu Pluggy. Confira as credenciais da instalação.",
+        );
+      }
+    },
+    [snapshot, command, api, widget],
+  );
+  const handleCommand = useCallback(
+    (event: MouseEvent<HTMLButtonElement>) => {
+      const action = event.currentTarget.value;
+      background(() => command(action));
+    },
+    [command],
+  );
+  const handleConnect = useCallback(
+    (event: MouseEvent<HTMLButtonElement>) => {
+      const id = event.currentTarget.value || undefined;
+      background(() => connect(id));
+    },
+    [connect],
+  );
   if (!snapshot) {
     return (
-      <>
-        <h1>Seu Caderninho.</h1>
-        <p role="status">
-          {load.kind === LoadStatus.loading
-            ? "Abrindo seu painel…"
-            : "Não foi possível abrir o painel."}
-        </p>
-        {load.kind === LoadStatus.failed && load.session ? (
-          <a href="/account/login">Entrar novamente</a>
-        ) : (
-          <Action onClick={actions.refresh}>Tentar novamente</Action>
-        )}
-      </>
+      <p role="status">
+        {message || "Carregando sua instalação…"}{" "}
+        <a href="/account/login">Entrar novamente</a>
+      </p>
     );
   }
-  const { status: state } = snapshot,
-    sync = SYNC_PRESENTATION[snapshot.panel.sync];
   return (
     <>
-      <h1>Seu Caderninho.</h1>
-      <p className="instance">{snapshot.origin}</p>
-      <div className="setup-layout">
-        <nav aria-label="Configuração">
-          {labels.map((label, index) => (
-            <button
-              aria-current={step === index + 1 ? "step" : undefined}
-              key={label}
-              onClick={selectStep}
-              type="button"
-              value={index + 1}
-            >
-              {index + 1}. {label}
-            </button>
-          ))}
-        </nav>
-        <section>
-          <h2
-            ref={heading}
-            tabIndex={-1}
-          >
-            {labels[step - 1]}
-          </h2>
-          {step === 1 ? (
-            <>
-              <p>
-                Conecte seus bancos em{" "}
-                <a
-                  href="https://meu.pluggy.ai/"
-                  rel="noreferrer"
-                  target="_blank"
-                >
-                  Meu Pluggy
-                </a>
-                . Depois, importe suas conexões aqui.
-              </p>
-              {state.credentials ? (
-                <Action
-                  disabled={busy}
-                  onClick={connect}
-                >
-                  Abrir Meu Pluggy
-                </Action>
-              ) : (
-                <p role="alert">
-                  Configure PLUGGY_CLIENT_ID e PLUGGY_CLIENT_SECRET nos secrets
-                  deste Worker na sua Cloudflare.
-                </p>
-              )}
-              {state.connected ? (
-                <>
-                  <h3>{sync.title}</h3>
-                  <p>{sync.detail}</p>
-                  <p>
-                    Cobertura: {state.coverage.complete} de{" "}
-                    {state.coverage.total} recursos.
-                  </p>
-                  <Action onClick={connectAssistant}>
-                    Conectar meu assistente
-                  </Action>
-                </>
-              ) : null}
-            </>
-          ) : (
-            <>
-              <p>
-                Adicione este endereço como servidor MCP no ChatGPT ou Claude.
-                Entre com sua senha e confirme a autorização nesta instalação.
-              </p>
-              <label htmlFor="mcp-url">Endereço do seu MCP</label>
-              <Input
-                id="mcp-url"
-                readOnly
-                value={`${snapshot.origin}/mcp`}
-              />
-              <Action onClick={copyAddress}>Copiar endereço</Action>
-              <details>
-                <summary>Conectar no ChatGPT</summary>
-                <p>
-                  Nas configurações de apps/conectores, adicione um servidor MCP
-                  remoto com este endereço e autenticação OAuth.
-                </p>
-              </details>
-              <details>
-                <summary>Conectar no Claude</summary>
-                <p>
-                  Em Configurações → Conectores, adicione um conector
-                  personalizado com este endereço e autenticação OAuth.
-                </p>
-              </details>
-              <label htmlFor="first-question">Primeira consulta</label>
-              <textarea
-                id="first-question"
-                readOnly
-                value={firstQuestion}
-              />
-              <Action onClick={copyQuestion}>Copiar primeira pergunta</Action>
-              <p>
-                Confira a resposta no seu assistente para confirmar a conexão e
-                a cobertura dos dados.
-              </p>
-            </>
-          )}
-          <p role="status">{verificationMessage(load, snapshot.checkedAt)}</p>
-          {load.kind === LoadStatus.failed && load.session && (
-            <a href="/account/login">Entrar novamente</a>
-          )}
-          <p role="status">{message}</p>
-        </section>
-      </div>
-      <details>
-        <summary>Manutenção</summary>
-        {snapshot.items.map((item) => (
-          <p key={item.id}>
-            <code>{item.id}</code>
-            <Action
-              disabled={busy}
-              onClick={reconnect}
-              value={item.id}
-            >
-              Reconectar
-            </Action>
+      <h1>Seu Caderninho</h1>
+      <p>Contas e transações na sua Cloudflare.</p>
+      <p
+        aria-live="polite"
+        role="status"
+      >
+        {message}
+      </p>
+      <section aria-labelledby="connections-heading">
+        <h2 id="connections-heading">1. Conecte e importe</h2>
+        {!snapshot.configured && (
+          <p className="notice">
+            Configure PLUGGY_CLIENT_ID e PLUGGY_CLIENT_SECRET nos secrets do
+            Worker para conectar.
           </p>
-        ))}
-        <Action
-          disabled={busy}
-          onClick={actions.requestSync}
+        )}
+        <UiButton
+          disabled={busy || !snapshot.configured}
+          onClick={handleConnect}
+          type="button"
         >
-          Sincronizar agora
-        </Action>
-        <p>
-          Próxima tentativa automática:{" "}
-          {snapshot.freshness?.nextAutomaticAt ?? "09:00 UTC diariamente"}.
-        </p>
-        {snapshot.freshness?.items.map((item) => (
-          <p key={item.id}>
-            <code>{item.id}</code>:{" "}
-            {item.status ? admissionLabels[item.status] : "Estado indisponível"}
-            . Última importação {item.lastImportAt ?? "ainda não concluída"}.
-            próxima elegibilidade {item.nextEligibleAt ?? "imediata"}.
-          </p>
-        ))}
-        {snapshot.localApplications?.map((application) => (
-          <p key={application.operationId}>
-            Reaplicação parcial: {application.totalProcessed} transações
-            confirmadas. Solicite a continuação pelo assistente; fechar este
-            painel mantém os lotes já aplicados.
-          </p>
-        ))}
-        <Action
-          disabled={busy}
-          onClick={state.paused ? actions.resumeSync : actions.pauseSync}
+          Conectar Meu Pluggy
+        </UiButton>
+        <UiButton
+          disabled={busy || !snapshot.connections.length}
+          onClick={handleCommand}
+          type="button"
+          value="sync"
         >
-          {state.paused ? "Retomar sincronização" : "Pausar sincronização"}
-        </Action>
-        <p>
-          A cópia é atualizada diariamente, com reconciliação semanal. Pausar
-          preserva o histórico e deixa operações iniciadas terminarem. Pedidos
-          manuais compartilham o intervalo mínimo de 24 horas por conexão. A
-          agenda roda às 09:00 UTC. Uma importação manual pode fazer o próximo
-          horário automático pular um dia. Sincronizar agora também retoma
-          despachos pendentes.
-        </p>
-        <Action
-          disabled={busy}
-          onClick={actions.disconnectAssistants}
-        >
-          Desconectar assistentes
-        </Action>
-        <p>
-          Para conectar novamente, refaça a autorização OAuth pelo assistente.
-        </p>
-        <Action
-          disabled={busy}
-          onClick={actions.logout}
-        >
-          Sair
-        </Action>
-      </details>
-      <details>
-        <summary>Diagnóstico</summary>
+          Importar agora
+        </UiButton>
+        {!snapshot.connections.length && (
+          <p>Nenhuma conexão. Conecte seu Meu Pluggy para começar.</p>
+        )}
         <ul>
-          {Object.entries(snapshot.checks).map(([name, ready]) => (
-            <li key={name}>
-              {checkLabel(name)}: {ready ? "Configurado" : "Requer atenção"}
+          {snapshot.connections.map((connection) => (
+            <li key={connection.id}>
+              <strong>{connection.name}</strong> · {connection.status}
+              <br />
+              Próxima elegibilidade: {timestamp(connection.nextImportAt)}{" "}
+              <UiButton
+                disabled={busy}
+                onClick={handleConnect}
+                type="button"
+                value={connection.id}
+              >
+                Reconectar
+              </UiButton>
+            </li>
+          ))}
+        </ul>
+        <ul>
+          {snapshot.runs.slice(0, 10).map((run) => (
+            <li key={run.id}>
+              {runLabels[run.status]} · {run.records} registros ·{" "}
+              {timestamp(run.updatedAt)}
+              {!!run.error &&
+                ". Confira a conexão e aguarde a próxima elegibilidade."}
+            </li>
+          ))}
+        </ul>
+        <ul>
+          {snapshot.accounts.map((account) => (
+            <li key={JSON.stringify([account.connectionId, account.id])}>
+              <strong>{account.name}</strong> ({account.type},{" "}
+              {account.currency})<br />
+              {collectionLabels[account.collectionStatus]}
+              <br />
+              Última coleta: {timestamp(account.lastSuccessAt)}
             </li>
           ))}
         </ul>
         <p>
-          A configuração dos recursos não comprova sua execução nem a conexão do
-          assistente.
+          A origem pode oferecer apenas parte do histórico. Saldo de cartão não
+          é patrimônio disponível.
         </p>
-        <textarea
-          aria-label="Diagnóstico seguro"
-          readOnly
-          value={diagnostic}
-        />
-        <Action onClick={copyDiagnostic}>Copiar diagnóstico</Action>
-        <Action onClick={actions.refresh}>Verificar novamente</Action>
-      </details>
-      <details>
-        <summary>Onde seus dados ficam</summary>
+      </section>
+      <section aria-labelledby="assistant-heading">
+        <h2 id="assistant-heading">2. Autorize seu assistente</h2>
         <p>
-          As credenciais Pluggy ficam nos secrets do seu Worker. O histórico
-          financeiro fica no D1 da sua Cloudflare. As consultas autorizadas são
-          enviadas ao serviço do seu assistente.
+          Adicione esta URL como conector MCP e aprove o acesso no Caderninho:
         </p>
-      </details>
+        <code>{snapshot.origin}/mcp</code>
+        <p>
+          Consulte contas, transações e totais. Autorize cada assistente com seu
+          OAuth pessoal.
+        </p>
+      </section>
+      <section aria-labelledby="maintenance-heading">
+        <h2 id="maintenance-heading">3. Mantenha seu acesso</h2>
+        <p>
+          {snapshot.enabled
+            ? "Importação diária habilitada. A pausa impede novas importações."
+            : "Novas importações estão pausadas."}{" "}
+          Importações já iniciadas continuam.
+        </p>
+        <UiButton
+          disabled={busy}
+          onClick={handleCommand}
+          type="button"
+          value={snapshot.enabled ? "pause" : "resume"}
+        >
+          {snapshot.enabled ? "Pausar importações" : "Retomar importações"}
+        </UiButton>
+        <UiButton
+          disabled={busy}
+          onClick={handleCommand}
+          type="button"
+          value="disconnect-assistants"
+        >
+          Revogar todos os assistentes
+        </UiButton>
+        <UiButton
+          disabled={busy}
+          onClick={handleCommand}
+          type="button"
+          value="logout"
+        >
+          Sair
+        </UiButton>
+      </section>
     </>
   );
 }
 
-function checkLabel(name: string) {
-  switch (name) {
-    case "database":
-      return "Banco";
-    case "workflow":
-      return "Importação";
-    case "oauth":
-      return "OAuth";
-    default:
-      return "Estrutura do banco";
-  }
-}
-
-function verificationMessage(load: LoadState, checkedAt: string) {
-  if (load.kind !== LoadStatus.failed) {
-    return `Verificado em ${checkedAt}`;
-  }
-  if (load.session) {
-    return "Sua sessão expirou. Entre novamente.";
-  }
-  return `Verificação indisponível. Último estado confirmado em ${checkedAt}`;
+// Browser callbacks have no awaiting caller; unexpected teardown failures are best effort.
+function background(operation: () => Promise<void>) {
+  tryCatch(operation).then(
+    ({ data, error }) => (error ? undefined : data),
+    () => undefined,
+  );
 }

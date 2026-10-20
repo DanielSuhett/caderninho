@@ -1,181 +1,62 @@
+import type { AccountInfo } from "../../../contracts";
 import type {
-  Aggregate,
+  AggregateQuery,
   Cursor,
-  Identity,
-  PreviewInput,
-  Query,
-  SubscriptionInput,
-} from "../../../contracts";
-import type {
-  EntityChange,
-  FinanceRecord,
-  ItemAdmission,
-  metricFor,
-  ProviderRecord,
-  projectEntity,
-  RecordChange,
-  Resource,
+  TransactionCorrection,
+  TransactionProjection,
+  TransactionQuery,
 } from "../../../domain";
-import type { Derived, RuleEngine, Rules } from "../../../domain/rules";
-import type {
-  coverage,
-  effective_entities,
-  items,
-  operations,
-  overrides,
-  rule_sets,
-  tags,
-} from "../../schema";
 
-export type EffectiveEntity = typeof effective_entities.$inferSelect;
-export type SerializedEntity = Omit<
-  EffectiveEntity,
-  "source" | "normalized" | "evidence"
-> & { source: string; normalized: string; evidence: string | null };
-export type QueryCoverage = {
-  itemId: string;
-  coverage: (
-    | Pick<
-        typeof coverage.$inferSelect,
-        | "resource"
-        | "parent_id"
-        | "status"
-        | "bootstrap_complete"
-        | "observed_at"
-      >
-    | {
-        resource: Resource;
-        status: "not_synced";
-        bootstrap_complete: number;
-      }
-  )[];
-}[];
-export interface FinancialRepository {
-  aggregate: (input: Aggregate) => Promise<{
-    revision: number;
-    coverage: QueryCoverage;
-    metric: string;
-    definition: ReturnType<typeof metricFor> | null;
-    groups: {
-      currency: string | null;
-      count: string;
-      known: string;
-      totalMinor: string | null;
-      partial: boolean;
-    }[];
-  }>;
-  correct: (
-    identity: Identity,
-    change: RecordChange,
-  ) => Promise<{ updated: true }>;
-  explain: (identity: Identity) => Promise<{
-    tags: Pick<typeof tags.$inferSelect, "key" | "value" | "origin">[];
-    record: SerializedEntity | null;
-    overrides: Pick<typeof overrides.$inferSelect, "field" | "value">[];
-  }>;
-  preview: (input: PreviewInput, before: number) => Promise<PreviewSelection>;
-  query: (input: Query) => Promise<{
-    revision: number;
-    coverage: QueryCoverage;
-    records: (SerializedEntity & { effective_tags: string })[];
-    cursor: Cursor | null;
-  }>;
-  readStatus: () => Promise<{
-    schedule?: { paused: boolean; nextAutomaticAt: string } | undefined;
-    freshness?: ItemAdmission[] | undefined;
-    items: (typeof items.$inferSelect)[];
-    coverage: (typeof coverage.$inferSelect)[];
-    operations: (Pick<
-      typeof operations.$inferSelect,
-      | "id"
-      | "status"
-      | "phase"
-      | "created_at"
-      | "dispatched"
-      | "kind"
-      | "execution_mode"
-    > & { progress: string })[];
-    backlog: { pending: number } | undefined;
-    limitation: string;
-  }>;
-  revision: () => Promise<number>;
-  rules: (revision: string) => Promise<RuleEngine>;
-  subscriptions: (
-    input: SubscriptionInput,
-  ) => Promise<{ before: number; records: FinanceRecord[] }>;
-}
-export interface PreviewSelection {
-  before: number;
-  sample: {
-    id: string;
-    normalized: FinanceRecord;
-    effective_category: string | null;
-    effective_description: string | null;
-  }[];
-  total: number;
-}
-export interface RuleActions {
-  activate: (
-    revision: string,
-  ) => Promise<{ activated: string; historicalReclassification: boolean }>;
-  list: () => Promise<
-    Pick<typeof rule_sets.$inferSelect, "id" | "created_at" | "normalizer">[]
-  >;
-  onValidationFailure?: (error: Error) => void;
-  read: (
-    revision: string,
-  ) => Promise<(typeof rule_sets.$inferSelect)["document"]>;
-  save: (
-    document: Rules,
-    activate?: boolean,
-  ) => Promise<{ id: string; rules: number; activated: boolean }>;
-}
-
-export interface EntityObservation {
-  identity: Identity;
+export interface TransactionView extends Omit<TransactionProjection, "source"> {
+  categoryOverride: string | null;
+  correctedAt: string | null;
+  descriptionOverride: string | null;
+  effectiveCategory: string | null;
+  effectiveDescription: string;
+  ignored: boolean;
+  ignoredOverride: boolean | null;
   observedAt: string;
-  operationId: string;
-  source: ProviderRecord;
+  presence: "observed" | "not_observed";
 }
-export interface EntityPublication extends EntityObservation {
-  derived: Derived | undefined;
-  digest: string;
-  normalizer: string;
-  projection: ReturnType<typeof projectEntity>;
-  rulesRevision: string;
+export interface Quality {
+  accounts: AccountInfo[];
+  partial: boolean;
 }
-export type EntityMutation =
-  | { kind: "observe"; value: EntityObservation }
-  | { kind: "save"; value: EntityPublication };
-export interface PreparedEntity {
-  classified: number;
-  mutation: EntityMutation;
-  seenInOperation: boolean;
-  state: (typeof EntityChange)[keyof typeof EntityChange];
-}
-export interface EntityReader {
-  read: (identity: Identity) => Promise<
-    | {
-        relevant_hash: string;
-        deleted: number;
-        seen_operation: string | null;
-      }
-    | undefined
-  >;
-}
-export interface EntityInput {
-  identity: Identity;
-  legacyProjection?: FinanceRecord;
-  observedAt: string;
-  operationId: string;
-  parent: FinanceRecord | undefined;
+export interface QueryResult extends Quality {
+  cursor: Cursor | null;
+  records: TransactionView[];
   referenceDay: string;
-  renormalize: boolean;
-  rulesRevision: string;
-  source: ProviderRecord;
+  revision: number;
 }
-export interface EntityPreparation {
-  evaluate: RuleEngine["evaluate"];
-  hash: (value: unknown) => Promise<string>;
-  repository: EntityReader;
+export interface AggregateGroup {
+  count: string;
+  currency: string;
+  group: string | null;
+  known: string;
+  totalMinor: string | null;
+  unclassifiedDebitMinor: string | null;
+  unconfirmed: string;
+}
+export interface AggregateResult extends Quality {
+  definition: string;
+  groups: AggregateGroup[];
+  metric: AggregateQuery["metric"];
+  referenceDay: string;
+  revision: number;
+}
+export interface FinancialRepository {
+  accounts: (ids?: string[]) => Promise<AccountInfo[]>;
+  aggregate: (
+    input: AggregateQuery,
+    referenceDay: string,
+  ) => Promise<AggregateResult>;
+  correct: (
+    input: TransactionCorrection,
+    now: string,
+  ) => Promise<TransactionView>;
+  query: (
+    input: TransactionQuery,
+    scope: string,
+    referenceDay: string,
+  ) => Promise<QueryResult>;
 }

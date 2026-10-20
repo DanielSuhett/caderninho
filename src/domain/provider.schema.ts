@@ -1,73 +1,60 @@
 import { z } from "zod/v4";
 
-import type { Credentials, ProviderRecord } from "./provider.entity";
+import type {
+  Credentials,
+  ProviderAccount,
+  ProviderConnection,
+  ProviderTransaction,
+} from "./provider.entity";
 
-const MoneyInputSchema = z.union([z.string(), z.number()]).nullish();
-
-const text = z.string().nullish();
-const scalar = z.union([z.string(), z.number(), z.boolean()]).nullish();
-// Provider payloads enter here before any field is trusted. Unknown keys are
-// retained for the allowlisted provider-field projection, never cast to a model.
+const money = z.union([z.string(), z.number()]);
 const participant = z
-  .object({ documentNumber: z.object({ value: text }).nullish(), name: text })
-  .loose();
-
-export const ProviderRecordSchema = z
   .object({
-    accountId: text,
-    amount: MoneyInputSchema,
-    automaticallyInvestedBalance: MoneyInputSchema,
-    availableBalance: MoneyInputSchema,
-    balance: MoneyInputSchema,
-    category: text,
-    categoryId: text,
-    connector: z
-      .object({
-        id: scalar,
-        isOpenFinance: z.boolean().nullish(),
-        isSandbox: z.boolean().nullish(),
-        name: text,
-        products: z.array(z.string()).nullish(),
-      })
-      .loose()
-      .nullish(),
-    consentExpiresAt: text,
-    createdAt: text,
-    creditCardMetadata: z.object({ billId: text }).loose().nullish(),
-    currencyCode: text,
-    date: text,
-    description: text,
-    executionStatus: text,
-    id: z.union([z.string(), z.number()]).nullish(),
-    investmentId: text,
-    itemId: text,
-    lastUpdatedAt: text,
-    merchant: z.object({ name: text }).loose().nullish(),
-    name: text,
-    operationType: text,
+    documentNumber: z.object({ value: z.string().nullish() }).nullish(),
+  })
+  .loose();
+export const PluggyCredentialsSchema = z.object({
+  clientId: z.string().min(1),
+  clientSecret: z.string().min(1),
+}) satisfies z.ZodType<Credentials>;
+export const ProviderConnectionSchema = z.object({
+  connector: z.object({ id: money, name: z.string().optional() }).optional(),
+  id: z.string(),
+  status: z.string().optional(),
+}) satisfies z.ZodType<ProviderConnection>;
+export const ProviderAccountSchema = z
+  .object({
+    balance: money.nullish(),
+    currencyCode: z.string().min(1),
+    id: z.string().min(1),
+    itemId: z.string().min(1),
+    name: z.string(),
+    taxNumber: z.string().nullish(),
+    type: z.enum(["BANK", "CREDIT"]),
+    updatedAt: z.string().nullish(),
+  })
+  .catchall(z.json()) satisfies z.ZodType<ProviderAccount>;
+export const ProviderTransactionSchema = z
+  .object({
+    accountId: z.string().min(1),
+    amount: money.nullable(),
+    category: z.string().nullish(),
+    currencyCode: z.string().min(1),
+    date: z.string().min(10),
+    description: z.string(),
+    id: z.string().min(1),
+    merchant: z.object({ name: z.string().nullish() }).loose().nullish(),
+    operationType: z.string().nullish(),
     paymentData: z
       .object({
         payer: participant.nullish(),
-        paymentMethod: text,
+        paymentMethod: z.string().nullish(),
         receiver: participant.nullish(),
       })
       .loose()
       .nullish(),
-    products: z.array(z.string()).nullish(),
-    resourceId: text,
-    resourcesCollectedAt: z.json().nullish(),
-    status: text,
-    taxNumber: text,
-    type: text,
-    updateDateTime: text,
-    updatedAt: text,
-    url: text,
+    status: z.enum(["PENDING", "POSTED"]).default("POSTED"),
+    type: z.enum(["DEBIT", "CREDIT"]),
+    updatedAt: z.string().nullish(),
   })
-  .loose() satisfies z.ZodType<ProviderRecord>;
-
-export const PluggyCredentialsSchema = z
-  .object({
-    clientId: z.string().trim().min(1).max(256),
-    clientSecret: z.string().min(1).max(1024),
-  })
-  .strict() satisfies z.ZodType<Credentials>;
+  .catchall(z.json()) satisfies z.ZodType<ProviderTransaction>;

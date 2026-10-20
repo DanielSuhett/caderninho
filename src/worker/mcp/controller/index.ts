@@ -1,552 +1,156 @@
 import {
   createMcpHandler,
-  readRequestBody,
   Server,
   specTypeSchemas,
 } from "@modelcontextprotocol/server";
 import { CfWorkerJsonSchemaValidator } from "@modelcontextprotocol/server/validators/cf-worker";
-import { Hono } from "hono";
 import { z } from "zod/v4";
 
 import {
-  LongInput,
-  type LongOperationKind,
-  OperationKind,
+  AggregateQuerySchema,
+  ConnectionSelectionSchema,
+  CorrectionSchema,
   PRODUCT_INSTRUCTIONS,
-  ReapplicationInputSchema,
-  RuleImportMode,
+  StatusInputSchema,
   ToolName,
+  TransactionQuerySchema,
   tools,
 } from "../../../contracts";
-import { RulesSchema } from "../../../domain/rules";
-import { parseJson, tryCatch } from "../../../shared";
+import { tryCatch } from "../../../shared";
 import type { Bindings } from "../../bindings";
 import {
-  financialQueries,
-  reapplyRules,
-  ruleActions,
+  financialService,
+  installationService,
   syncService,
 } from "../../composition";
-import { importRuleDocument } from "../../finance";
-import { boundedJson } from "../../http";
 import {
-  captureObservation,
+  classifyFailure,
   DiagnosticEvent,
   markFailure,
-  type ObservedSpan,
+  Outcome,
   observeSpan,
-  Recovery,
   reportDiagnostic,
-  type SafeFields,
   SpanName,
 } from "../../observability";
-import { migrationHttp } from "../../sync/controller";
-import { invoke } from "../invoke";
-import type { Envelope } from "../protocol.types";
-import {
-  cancel,
-  EXTENSION,
-  listen,
-  negotiated,
-  TaskParams,
-  task,
-  UpdateParams,
-  validateSubscriptionWire,
-  validateTaskWire,
-} from "../tasks";
 import { streamMcpResponse } from "./response";
 
-const EnvelopeSchema = z.object({
-  id: z.union([z.string(), z.number()]).optional(),
-  jsonrpc: z.literal("2.0"),
-  method: z.string(),
-  params: z.record(z.string(), z.json()).optional(),
-}) satisfies z.ZodType<Envelope>;
-const longKinds = new Map<string, LongOperationKind>([
-  [ToolName.sync, OperationKind.sync],
-  [ToolName.reconcile, OperationKind.reconcile],
-  [ToolName.reapply, OperationKind.reapply],
-]);
-const toolActions = new Map<string, NonNullable<SafeFields["action"]>>([
-  [ToolName.aggregate, "aggregate"],
-  [ToolName.explain, "explain"],
-  [ToolName.get_subscriptions, "subscriptions"],
-  [ToolName.live_balance, "live_balance"],
-  [ToolName.override, "correct"],
-  [ToolName.preview, "preview"],
-  [ToolName.query, "query"],
-  [ToolName.reapply, "reapply"],
-  [ToolName.reconcile, "reconcile"],
-  [ToolName.rules, "rules"],
-  [ToolName.setup_status, "setup_status"],
-  [ToolName.status, "status"],
-  [ToolName.sync, "sync"],
-]);
-const taskActions = new Map<string, NonNullable<SafeFields["action"]>>([
-  ["tasks/get", "tasks_get"],
-  ["tasks/cancel", "tasks_cancel"],
-  ["tasks/update", "tasks_update"],
-  ["subscriptions/listen", "subscriptions_listen"],
-]);
-function messageAction(message: Envelope): NonNullable<SafeFields["action"]> {
-  if (message.method === "tools/list") {
-    return "tools_list";
-  }
-  if (
-    message.method === "tools/call" &&
-    typeof message.params?.name === "string"
-  ) {
-    return toolActions.get(message.params.name) ?? "unknown";
-  }
-  return taskActions.get(message.method) ?? "unknown";
-}
-// The catalog is controlled code. Adapt it to the SDK once per isolate,
-// instead of validating the same declarations on every tools/list request.
 const catalog = tools.map((tool) => {
-  const validated = specTypeSchemas.Tool["~standard"].validate(tool);
-  if (validated.issues) {
+  const result = specTypeSchemas.Tool["~standard"].validate(tool);
+  if (result.issues) {
     throw new Error("INVALID_TOOL_SCHEMA");
   }
-  return validated.value;
+  return result.value;
 });
-export async function fetchMcp(
-  request: Request,
-  env: Bindings,
-  ctx?: ExecutionContext,
-) {
-  const routes = new Hono<{ Bindings: Bindings }>();
-  routes.onError((error) => {
-    throw error;
-  });
-  routes.post("/mcp/rules/import", (c) => importHttp(c.req.raw, c.env));
-  routes.post("/mcp/migration", (c) => migrationHttp(c.req.raw, c.env));
-  routes.all("*", (c) => fetchTransport(c.req.raw, c.env, ctx));
-  return await routes.fetch(request, env);
-}
-async function fetchTransport(
-  request: Request,
-  env: Bindings,
-  ctx?: ExecutionContext,
-) {
-  let text: string | undefined;
-  let streamAction: NonNullable<SafeFields["action"]> = "unknown";
-  if (request.method === "POST") {
-    const body = await readMcpBody(request);
-    if (body instanceof Response) {
-      return body;
+async function invoke(env: Bindings, name: string, args: unknown) {
+  const finance = financialService(env);
+  switch (name) {
+    case ToolName.status: {
+      const input = StatusInputSchema.parse(args);
+      const installation = installationService(env);
+      return {
+        configured: installation.configured,
+        ...(await installation.state(input)),
+      };
     }
-    text = body;
-    const m = readEnvelope(body);
-    if (m) {
-      streamAction = messageAction(m);
-      const taskResponse = routeTaskRequest({ ctx, env, m, request });
-      if (taskResponse !== undefined) {
-        return taskResponse;
-      }
+    case ToolName.sync: {
+      const input = ConnectionSelectionSchema.parse(args);
+      const sync = syncService(env);
+      await sync.recover();
+      return sync.request(input.connectionIds);
     }
+    case ToolName.accounts:
+      return finance.accounts(
+        ConnectionSelectionSchema.parse(args).connectionIds,
+      );
+    case ToolName.transactions:
+      return finance.query(TransactionQuerySchema.parse(args));
+    case ToolName.aggregate:
+      return finance.aggregate(AggregateQuerySchema.parse(args));
+    case ToolName.correct:
+      return finance.correct(CorrectionSchema.parse(args));
+    default:
+      throw new Error("UNKNOWN_TOOL");
   }
-  const handler = createMcpHandler(() => createToolServer(env), {
-    keepAliveMs: 0,
-    legacy: "stateless",
-    maxRequestBodySize: 32_768,
-    responseMode: "auto",
-  });
-  const req =
-    text === undefined
-      ? request
-      : new Request(request.url, {
-          body: text,
-          headers: request.headers,
-          method: request.method,
-          signal: request.signal,
-        });
-  const { data, error } = await tryCatch(() => handler.fetch(req));
+}
+const safeErrors = new Set([
+  "NOT_FOUND",
+  "RESTART_REQUIRED",
+  "CURSOR_SCOPE_MISMATCH",
+  "UNKNOWN_TOOL",
+]);
+export async function fetchMcp(request: Request, env: Bindings) {
+  const handler = createMcpHandler(
+    () => {
+      const server = new Server(
+        { name: "Caderninho", version: "0.4.0" },
+        {
+          capabilities: { tools: {} },
+          instructions: PRODUCT_INSTRUCTIONS,
+          jsonSchemaValidator: new CfWorkerJsonSchemaValidator(),
+        },
+      );
+      server.setRequestHandler("tools/list", async () => ({ tools: catalog }));
+      server.setRequestHandler("tools/call", (r) => {
+        const action =
+          tools.find((tool) => tool.name === r.params.name)?.name ?? "unknown";
+        return observeSpan(
+          SpanName.mcpCall,
+          async (span) => {
+            const { data, error } = await tryCatch(() =>
+              invoke(env, r.params.name, r.params.arguments ?? {}),
+            );
+            if (error) {
+              markFailure(error, { phase: SpanName.mcpCall });
+              span.annotate({ failure: classifyFailure(error) });
+            }
+            reportDiagnostic({
+              action,
+              event: DiagnosticEvent.mcp,
+              ...(!error && { outcome: Outcome.success }),
+            });
+            const payload = error ? { error: publicError(error) } : data;
+            return {
+              content: [{ text: JSON.stringify(payload), type: "text" }],
+              isError: !!error,
+            };
+          },
+          { action },
+        );
+      });
+      return server;
+    },
+    {
+      keepAliveMs: 0,
+      legacy: "stateless",
+      maxRequestBodySize: 32_768,
+      responseMode: "auto",
+    },
+  );
+  const { data: response, error } = await tryCatch(() =>
+    handler.fetch(request),
+  );
   if (error) {
     await handler.close();
     throw error;
   }
-  const response = data;
   if (!response.body) {
     await handler.close();
     return response;
   }
   return streamMcpResponse({
-    action: streamAction,
+    action: "unknown",
     close: () => handler.close(),
     response,
     signal: request.signal,
-    ...(ctx && {
-      keepAlive: (lifetime: Promise<void>) => ctx.waitUntil(lifetime),
-    }),
   });
 }
 
-function readEnvelope(body: string) {
-  let message: unknown;
-  try {
-    message = parseJson(body);
-  } catch {
-    return;
+function publicError(error: Error) {
+  if (safeErrors.has(error.message)) {
+    return error.message;
   }
-  const parsed = EnvelopeSchema.safeParse(message);
-  return parsed.success ? parsed.data : undefined;
-}
-
-function routeTaskRequest({
-  ctx,
-  env,
-  m,
-  request,
-}: {
-  ctx: ExecutionContext | undefined;
-  env: Bindings;
-  m: Envelope;
-  request: Request;
-}) {
-  const params = m.params ?? {};
-  let kind: LongOperationKind | undefined;
-  const action = messageAction(m);
-  if (m.method === "tools/call" && typeof params.name === "string") {
-    kind = longKinds.get(params.name);
+  if (error instanceof z.ZodError) {
+    return "INVALID_REQUEST";
   }
-  if (
-    !(kind || m.method.startsWith("tasks/")) &&
-    m.method !== "subscriptions/listen"
-  ) {
-    return;
-  }
-  return observeSpan(
-    SpanName.mcpCall,
-    (span) =>
-      handleTaskRequest({ action, ctx, env, kind, m, params, request, span }),
-    { action, ...(kind && { operationKind: kind }) },
-  );
-}
-
-function createToolServer(env: Bindings) {
-  const inRequest = captureObservation();
-  const server = new Server(
-    { name: "Caderninho", version: "0.4.0" },
-    {
-      capabilities: { extensions: { [EXTENSION]: {} }, tools: {} },
-      instructions: PRODUCT_INSTRUCTIONS,
-      jsonSchemaValidator: new CfWorkerJsonSchemaValidator(),
-    },
-  );
-  server.setRequestHandler("tools/list", () =>
-    inRequest(() =>
-      observeSpan(SpanName.mcpCall, () => ({ tools: catalog }), {
-        action: "tools_list",
-      }),
-    ),
-  );
-  server.setRequestHandler("tools/call", (r) =>
-    inRequest(() => {
-      const action = toolActions.get(r.params.name) ?? "unknown";
-      return observeSpan(
-        SpanName.mcpCall,
-        async (span) => {
-          const { data, error } = await tryCatch(() =>
-            invoke(
-              financialQueries(env),
-              r.params.name,
-              r.params.arguments ?? {},
-            ),
-          );
-          if (error) {
-            markFailure(error, {
-              phase: SpanName.mcpCall,
-              recovery: Recovery.none,
-            });
-            span.annotate(
-              reportDiagnostic({
-                action,
-                event: DiagnosticEvent.mcp,
-                phase: SpanName.mcpCall,
-                recovery: Recovery.none,
-              }),
-            );
-          }
-          const payload = error ? { error: error.message } : data;
-          return {
-            content: [{ text: JSON.stringify(payload), type: "text" }],
-            isError: !!error,
-            resultType: "complete",
-          };
-        },
-        { action },
-      );
-    }),
-  );
-  return server;
-}
-
-async function handleTaskRequest({
-  request,
-  env,
-  m,
-  params,
-  kind,
-  ctx,
-  action,
-  span,
-}: {
-  request: Request;
-  env: Bindings;
-  m: Envelope;
-  params: NonNullable<Envelope["params"]>;
-  kind: LongOperationKind | undefined;
-  ctx: ExecutionContext | undefined;
-  action: NonNullable<SafeFields["action"]>;
-  span: ObservedSpan;
-}) {
-  const response = (result: unknown) =>
-    Response.json(
-      { id: m.id, jsonrpc: "2.0", result },
-      { headers: { "Cache-Control": "no-store" } },
-    );
-  const failure = ({
-    code,
-    message,
-    details,
-    error: requestError = new Error("INVALID_REQUEST"),
-  }: {
-    code: number;
-    message: string;
-    details?: unknown;
-    error?: Error;
-  }) => {
-    markFailure(requestError, {
-      phase: SpanName.mcpCall,
-      recovery: Recovery.none,
-    });
-    span.annotate(
-      reportDiagnostic({
-        action,
-        event: DiagnosticEvent.mcp,
-        phase: SpanName.mcpCall,
-        recovery: Recovery.none,
-      }),
-    );
-    return Response.json(
-      {
-        error: { code, message, ...(!!details && { data: details }) },
-        id: m.id ?? null,
-        jsonrpc: "2.0",
-      },
-      { headers: { "Cache-Control": "no-store" } },
-    );
-  };
-  if (m.id === undefined) {
-    return failure({ code: -32_600, message: "Request id required" });
-  }
-  if (request.headers.get("Mcp-Protocol-Version") !== "2026-07-28") {
-    return failure({
-      code: -32_600,
-      message: "Tasks require protocol 2026-07-28",
-    });
-  }
-  const expectedName = kind ? params.name : params.taskId;
-  if (
-    request.headers.get("Mcp-Method") !== m.method ||
-    (expectedName && request.headers.get("Mcp-Name") !== expectedName)
-  ) {
-    return failure({
-      code: -32_020,
-      message: "MCP routing headers disagree with request",
-    });
-  }
-  const version = z
-    .object({
-      "io.modelcontextprotocol/protocolVersion": z.literal("2026-07-28"),
-    })
-    .loose()
-    .safeParse(params._meta);
-  if (params._meta && !version.success) {
-    return failure({
-      code: -32_600,
-      message: "Protocol metadata must match routing version",
-    });
-  }
-  if (kind !== OperationKind.reapply && !negotiated(params)) {
-    return failure({
-      code: -32_021,
-      details: {
-        requiredCapabilities: { extensions: { [EXTENSION]: {} } },
-      },
-      message: "Missing required client capability",
-    });
-  }
-  const { data, error } = await tryCatch(async () => {
-    if (kind === OperationKind.reapply) {
-      return response(await localReapplication(env, params));
-    }
-    if (kind) {
-      const admitted = await createLongOperation(env, { kind, params });
-      if (!admitted.operation) {
-        return response({
-          content: [{ text: JSON.stringify(admitted), type: "text" }],
-          isError: false,
-          resultType: "complete",
-        });
-      }
-      return response(
-        validateTaskWire("CreateTaskResult", {
-          ...(await task(env, admitted.operation.id)),
-          resultType: "task",
-          statusMessage: JSON.stringify(admitted.items),
-        }),
-      );
-    }
-    if (m.method === "tasks/get") {
-      validateTaskWire("GetTaskRequest", m);
-      const a = TaskParams.parse(params);
-      return response(
-        validateTaskWire("GetTaskResult", {
-          ...(await task(env, a.taskId)),
-          resultType: "complete",
-        }),
-      );
-    }
-    if (m.method === "tasks/cancel") {
-      validateTaskWire("CancelTaskRequest", m);
-      const a = TaskParams.parse(params);
-      return response(
-        validateTaskWire("CancelTaskResult", await cancel(env, a.taskId)),
-      );
-    }
-    if (m.method === "tasks/update") {
-      validateTaskWire("UpdateTaskRequest", m);
-      const a = UpdateParams.parse(params);
-      await task(env, a.taskId);
-      return response(
-        validateTaskWire("UpdateTaskResult", {
-          resultType: "complete",
-        }),
-      );
-    }
-    if (m.method === "subscriptions/listen") {
-      validateSubscriptionWire("SubscriptionsListenRequest", m);
-      const a = z
-        .object({
-          notifications: z.object({ taskIds: z.array(z.string()) }),
-        })
-        .parse(params);
-      if (!request.headers.get("Accept")?.includes("text/event-stream")) {
-        return failure({ code: -32_600, message: "SSE Accept required" });
-      }
-      return listen(request, env, {
-        id: m.id ?? "",
-        ids: a.notifications.taskIds,
-        ...(ctx && {
-          keepAlive: (lifetime: Promise<void>) => ctx.waitUntil(lifetime),
-        }),
-      });
-    }
-    return failure({ code: -32_601, message: "Method not found" });
-  });
-  if (error) {
-    return failure({ code: -32_602, error, message: operationError(error) });
-  }
-  return data;
-}
-
-const operationErrors = new Set([
-  "IDEMPOTENCY_CONFLICT",
-  "REAPPLICATION_CONFLICT_START_NEW_REQUEST",
-  "REAPPLICATION_TOO_LARGE_USE_BATCHES",
-  "REAPPLICATION_SELECTION_CONFLICT",
-  "FINANCIAL_EXECUTOR_BUSY_RETRY_BATCH",
-  "REAPPLICATION_CANCELLED",
-  "RENORMALIZE_REQUIRES_RECONCILIATION",
-  "SYNC_FILTER_NOT_SUPPORTED_USE_ITEM_SCOPE",
-]);
-function operationError(error: Error) {
-  return operationErrors.has(error.message)
-    ? error.message
-    : "Invalid operation";
-}
-
-async function localReapplication(
-  env: Bindings,
-  params: NonNullable<Envelope["params"]>,
-) {
-  const input = ReapplicationInputSchema.parse(params.arguments);
-  const result = await reapplyRules(env)(input);
-  if (!negotiated(params)) {
-    return {
-      content: [{ text: JSON.stringify(result), type: "text" }],
-      isError: false,
-      resultType: "complete",
-    };
-  }
-  return validateTaskWire("CreateTaskResult", {
-    ...(await task(
-      env,
-      `${result.operationId}/batch/${input.continuation?.batch ?? 0}`,
-    )),
-    resultType: "task",
-  });
-}
-
-async function createLongOperation(
-  env: Bindings,
-  {
-    kind,
-    params,
-  }: {
-    kind: LongOperationKind;
-    params: NonNullable<Envelope["params"]>;
-  },
-) {
-  const args = LongInput.parse(params.arguments);
-  const admitted = await syncService(env).start(args.requestKey, {
-    itemIds: args.itemIds,
-    kind,
-    ...(args.renormalize && { renormalize: true }),
-    ...(args.filter && { filter: args.filter }),
-  });
-  // Durable outbox survives uncertain Workflow creation.
-  const op = admitted.operation;
-  if (!op) {
-    return admitted;
-  }
-  await tryCatch(() => syncService(env).dispatch(op)).then(({ data, error }) =>
-    error ? undefined : data,
-  );
-  return admitted;
-}
-
-const MAX_MCP_BODY_BYTES = 32_768;
-
-// Consume the original stream under the SDK's byte limit, before auth/JSON parsing.
-// Cloning first would leave an unbounded tee buffer for the unread branch.
-async function readMcpBody(request: Request): Promise<string | Response> {
-  const { data, error } = await tryCatch(() =>
-    readRequestBody(request, MAX_MCP_BODY_BYTES),
-  );
-
-  if (error) {
-    return new Response("Unreadable request body", { status: 400 });
-  }
-
-  if (data.tooLarge) {
-    return new Response("Request too large", { status: 413 });
-  }
-
-  return data.text;
-}
-
-async function importHttp(request: Request, env: Bindings) {
-  const a = z
-    .object({
-      catalog: RulesSchema.pick({ categories: true, groups: true }).optional(),
-      document: z.json(),
-      mode: z.enum(RuleImportMode).default(RuleImportMode.dry_run),
-    })
-    .strict()
-    .parse(await boundedJson(request, 1_048_576, true));
-  return Response.json(await importRuleDocument(ruleActions(env), a), {
-    headers: { "Cache-Control": "no-store" },
-  });
+  return "REQUEST_FAILED";
 }

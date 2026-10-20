@@ -30,13 +30,11 @@
     "big.js": "7.0.1",
     "drizzle-orm": "0.45.4",
     "hono": "4.13.13",
-    "json-rules-engine": "7.3.1",
     "ky": "2.2.0",
     "lossless-json": "4.3.1",
     "pino": "10.4.0",
     "pluggy-connect-sdk": "2.14.2",
     "pluggy-sdk": "0.92.0",
-    "re2js": "2.8.6",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "zod": "4.6.7"

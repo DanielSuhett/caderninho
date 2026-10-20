@@ -1,53 +1,99 @@
-# Usar seu Caderninho
+# Usar o Caderninho
 
-## Conectar os bancos
+Abra `/account`, entre com sua senha e escolha **Conectar Meu Pluggy**. Use a mesma
+aplicação Pluggy das suas conexões pessoais. Depois, escolha **Importar agora** e
+acompanhe o estado das contas no painel.
 
-Entre em `/account` com a senha escolhida no deploy. No passo **Conectar bancos**,
-abra Meu Pluggy e importe as conexões já cadastradas em [meu.pluggy.ai](https://meu.pluggy.ai/).
-O servidor confere a conexão antes de salvá-la; selecionar um banco no widget não
-substitui essa validação.
+## Importações
 
-A importação acontece em segundo plano. Pode fechar a página e retornar depois.
-Confira cobertura e eventuais falhas antes de usar totais financeiros. Dados
-parciais ou antigos continuam identificados; falha não significa saldo zero.
+O Caderninho relê as contas e transações disponíveis na origem. Uma coleta
+concluída significa que essa enumeração terminou; a instituição pode disponibilizar
+somente parte do histórico. Uma falha preserva páginas confirmadas e aparece como
+coleta parcial. Última coleta bem-sucedida e tentativa atual têm horários distintos.
 
-## Conectar o assistente
+Cada conexão só admite uma importação a cada 24 horas, contadas do pedido aceito,
+inclusive em falha. Pedido repetido reutiliza a execução ativa. A agenda diária
+roda às 09:00 UTC. **Próxima elegibilidade** informa quando uma nova importação
+pode ser admitida; não promete o horário exato da execução.
 
-No passo **Conectar assistente**, copie o endereço do MCP. Adicione um servidor
-remoto com OAuth nas configurações de conectores do seu ChatGPT ou Claude. Entre
-no Caderninho e confirme a autorização. Não informe sua senha ou credenciais
-Pluggy ao assistente.
+Use **Reconectar** quando a origem exigir uma nova autorização. Pausar impede
+novas importações; importações iniciadas continuam. Retomar habilita novos pedidos
+e a agenda. Consultar status não inicia trabalho.
 
-Copie a primeira pergunta sugerida pelo painel para conferir status e cobertura.
-Uma autorização OAuth, por si só, não comprova que o cliente executou uma consulta.
-O suporte aos recursos MCP depende do cliente e da versão utilizada.
+## Assistente
 
-## Manutenção
+Copie a URL `https://SEU-WORKER/mcp` exibida no painel, configure seu conector MCP
+e aprove o OAuth no Caderninho. Cada assistente recebe sua própria autorização.
+Há seis ferramentas:
 
-- **Sincronização:** a agenda importa diariamente e reconcilia semanalmente. O painel permite solicitar uma cópia manual, compartilhando a janela de 24 horas por conexão. O cron roda às 09:00 UTC; o botão também recupera despachos pendentes.
-- **Pausar:** interrompe próximos agendamentos. Preserva o histórico, as consultas locais e operações já iniciadas.
-- **Reconectar bancos:** use Reconectar na manutenção do painel para renovar uma conexão existente.
-- **Desconectar assistentes:** revoga todas as autorizações desta instalação. Para voltar a usar um cliente, autorize novamente. Isso não apaga mensagens já enviadas ao serviço de IA.
-- **Diagnóstico:** copie o diagnóstico seguro para pedir ajuda. Ele contém estados e contagens, sem credenciais ou dados financeiros.
+| Tool | Uso |
+| --- | --- |
+| `caderninho_status` | Configuração segura, contas e importações |
+| `caderninho_sync` | Pedir importação por conexões opcionais |
+| `caderninho_accounts` | Contas e saldos observados |
+| `caderninho_transactions` | Página filtrada de transações |
+| `caderninho_aggregate` | Totais exatos por moeda em toda a seleção |
+| `caderninho_correct_transaction` | Correções locais de categoria, descrição e ignorado |
 
-## Alterar senha ou credenciais
+Exemplo de agregado:
 
-Na sua Cloudflare, abra o Worker em **Settings → Variables and Secrets**. Edite o
-secret desejado e publique a alteração. A recuperação da senha troca somente
-`ADMIN_PASSWORD`; use de 16 a 256 caracteres. Após uma publicação, entre novamente.
+```json
+{
+  "metric": "debits",
+  "filter": { "from": "2026-10-01", "to": "2026-10-31", "currency": "BRL" },
+  "groupBy": "category"
+}
+```
 
-Para atualizar as credenciais Pluggy, altere `PLUGGY_CLIENT_ID` e
-`PLUGGY_CLIENT_SECRET` conforme a aplicação escolhida. As chamadas seguintes usam
-esses secrets, e o histórico importado continua no D1.
+`count` conta registros. `debits`/`credits` são magnitudes por direção da origem.
+`cash_flow` é o fluxo assinado de contas BANK. `known_spending` só inclui consumo
+com evidência suficiente e informa também débitos de natureza incerta.
+Pendentes, futuros e ignorados não entram nas métricas financeiras. Saldo de
+cartão não representa patrimônio disponível.
 
-## Dados e backups
+Valores em `amountMinor`/`totalMinor` são strings de unidades menores da moeda.
+Nunca some moedas diferentes nem use uma página para calcular o total do período.
+A resposta informa referência temporal e parcialidade. Um subtotal conhecido pode
+ser ausente quando não há registros confirmados; isso não equivale a zero.
 
-O histórico fica no D1 da sua Cloudflare; as credenciais ficam nos secrets do
-Worker e não entram no export SQL. O runtime precisa dessas credenciais para
-consultar a Pluggy. As respostas MCP são compartilhadas com o assistente autorizado.
+A origem pode substituir IDs ou reduzir a janela histórica. Registros antigos
+não encontrados ficam `not_observed`, sem remoção física. Eles continuam
+consultáveis, mas não são somados como valores confirmados junto dos novos IDs.
+Correções não são copiadas para outro ID por semelhança.
 
-Guarde exports D1 em armazenamento privado: eles contêm informações financeiras.
-O backup D1 não inclui secrets, autorizações KV nem o estado nativo dos Workflows.
-Confira a recuperação em infraestrutura isolada antes de substituir uma instalação.
+## Filtros e correções
 
-A [referência técnica](cloudflare-product.md) detalha cobertura, regras, Tasks e recuperação.
+Filtros aceitos: conexões, referências de contas, período, moeda, direção, status,
+categoria/descrição efetivas, ignorado, presença e faixa de valor em unidades
+menores. Uma faixa monetária exige moeda. Agrupamentos são conta, categoria ou mês.
+Campos desconhecidos são recusados. A página tem até 200 registros; o padrão é 50.
+
+Use o cursor retornado com os mesmos filtros. Se a revisão financeira mudar,
+reinicie a paginação; não misture páginas de revisões distintas.
+
+Uma correção identifica conexão, conta e transação:
+
+```json
+{
+  "connectionId": "item-da-origem",
+  "accountId": "conta-da-origem",
+  "id": "transacao-da-origem",
+  "patch": { "category": "Mercado", "description": "", "ignored": false }
+}
+```
+
+Campos omitidos não mudam. `null` remove aquela correção e restaura o valor da
+origem; `ignored=false` e descrição vazia são escolhas válidas. Importações futuras
+atualizam a origem e preservam as correções locais. Nada é escrito no banco ou
+cartão da instituição financeira.
+
+## Manutenção do acesso
+
+**Revogar todos os assistentes** remove seus grants OAuth. A sessão do painel
+continua válida; novos acessos MCP precisam de consentimento. **Sair** revoga a
+sessão atual. Ela também expira em oito horas ou quando um deploy muda a versão
+do Worker. Altere ADMIN_PASSWORD nos secrets para trocar a senha e publique uma
+nova versão para invalidar sessões existentes.
+
+A instalação desta versão exige um D1 novo. Deploys posteriores preservam o banco.
+O [guia técnico](cloudflare-product.md) descreve os recursos e a validação local.

@@ -1,11 +1,11 @@
 import { createRoot } from "react-dom/client";
 
-import { AccountView, useAccount } from "./account";
+import { AccountView } from "./account";
 
 import "./account.css";
 
 function Account() {
-  return <AccountView {...useAccount()} />;
+  return <AccountView />;
 }
 const root = document.getElementById("account-root");
 if (root) {

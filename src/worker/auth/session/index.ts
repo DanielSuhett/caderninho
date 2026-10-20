@@ -1,7 +1,7 @@
 import type { Context, Next } from "hono";
 import { getCookie, setCookie } from "hono/cookie";
 
-import { WizardIssue } from "../../../contracts";
+import { PortalIssue } from "../../../contracts";
 import type { Bindings } from "../../bindings";
 import { authService } from "../../composition";
 import type { PortalSession } from "../entity";
@@ -36,7 +36,7 @@ export async function sessionMiddleware(c: Context<PortalEnv>, next: Next) {
   const session = await readSession(c);
   if (!session) {
     return c.req.path.startsWith("/api/")
-      ? c.json({ issue: WizardIssue.session }, 401)
+      ? c.json({ issue: PortalIssue.session }, 401)
       : c.redirect("/account/login");
   }
   c.set("session", session);

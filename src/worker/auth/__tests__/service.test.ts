@@ -7,7 +7,6 @@ import type { AuthRepository } from "../entity";
 await test("authentication use case checks installation version before exposing a stored session", async () => {
   const reads: number[] = [];
   const repository: AuthRepository = {
-    allowLoginAttempt: async () => true,
     compact: () => Promise.resolve(),
     revokeSession: () => Promise.resolve(),
     saveSession: () => Promise.resolve(),

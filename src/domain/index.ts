@@ -1,124 +1,58 @@
 export {
-  AccountSyncOutcome,
-  accountState,
-  accountSyncOutcome,
-  WizardIssue,
-  type WizardState,
-  WizardSyncState,
-} from "./account.entity";
-export {
   assertConnectionCapacity,
   assertPersonalConnector,
+  MAX_PERSONAL_CONNECTIONS,
   PERSONAL_CONNECTOR_ID,
 } from "./connection.entity";
 export {
-  Availability,
-  CoverageStatus,
-  EntityChange,
+  AccountType,
+  Classification,
   FaultCode,
-  Resource,
-  TagOrigin,
+  PaymentMethod,
   TransactionStatus,
+  TransactionType,
 } from "./enums";
-export { ResourceSchema } from "./enums.schema";
 export {
   accountingDay,
   assertMinor,
   compareDecimal,
   decimal,
   exactJSON,
+  isMatureDate,
   localDay,
   minor,
 } from "./exact";
-export { Fault } from "./fault.entity";
-export { FilterSchema } from "./filter.schema";
-export {
-  assertEntityIdentity,
-  CorrectionField,
-  type CorrectionInput,
-  entityChange,
-  entityFingerprint,
-  type FinanceRecord,
-  type MetricDefinition,
-  type MoneyInput,
-  NORMALIZER,
-  type OptionalScalar,
-  type OptionalText,
-  type PrecisionWarning,
-  type Provenance,
-  projectEntity,
-  type RecordChange,
-  type RecordReference,
-  type ResourceDefinition,
-  recordChange,
+export { Fault, fail } from "./fault.entity";
+export type {
+  AccountProjection,
+  AccountReference,
+  CollectionStatus as CollectionStatusType,
+  TransactionCorrection,
+  TransactionProjection,
+  TransactionReference,
 } from "./finance.entity";
-export {
-  CorrectionInputSchema,
-  FinanceRecordSchema,
-  RecordReferenceSchema,
-} from "./finance.schema";
-export { DEFINITIONS, metricFor, normalizeResource } from "./finance-model";
-export {
-  AdmissionStatus,
-  assertCollectionComplete,
-  assertIdempotency,
-  assertOperationInput,
-  assertSourceTotal,
-  assertWebhookEvent,
-  deleteMissingAfterPage,
-  ExecutionPhase,
-  type FinishedOperationStatus,
-  type ItemAdmission,
-  type LongOperationKind,
-  latestCreatedAt,
-  MigrationDecision,
-  MigrationPolicy,
-  type MigrationRequest,
-  type MigrationRow,
-  migrationDecision,
-  nextAutomaticAttempt,
-  nextSyncSchedule,
-  type OperationInput,
-  OperationKind,
-  OperationPhase,
-  type OperationSelection,
-  OperationStatus,
-  pageCoverage,
-  type ReapplicationInput,
-  type ReapplicationResult,
-  resourceParentAllowed,
-  SYNC_POLICY,
-  sourceFailureCoverage,
-  transactionCreationFloor,
-  type WebhookEvent,
-  WebhookEventType,
-} from "./operation.entity";
-export {
-  assertSourceIdentity,
-  assertSourceRecords,
-  assertTransactionSelection,
-  type Credentials,
-  type ItemInfo,
-  itemInfo,
-  type ProviderField,
-  type ProviderRecord,
-  productState,
-  type SourceContext,
+export { CollectionStatus } from "./finance.entity";
+export { normalizeAccount, normalizeTransaction } from "./finance-model";
+export type {
+  Credentials,
+  MoneyInput,
+  ProviderAccount,
+  ProviderConnection,
+  ProviderTransaction,
+  TransactionPage,
 } from "./provider.entity";
 export {
   PluggyCredentialsSchema,
-  ProviderRecordSchema,
+  ProviderAccountSchema,
+  ProviderConnectionSchema,
+  ProviderTransactionSchema,
 } from "./provider.schema";
-export {
-  type Aggregate,
-  assertCursorScope,
-  assertReadRevision,
-  type Cursor,
-  type Filter,
-  FilterOperandKind,
-  FilterOperator,
-  filterOperand,
-  type Identity,
-  type Query,
+export type {
+  AggregateQuery,
+  Cursor,
+  TransactionFilter,
+  TransactionQuery,
 } from "./query.entity";
-export { detectSubscriptions } from "./recurrence.entity";
+export { Metric, MetricDefinition } from "./query.entity";
+export type { Checkpoint, CommitResult, FinancialSource } from "./sync.entity";
+export { IMPORT_INTERVAL, RunStatus } from "./sync.entity";

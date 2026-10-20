@@ -1,8 +1,6 @@
 import { readRequestBody } from "@modelcontextprotocol/server";
 import { z } from "zod/v4";
 
-import { exactJSON } from "../../domain";
-import { parseRuleJson } from "../../domain/rules";
 import type { SafeFields } from "../observability";
 
 const invalidRequests = new Set([
@@ -12,8 +10,22 @@ const invalidRequests = new Set([
   "SESSION_REQUIRED",
   "UNKNOWN_ACTION",
 ]);
-export function failureStatus(error: Error): 400 | 500 {
-  return error instanceof z.ZodError || invalidRequests.has(error.message)
+export function failureStatus(error: Error): 400 | 403 | 404 | 409 | 500 | 503 {
+  if (error.message === "SESSION_REQUIRED") {
+    return 403;
+  }
+  if (error.message === "NOT_FOUND") {
+    return 404;
+  }
+  if (error.message === "NOT_CONFIGURED") {
+    return 503;
+  }
+  if (error.message === "ITEM_LIMIT" || error.message === "RESTART_REQUIRED") {
+    return 409;
+  }
+  return error instanceof z.ZodError ||
+    error instanceof SyntaxError ||
+    invalidRequests.has(error.message)
     ? 400
     : 500;
 }
@@ -30,8 +42,6 @@ const requestActions = new Map<string, NonNullable<SafeFields["action"]>>([
   ["/api/account/logout", "logout"],
   ["/authorize", "authorize"],
   ["/oauth/token", "token"],
-  ["/mcp/rules/import", "rules"],
-  ["/mcp/migration", "migration"],
 ]);
 export function requestCategory(
   path: string,
@@ -43,17 +53,10 @@ export function requestCategory(
   if (path === "/mcp" || path.startsWith("/mcp/")) {
     return { action, phase: "mcp.call" };
   }
-  if (path === "/webhook") {
-    return { action, phase: "sync.admission" };
-  }
   return { action, phase: "auth.request" };
 }
 
-export async function boundedJson(
-  request: Request,
-  maximum = 1_048_576,
-  losslessRules = false,
-) {
+export async function boundedJson(request: Request, maximum = 1_048_576) {
   if (!request.body) {
     throw new Error("BODY_REQUIRED");
   }
@@ -61,9 +64,7 @@ export async function boundedJson(
   if (body.tooLarge) {
     throw new Error("BODY_LIMIT");
   }
-  return losslessRules
-    ? z.json().parse(parseRuleJson(body.text))
-    : exactJSON(body.text);
+  return z.json().parse(JSON.parse(body.text));
 }
 
 export async function boundedForm(request: Request) {

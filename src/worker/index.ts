@@ -4,7 +4,7 @@ import { FaultCode } from "../domain";
 import { tryCatch } from "../shared";
 import { authenticatedFetch } from "./auth/controller";
 import type { Bindings } from "./bindings";
-import { authService, scheduleSync, syncService } from "./composition";
+import { authService, syncService } from "./composition";
 import { failureStatus, requestCategory } from "./http";
 import { fetchMcp } from "./mcp";
 import {
@@ -19,9 +19,7 @@ import {
   SpanName,
   withObservation,
 } from "./observability";
-import { receiveWebhook } from "./sync/controller";
 
-export { receiveWebhook } from "./sync/controller";
 export { FinanceWorkflow } from "./sync/workflow";
 
 function createRoutes(ctx: ExecutionContext) {
@@ -58,22 +56,9 @@ function createRoutes(ctx: ExecutionContext) {
     );
   });
 
-  routes.post("/webhook", async (c) => {
-    const { data, error } = await tryCatch(() =>
-      receiveWebhook(c.req.raw, c.env),
-    );
-    if (error) {
-      markFailure(error, {
-        phase: SpanName.admission,
-        recovery: Recovery.none,
-      });
-      return new Response("Receipt not confirmed; retry", { status: 503 });
-    }
-    return data;
-  });
   routes.all("*", (c) =>
     authenticatedFetch(c.req.raw, c.env, ctx, (request, bindings) =>
-      fetchMcp(request, bindings, ctx),
+      fetchMcp(request, bindings),
     ),
   );
   return routes;
@@ -90,7 +75,7 @@ const worker = {
         const { data, error } = await tryCatch(async () => {
           await syncService(env).recover();
           phase = SpanName.scheduled;
-          await scheduleSync(env, new Date(event.scheduledTime));
+          await syncService(env, () => new Date(event.scheduledTime)).request();
           phase = SpanName.maintenance;
           action = "compact_sync";
           await observeSpan(

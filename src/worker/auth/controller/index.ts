@@ -4,15 +4,14 @@ import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 
 import { tryCatch } from "../../../shared";
 import { accessPage, consentPage, renderPage } from "../../../web";
-import { accountRoutes } from "../../account/controller";
 import type { Bindings } from "../../bindings";
-import { authService } from "../../composition";
 import {
   boundedForm,
   failureStatus,
   requestCategory,
   requestOrigin,
 } from "../../http";
+import { installationRoutes } from "../../installation/controller";
 import {
   FailureCode,
   markFailure,
@@ -197,7 +196,13 @@ function loginRoutes() {
     if (!csrf || form.get("csrf") !== csrf) {
       return c.text("Atualize a página para entrar novamente.", 403);
     }
-    if (!(await authService(c.env).allowLoginAttempt())) {
+    if (
+      !(
+        await c.env.LOGIN_LIMITER.limit({
+          key: c.req.header("CF-Connecting-IP") ?? "local",
+        })
+      ).success
+    ) {
       c.header("Retry-After", "60");
       return c.html(
         renderPage(
@@ -236,5 +241,5 @@ function loginRoutes() {
 }
 
 function portalRoutes() {
-  return accountRoutes(loginRoutes());
+  return installationRoutes(loginRoutes());
 }

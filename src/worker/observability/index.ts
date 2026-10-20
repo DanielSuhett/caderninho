@@ -4,13 +4,7 @@ import type { Logger } from "pino";
 import { z } from "zod/v4";
 
 import type { ToolName } from "../../contracts";
-import {
-  ExecutionPhase,
-  Fault,
-  FaultCode,
-  type OperationKind,
-  type Resource,
-} from "../../domain";
+import { Fault, FaultCode } from "../../domain";
 import { type Result, tryCatch } from "../../shared";
 import { logger } from "../../shared/logger";
 import { tracing } from "cloudflare:workers";
@@ -28,10 +22,8 @@ export const SpanName = {
   phase: "sync.phase",
   providerRead: "pluggy.read",
   publication: "finance.publish",
-  reapplication: "finance.reapply",
   recovery: "sync.recovery",
   scheduled: "sync.scheduled",
-  source: "pluggy.read",
 } as const;
 export type SpanName = (typeof SpanName)[keyof typeof SpanName];
 
@@ -47,8 +39,12 @@ export const Outcome = {
   success: "success",
 } as const;
 export type Outcome = (typeof Outcome)[keyof typeof Outcome];
-export const Phase = ExecutionPhase;
-export type Phase = ExecutionPhase;
+export const Phase = {
+  accounts: "accounts",
+  finish: "finish",
+  transactions: "transactions",
+} as const;
+export type Phase = (typeof Phase)[keyof typeof Phase];
 
 export const Recovery = {
   none: "none",
@@ -99,81 +95,30 @@ for (const code of [
   "BODY_LIMIT",
   "MEU_PLUGGY_REQUIRED",
   "ITEM_LIMIT",
-  "IDEMPOTENCY_CONFLICT",
-  "REAPPLICATION_CONFLICT_START_NEW_REQUEST",
-  "REAPPLICATION_TOO_LARGE_USE_BATCHES",
-  "REAPPLICATION_SELECTION_CONFLICT",
-  "FINANCIAL_EXECUTOR_BUSY_RETRY_BATCH",
-  "REAPPLICATION_CANCELLED",
-  "RENORMALIZE_REQUIRES_RECONCILIATION",
-  "SYNC_FILTER_NOT_SUPPORTED_USE_ITEM_SCOPE",
-  "SUBSCRIPTION_LIMIT",
-  "OPERATION_NOT_FOUND",
-  "LOCAL_RECEIPT_NOT_FOUND",
   "NOT_FOUND",
-  "UNKNOWN_CATEGORY",
-  "RULES_REVISION_REQUIRED",
   "RESTART_REQUIRED",
   "CURSOR_SCOPE_MISMATCH",
-  "ANALYSIS_LIMIT_NARROW_PERIOD",
-  "EXACT_AGGREGATE_LIMIT",
-  "Invalid amount filter",
-  "contains only supports description",
-  "Minor amount must be canonical integer, at most 30 digits",
-  "Filter complexity limit",
-  "UNSAFE_RULE_NUMBER",
 ]) {
   failures.set(code, localFailures.INVALID_REQUEST);
 }
-for (const code of ["SOURCE_IDENTITY_MISMATCH", "SOURCE_SELECTION_MISMATCH"]) {
+for (const code of [
+  "SOURCE_IDENTITY_MISMATCH",
+  "SOURCE_SELECTION_MISMATCH",
+  "DUPLICATE_CHANGED",
+  "REPEATED_CURSOR",
+  "INVALID_PAGINATION",
+]) {
   failures.set(code, FaultCode.INVALID_RESPONSE);
 }
-failures.set(
-  "FINANCIAL_EXECUTOR_BUSY_RESUME_DISPATCH",
-  localFailures.EXECUTOR_BUSY,
-);
-for (const code of ["PLUGGY_ACCOUNT_NOT_CONFIGURED", "SETTINGS_MISSING"]) {
-  failures.set(code, localFailures.INSTALLATION_INCOMPLETE);
-}
+failures.set("NOT_CONFIGURED", localFailures.INSTALLATION_INCOMPLETE);
 const expected = new Set<FailureCode>([
   localFailures.INVALID_REQUEST,
   localFailures.SESSION_REQUIRED,
   localFailures.INSTALLATION_INCOMPLETE,
-  FaultCode.AUTH_NOT_CONFIGURED,
-  FaultCode.STORAGE_NOT_CONFIGURED,
-  FaultCode.NOT_INITIALIZED,
-  FaultCode.ACCOUNT_NOT_IN_SNAPSHOT,
-  FaultCode.BANK_ACCOUNT_REQUIRED,
-  FaultCode.FIELD_NOT_ALLOWED,
-  FaultCode.FILTER_NOT_SUPPORTED,
-  FaultCode.GROUP_NOT_ALLOWED,
-  FaultCode.INVALID_ACCOUNT,
   FaultCode.INVALID_ARGUMENT,
-  FaultCode.INVALID_CURRENCY,
-  FaultCode.INVALID_CURSOR,
   FaultCode.INVALID_DATE,
   FaultCode.INVALID_DECIMAL,
-  FaultCode.INVALID_FILTER,
   FaultCode.INVALID_ID,
-  FaultCode.INVALID_ITEM_ID,
-  FaultCode.INVALID_MODE,
-  FaultCode.INVALID_MONEY,
-  FaultCode.INVALID_PAGE,
-  FaultCode.INVALID_SORT,
-  FaultCode.INVALID_STATUS,
-  FaultCode.INVALID_TRANSACTION,
-  FaultCode.INVALID_TYPE,
-  FaultCode.LIVE_BALANCE_ACCOUNT_REQUIRED,
-  FaultCode.LIVE_DETAIL_UNSUPPORTED,
-  FaultCode.METRIC_NOT_ALLOWED,
-  FaultCode.PERIOD_REQUIRED,
-  FaultCode.QUERY_CACHED_ONLY,
-  FaultCode.QUERY_LIMIT,
-  FaultCode.RESUME_NOT_FOUND,
-  FaultCode.SNAPSHOT_NOT_FOUND,
-  FaultCode.SNAPSHOT_REQUIRED,
-  FaultCode.SORT_NOT_ALLOWED,
-  FaultCode.UNKNOWN_TOOL,
 ]);
 
 export function classifyFailure(error: Error): FailureCode {
@@ -197,24 +142,9 @@ export function failureOutcome(failure: FailureCode): Outcome {
 export interface SafeFields {
   action?:
     | (typeof ToolName)[keyof typeof ToolName]
-    | "reconcile"
     | "compact_sync"
     | "compact_auth"
-    | "readiness"
     | "status"
-    | "subscriptions"
-    | "live_balance"
-    | "setup_status"
-    | "preview"
-    | "rules_read"
-    | "rules_list"
-    | "rules_save"
-    | "rules_activate"
-    | "tasks_get"
-    | "migration"
-    | "tasks_cancel"
-    | "tasks_update"
-    | "subscriptions_listen"
     | "tools_list"
     | "read"
     | "write"
@@ -229,15 +159,7 @@ export interface SafeFields {
     | "disconnect"
     | "query"
     | "aggregate"
-    | "explain"
-    | "rules"
     | "correct"
-    | "reapply"
-    | "initialize"
-    | "get"
-    | "list"
-    | "cancel"
-    | "subscribe"
     | "unknown";
   attempt?: number;
   batch?: number;
@@ -248,13 +170,13 @@ export interface SafeFields {
   durationMs?: number;
   failed?: number;
   failure?: FailureCode;
-  operationKind?: OperationKind;
+
   outcome?: Outcome;
   pages?: number;
   phase?: SpanName | Phase;
   processed?: number;
   recovery?: Recovery;
-  resource?: Resource;
+  resource?: "connections" | "accounts" | "transactions";
   retries?: number;
   schedulePending?: number;
   sourceUnauthorized?: number;
@@ -268,7 +190,6 @@ function safeFields(input: SafeFields): SafeFields {
     ...(input.outcome && { outcome: input.outcome }),
     ...(input.failure && { failure: input.failure }),
     ...(input.recovery && { recovery: input.recovery }),
-    ...(input.operationKind && { operationKind: input.operationKind }),
     ...(input.resource && { resource: input.resource }),
     ...(input.phase && { phase: input.phase }),
     ...safeMeasurements(input),

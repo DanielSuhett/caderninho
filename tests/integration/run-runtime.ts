@@ -1,27 +1,28 @@
 import assert from "node:assert/strict";
-import {
-  chmod,
-  cp,
-  mkdir,
-  mkdtemp,
-  readFile,
-  writeFile,
-} from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { execFile } from "node:child_process";
+import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
+
+import { z } from "zod/v4";
 
 import { tryCatch } from "../../src/shared";
 import { createLogger } from "../../src/shared/logger";
-import { required, responseJson } from "../support";
 import { poll, spawnManaged } from "../support/process";
 
+const whitespacePattern = /\s+/;
 const logger = createLogger({ level: "info", name: "run-runtime" });
 
-await test("native Workflow and complete D1 backup restore", async () => {
+await test("native Workflow, 10k/100k volume and persistent installation", {
+  timeout: 900_000,
+}, async () => {
   const cwd = fileURLToPath(new URL("../..", import.meta.url)),
-    state = await mkdtemp(join(tmpdir(), "caderninho-test-")),
+    temporaryRoot = join(cwd, "work/tmp"),
+    state = await mkdir(temporaryRoot, { recursive: true }).then(() =>
+      mkdtemp(join(temporaryRoot, "caderninho-test-")),
+    ),
     port = Number(process.env.PRODUCT_TEST_PORT ?? 8895),
     base = `http://127.0.0.1:${port}`;
   const runtime = fileURLToPath(
@@ -108,160 +109,165 @@ await test("native Workflow and complete D1 backup restore", async () => {
     throw new Error(`Runtime not ready: ${logs}`, { cause: error });
   }
   const worker = await start();
+  const processList = promisify(execFile);
+  let peakWorkerdRssKiB = 0;
+  let sampledAt = 0;
+  async function sampleMemory() {
+    if (performance.now() - sampledAt < 1000) {
+      return;
+    }
+    sampledAt = performance.now();
+    const { stdout } = await processList("ps", ["-eo", "pgid=,rss=,comm="]);
+    const memory = stdout
+      .split("\n")
+      .map((row) => row.trim().split(whitespacePattern))
+      .filter(
+        ([group, , name]) =>
+          group === String(worker.child.pid) && name === "workerd",
+      )
+      .reduce((sum, [, rss]) => sum + Number(rss ?? 0), 0);
+    peakWorkerdRssKiB = Math.max(peakWorkerdRssKiB, memory);
+  }
+
   const { data: _data, error } = await tryCatch(async () => {
     await fetch(`${base}/setup`, { method: "POST" });
-    const meta = {
-      "io.modelcontextprotocol/clientCapabilities": {
-        extensions: { "io.modelcontextprotocol/tasks": {} },
-      },
-      "io.modelcontextprotocol/protocolVersion": "2026-07-28",
-    };
-    const rpc = async (
-      method: string,
-      params: { name?: string; taskId?: string; arguments?: object },
-    ) =>
-      responseJson(
-        await fetch(`${base}/mcp`, {
-          body: JSON.stringify({
-            id: 1,
-            jsonrpc: "2.0",
-            method,
-            params: { ...params, _meta: meta },
+    const stateSchema = z.object({
+      runs: z.array(
+        z.object({ id: z.string(), records: z.number(), status: z.string() }),
+      ),
+      totals: z.object({
+        groups: z.array(
+          z.object({
+            count: z.string(),
+            currency: z.string(),
+            totalMinor: z.string().nullable(),
           }),
-          headers: {
-            Accept: "application/json, text/event-stream",
-            "Content-Type": "application/json",
-            "Mcp-Method": method,
-            "Mcp-Name": params.name ?? params.taskId ?? "",
-            "Mcp-Protocol-Version": "2026-07-28",
-          },
-          method: "POST",
-        }),
-      );
-    const started = await rpc("tools/call", {
-      arguments: {
-        itemIds: ["11111111-1111-4111-8111-111111111111"],
-        requestKey: "restart-test",
-      },
-      name: "caderninho_sync",
-    });
-    const taskId = required(required(started.result).taskId);
-    const partial = await poll({
-      attempts: 30,
-      intervalMs: 100,
-      read: () => rpc("tasks/get", { taskId }),
-      until: (value) =>
-        required(value.result).status === "working" &&
-        required(required(value.result).statusMessage).startsWith(
-          "transactions",
         ),
+        partial: z.boolean(),
+      }),
     });
-    assert.equal(
-      required(partial.result).status,
-      "working",
-      "observe a committed page while workflow is still executing",
-    );
-    // Disconnect all HTTP clients while the native Workflow continues. Stopping
-    // the complete Wrangler process also kills its emulated Workflow service;
-    // that emulator restart limitation is documented separately.
-    const terminal = required(
-      (
-        await poll({
-          attempts: 40,
-          intervalMs: 500,
-          read: () => rpc("tasks/get", { taskId }),
-          until: (value) => required(value.result).status !== "working",
-        })
-      ).result,
-    );
-    assert.equal(terminal.status, "completed");
-    assert.equal(required(terminal.result).isError, false);
+    const readState = async (connection = "c") => {
+      await sampleMemory();
+      return stateSchema.parse(
+        await (await fetch(`${base}/state?connection=${connection}`)).json(),
+      );
+    };
+    const startRun = async (connection = "c") => {
+      await fetch(`${base}/setup?connection=${connection}`, { method: "POST" });
+      const response = await fetch(`${base}/start?connection=${connection}`, {
+        method: "POST",
+      });
+      assert.equal(response.status, 200);
+      await response.body?.cancel();
+    };
+    await startRun();
+    const partial = await poll({
+      attempts: 60,
+      intervalMs: 100,
+      read: () => readState(),
+      until: (value) =>
+        value.runs.some((run) => run.status === "running" && run.records > 2),
+    });
+    assert.equal(partial.totals.partial, true);
+    const completed = await poll({
+      attempts: 120,
+      intervalMs: 250,
+      read: () => readState(),
+      until: (value) => value.runs[0]?.status === "succeeded",
+    });
+    assert.equal(completed.totals.partial, false);
+    assert.equal(completed.runs[0]?.records, 1202);
     logger.info(
-      "PASS: native Workflow continues without a connected subscriber, same durable Task",
+      "PASS: native Workflow completes all pages after the starting HTTP client disconnects",
     );
-    await command(["--import", "tsx", "tests/integration/runtime-check.ts"], {
-      PRODUCT_TEST_REQUEST_KEY: "restart-test",
-      PRODUCT_TEST_URL: base,
+    await startRun("failure");
+    const failed = await poll({
+      attempts: 60,
+      intervalMs: 250,
+      read: () => readState("failure"),
+      until: (value) => value.runs[0]?.status === "failed",
     });
+    assert.equal(failed.runs[0]?.records, 502);
+    assert.equal(failed.totals.partial, true);
+    logger.info(
+      "PASS: native terminal provider failure preserves committed pages and fails the import",
+    );
+    await startRun("replay");
+    const replay = await poll({
+      attempts: 180,
+      intervalMs: 250,
+      read: () => readState("replay"),
+      until: (value) =>
+        value.runs[0]?.status === "succeeded" ||
+        value.runs[0]?.status === "failed",
+    });
+    assert.equal(replay.runs[0]?.status, "succeeded");
+    assert.equal(replay.runs[0]?.records, 1202);
+    assert.equal(replay.totals.partial, false);
+    logger.info(
+      "PASS: native retry recovers a committed page without querying the provider again",
+    );
+    await [10_000, 100_000].reduce(async (previous, size) => {
+      await previous;
+      const connection = `volume-${size}`;
+      const started = performance.now();
+      await startRun(connection);
+      const result = await poll({
+        attempts: 1200,
+        intervalMs: 500,
+        read: () => readState(connection),
+        until: (value) =>
+          value.runs[0]?.status === "succeeded" ||
+          value.runs[0]?.status === "failed",
+      });
+      assert.equal(result.runs[0]?.status, "succeeded");
+      assert.equal(result.runs[0]?.records, size + 2);
+      assert.equal(result.totals.partial, false);
+      const usd = 2 * Math.ceil(size / 2 / 3);
+      const unit = 9007199254740993123456789012n;
+      assert.equal(
+        result.totals.groups.find((group) => group.currency === "USD")
+          ?.totalMinor,
+        (BigInt(usd) * unit).toString(),
+      );
+      assert.equal(
+        result.totals.groups.find((group) => group.currency === "BRL")
+          ?.totalMinor,
+        (BigInt(size - usd) * unit).toString(),
+      );
+      logger.info(
+        {
+          elapsedMs: Math.round(performance.now() - started),
+          pageSize: 500,
+          peakWorkerdRssKiB,
+          records: size,
+        },
+        "PASS: bounded-page native import and exact SQL totals",
+      );
+    }, Promise.resolve());
   });
   await worker.stop();
   if (error) {
     logger.error({ logs }, "Synthetic runtime diagnostic");
     throw error;
   }
-  // Restore only into a new, isolated local database. Never reuse the source state.
-  const restored = await mkdtemp(join(tmpdir(), "caderninho-restore-test-"));
-  const backup = join(state, "synthetic-backup.sql");
-  const reexport = join(restored, "synthetic-restored.sql");
-  // Wrangler export does not support --persist-to. Copy the stopped synthetic DB
-  // into its default layout, leaving the source untouched.
-  const snapshot = await mkdtemp(join(tmpdir(), "caderninho-export-test-"));
-  await mkdir(join(snapshot, ".wrangler/state/v3"), { recursive: true });
-  await cp(join(state, "v3/d1"), join(snapshot, ".wrangler/state/v3/d1"), {
-    recursive: true,
-  });
-  const config = JSON.stringify({
-    compatibility_date: "2026-10-06",
-    d1_databases: [
-      { binding: "DB", database_id: "local-test", database_name: "test" },
-    ],
-    name: "synthetic-backup",
-  });
-  await writeFile(join(snapshot, "wrangler.json"), config);
-  await writeFile(join(restored, "wrangler.json"), config);
-  const sourceDatabase = [
-    "DB",
-    "--local",
-    "--config",
-    join(snapshot, "wrangler.json"),
-  ];
-  const restoredDatabase = [
-    "DB",
-    "--local",
-    "--config",
-    join(restored, "wrangler.json"),
-  ];
-  await command([
-    runtime,
-    "d1",
-    "export",
-    ...sourceDatabase,
-    "--output",
-    backup,
-  ]);
-  await chmod(backup, 0o600);
-  await command([
-    runtime,
-    "d1",
-    "execute",
-    ...restoredDatabase,
-    "--file",
-    backup,
-  ]);
-  await command([
-    runtime,
-    "d1",
-    "export",
-    ...restoredDatabase,
-    "--output",
-    reexport,
-  ]);
-  await chmod(reexport, 0o600);
-  const canonical = (sql: string) =>
-    sql
-      .split("\n")
-      .map((line) => line.trim())
-      .filter(Boolean)
-      .sort();
-  assert.deepEqual(
-    canonical(await readFile(reexport, "utf8")),
-    canonical(await readFile(backup, "utf8")),
-  );
-  logger.info(
-    "PASS: complete synthetic D1 export restores into an empty local database without loss",
-  );
-  logger.info(
-    { state },
-    "Local workerd integration passed; isolated synthetic state",
-  );
+  const restarted = await start();
+  try {
+    const persisted = z
+      .object({
+        runs: z.array(z.object({ records: z.number(), status: z.string() })),
+      })
+      .parse(
+        await (await fetch(`${base}/state?connection=volume-100000`)).json(),
+      );
+    assert.equal(persisted.runs[0]?.status, "succeeded");
+    assert.equal(persisted.runs[0]?.records, 100_002);
+    logger.info(
+      { state },
+      "PASS: restarting the local Worker preserves the installed financial database",
+    );
+  } finally {
+    await restarted.stop();
+    await rm(state, { force: true, recursive: true });
+  }
 });

@@ -18,8 +18,7 @@
       "/oauth/*",
       "/token",
       "/register",
-      "/.well-known/*",
-      "/webhook"
+      "/.well-known/*"
     ]
   },
   "preview_urls": false,
@@ -30,7 +29,11 @@
       "migrations_dir": "migrations"
     }
   ],
-  "kv_namespaces": [{ "binding": "OAUTH_KV" }],
+  "kv_namespaces": [
+    {
+      "binding": "OAUTH_KV"
+    }
+  ],
   "workflows": [
     {
       "name": "caderninho-finance",
@@ -38,8 +41,12 @@
       "class_name": "FinanceWorkflow"
     }
   ],
-  "triggers": { "crons": ["0 9 * * *"] },
-  "version_metadata": { "binding": "CF_VERSION_METADATA" },
+  "triggers": {
+    "crons": ["0 9 * * *"]
+  },
+  "version_metadata": {
+    "binding": "CF_VERSION_METADATA"
+  },
   "keep_vars": true,
   "observability": {
     "enabled": true,
@@ -49,6 +56,19 @@
       "head_sampling_rate": 1,
       "invocation_logs": false
     },
-    "traces": { "enabled": true, "head_sampling_rate": 0.1 }
-  }
+    "traces": {
+      "enabled": true,
+      "head_sampling_rate": 0.1
+    }
+  },
+  "ratelimits": [
+    {
+      "name": "LOGIN_LIMITER",
+      "namespace_id": "1001",
+      "simple": {
+        "limit": 10,
+        "period": 60
+      }
+    }
+  ]
 }

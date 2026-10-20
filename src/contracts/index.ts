@@ -1,46 +1,24 @@
 export {
-  AccountSyncOutcome,
-  type FinishedOperationStatus,
-  type LongOperationKind,
-  type MigrationRequest,
-  type OperationInput,
-  OperationKind,
-  OperationPhase,
-  OperationStatus,
-  type WebhookEvent,
-  WizardIssue,
-  type WizardState,
-  WizardSyncState,
-} from "../domain";
-export {
-  type PreviewInput,
-  type RuleCommand,
-  RuleCommandAction,
-  RuleImportMode,
-  type SubscriptionInput,
-} from "./finance.types";
-export { ToolName } from "./mcp.types";
-export {
-  LongInput,
-  PRODUCT_INSTRUCTIONS,
-  ReapplicationInputSchema,
-  ToolCallSchema,
-  tools,
-} from "./mcp-contract";
-export { MigrationRequestSchema, WebhookSchema } from "./operation";
-export {
-  type AccountConnectToken,
-  type AccountPanel,
-  type AccountResponse,
-  AccountStep,
-  type InstallationChecks,
+  AggregateQuerySchema,
+  ConnectionSelectionSchema,
+  CorrectionSchema,
+  StatusInputSchema,
+  TransactionQuerySchema,
+} from "./finance";
+export { PRODUCT_INSTRUCTIONS, ToolName, tools } from "./mcp-contract";
+export type {
+  AccountConnectToken,
+  AccountInfo,
+  ConnectionInfo,
+  InstallationState,
+  PortalResponse,
+  RunInfo,
 } from "./portal.types";
+export { PortalIssue } from "./portal.types";
 export {
   AccountActionSchema,
   AccountConnectTokenSchema,
-  AccountResponseSchema,
   ConnectTokenActionSchema,
   ItemActionSchema,
+  PortalResponseSchema,
 } from "./portal-contract";
-export type { Aggregate, Cursor, Identity, Query } from "./queries.types";
-export { WizardIssueSchema } from "./wizard-contract";

@@ -1,205 +1,170 @@
-// Local integration host only. Never referenced by the product Wrangler config.
+import { eq } from "drizzle-orm";
 
-import { eq, sql } from "drizzle-orm";
-import { sqliteTable, text } from "drizzle-orm/sqlite-core";
-
-import type { ProviderRecord } from "../../src/domain";
-import { tryCatch } from "../../src/shared";
-import { receiveWebhook } from "../../src/worker";
-import { authenticatedFetch } from "../../src/worker/auth/controller";
+import { Fault, FaultCode, type FinancialSource } from "../../src/domain";
 import type { Bindings } from "../../src/worker/bindings";
-import {
-  synchronizationDependencies,
-  syncService,
-} from "../../src/worker/composition";
 import { database } from "../../src/worker/database";
-import { fetchMcp } from "../../src/worker/mcp";
-import {
-  items as itemsTable,
-  operations as operationsTable,
-  settings as settingsTable,
-} from "../../src/worker/schema";
-import { type FinancialSource, runOperation } from "../../src/worker/sync";
+import { createFinancialService } from "../../src/worker/finance";
+import { createFinancialRepository } from "../../src/worker/finance/repository";
+import { createInstallationRepository } from "../../src/worker/installation/repository";
+import { connections } from "../../src/worker/schema";
+import { createSyncService, runImport } from "../../src/worker/sync";
+import { createSyncRepository } from "../../src/worker/sync/repository";
+import { workflowSteps } from "../../src/worker/sync/workflow";
 import {
   WorkflowEntrypoint,
   type WorkflowEvent,
   type WorkflowStep,
 } from "cloudflare:workers";
 
-const fixtureRows = sqliteTable("fixture", {
-  id: text("id").primaryKey(),
-  payload: text("payload", { mode: "json" }).$type<ProviderRecord>().notNull(),
-});
-const item = "11111111-1111-4111-8111-111111111111",
-  account = "22222222-2222-4222-8222-222222222222";
-class Fixture implements FinancialSource {
-  private readonly db: D1Database;
-  constructor(env: Bindings) {
-    this.db = env.DB;
-  }
-  async page({
-    resource,
-    cursor,
-    floor,
-  }: Parameters<FinancialSource["page"]>[0]) {
-    if (resource === "connections") {
-      return {
-        next: null,
-        records: [{ connector: { id: 200, isOpenFinance: false }, id: item }],
-      };
-    }
-    if (resource === "accounts") {
-      return {
-        next: null,
-        records: [
-          {
-            balance: "100",
-            currencyCode: "BRL",
-            id: account,
-            itemId: item,
-            name: "Synthetic",
-            type: "BANK",
-          },
-        ],
-      };
-    }
-    if (resource !== "transactions") {
-      return { next: null, records: [] };
-    }
-    const result = await database(this.db)
-      .select()
-      .from(fixtureRows)
-      .where(eq(fixtureRows.id, cursor ?? "first"))
-      .get();
-    if (!result) {
-      throw new Error("FIXTURE_MISSING");
-    }
-    const { payload: record } = result;
-    return { next: cursor || floor ? null : "second", records: [record] };
-  }
-  async ids(_account: string, ids: string[]) {
-    const result = await database(this.db).select().from(fixtureRows);
-    return result
-      .map((r) => r.payload)
-      .filter((r) => ids.includes(String(r.id)));
-  }
+type RuntimeEnv = Pick<Bindings, "DB" | "FINANCE">;
+function syntheticSource(
+  connectionId: string,
+  db: D1Database,
+): FinancialSource {
+  const sizes: Record<string, number> = {
+    "volume-10000": 10_000,
+    "volume-100000": 100_000,
+  };
+  const count = sizes[connectionId] ?? 1200;
+  const perAccount = count / 2;
+  return {
+    accounts: async () =>
+      ["a", "b"].map((id) => ({
+        balance: "123.45",
+        currencyCode: "BRL",
+        id,
+        itemId: connectionId,
+        name: "Synthetic",
+        type: id === "a" ? "BANK" : "CREDIT",
+      })),
+    connection: async () => ({ connector: { id: 200 }, id: connectionId }),
+    transactions: async (id, cursor) => {
+      if (connectionId === "replay" && id === "a" && !cursor) {
+        const connection = await database(db)
+          .select({ status: connections.status })
+          .from(connections)
+          .where(eq(connections.id, connectionId))
+          .get();
+        if (connection?.status === "lost_response_committed") {
+          throw new Error("COMMITTED_PAGE_REFETCHED");
+        }
+      }
+      if (connectionId === "failure" && cursor) {
+        throw new Fault(FaultCode.UPSTREAM_AUTH);
+      }
+      const from = Number(cursor ?? 0);
+      const until = Math.min(from + 500, perAccount);
+      return Promise.resolve({
+        next: until < perAccount ? String(until) : null,
+        records: Array.from({ length: until - from }, (_, offset) => {
+          const index = from + offset;
+          return {
+            accountId: id,
+            amount: "-90071992547409931234567890.12",
+            category: "Fixture",
+            currencyCode: index % 3 === 0 ? "USD" : "BRL",
+            date: "2026-10-01",
+            description: "Synthetic transaction",
+            details: "synthetic ".repeat(50),
+            id: `tx-${String(index).padStart(6, "0")}`,
+            merchant: { name: "Synthetic merchant" },
+            status: "POSTED",
+            type: "DEBIT",
+          };
+        }),
+      });
+    },
+  };
 }
 export class TestWorkflow extends WorkflowEntrypoint<
-  Bindings,
-  { operationId: string }
+  RuntimeEnv,
+  { runId: string }
 > {
-  async run(event: WorkflowEvent<{ operationId: string }>, step: WorkflowStep) {
-    return await runOperation(
+  async run(event: WorkflowEvent<{ runId: string }>, step: WorkflowStep) {
+    const repository = createSyncRepository(this.env.DB);
+    const run = await repository.read(event.payload.runId);
+    const steps = workflowSteps(step);
+    await runImport(
       {
-        ...synchronizationDependencies(this.env),
-        source: () => Promise.resolve(new Fixture(this.env)),
+        now: () => new Date().toISOString(),
+        repository,
+        source: syntheticSource(run.connectionId, this.env.DB),
+        steps: {
+          do: async (name, fn) => {
+            const result = await steps.do(name, async () => {
+              const receipt = await fn();
+              if (run.connectionId === "replay" && receipt.sequence === 2) {
+                const row = await database(this.env.DB)
+                  .select({ status: connections.status })
+                  .from(connections)
+                  .where(eq(connections.id, run.connectionId))
+                  .get();
+                if (row?.status !== "lost_response_committed") {
+                  await database(this.env.DB)
+                    .update(connections)
+                    .set({ status: "lost_response_committed" })
+                    .where(eq(connections.id, run.connectionId));
+                  const lost = new Fault(FaultCode.UPSTREAM_RATE_LIMIT);
+                  lost.details = { retryAfterSeconds: 0 };
+                  throw lost;
+                }
+              }
+              return receipt;
+            });
+            if (run.connectionId === "c") {
+              await step.sleep(`${name}-inspection`, 200);
+            }
+            return result;
+          },
+        },
       },
-      event.payload.operationId,
-      {
-        do: (name, fn) =>
-          step.do(name, { retries: { delay: "1 second", limit: 1 } }, fn),
-        sleep: (name) => step.sleep(name, "3 seconds"),
-      },
+      run.id,
     );
   }
 }
-const worker = {
-  async fetch(req: Request, env: Bindings, ctx: ExecutionContext) {
-    const { pathname: path } = new URL(req.url);
-    if (path === "/auth-probe") {
-      return authenticatedFetch(
-        new Request("https://synthetic.example.com/mcp", req),
-        env,
-        ctx,
-        async () => new Response("unexpected-auth", { status: 599 }),
+export default {
+  async fetch(request: Request, env: RuntimeEnv) {
+    const path = new URL(request.url).pathname;
+    const installation = createInstallationRepository(env.DB);
+    if (path === "/setup" && request.method === "POST") {
+      const id = new URL(request.url).searchParams.get("connection") ?? "c";
+      if (
+        !["c", "volume-10000", "volume-100000", "failure", "replay"].includes(
+          id,
+        )
+      ) {
+        return new Response("Invalid fixture", { status: 400 });
+      }
+      await installation.register(
+        { connector: { id: 200 }, id },
+        new Date().toISOString(),
       );
+      return Response.json({ ok: true });
     }
-    if (path === "/setup") {
-      await env.DB.exec(
-        "CREATE TABLE IF NOT EXISTS fixture(id TEXT PRIMARY KEY,payload TEXT NOT NULL);",
-      );
-      await env.DB.exec(
-        "CREATE TRIGGER IF NOT EXISTS fixture_fail BEFORE UPDATE OF notice_generation ON items WHEN NEW.notice_generation=2 BEGIN SELECT RAISE(ABORT,'synthetic storage failure'); END;",
-      );
-      await database(env.DB).update(settingsTable).set({ sync_enabled: 1 });
-      await database(env.DB)
-        .insert(itemsTable)
-        .values({
-          id: item,
-        })
-        .onConflictDoNothing()
-        .run();
-      await (
-        [
-          ["first", "33333333-3333-4333-8333-333333333333"],
-          ["second", "44444444-4444-4444-8444-444444444444"],
-        ] as const
-      ).reduce(async (priorCase, [key, id]) => {
-        await priorCase;
-        await database(env.DB)
-          .insert(fixtureRows)
-          .values({
-            id: key,
-            payload: {
-              accountId: account,
-              amount: "-9007199254740993.01",
-              createdAt: "2026-10-01T00:00:00.000Z",
-              currencyCode: "BRL",
-              date: "2026-01-01T00:00:00.000Z",
-              description: "Synthetic",
-              id,
-              status: "POSTED",
-              type: "DEBIT",
-            },
-          })
-          .onConflictDoUpdate({
-            set: { payload: sql`excluded.payload` },
-            target: fixtureRows.id,
-          })
-          .run();
-      }, Promise.resolve());
-      return Response.json({ synthetic: true });
-    }
-    if (path === "/inspect-native") {
+    if (path === "/start" && request.method === "POST") {
+      const id = new URL(request.url).searchParams.get("connection") ?? "c";
       return Response.json(
-        await (
-          await env.FINANCE.get(new URL(req.url).searchParams.get("id") ?? "")
-        ).status(),
+        await createSyncService(createSyncRepository(env.DB), {
+          create: async (runId) => {
+            await env.FINANCE.create({ id: runId, params: { runId } });
+          },
+          status: async (runId) =>
+            (await (await env.FINANCE.get(runId)).status()).status,
+        }).request([id]),
       );
     }
-    if (path === "/recover") {
-      await syncService(env).recover();
-      return Response.json({ done: true });
-    }
-    if (path === "/inspect-event") {
-      const notice = await database(env.DB)
-        .select()
-        .from(itemsTable)
-        .where(eq(itemsTable.id, item))
-        .get();
-      const rows = await database(env.DB).select().from(operationsTable);
+    if (path === "/state") {
+      const connection =
+        new URL(request.url).searchParams.get("connection") ?? "c";
+      const finance = createFinancialService(createFinancialRepository(env.DB));
       return Response.json({
-        generation: notice?.notice_generation,
-        operations: rows.length,
-        pending: !!notice && notice.notice_generation > notice.notice_consumed,
+        ...(await installation.state({ connectionIds: [connection] })),
+        totals: await finance.aggregate({
+          filter: { connectionIds: [connection] },
+          metric: "debits",
+        }),
       });
     }
-    if (path === "/fail-notice") {
-      await database(env.DB)
-        .update(itemsTable)
-        .set({ notice_claimed: itemsTable.notice_generation })
-        .where(eq(itemsTable.id, item));
-      return Response.json({ done: true });
-    }
-    if (path === "/webhook") {
-      const { data, error } = await tryCatch(() => receiveWebhook(req, env));
-      return error ? new Response("Receipt failed", { status: 503 }) : data;
-    }
-    if (path === "/mcp") {
-      return fetchMcp(req, env, ctx);
-    }
-    return new Response("Not found", { status: 404 });
+    return new Response("Synthetic local runtime");
   },
 };
-
-export default worker;

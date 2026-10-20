@@ -1,258 +1,116 @@
 # Arquitetura do Caderninho
 
-Um monólito modular, um pacote npm e um deploy Cloudflare atendem OAuth, MCP,
-API, Workflows e assets. `package.json` concentra comandos e dependências;
-`package-lock.json` é o único lockfile. O desenvolvimento usa Node 24.
+Um pacote npm e um deploy Cloudflare atendem painel, OAuth, MCP e importação.
+O produto é pessoal: uma instalação pertence a uma pessoa e pode ter até dez
+conexões Meu Pluggy. O primeiro lançamento importa somente contas BANK/CREDIT e
+transações. A decisão completa está na [spec](spec-refatoracao.md).
 
 ## Código
 
-| Diretório | Responsabilidade |
+| Área | Responsabilidade |
 | --- | --- |
-| `src/web` | React, Kumo, painel e páginas públicas |
-| `src/worker` | HTTP, OAuth, MCP, D1 e Workflows |
-| `src/domain` | Dinheiro, normalização, regras e recorrências |
-| `src/contracts` | Schemas Zod e tipos dos contratos públicos |
-| `src/shared` | Utilitários genéricos, sem dependência da aplicação |
+| `src/domain` | Conexões, dinheiro exato, classificação financeira, consultas e importação |
+| `src/contracts` | Entradas externas Zod e contratos do painel/MCP |
+| `src/worker` | Casos de uso, D1, OAuth, SDKs e transporte Cloudflare |
+| `src/web` | Painel React e páginas públicas |
+| `src/shared` | HTTP, resultados, hashing e logger |
 
-Dentro de `src/worker`, o código fica junto do módulo:
-
-| Módulo | Responsabilidade |
+| Módulo Worker | Responsabilidade |
 | --- | --- |
-| `account` | Instalação, conexões e ações do painel |
-| `auth` | Login, sessões, OAuth e consentimento |
-| `finance` | Consultas, regras, correções e projeções persistidas |
-| `sync` | Agenda, webhooks, operações e publicação durável |
-| `mcp` | Transporte, capacidades, Tasks e subscriptions |
+| `installation` | Conexões e configuração da instalação; dados do painel |
+| `auth` | Senha, sessões, OAuth oficial e revogação |
+| `finance` | Contas, transações, consultas, totais e correções |
+| `sync` | Admissão diária, despacho, páginas e commits duráveis |
+| `mcp` | Seis tools comuns do SDK |
 
-Os módulos de aplicação usam `entity/index.ts`, `controller/index.ts`, `service.ts`,
-`repository/` e testes em `__tests__` como estrutura padrão. Entidades locais
-concentram modelos e portas; entidades de domínio concentram as regras puras.
-Controllers validam transporte e delegam ações. Services coordenam casos de uso
-com dependências explícitas, sem SQL, Bindings, cliente HTTP ou tipos derivados
-dos factories de repositories. Repositories concretos implementam as portas e
-concentram SQL. `composition/index.ts` vincula implementações por requisição ou operação,
-sem estado privado global, repository genérico ou container de DI.
+Controllers validam transporte. Services coordenam casos de uso por portas em
+`entity/index.ts`, sem SQL, HTTP ou Bindings. Repositories implementam essas portas
+com Drizzle. A composição injeta implementações por requisição/importação.
+Adapters Pluggy, OAuth e Workflow têm entradas explícitas. Não há repository
+universal, container de DI nem camadas vazias.
 
-Há exceções concretas: `finance` separa consultas, regras e gravações de entidades
-em repositories especializados; `sync` separa despacho e execução durável. MCP
-é transporte, Pluggy é adapter de origem, e OAuth/Workflow mantêm seus adapters.
-Esses módulos não ganham services ou repositories vazios para completar o layout.
-`entity/index.ts` pode inferir modelos de linhas por imports exclusivamente de tipo do
-schema Drizzle; builders e dependências D1 permanecem nos repositories.
+## Persistência
 
-As entidades do domínio reúnem tipos, enums e regras puras no mesmo arquivo
-`*.entity.ts`, organizado por conceito. Recebem fatos já lidos pelos adaptadores;
-não consultam D1, HTTP, Bindings nem relógio global. São funções e modelos tipados.
-A revisão inclui conta, autenticação, finanças, sincronização, Pluggy, MCP e interface:
+| Tabela | Dados |
+| --- | --- |
+| `settings` | Singleton: importação habilitada e revisão financeira |
+| `connections` | Item, apresentação e janela da próxima admissão |
+| `accounts` | Conta, saldo observado, origem privada e qualidade da coleta |
+| `transactions` | Origem, projeção consultável, marcador de presença e três overrides |
+| `sync_runs` | Intenção, estado, checkpoint e último commit confirmado |
+| `portal_sessions` | Sessões hasheadas, CSRF, expiração e versão do Worker |
 
-| Conceito | Entidade | Responsabilidade |
-| --- | --- | --- |
-| Conta e conexão | `account.entity.ts`, `connection.entity.ts` | Estado da conta, resultado da importação, conector Meu Pluggy e capacidade de conexões |
-| Operação | `operation.entity.ts` | Intenção, idempotência, webhook, migração, agenda, watermark, cobertura e totais |
-| Origem e finanças | `provider.entity.ts`, `finance.entity.ts` | Payloads de origem, identidade, relacionamentos, projeção, mudanças e correções locais |
-| Consulta e recorrência | `query.entity.ts`, `recurrence.entity.ts` | Filtros, revisão de leitura, cursores e detecção de recorrências |
-| Regras e falhas | `rules/rule.entity.ts`, `fault.entity.ts` | Catálogo, condições, ações, compilação e erros de domínio |
+Contas usam `(connection_id,id)`; transações usam
+`(connection_id,account_id,id)`. Não assumir unicidade global dos IDs externos.
+Detalhes sem filtro frequente ficam no JSON privado do registro. Contas e
+transações continuam linhas SQL; não são um extrato inteiro em JSON/R2.
 
-`finance-model.ts` mantém a normalização e as definições de métricas, e `exact.ts`
-mantém os cálculos monetários e de datas. Schemas de uma mesma entidade ficam
-juntos em `*.schema.ts`; DTOs de importação sem comportamento podem usar `.types.ts`.
+Correções são colunas de categoria, descrição e ignorado, com precedência sobre a
+origem. Importação não escreve nessas colunas. `null` remove um override; ausência
+preserva o campo. Descrição vazia e `false` são valores válidos.
 
-Os enums e modelos de operações e estado da conta pertencem ao domínio. Os caminhos
-históricos de `contracts` os reexportam, preservando os imports públicos e os valores
-persistidos. Schemas continuam validando as entradas externas uma vez na fronteira.
-SQL traduz seleção, ordenação, precedência de overrides e atualização condicional;
-os limites de parâmetros e a codificação monetária do banco permanecem no adaptador.
-As condições SQL de maturidade preservam a seleção no banco e os testes de
-integração verificam sua correspondência com as políticas de domínio.
-Sessão, CSRF, OAuth, HTTP, parsing e ciclo de vida visual têm donos nos respectivos
-adaptadores. Guards que fazem narrowing de uniões mantêm essa informação de tipos.
-Steps, recibos e batches conservam a ordem e os limites atômicos existentes.
+## Importação
 
-A ingestão, publicação, recursos, eventos legados, reaplicação legada e migração ficam
-em `sync/execution.service.ts`; não executam queries nem montam statements.
-`runOperation` recebe persistência, preparação, origem e Steps pela composição
-e concentra lock, cancelamento, maturação, escolha da execução e conclusão.
-Novas reaplicações usam `sync/reapplication.service.ts`: uma chamada síncrona
-limitada a 5 transações, com seleção estável, revisão e recibo atômico por lote.
-A admissão em `sync/repository/admission.repository.ts` reserva 24 horas por Item;
-webhooks consolidam gerações, e o despacho reserva o executor antes do Workflow.
-A agenda diária não executa trabalho local; GET nunca despacha ou mantém dados.
-O Workflow e os testes usam essa mesma entrada, sem uma sessão intermediária
-que exponha a sequência interna.
-`sync/repository/execution.repository.ts` faz leituras e commits atômicos por portas tipadas.
-A preparação financeira retorna um plano de observação ou publicação, sem builders;
-o repository traduz esse plano junto com os checkpoints, progresso e recibos no
-mesmo batch. `workflow/index.ts` é a entrada Cloudflare. O cliente Pluggy, sua configuração
-e o adapter Fetch ficam em `pluggy`; os índices de `database`, `schema`,
-`http` e `bindings` são compartilhados entre funcionalidades.
+Pedido manual ou cron às 09:00 UTC admite conexões elegíveis. Um batch insere a
+intenção `pending` e reserva 24 horas por conexão, inclusive em falha. Um índice
+único parcial impede duas execuções ativas da mesma conexão. A pausa impede novas
+admissões; não cancela trabalho iniciado. Não há lock mantido durante HTTP.
 
-A preparação dos registros de páginas, eventos e pendências compartilha identidade,
-detecção de duplicatas e progresso. No mesmo lote, conteúdo idêntico para o mesmo ID
-conta como duplicata sem nova preparação; conteúdo diferente recusa o lote inteiro.
-Um lote reúne os registros da mesma conexão, recurso e contexto pai recebidos
-em uma página ou seleção de IDs. Cobertura, watermark, remoção de ausentes e recibos
-conservam as políticas de cada fluxo.
+O Workflow usa o ID da execução. Despacho incerto conserva a intenção; o próximo
+cron ou pedido manual recupera o mesmo ID. GET/status nunca despacham trabalho.
+Falha terminal nativa encerra a execução D1; falha ao consultar status não prova
+que ela terminou. Não há expiração de lock nem restart de execução encerrada.
 
-## Instalação pessoal
+Um único algoritmo relê contas e todas as páginas disponíveis de transações.
+Cada `step.do` lê, valida e publica uma página; devolve só resumo/checkpoint.
+O adapter Workflow limita retentativas a três e respeita Retry-After. Falhas
+conhecidas viram resultados pequenos do step; a espera durável ocorre fora de
+step.do. Não depender de propriedades de Error após o RPC. HTTP, SDK e retries
+nativos adicionais não multiplicam as tentativas.
 
-Uma pessoa e uma aplicação Pluggy usam cada instalação. Não há cadastro de usuários,
-identidade configurável, login GitHub ou cofre próprio. Os três secrets vêm do deploy.
-O banco mantém uma única configuração. Todas as conexões e registros pertencem
-ao dono da instalação; não há permissões por Item, recurso, conta ou operação.
-O histórico de migrações é preservado. A migração `0002_owner_data.sql` remove
-os campos antigos de permissões e o vínculo com o Client ID sem alterar os dados
-financeiros. A migração inicial exige banco novo; não converte a arquitetura anterior.
+`sync/repository/publication.repository.ts` prepara os writes da página.
+`sync/repository/index.ts` confirma dados, qualidade, revisão, checkpoint e último
+recibo no mesmo batch D1. Uma guarda de estado/sequence usa o CHECK da revisão
+para abortar todo o batch se o executor estiver obsoleto. Resposta perdida relê o
+recibo; página antiga não publica. Não há histórico ilimitado de recibos.
 
-## Persistência e finanças
+A origem pode mudar de ID ou reduzir a janela histórica. A enumeração concluída
+da conta troca `last_completed_run`; registros não encontrados ficam
+`not_observed`, preservados e consultáveis. Coleta parcial mantém páginas já
+confirmadas, sem promover o marcador de sucesso. Não há rollback da execução
+inteira, correspondência por similaridade ou migração automática de overrides.
+Execuções encerradas são retidas por 30 dias; marcadores financeiros não são FKs
+para essas execuções.
 
-D1 é a base canônica de dados, regras, operações e progresso. Consultas reutilizam
-essa base; não iniciam importações. Workflows executam as operações duráveis.
-A mesma operação identifica a Task MCP e o Workflow. A outbox recupera o intervalo
-entre a gravação D1 e o despacho do Workflow.
+## Consultas e dinheiro
 
-Publicação de dados, derivados, cobertura, checkpoint, progresso, revisão e recibo
-ocorre no mesmo batch. Replay verifica o recibo antes de buscar a página novamente.
-Um lock da instalação serializa publicações; cancelamento preserva commits já feitos.
-Nenhuma transação SQL fica aberta durante chamadas HTTP.
+D1 é a fonte das leituras. Filtros fechados e paginação por tupla composta usam a
+revisão financeira: alteração entre páginas exige reiniciar a consulta. Totais
+consideram toda a seleção SQL, não uma página. Moedas permanecem separadas.
 
-Dinheiro usa valores exatos e moedas separadas. Normalização e elegibilidade recebem
-a data de referência explicitamente. Regras ativadas não reescrevem o histórico sem
-reaplicação; overrides permanecem separados da origem e dos derivados. Revisões de
-leitura invalidam cursores durante publicação.
+Valores monetários são inteiros em strings, com até 30 dígitos por registro. A
+soma SQL usa parcelas inteiras de três dígitos, reconstruídas com BigInt. Não usa
+REAL nem converte valores financeiros para Number. Precisão/moeda não suportada
+fica desconhecida, sem arredondar para zero.
 
-Cada requisição privada valida a sessão ou o grant OAuth. `live_balance` recebe
-`accountId` e consulta a Pluggy com as credenciais atuais da instalação. R2 é somente fonte
-de migração explícita; o histórico importado conserva sua origem.
+Dia financeiro da origem é preservado. Elegibilidade usa o dia corrente em
+America/Sao_Paulo. Pendentes, futuros e ignorados ficam fora das métricas
+financeiras. Débito, fluxo BANK e consumo comprovado têm significados distintos;
+transferência própria e pagamento de cartão não viram consumo.
 
-### Independência da origem e recuperação
+## Acesso e operação
 
-Pluggy é o adaptador de ingestão e leitura pontual, não a base de consultas do
-produto. Consulta, agregação, correção local, explicação, reaplicação de regras e
-progresso das operações usam D1, sem executar o cliente ou acessar rede Pluggy.
-Isso permite usar o histórico importado durante uma indisponibilidade da origem;
-não transforma informação antiga em saldo atual. Cobertura e falha permanecem
-explícitas. Novos dados, validação de conexão e `live_balance` dependem da origem.
+Os três secrets são ADMIN_PASSWORD, PLUGGY_CLIENT_ID e PLUGGY_CLIENT_SECRET.
+Sessão de oito horas e OAuth oficial protegem toda a instalação. Não há usuários,
+tenants, permissões por conta ou credenciais no D1. Login usa rate limit nativo
+por IP confiável e por localização; não há tabela de tentativas.
 
-`FinancialSource` recebe o adaptador por operação e só o resolve quando necessário.
-Não há fallback para saldo persistido na leitura pontual. Uma futura fonte deve adaptar os dados e capacidades
-de origem, preservando precisão, identidade e cobertura; não exige uma camada
-genérica de providers antecipadamente. O payload heterogêneo continua preservado.
+A observabilidade preserva contexto isolado, erros seguros e spans por ação/página,
+sem registrar payloads ou identidades financeiras. Consulte o
+[roteiro](observability.md). A configuração atual mantém logs integrais e traces
+amostrados em 10%; isso não comprova ingestão em produção.
 
-`src/worker/sync/entity/index.ts` concentra modelos, progresso, checkpoints e portas.
-O serviço de despacho recebe apenas identidade/status da operação e consulta a
-elegibilidade na outbox. O repositório entrega o estado de leitura com resultado
-parseado; o adaptador MCP traduz esse estado para Tasks. Flags e JSON de persistência
-não fazem parte das dependências de aplicação. Os valores D1 e os steps existentes
-permanecem estáveis: `completed` com fase `error` continua sendo falha financeira,
-e não confirmação de cobertura integral no wizard.
-
-## Interface e contratos
-
-`src/web/document.tsx` compõe e renderiza o documento React em HTML. Login e
-consentimento usam formulários nativos; o painel monta a aplicação pelo
-`account-entry.ts`. A página inicial pública foi removida.
-Hono mantém as rotas, cookies, redirects e headers no Worker.
-
-`src/web/account/account-view.tsx` recebe apresentação e ações nomeadas.
-`use-account.ts` mantém o estado React, a montagem e os timers de polling. O controlador
-coordena comandos e cancelamento e publica o estado por uma callback para essa
-única view; `account-browser.ts` concentra os efeitos no navegador.
-`account-api.ts` valida HTTP e preserva CSRF, deadlines e ausência de retry de
-mutações. Leituras concorrentes são consolidadas; confirmar
-uma mutação invalida a leitura anterior. Desmontar cancela requisições e timers.
-Falha transitória conserva o último estado confirmado; expiração da sessão
-interrompe polling. `connect-widget.ts` isola o SDK, serializa sua destruição e
-descarta eventos atrasados. A view controla a apresentação e o foco nos títulos;
-o adaptador do navegador restaura o foco ao fechar o widget.
-
-Painel e Pluggy estendem o cliente Ky de `src/shared/http.ts`, que concentra
-os padrões de transporte. Os consumidores definem prazo total, parsing e limites
-de resposta; schemas validam JSON pela API nativa do Ky. Falhas de sessão e da
-Pluggy continuam traduzidas nos respectivos adaptadores. `src/shared/crypto.ts`
-concentra os hashes estáveis persistidos e a comparação de secrets por digests.
-
-`requestJson` concentra classificação de autorização, redirects e status HTTP,
-normalização de falhas de rede, timeout e parsing, e descarte dos corpos rejeitados.
-O erro genérico contém apenas categoria, status e metadados de `Retry-After`.
-O painel traduz as falhas para sua sessão e mensagens; a Pluggy conserva os códigos
-e metadados esperados pelo SDK. O transporte usa retry zero. `rateLimitRetry`
-define orçamento e backoff de 429; o adaptador de Steps executa as esperas fora
-dos steps duráveis, preservando seus nomes e checkpoints.
-
-O domínio `src/domain/account.entity.ts` decide o estado e o resultado da importação.
-O módulo `src/worker/account/entity/index.ts` projeta esse resultado, a etapa
-inicial, a política de atualização e os dados permitidos no diagnóstico. O serviço de conta
-inclui essa projeção no campo aditivo `panel` do estado e fornece a configuração
-do widget junto ao token. A interface consome essas decisões por contratos tipados;
-`account-presentation.ts` contém os textos e formata o diagnóstico seguro. Foco, seleção
-visual, visibilidade, cancelamento e ciclo de vida do SDK pertencem ao navegador.
-
-Os contratos de wizard descrevem dados. A tradução de falhas pertence ao Worker.
-A política do conector Meu Pluggy pertence ao domínio e valida os dados da origem
-no servidor. As credenciais Pluggy são secrets da instalação; o painel não recebe
-nem persiste essas credenciais.
-
-O parsing e dispatch de `ToolCall` ficam em `src/worker/mcp/invoke.ts`. Operações financeiras
-recebem intenções tipadas após autenticação. Correções usam política do
-domínio, mantendo alterações e revisão no repositório concreto.
-`exact.ts::assertMinor` concentra a precisão persistível; `moneyKey` mantém o
-encoding de ordenação no adaptador SQL. Não há divisão global dos modelos por
-simetria nem alteração do catálogo MCP.
-
-`npm run build` gera assets em `dist/web` e executa o dry-run do Worker em
-`dist/worker`. Não publica o serviço.
-
-As entidades reúnem modelos e comportamento em `*.entity.ts`, independentes de Zod
-e de schemas de validação. Contratos de transporte e DTOs sem comportamento usam
-`.types.ts`. Os parsers de entrada permanecem nas fronteiras HTTP/MCP, Pluggy,
-configuração e importação; `satisfies z.ZodType<T>`
-verifica sua compatibilidade com os modelos. Tipos de linhas e projeções SQL
-continuam inferidos do Drizzle. Dados produzidos internamente não ganham schemas
-apenas para definir seus tipos. O catálogo de campos do provedor é TypeScript
-controlado e verificado no build.
-
-Tasks seguem a revisão 2026-07-28; a JSON Schema
-oficial e sua licença ficam em `src/worker/vendor/ext-tasks`. D1 fornece o progresso
-canônico e é a única fonte de subscriptions. Os testes de wire exercitam a entrega
-do catálogo e as operações MCP; não há snapshot paralelo das declarações internas.
-
-## Ferramentas e testes
-
-Um único `tsconfig.json` verifica fontes e testes com resolução `Bundler` e os
-tipos de Node, navegador e Cloudflare. Imports locais são relativos, omitem
-`.ts`/`.tsx` e consomem outros módulos pelo diretório de seu `index.ts`, sem
-o sufixo `/index`. Vite, Vitest e Wrangler usam os mesmos caminhos, sem aliases.
-Scripts e testes Node usam o loader `tsx` para resolver esses índices em ESM,
-sem alterar o runtime do Worker.
-
-Entradas `index.ts` de domínio, regras, contratos, utilitários e módulos da aplicação
-reexportam nomes explícitos. Internos usam implementações diretamente para evitar
-ciclos pelo próprio barrel. Persistência e transporte têm índices separados dos
-casos de uso; composição e Workflows mantêm suas próprias entradas. `shared/logger`
-preserva a inicialização do Pino fora do barrel compartilhado. Helpers de processos
-Node e mocks Vitest também permanecem em módulos próprios. `mount-account.tsx`
-inicializa o navegador fora do índice de páginas do Worker.
-
-Helpers novos das funcionalidades são tratados como aplicação, mesmo quando
-não se chamam `service.ts`. Repositórios/adaptadores e os fluxos de publicação
-durável têm papéis explícitos; renomear um serviço não libera SQL ou HTTP.
-Views não importam a API, o hook nem o widget, e aplicação/persistência não importam
-envelopes MCP. As dependências dos services são contratos explícitos em `entity/index.ts`.
-MCP, Tasks e cron chamam esses services; não acessam repositories diretamente.
-
-Testes unitários ficam em `__tests__` junto ao módulo. `tests/integration` contém
-fixtures e testes de D1, HTTP, OAuth e Workflows; `tests/support` contém helpers
-exclusivos de testes. `biome.json` concentra lint, formatação e organização de
-imports com regras nativas. Restrições de imports bloqueiam SQL fora de repositories,
-transporte/composição em services e helpers, services em repositories e imports
-do Worker no frontend, incluindo imports relativos, imports dinâmicos e reexports de
-persistência por índices. O check executa o Biome diretamente.
-Os adapters e os imports de tipos de linhas têm exceções explícitas. A localização
-semântica de regras de negócio continua na revisão; o lint não interpreta o produto.
-Políticas sem cobertura de lint ficam nas
-[convenções de contribuição](../CONTRIBUTING.md#layout-e-typescript).
-As migrações SQL em `migrations` mantêm sua ordem.
-
-Os comandos e convenções de contribuição estão em [CONTRIBUTING.md](../CONTRIBUTING.md).
-A identidade visual está em [DESIGN.md](../DESIGN.md), e a instalação e operação em
-[cloudflare-product.md](cloudflare-product.md).
+Esta refatoração começa com um D1 vazio e um schema inicial. Não inclui atualização
+de bancos antigos nem reset a cada deploy. O estado financeiro persiste após a
+instalação. Deploy, migração remota e validação com provedor/host reais são etapas
+separadas da validação local.

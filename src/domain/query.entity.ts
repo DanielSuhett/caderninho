@@ -1,116 +1,55 @@
-import type { Resource } from "./enums";
-import { assertMinor } from "./exact";
-import type { RecordReference } from "./finance.entity";
-
-export const Field = {
-  account: "account",
-  amountMinor: "amountMinor",
-  currency: "currency",
-  date: "date",
-  direction: "direction",
-  effective_category: "effective.category",
-  effective_description: "effective.description",
-  effective_group: "effective.group",
-  eligible: "eligible",
-  ignored: "ignored",
-  item: "item",
-  original_category: "original.category",
-  original_description: "original.description",
-  status: "status",
-} as const;
-export type Field = (typeof Field)[keyof typeof Field];
-
-export const FilterOperator = {
-  contains: "contains",
-  eq: "eq",
-  gte: "gte",
-  lte: "lte",
-  ne: "ne",
-} as const;
-export type FilterOperator =
-  (typeof FilterOperator)[keyof typeof FilterOperator];
-
-export interface Predicate {
-  field: Field;
-  op: FilterOperator;
-  value: string | boolean;
+import type { AccountReference } from "./finance.entity";
+export interface TransactionFilter {
+  accounts?: AccountReference[] | undefined;
+  category?: string | undefined;
+  connectionIds?: string[] | undefined;
+  currency?: string | undefined;
+  description?: string | undefined;
+  direction?: "DEBIT" | "CREDIT" | undefined;
+  from?: string | undefined;
+  ignored?: boolean | undefined;
+  maxAmountMinor?: string | undefined;
+  minAmountMinor?: string | undefined;
+  presence?: "observed" | "not_observed" | undefined;
+  status?: "PENDING" | "POSTED" | undefined;
+  to?: string | undefined;
 }
-
-export const FilterOperandKind = {
-  amount: "amount",
-  scalar: "scalar",
-} as const;
-export type FilterOperand =
-  | { kind: typeof FilterOperandKind.amount; value: string }
-  | { kind: typeof FilterOperandKind.scalar; value: string | boolean };
-
-export type Filter =
-  | Predicate
-  | { tag: string; value: string }
-  | { and: Filter[] }
-  | { or: Filter[] };
-
-export type Identity = RecordReference;
-
 export interface Cursor {
-  offset: number;
+  accountId: string;
+  connectionId: string;
+  date: string;
+  id: string;
   revision: number;
   scope: string;
 }
-
-export interface Query {
+export interface TransactionQuery {
   cursor?: Cursor | undefined;
-  filter?: Filter | undefined;
+  filter?: TransactionFilter | undefined;
   limit: number;
-  resource: Resource;
+}
+export const Metric = {
+  cash_flow: "cash_flow",
+  count: "count",
+  credits: "credits",
+  debits: "debits",
+  known_spending: "known_spending",
+} as const;
+export type Metric = (typeof Metric)[keyof typeof Metric];
+export interface AggregateQuery {
+  filter?: TransactionFilter | undefined;
+  groupBy?: "account" | "category" | "month" | undefined;
+  metric: Metric;
 }
 
-export interface Aggregate {
-  filter?: Filter | undefined;
-  metric?: string | undefined;
-  resource: Resource;
-}
-
-export function assertReadRevision({
-  expected,
-  actual,
-}: {
-  expected: number;
-  actual: number;
-}) {
-  if (expected !== actual) {
-    throw new Error("RESTART_REQUIRED");
-  }
-}
-
-export function assertCursorScope({
-  expected,
-  actual,
-}: {
-  expected: string;
-  actual: string;
-}) {
-  if (expected !== actual) {
-    throw new Error("CURSOR_SCOPE_MISMATCH");
-  }
-}
-
-export function filterOperand(filter: Predicate): FilterOperand {
-  let operand: FilterOperand;
-  if (filter.field === Field.amountMinor) {
-    if (typeof filter.value !== "string") {
-      throw new Error("Invalid amount filter");
-    }
-    assertMinor(filter.value);
-    operand = { kind: FilterOperandKind.amount, value: filter.value };
-  } else {
-    operand = { kind: FilterOperandKind.scalar, value: filter.value };
-  }
-  if (
-    filter.op === FilterOperator.contains &&
-    !filter.field.endsWith("description")
-  ) {
-    throw new Error("contains only supports description");
-  }
-  return operand;
-}
+export const MetricDefinition: Record<Metric, string> = {
+  cash_flow:
+    "Creditos menos debitos POSTED, maduros e nao ignorados, somente de contas BANK.",
+  count:
+    "Registros da selecao; contagens confirmadas e nao confirmadas separadas.",
+  credits:
+    "Magnitude dos creditos POSTED, maduros e nao ignorados; nao equivale a renda.",
+  debits:
+    "Magnitude dos debitos POSTED, maduros e nao ignorados; nao equivale a gasto.",
+  known_spending:
+    "Consumo com evidencia deterministica; debitos incertos informados separadamente.",
+};

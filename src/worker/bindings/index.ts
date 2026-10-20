@@ -7,7 +7,7 @@ export interface DurableInstance {
 export interface DurableWorkflow {
   create: (options: {
     id: string;
-    params: { operationId: string };
+    params: { runId: string };
   }) => Promise<DurableInstance>;
   get: (id: string) => Promise<DurableInstance>;
 }
@@ -17,9 +17,11 @@ export interface Bindings {
   CF_VERSION_METADATA: Cloudflare.Env["CF_VERSION_METADATA"];
   DB: Cloudflare.Env["DB"];
   FINANCE: DurableWorkflow;
+  LOGIN_LIMITER: {
+    limit: (input: { key: string }) => Promise<{ success: boolean }>;
+  };
   OAUTH_KV: Cloudflare.Env["OAUTH_KV"];
   OAUTH_PROVIDER: OAuthHelpers;
   PLUGGY_CLIENT_ID?: string;
   PLUGGY_CLIENT_SECRET?: string;
-  WEBHOOK_SECRET?: string;
 }

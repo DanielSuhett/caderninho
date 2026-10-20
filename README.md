@@ -8,7 +8,7 @@ pelo Meu Pluggy e consulte o histórico no ChatGPT ou Claude.
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/DanielSuhett/caderninho)
 
 1. **Instale.** Clique no botão, confirme o nome do Worker e informe os três campos abaixo. Mantenha a raiz do repositório, build `npm run build` e deploy `npm run deploy`.
-2. **Conecte seus bancos.** Abra `/account`, entre com sua senha e use **Abrir Meu Pluggy** para importar suas conexões pessoais.
+2. **Conecte seus bancos.** Abra `/account`, entre com sua senha e use **Conectar Meu Pluggy**. Depois escolha **Importar agora**.
 3. **Conecte seu assistente.** No painel, copie o endereço `/mcp`, adicione-o ao ChatGPT ou Claude com OAuth e confirme a autorização.
 
 | Campo do deploy | O que informar |
@@ -25,6 +25,10 @@ Esta versão exige **banco novo**. Não atualize uma instalação com o schema a
 O botão usa o código publicado no GitHub; alterações locais não aparecem nele.
 O provisionamento completo numa conta Cloudflare nova ainda exige validação real.
 O software é gratuito; Cloudflare e Pluggy têm seus próprios limites e custos.
+
+O lançamento cobre contas BANK/CREDIT e transações, com consultas exatas e correções
+locais de categoria, descrição e ignorado. O modelo usa seis tabelas D1 e seis tools
+MCP comuns; importações rodam no servidor, sem lotes coordenados pelo assistente.
 
 Consulte o [guia de uso](docs/usage.md) para manutenção e recuperação de acesso.
 
