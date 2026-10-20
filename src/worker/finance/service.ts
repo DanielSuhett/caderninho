@@ -8,7 +8,6 @@ export function createFinancialService(
   now: () => Date = () => new Date(),
 ) {
   return {
-    accounts: repository.accounts,
     aggregate: (input: AggregateQuery) =>
       repository.aggregate(input, localDay(now())),
     async query(input: TransactionQuery) {

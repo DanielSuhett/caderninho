@@ -27,7 +27,7 @@ test("account and transaction keep exact money and the provider calendar day", (
       status: "POSTED",
       type: "DEBIT",
     },
-    bank,
+    bank.id,
   );
   assert.equal(tx.amountMinor, "-900719925474099301");
   assert.equal(tx.date, "2026-10-01");

@@ -1,4 +1,3 @@
-import type { AccountInfo } from "../../../contracts";
 import type {
   AggregateQuery,
   Cursor,
@@ -7,7 +6,6 @@ import type {
 } from "../../../domain";
 
 export interface Quality {
-  accounts: AccountInfo[];
   partial: boolean;
 }
 export interface QueryResult extends Quality {
@@ -29,7 +27,6 @@ export interface AggregateResult extends Quality {
   referenceDay: string;
 }
 export interface FinancialRepository {
-  accounts: (ids?: string[]) => Promise<AccountInfo[]>;
   aggregate: (
     input: AggregateQuery,
     referenceDay: string,

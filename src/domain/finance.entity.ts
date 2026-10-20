@@ -1,19 +1,19 @@
 export type { MoneyInput } from "./provider.entity";
-export interface AccountReference {
+export interface TransactionReference {
   accountId: string;
-  connectionId: string;
-}
-export interface TransactionReference extends AccountReference {
   id: string;
 }
-export interface AccountProjection {
+export interface AccountMetadata {
   balanceMinor: string | null;
-  connectionId: string;
+  balanceObservedAt: string | null;
   currency: string;
-  id: string;
   name: string;
-  sourceUpdatedAt: string | null;
   type: "BANK" | "CREDIT";
+}
+export type AccountMap = Record<string, AccountMetadata>;
+export interface AccountProjection
+  extends Omit<AccountMetadata, "balanceObservedAt"> {
+  id: string;
 }
 export interface TransactionProjection extends TransactionReference {
   amountMinor: string | null;
@@ -24,12 +24,3 @@ export interface TransactionProjection extends TransactionReference {
   direction: "DEBIT" | "CREDIT";
   status: "PENDING" | "POSTED";
 }
-export const CollectionStatus = {
-  collecting: "collecting",
-  complete: "complete",
-  never: "never",
-  partial: "partial",
-  unavailable: "unavailable",
-} as const;
-export type CollectionStatus =
-  (typeof CollectionStatus)[keyof typeof CollectionStatus];

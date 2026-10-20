@@ -18,28 +18,31 @@ reset automático em deploys posteriores. Não execute a migração em bancos an
 
 ## Dados e execução
 
-São cinco tabelas de aplicação: settings, connections, accounts, transactions e
-sync_runs. Contas/transações têm identidade composta e campos financeiros concretos
-em SQL. Não são guardados payloads genéricos, documentos pessoais ou marcadores de
+São duas tabelas de aplicação: connections (nove colunas) e transactions (nove).
+Contas e saldos ficam no mapa JSON tipado da conexão; transações usam os IDs
+globais dos recursos Pluggy e campos financeiros concretos em SQL. Não são
+guardados payloads genéricos, documentos pessoais ou marcadores de
 importação por transação. O histórico é alterado somente pela importação;
 categoria e descrição são as da origem.
 
-A intenção de importação e a reserva de 24 horas são confirmadas antes do despacho.
-O índice único parcial de sync_runs impede duas execuções ativas por conexão.
-Cada execução corresponde a um Workflow com o mesmo ID. Despacho incerto conserva
-`pending`; cron e pedidos manuais recuperam esse ID. GET nunca despacha. Pausa
-impede novas admissões; falha não libera cooldown. O cron roda às 09:00 UTC.
+O ID, estado, admissão, sequência, checkpoint e erro da importação ficam na
+conexão, junto do último sucesso completo e do mapa de contas. A admissão
+condicional reserva 24 horas antes do despacho. Despacho incerto conserva o mesmo
+ID; cron e pedido manual o recuperam. GET nunca despacha e falha não libera
+cooldown. Não há settings, pausa global ou histórico de execuções. O cron roda
+às 09:00 UTC.
 
-Cada página confirma registros, qualidade, revisão, checkpoint e último recibo no
-mesmo batch D1. A guarda de estado/sequence aborta o batch inteiro quando obsoleto.
-O Workflow limita retries e os clientes HTTP não repetem operações por conta
-própria. Não há lock durante rede nem expiração artificial de executor.
+Cada página confirma metadados, transações, checkpoint, sequência e estado no mesmo
+batch D1. A guarda de ID/estado/sequence aborta o batch obsoleto. Replay reconstitui
+a última página ou término pelo mesmo ID com sequência N+1, sem recibos ou
+contagens persistidas. O Workflow limita retries; os clientes HTTP não repetem
+operações por conta própria. Não há lock durante rede nem expiração de executor.
 
 Uma releitura integral por admissão substitui caminhos incrementais, webhooks e
 reconciliações separados. Importações atualizam o mesmo ID e acrescentam novos IDs.
 Ausência na origem preserva o histórico e sua elegibilidade nos totais objetivos.
-Consultas e totais informam coleta parcial e valores desconhecidos. Execuções
-encerradas são limpas após 30 dias, em lotes de até 200.
+Consultas e totais informam parcialidade por conexão e valores desconhecidos.
+Contas ausentes e saldos não relidos preservam o valor e a referência antigos.
 
 ## Segurança e diagnóstico
 

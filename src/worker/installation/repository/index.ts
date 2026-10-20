@@ -1,9 +1,9 @@
 import { inArray } from "drizzle-orm";
 
-import { IMPORT_INTERVAL } from "../../../domain";
+import { connectionPartial, IMPORT_INTERVAL } from "../../../domain";
 import { tryCatch } from "../../../shared";
 import { database } from "../../database";
-import { accounts, connections } from "../../schema";
+import { connections } from "../../schema";
 import type { InstallationRepository } from "../entity";
 export function createInstallationRepository(
   binding: D1Database,
@@ -28,44 +28,17 @@ export function createInstallationRepository(
       throw error;
     },
     async state(selection = {}) {
-      const [items, accountRows] = await db.batch([
-        db
-          .select()
-          .from(connections)
-          .where(
-            selection.connectionIds &&
-              inArray(connections.id, selection.connectionIds),
-          )
-          .orderBy(connections.id),
-        db
-          .select({
-            balanceMinor: accounts.balanceMinor,
-            collectionStatus: accounts.collectionStatus,
-            connectionId: accounts.connectionId,
-            currency: accounts.currency,
-            error: accounts.error,
-            id: accounts.id,
-            lastAttemptAt: accounts.lastAttemptAt,
-            lastCompletedFrom: accounts.lastCompletedFrom,
-            lastCompletedTo: accounts.lastCompletedTo,
-            lastSuccessAt: accounts.lastSuccessAt,
-            name: accounts.name,
-            observedAt: accounts.observedAt,
-            observedFrom: accounts.observedFrom,
-            observedTo: accounts.observedTo,
-            sourceUpdatedAt: accounts.sourceUpdatedAt,
-            type: accounts.type,
-          })
-          .from(accounts)
-          .where(
-            selection.connectionIds &&
-              inArray(accounts.connectionId, selection.connectionIds),
-          )
-          .orderBy(accounts.connectionId, accounts.id),
-      ]);
+      const items = await db
+        .select()
+        .from(connections)
+        .where(
+          selection.connectionIds &&
+            inArray(connections.id, selection.connectionIds),
+        )
+        .orderBy(connections.id);
       return {
-        accounts: accountRows,
         connections: items.map((row) => ({
+          accounts: row.accounts,
           id: row.id,
           importCheckpoint: row.importCheckpoint
             ? {
@@ -81,6 +54,7 @@ export function createInstallationRepository(
                 Date.parse(row.importAdmittedAt) + IMPORT_INTERVAL,
               ).toISOString()
             : null,
+          partial: connectionPartial(row),
         })),
       };
     },

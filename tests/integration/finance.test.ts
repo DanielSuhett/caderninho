@@ -6,7 +6,7 @@ import {
   AggregateQuerySchema,
   TransactionQuerySchema,
 } from "../../src/contracts";
-import { normalizeAccount, normalizeTransaction } from "../../src/domain";
+import { normalizeTransaction } from "../../src/domain";
 import { createFinancialService } from "../../src/worker/finance";
 import { createFinancialRepository } from "../../src/worker/finance/repository";
 import { createInstallationRepository } from "../../src/worker/installation/repository";
@@ -192,16 +192,16 @@ test("strict filters, scoped cursors and signed magnitude filters preserve unkno
 
 test("100 account references remain a valid bounded query within D1 parameter limits", async () => {
   await collect(source([transaction()]));
-  const accounts = Array.from({ length: 100 }, (_, index) => ({
-    accountId: index === 0 ? "a" : `missing-${index}`,
-    connectionId: "c",
-  }));
+  const accountIds = Array.from({ length: 100 }, (_, index) =>
+    index === 0 ? "a" : `missing-${index}`,
+  );
   assert.equal(
-    (await finance().query({ filter: { accounts }, limit: 10 })).records.length,
+    (await finance().query({ filter: { accountIds }, limit: 10 })).records
+      .length,
     1,
   );
   assert.equal(
-    (await finance().aggregate({ filter: { accounts }, metric: "debits" }))
+    (await finance().aggregate({ filter: { accountIds }, metric: "debits" }))
       .groups[0]?.totalMinor,
     "1000",
   );
@@ -256,7 +256,7 @@ test("selected pagination ignores unrelated imports and reconnects but rejects e
     transactions: [
       normalizeTransaction(
         transaction({ description: "Changed", id: "1" }),
-        normalizeAccount(account(), "c"),
+        "a",
       ),
     ],
   });

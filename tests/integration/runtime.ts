@@ -29,17 +29,31 @@ function syntheticSource(
     "volume-10000": 10_000,
     "volume-100000": 100_000,
   };
+  const resourceOffsets: Record<string, number> = {
+    c: 1,
+    failure: 300_000,
+    history: 500_000,
+    replay: 400_000,
+    "volume-10000": 10_000,
+    "volume-100000": 100_000,
+  };
+  const base = resourceOffsets[connectionId] ?? 1;
+  // Fixture resources are unique UUIDs, independently from bank account numbers.
+  const resourceId = (index: number) =>
+    `00000000-0000-4000-8000-${String(index).padStart(12, "0")}`;
+  const bankId = resourceId(base);
+  const cardId = resourceId(base + 1);
   const count = sizes[connectionId] ?? 1200;
   const perAccount = count / 2;
   return {
     accounts: async () =>
-      (connectionId === "history" ? ["a"] : ["a", "b"]).map((id) => ({
+      (connectionId === "history" ? [bankId] : [bankId, cardId]).map((id) => ({
         balance: "123.45",
         currencyCode: "BRL",
         id,
         itemId: connectionId,
         name: "Synthetic",
-        type: id === "a" ? "BANK" : "CREDIT",
+        type: id === bankId ? "BANK" : "CREDIT",
       })),
     connection: async () => ({ connector: { id: 200 }, id: connectionId }),
     transactions: async (id, cursor) => {
@@ -74,6 +88,7 @@ function syntheticSource(
             currencyCode: "BRL",
             date: "2026-10-01",
             description: "Synthetic history",
+            id: resourceId(base + 2 + row.id.charCodeAt(0)),
             status: "POSTED",
             type: "DEBIT",
           })),
@@ -81,7 +96,7 @@ function syntheticSource(
       }
       if (
         connectionId === "replay" &&
-        id === "a" &&
+        id === bankId &&
         !cursor &&
         (await instrumentation.get(`test:committed:${importId}`))
       ) {
@@ -103,7 +118,7 @@ function syntheticSource(
             currencyCode: index % 3 === 0 ? "USD" : "BRL",
             date: "2026-10-01",
             description: "Synthetic transaction",
-            id: `tx-${String(index).padStart(6, "0")}`,
+            id: resourceId(base + 2 + (id === bankId ? 0 : perAccount) + index),
             status: "POSTED",
             type: "DEBIT",
           };
@@ -146,6 +161,9 @@ export class TestWorkflow extends WorkflowEntrypoint<
               }
               return receipt;
             });
+            if (JSON.stringify(result).length > 1024) {
+              throw new Error("STEP_RESULT_TOO_LARGE");
+            }
             if (run.connectionId === "c") {
               await step.sleep(`${name}-inspection`, 200);
             }

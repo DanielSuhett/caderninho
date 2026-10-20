@@ -7,7 +7,6 @@ export {
 export { PRODUCT_INSTRUCTIONS, ToolName, tools } from "./mcp-contract";
 export type {
   AccountConnectToken,
-  AccountInfo,
   ConnectionInfo,
   InstallationState,
   PortalResponse,

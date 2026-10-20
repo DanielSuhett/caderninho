@@ -68,14 +68,11 @@ test("connection checkpoints survive response loss, races and completed-run repl
   assert.equal((await repository.read(id)).sequence, version);
   const latest = await repository.read(id);
   const done = {
-    completeAccountId: "a",
     done: true,
     next: { accountId: null, cursor: null, phase: "finish" as const },
     now,
     run: latest,
-    transactions: [
-      normalizeTransaction(transaction(), normalizeAccount(account(), "c")),
-    ],
+    transactions: [normalizeTransaction(transaction(), "a")],
   };
   await repository.publish(done);
   assert.deepEqual(await repository.publish(done), {
@@ -95,7 +92,11 @@ test("connection checkpoints survive response loss, races and completed-run repl
     { message: "STALE_COMMIT" },
   );
   assert.equal(
-    (await finance().accounts()).some((row) => row.id === "stale"),
+    Object.hasOwn(
+      (await createInstallationRepository(env.DB).state()).connections[0]
+        ?.accounts ?? {},
+      "stale",
+    ),
     false,
   );
   assert.equal((await finance().query({ limit: 10 })).records.length, 1);
@@ -116,9 +117,15 @@ test("a checkpoint failure rolls back financial data, metadata and sequence in t
       next: { accountId: null, cursor: null, phase: "finish" },
       now,
       run,
+      transactions: [normalizeTransaction(transaction(), "a")],
     }),
   );
-  assert.equal((await finance().accounts()).length, 0);
+  assert.deepEqual(
+    (await createInstallationRepository(env.DB).state()).connections[0]
+      ?.accounts ?? {},
+    {},
+  );
+  assert.deepEqual((await finance().query({ limit: 10 })).records, []);
   assert.equal((await repository.read(id)).sequence, 0);
   assert.equal((await repository.read(id)).sequence, version);
 });
@@ -153,15 +160,11 @@ test("partial pages keep prior success and confirmed data, reject conflicting ID
     { code: "UPSTREAM_AUTH" },
   );
   const state = await createInstallationRepository(env.DB).state();
-  assert.equal(state.accounts[0]?.collectionStatus, "partial");
-  assert.equal(state.accounts[0]?.lastSuccessAt, now);
-  assert.equal(state.accounts[0]?.observedFrom, "2026-10-02");
-  assert.equal(state.accounts[0]?.observedTo, "2026-10-02");
-  assert.equal(state.accounts[0]?.lastCompletedFrom, "2026-09-01");
-  assert.equal(state.accounts[0]?.lastCompletedTo, "2026-09-01");
+  assert.equal(state.connections[0]?.partial, true);
+  assert.equal(state.connections[0]?.lastSuccessAt, now);
   assert.equal(
-    (await finance().accounts())[0]?.lastCompletedFrom,
-    "2026-09-01",
+    state.connections[0]?.accounts.a?.balanceObservedAt,
+    "2026-10-02T00:00:00.000Z",
   );
   assert.equal(state.connections[0]?.importStatus, "failed");
   assert.equal((await finance().query({ limit: 10 })).records.length, 2);
@@ -190,14 +193,13 @@ test("partial pages keep prior success and confirmed data, reject conflicting ID
     { message: "DUPLICATE_CHANGED" },
   );
   await collect(source([]), "2026-10-04T00:00:00.000Z");
-  const {
-    accounts: [empty],
-  } = await createInstallationRepository(env.DB).state();
-  assert.equal(empty?.lastSuccessAt, "2026-10-04T00:00:00.000Z");
-  assert.equal(empty?.observedFrom, null);
-  assert.equal(empty?.observedTo, null);
-  assert.equal(empty?.lastCompletedFrom, null);
-  assert.equal(empty?.lastCompletedTo, null);
+  const stateAfterEmpty = await createInstallationRepository(env.DB).state();
+  assert.equal(
+    stateAfterEmpty.connections[0]?.lastSuccessAt,
+    "2026-10-04T00:00:00.000Z",
+  );
+  assert.equal(stateAfterEmpty.connections[0]?.partial, false);
+  assert.equal((await finance().query({ limit: 10 })).records.length, 2);
 });
 test("dispatch uncertainty recovers the same ID and terminal native failures do not free cooldown", async () => {
   let creates = 0;
@@ -262,10 +264,18 @@ test("a replaced or missing connection cannot publish, fail or restart an old ex
   await repository.fail(id, "OLD_EXECUTOR");
   await repository.start(id);
   assert.equal((await repository.read(replacement)).status, "pending");
-  assert.equal((await finance().accounts()).length, 0);
+  assert.deepEqual(
+    (await createInstallationRepository(env.DB).state()).connections[0]
+      ?.accounts ?? {},
+    {},
+  );
   await database(env.DB).delete(connections);
   await assert.rejects(publish, { message: "STALE_COMMIT" });
-  assert.equal((await finance().accounts()).length, 0);
+  assert.deepEqual(
+    (await createInstallationRepository(env.DB).state()).connections[0]
+      ?.accounts ?? {},
+    {},
+  );
 });
 
 test("a retried native step rebuilds the last committed page and terminal result before any source I/O", async () => {

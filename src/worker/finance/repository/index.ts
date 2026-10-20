@@ -5,43 +5,16 @@ import type {
   Metric,
   TransactionFilter,
 } from "../../../domain";
-import { MetricDefinition } from "../../../domain";
+import { connectionPartial, MetricDefinition } from "../../../domain";
 import { hash } from "../../../shared";
 import { database } from "../../database";
-import {
-  accounts as a,
-  connections as c,
-  transactions as t,
-} from "../../schema";
+import { connections as c, transactions as t } from "../../schema";
 import type { FinancialRepository } from "../entity";
 
-const joinAccount = and(
-  eq(a.connectionId, t.connectionId),
-  eq(a.id, t.accountId),
-);
-const accountFields = {
-  balanceMinor: a.balanceMinor,
-  collectionStatus: a.collectionStatus,
-  connectionId: a.connectionId,
-  currency: a.currency,
-  error: a.error,
-  id: a.id,
-  lastAttemptAt: a.lastAttemptAt,
-  lastCompletedFrom: a.lastCompletedFrom,
-  lastCompletedTo: a.lastCompletedTo,
-  lastSuccessAt: a.lastSuccessAt,
-  name: a.name,
-  observedAt: a.observedAt,
-  observedFrom: a.observedFrom,
-  observedTo: a.observedTo,
-  sourceUpdatedAt: a.sourceUpdatedAt,
-  type: a.type,
-};
 const transactionFields = {
   accountId: t.accountId,
   amountMinor: t.amountMinor,
   category: t.category,
-  connectionId: t.connectionId,
   currency: t.currency,
   date: t.date,
   description: t.description,
@@ -49,12 +22,15 @@ const transactionFields = {
   id: t.id,
   status: t.status,
 };
-function accountWhere(filter: TransactionFilter = {}) {
-  return and(
-    filter.connectionIds && inArray(a.connectionId, filter.connectionIds),
-    filter.accounts &&
-      sql`EXISTS(SELECT 1 FROM json_each(${JSON.stringify(filter.accounts)}) AS selected WHERE json_extract(selected.value,'$.connectionId')=${a.connectionId} AND json_extract(selected.value,'$.accountId')=${a.id})`,
+function accountMembership(filter: TransactionFilter = {}, bank = false) {
+  const condition = and(
+    filter.connectionIds && inArray(c.id, filter.connectionIds),
+    bank ? sql`json_extract(account.value,'$.type')='BANK'` : undefined,
   );
+  return sql`${t.accountId} IN (SELECT account.key FROM ${c}, json_each(${c.accounts}) AS account ${condition ? sql`WHERE ${condition}` : sql``})`;
+}
+function selectedAccounts(ids: string[]) {
+  return sql`SELECT value FROM json_each(${JSON.stringify(ids)})`;
 }
 function amountComparison(bound: string, minimum: boolean) {
   const value = BigInt(bound).toString();
@@ -73,9 +49,9 @@ function amountComparison(bound: string, minimum: boolean) {
 }
 function filterWhere(filter: TransactionFilter = {}) {
   return and(
-    filter.connectionIds && inArray(t.connectionId, filter.connectionIds),
-    filter.accounts &&
-      sql`EXISTS(SELECT 1 FROM json_each(${JSON.stringify(filter.accounts)}) AS selected WHERE json_extract(selected.value,'$.connectionId')=${t.connectionId} AND json_extract(selected.value,'$.accountId')=${t.accountId})`,
+    filter.connectionIds && accountMembership(filter),
+    filter.accountIds &&
+      sql`${t.accountId} IN (${selectedAccounts(filter.accountIds)})`,
     filter.from === undefined ? undefined : sql`${t.date}>=${filter.from}`,
     filter.to === undefined ? undefined : sql`${t.date}<=${filter.to}`,
     filter.currency === undefined ? undefined : eq(t.currency, filter.currency),
@@ -133,15 +109,10 @@ export function createFinancialRepository(
   binding: D1Database,
 ): FinancialRepository {
   const db = database(binding);
-  const qualityAccounts = (filter?: TransactionFilter) =>
-    db
-      .select(accountFields)
-      .from(a)
-      .where(accountWhere(filter))
-      .orderBy(a.connectionId, a.id);
   const qualityConnections = (filter: TransactionFilter = {}) =>
     db
       .select({
+        accounts: c.accounts,
         id: c.id,
         importAdmittedAt: c.importAdmittedAt,
         importId: c.importId,
@@ -153,37 +124,15 @@ export function createFinancialRepository(
       .where(
         and(
           filter.connectionIds && inArray(c.id, filter.connectionIds),
-          filter.accounts &&
-            sql`${c.id} IN (SELECT json_extract(value,'$.connectionId') FROM json_each(${JSON.stringify(filter.accounts)}))`,
+          filter.accountIds &&
+            sql`EXISTS(SELECT 1 FROM json_each(${c.accounts}) AS account WHERE account.key IN (${selectedAccounts(filter.accountIds)}))`,
         ),
       )
       .orderBy(c.id);
-  function partial(
-    rows: { collectionStatus: string }[],
-    connections: {
-      lastSuccessAt: string | null;
-      importAdmittedAt: string | null;
-      importStatus: string | null;
-    }[],
-  ) {
-    return (
-      !connections.length ||
-      connections.some(
-        (row) =>
-          row.importStatus !== "succeeded" ||
-          !row.lastSuccessAt ||
-          !!(row.importAdmittedAt && row.importAdmittedAt > row.lastSuccessAt),
-      ) ||
-      rows.some((row) => row.collectionStatus !== "complete")
-    );
+  function partial(rows: Awaited<ReturnType<typeof qualityConnections>>) {
+    return !rows.length || rows.some(connectionPartial);
   }
   return {
-    accounts: (ids) =>
-      db
-        .select(accountFields)
-        .from(a)
-        .where(ids ? inArray(a.connectionId, ids) : undefined)
-        .orderBy(a.connectionId, a.id),
     async aggregate(input, referenceDay) {
       const absolute = sql<string | null>`replace(${t.amountMinor},'-','')`;
       const eligible =
@@ -191,7 +140,7 @@ export function createFinancialRepository(
           ? undefined
           : and(eq(t.status, "POSTED"), sql`${t.date}<=${referenceDay}`);
       const metricFilters: Record<Metric, SQL | undefined> = {
-        cash_flow: eq(a.type, "BANK"),
+        cash_flow: accountMembership(input.filter, true),
         count: undefined,
         credits: eq(t.direction, "CREDIT"),
         debits: eq(t.direction, "DEBIT"),
@@ -207,14 +156,14 @@ export function createFinancialRepository(
         NonNullable<AggregateQuery["groupBy"]>,
         SQL<string | null>
       > = {
-        account: sql`json_array(${t.connectionId},${t.accountId})`,
+        account: sql`${t.accountId}`,
         category: sql`${t.category}`,
         month: sql`substr(${t.date},1,7)`,
       };
       const group = input.groupBy
         ? groupings[input.groupBy]
         : sql<string | null>`NULL`;
-      const [groups, quality, connectionQuality] = await db.batch([
+      const [groups, connectionQuality] = await db.batch([
         db
           .select({
             amount: moneyTotal(amount),
@@ -230,15 +179,12 @@ export function createFinancialRepository(
               ),
           })
           .from(t)
-          .innerJoin(a, joinAccount)
           .where(and(filterWhere(input.filter), eligible, metricFilter))
           .groupBy(t.currency, group)
           .orderBy(t.currency, group),
-        qualityAccounts(input.filter),
         qualityConnections(input.filter),
       ]);
       return {
-        accounts: quality,
         definition: MetricDefinition[input.metric],
         groups: groups.map((row) => ({
           count: row.count,
@@ -252,7 +198,7 @@ export function createFinancialRepository(
         })),
         metric: input.metric,
         partial:
-          partial(quality, connectionQuality) ||
+          partial(connectionQuality) ||
           groups.some((row) => BigInt(row.unknownAmountCount) > 0n),
         referenceDay,
       };
@@ -263,25 +209,18 @@ export function createFinancialRepository(
       }
       const { cursor } = input;
       const after = cursor
-        ? sql`(${t.date},${t.connectionId},${t.accountId},${t.id})<(${cursor.date},${cursor.connectionId},${cursor.accountId},${cursor.id})`
+        ? sql`(${t.date},${t.accountId},${t.id})<(${cursor.date},${cursor.accountId},${cursor.id})`
         : undefined;
-      const [rows, quality, connectionQuality] = await db.batch([
+      const [rows, connectionQuality] = await db.batch([
         db
           .select(transactionFields)
           .from(t)
           .where(and(filterWhere(input.filter), after))
-          .orderBy(
-            desc(t.date),
-            desc(t.connectionId),
-            desc(t.accountId),
-            desc(t.id),
-          )
+          .orderBy(desc(t.date), desc(t.accountId), desc(t.id))
           .limit(input.limit + 1),
-        qualityAccounts(input.filter),
         qualityConnections(input.filter),
       ]);
       const state = await hash({
-        accounts: quality,
         connections: connectionQuality,
         referenceDay,
       });
@@ -291,19 +230,17 @@ export function createFinancialRepository(
       const records = rows.slice(0, input.limit);
       const last = records.at(-1);
       return {
-        accounts: quality,
         cursor:
           rows.length > input.limit && last
             ? {
                 accountId: last.accountId,
-                connectionId: last.connectionId,
                 date: last.date,
                 id: last.id,
                 scope,
                 state,
               }
             : null,
-        partial: partial(quality, connectionQuality),
+        partial: partial(connectionQuality),
         records,
         referenceDay,
       };

@@ -18,15 +18,23 @@ const importLabels = {
   running: "Importando",
   succeeded: "Importação concluída",
 };
-const collectionLabels = {
-  collecting: "Atualizando; dados parciais",
-  complete: "Dados disponíveis na última coleta",
-  never: "Ainda não importada",
-  partial: "Coleta parcial; tente novamente após a próxima elegibilidade",
-  unavailable: "Conta indisponível na origem",
-};
 function timestamp(value: string | null) {
   return value ? new Date(value).toLocaleString("pt-BR") : "Ainda não ocorreu";
+}
+function balance(value: string | null, currency: string) {
+  if (value === null) {
+    return "Desconhecido";
+  }
+  const scale =
+    new Intl.NumberFormat("pt-BR", {
+      currency,
+      style: "currency",
+    }).resolvedOptions().maximumFractionDigits ?? 0;
+  const negative = value.startsWith("-");
+  const digits = value.replace("-", "").padStart(scale + 1, "0");
+  const whole = scale ? digits.slice(0, -scale) : digits;
+  const fraction = scale ? `,${digits.slice(-scale)}` : "";
+  return `${negative ? "-" : ""}${BigInt(whole).toLocaleString("pt-BR")}${fraction} ${currency}`;
 }
 export function AccountView() {
   const [snapshot, setSnapshot] = useState<PortalResponse>();
@@ -249,6 +257,21 @@ export function AccountView() {
                 </p>
               )}
               <br />
+              {connection.partial
+                ? "Importação parcial"
+                : "Dados disponíveis na última importação"}
+              <ul>
+                {Object.entries(connection.accounts).map(([id, account]) => (
+                  <li key={id}>
+                    <strong>{account.name}</strong> ({account.type},{" "}
+                    {account.currency})<br />
+                    Saldo observado:{" "}
+                    {balance(account.balanceMinor, account.currency)}
+                    <br />
+                    Saldo lido em: {timestamp(account.balanceObservedAt)}
+                  </li>
+                ))}
+              </ul>
               Próxima elegibilidade: {timestamp(connection.nextEligibleAt)}{" "}
               <UiButton
                 disabled={busy}
@@ -258,17 +281,6 @@ export function AccountView() {
               >
                 Reconectar
               </UiButton>
-            </li>
-          ))}
-        </ul>
-        <ul>
-          {snapshot.accounts.map((account) => (
-            <li key={JSON.stringify([account.connectionId, account.id])}>
-              <strong>{account.name}</strong> ({account.type},{" "}
-              {account.currency})<br />
-              {collectionLabels[account.collectionStatus]}
-              <br />
-              Última coleta: {timestamp(account.lastSuccessAt)}
             </li>
           ))}
         </ul>

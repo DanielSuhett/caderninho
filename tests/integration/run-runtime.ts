@@ -311,7 +311,7 @@ await test("native Workflow, 10k/100k volume and persistent installation", {
           assert.equal(response.status, 200);
           const page = pageSchema.parse(await response.json());
           for (const row of page.records) {
-            const identity = JSON.stringify([row.accountId, row.id]);
+            const identity = row.id;
             assert.equal(seen.has(identity), false);
             seen.add(identity);
           }

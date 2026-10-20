@@ -1,6 +1,5 @@
-import type { AccountReference } from "./finance.entity";
 export interface TransactionFilter {
-  accounts?: AccountReference[] | undefined;
+  accountIds?: string[] | undefined;
   category?: string | undefined;
   connectionIds?: string[] | undefined;
   currency?: string | undefined;
@@ -14,7 +13,6 @@ export interface TransactionFilter {
 }
 export interface Cursor {
   accountId: string;
-  connectionId: string;
   date: string;
   id: string;
   scope: string;

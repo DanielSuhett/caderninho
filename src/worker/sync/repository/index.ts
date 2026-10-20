@@ -1,20 +1,9 @@
-import {
-  and,
-  asc,
-  eq,
-  exists,
-  gt,
-  inArray,
-  isNull,
-  lte,
-  or,
-  sql,
-} from "drizzle-orm";
+import { and, eq, exists, inArray, isNull, lte, or, sql } from "drizzle-orm";
 
 import { IMPORT_INTERVAL } from "../../../domain";
 import { tryCatch } from "../../../shared";
 import { database, required } from "../../database";
-import { accounts, connections } from "../../schema";
+import { connections } from "../../schema";
 import type { Admission, SyncRepository, SyncRun } from "../entity";
 import { publicationData } from "./publication.repository";
 
@@ -46,7 +35,7 @@ function replay(saved: SyncRun, expected: SyncRun) {
   if (saved.sequence === expected.sequence + 1) {
     return {
       checkpoint: saved.checkpoint,
-      done: saved.status === "succeeded",
+      done: saved.status === "succeeded" || saved.status === "failed",
       sequence: saved.sequence,
     };
   }
@@ -66,17 +55,6 @@ export function createSyncRepository(binding: D1Database): SyncRepository {
         .get(),
     );
   return {
-    async account(connectionId, id) {
-      return required(
-        await db
-          .select()
-          .from(accounts)
-          .where(
-            and(eq(accounts.connectionId, connectionId), eq(accounts.id, id)),
-          )
-          .get(),
-      );
-    },
     async active() {
       return (
         await db
@@ -155,53 +133,20 @@ export function createSyncRepository(binding: D1Database): SyncRepository {
         }),
       );
     },
-    async fail(id, code) {
-      await db.batch([
-        db
-          .update(connections)
-          .set({ importError: code, importStatus: "failed" })
-          .where(and(eq(connections.importId, id), active())),
-        db
-          .update(accounts)
-          .set({ collectionStatus: "partial", error: code })
-          .where(
-            and(
-              eq(accounts.lastSeenRun, id),
-              eq(accounts.collectionStatus, "collecting"),
-              exists(
-                db
-                  .select({ id: connections.id })
-                  .from(connections)
-                  .where(
-                    and(
-                      eq(connections.id, accounts.connectionId),
-                      eq(connections.importId, id),
-                      eq(connections.importStatus, "failed"),
-                    ),
-                  ),
-              ),
-            ),
-          ),
-      ]);
+    async connectionAccounts(connectionId) {
+      return required(
+        await db
+          .select({ accounts: connections.accounts })
+          .from(connections)
+          .where(eq(connections.id, connectionId))
+          .get(),
+      ).accounts;
     },
-    async nextAccount(run, after) {
-      return (
-        (
-          await db
-            .select({ id: accounts.id })
-            .from(accounts)
-            .where(
-              and(
-                eq(accounts.connectionId, run.connectionId),
-                eq(accounts.lastSeenRun, run.id),
-                gt(accounts.id, after),
-              ),
-            )
-            .orderBy(asc(accounts.id))
-            .limit(1)
-            .get()
-        )?.id ?? null
-      );
+    async fail(id, code) {
+      await db
+        .update(connections)
+        .set({ importError: code, importStatus: "failed" })
+        .where(and(eq(connections.importId, id), active()));
     },
     async publish(input) {
       const { run, now, next, done } = input;
@@ -232,16 +177,19 @@ export function createSyncRepository(binding: D1Database): SyncRepository {
           set: { importSequence: sequence },
           target: connections.id,
         });
+      const data = await publicationData(db, input);
+      const terminalStatus = input.error ? "failed" : "succeeded";
       const { data: _data, error } = await tryCatch(() =>
         db.batch([
           guard,
-          ...publicationData(db, input),
+          ...data,
           db
             .update(connections)
             .set({
               importCheckpoint: next,
-              importStatus: done ? "succeeded" : "running",
-              ...(done && { lastSuccessAt: now }),
+              importError: input.error ?? null,
+              importStatus: done ? terminalStatus : "running",
+              ...(done && !input.error && { lastSuccessAt: now }),
             })
             .where(eq(connections.id, run.connectionId)),
         ]),
