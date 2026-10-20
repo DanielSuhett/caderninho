@@ -24,13 +24,12 @@ e a agenda. Consultar status não inicia trabalho.
 
 Copie a URL `https://SEU-WORKER/mcp` exibida no painel, configure seu conector MCP
 e aprove o OAuth no Caderninho. Cada assistente recebe sua própria autorização.
-Há cinco ferramentas:
+Há quatro ferramentas:
 
 | Tool | Uso |
 | --- | --- |
-| `caderninho_status` | Configuração segura, contas e importações |
+| `caderninho_status` | Contas e saldos por conexão, configuração segura e importações |
 | `caderninho_sync` | Pedir importação por conexões opcionais |
-| `caderninho_accounts` | Contas e saldos observados |
 | `caderninho_transactions` | Página filtrada de transações |
 | `caderninho_aggregate` | Totais exatos por moeda em toda a seleção |
 
@@ -63,9 +62,16 @@ se pareçam. Categoria e descrição vêm da origem e só mudam por outra import
 O frescor é informado pela conexão e pela leitura do saldo, sem auditoria individual
 de transações.
 
+O status é o único caminho MCP para contas e saldos; `connectionIds` seleciona
+conexões. Cada conexão contém `accounts`, um mapa indexado pelo ID Pluggy da conta,
+com `name`, `type`, `currency`, `balanceMinor` e `balanceObservedAt`. A referência
+informa quando o saldo foi lido pelo Caderninho, sem prometer atualização bancária.
+Conta ausente e saldo não relido conservam o valor e o horário anteriores; a
+parcialidade acompanha a conexão, sem estados ou intervalos por conta.
+
 ## Filtros
 
-Filtros aceitos: conexões, referências de contas, período, moeda, direção, status,
+Filtros aceitos: `connectionIds`, `accountIds` (IDs de recurso Pluggy), período, moeda, direção, status,
 categoria/descrição da origem e faixa de valor em unidades menores. Uma faixa
 monetária exige moeda. Agrupamentos são conta, categoria ou mês. Campos desconhecidos
 são recusados. A página tem até 200 registros; o padrão é 50.

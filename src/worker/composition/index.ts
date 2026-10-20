@@ -52,7 +52,6 @@ export function installationService(env: Bindings) {
 export function financialService(env: Bindings) {
   const service = createFinancialService(createFinancialRepository(env.DB));
   return {
-    accounts: service.accounts,
     aggregate: (input: Parameters<typeof service.aggregate>[0]) =>
       observeSpan(SpanName.financeAction, () => service.aggregate(input), {
         action: "aggregate",

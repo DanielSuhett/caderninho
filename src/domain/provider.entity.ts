@@ -15,7 +15,6 @@ export interface ProviderAccount {
   itemId: string;
   name: string;
   type: "BANK" | "CREDIT";
-  updatedAt?: string | null | undefined;
 }
 export interface ProviderTransaction {
   accountId: string;

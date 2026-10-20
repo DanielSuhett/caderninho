@@ -52,7 +52,7 @@ export function source(
   accounts: ProviderAccount[] = [account()],
 ): FinancialSource {
   return {
-    accounts: async () => accounts,
+    accounts: async (id) => accounts.filter((row) => row.itemId === id),
     connection: async (id) => ({ connector: { id: 200 }, id }),
     transactions: async (id) => ({
       next: null,
@@ -77,8 +77,9 @@ export async function admit(
 export async function collect(
   financialSource: FinancialSource,
   now = "2026-10-01T00:00:00.000Z",
+  connectionId = "c",
 ) {
-  const id = await admit(now);
+  const id = await admit(now, connectionId);
   await runImport(
     {
       now: () => now,

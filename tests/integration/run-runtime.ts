@@ -132,9 +132,7 @@ await test("native Workflow, 10k/100k volume and persistent installation", {
   const { data: _data, error } = await tryCatch(async () => {
     await fetch(`${base}/setup`, { method: "POST" });
     const stateSchema = z.object({
-      runs: z.array(
-        z.object({ id: z.string(), records: z.number(), status: z.string() }),
-      ),
+      runs: z.array(z.object({ id: z.string(), status: z.string() })),
       totals: z.object({
         groups: z.array(
           z.object({
@@ -146,6 +144,11 @@ await test("native Workflow, 10k/100k volume and persistent installation", {
         partial: z.boolean(),
       }),
     });
+    const recordCount = (value: z.infer<typeof stateSchema>) =>
+      value.totals.groups.reduce(
+        (count, group) => count + BigInt(group.count),
+        0n,
+      );
     const readState = async (connection = "c") => {
       await sampleMemory();
       return stateSchema.parse(
@@ -169,7 +172,8 @@ await test("native Workflow, 10k/100k volume and persistent installation", {
       intervalMs: 100,
       read: () => readState(),
       until: (value) =>
-        value.runs.some((run) => run.status === "running" && run.records > 2),
+        value.runs.some((run) => run.status === "running") &&
+        recordCount(value) > 0n,
     });
     assert.equal(partial.totals.partial, true);
     const completed = await poll({
@@ -179,7 +183,7 @@ await test("native Workflow, 10k/100k volume and persistent installation", {
       until: (value) => value.runs[0]?.status === "succeeded",
     });
     assert.equal(completed.totals.partial, false);
-    assert.equal(completed.runs[0]?.records, 1202);
+    assert.equal(recordCount(completed), 1200n);
     logger.info(
       "PASS: native Workflow completes all pages after the starting HTTP client disconnects",
     );
@@ -190,7 +194,7 @@ await test("native Workflow, 10k/100k volume and persistent installation", {
       read: () => readState("failure"),
       until: (value) => value.runs[0]?.status === "failed",
     });
-    assert.equal(failed.runs[0]?.records, 502);
+    assert.equal(recordCount(failed), 500n);
     assert.equal(failed.totals.partial, true);
     assert.equal(
       failed.totals.groups.find((group) => group.currency === "USD")
@@ -215,7 +219,7 @@ await test("native Workflow, 10k/100k volume and persistent installation", {
         value.runs[0]?.status === "failed",
     });
     assert.equal(replay.runs[0]?.status, "succeeded");
-    assert.equal(replay.runs[0]?.records, 1202);
+    assert.equal(recordCount(replay), 1200n);
     assert.equal(replay.totals.partial, false);
     logger.info(
       "PASS: native retry recovers a committed page without querying the provider again",
@@ -257,7 +261,7 @@ await test("native Workflow, 10k/100k volume and persistent installation", {
           value.runs[0]?.status === "failed",
       });
       assert.equal(result.runs[0]?.status, "succeeded");
-      assert.equal(result.runs[0]?.records, size + 2);
+      assert.equal(recordCount(result), BigInt(size));
       assert.equal(result.totals.partial, false);
       const usd = 2 * Math.ceil(size / 2 / 3);
       const unit = 9007199254740993123456789012n;
@@ -291,13 +295,33 @@ await test("native Workflow, 10k/100k volume and persistent installation", {
   try {
     const persisted = z
       .object({
-        runs: z.array(z.object({ records: z.number(), status: z.string() })),
+        runs: z.array(z.object({ status: z.string() })),
+        totals: z.object({
+          groups: z.array(
+            z.object({
+              count: z.string(),
+              currency: z.string(),
+              totalMinor: z.string().nullable(),
+            }),
+          ),
+        }),
       })
       .parse(
         await (await fetch(`${base}/state?connection=volume-100000`)).json(),
       );
     assert.equal(persisted.runs[0]?.status, "succeeded");
-    assert.equal(persisted.runs[0]?.records, 100_002);
+    assert.equal(
+      persisted.totals.groups.reduce(
+        (count, group) => count + BigInt(group.count),
+        0n,
+      ),
+      100000n,
+    );
+    assert.equal(
+      persisted.totals.groups.find((group) => group.currency === "USD")
+        ?.totalMinor,
+      "300245979957536264777308604926008",
+    );
     logger.info(
       { state },
       "PASS: restarting the local Worker preserves the installed financial database",

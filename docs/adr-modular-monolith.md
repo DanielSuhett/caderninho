@@ -21,7 +21,7 @@ transações. As consultas e a importação estão descritas no [guia de uso](us
 | `auth` | Senha, cookies assinados, OAuth oficial e revogação de assistentes |
 | `finance` | Contas, transações, consultas e totais objetivos |
 | `sync` | Admissão diária, despacho, páginas e commits duráveis |
-| `mcp` | Cinco tools comuns do SDK |
+| `mcp` | Quatro tools comuns do SDK |
 
 Controllers validam transporte. Services coordenam casos de uso por portas em
 `entity/index.ts`, sem SQL, HTTP ou Bindings. Repositories implementam essas portas
@@ -34,16 +34,18 @@ universal, container de DI nem camadas vazias.
 | Tabela | Dados |
 | --- | --- |
 | `settings` | Singleton: importação habilitada e revisão financeira |
-| `connections` | Item, apresentação e janela da próxima admissão |
-| `accounts` | Conta, saldo observado e qualidade da coleta |
+| `connections` | Item, apresentação, mapa de contas/saldos e próxima admissão |
 | `transactions` | Projeção financeira da origem, atualizada somente pela importação |
 | `sync_runs` | Intenção, estado, checkpoint e último commit confirmado |
 
-Contas usam `(connection_id,id)`; transações usam
-`(connection_id,account_id,id)`. Não assumir unicidade global dos IDs externos.
-Contas e transações são linhas SQL com campos concretos, sem payload genérico,
-documentos pessoais ou versões antigas. Transações guardam a data financeira;
-horários de coleta e referência do saldo ficam nas contas/conexões.
+Contas usam seus IDs Pluggy como chaves do mapa JSON `connections.accounts`.
+Cada valor contém somente nome, tipo, moeda, saldo e horário de leitura do saldo.
+Contas ausentes preservam os metadados e o saldo com seu horário antigo.
+Transações têm nove campos: id, account_id, date, amount_minor, currency,
+direction, status, description e category. O ID do recurso Pluggy identifica a
+transação nesta instalação com uma aplicação Pluggy. A conexão e o tipo BANK
+são resolvidos pelo mapa pequeno de contas, sem repetir esses dados no histórico.
+Não são guardados documentos pessoais, payloads ou marcadores de qualidade por conta.
 
 ## Importação
 
@@ -83,7 +85,7 @@ para detectar ciclos arbitrários entre páginas distintas.
 
 ## Consultas e dinheiro
 
-D1 é a fonte das leituras. Filtros fechados e paginação por tupla composta usam a
+D1 é a fonte das leituras. Filtros fechados e paginação por data/conta/ID usam a
 revisão financeira: alteração entre páginas exige reiniciar a consulta. Totais
 consideram toda a seleção SQL, não uma página. Moedas permanecem separadas.
 

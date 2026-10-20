@@ -1,6 +1,7 @@
 export {
   assertConnectionCapacity,
   assertPersonalConnector,
+  connectionPartial,
   MAX_PERSONAL_CONNECTIONS,
   PERSONAL_CONNECTOR_ID,
 } from "./connection.entity";
@@ -22,13 +23,12 @@ export {
 } from "./exact";
 export { Fault, fail } from "./fault.entity";
 export type {
+  AccountMap,
+  AccountMetadata,
   AccountProjection,
-  AccountReference,
-  CollectionStatus as CollectionStatusType,
   TransactionProjection,
   TransactionReference,
 } from "./finance.entity";
-export { CollectionStatus } from "./finance.entity";
 export { normalizeAccount, normalizeTransaction } from "./finance-model";
 export type {
   Credentials,

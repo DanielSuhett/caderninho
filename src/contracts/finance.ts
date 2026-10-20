@@ -10,12 +10,9 @@ import { Metric } from "../domain";
 const identifier = z.string().min(1).max(128);
 const day = z.iso.date();
 const amount = z.string().regex(/^-?(0|[1-9]\d{0,29})$/);
-export const AccountReferenceSchema = z
-  .object({ accountId: identifier, connectionId: identifier })
-  .strict();
 export const TransactionFilterSchema = z
   .object({
-    accounts: z.array(AccountReferenceSchema).min(1).max(100).optional(),
+    accountIds: z.array(identifier).min(1).max(100).optional(),
     category: z.string().max(2048).optional(),
     connectionIds: z.array(identifier).min(1).max(10).optional(),
     currency: z.string().min(1).max(12).optional(),
@@ -55,7 +52,6 @@ export const TransactionQuerySchema = z
     cursor: z
       .object({
         accountId: identifier,
-        connectionId: identifier,
         date: day,
         id: identifier,
         revision: z.number().int().nonnegative(),

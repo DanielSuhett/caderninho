@@ -58,10 +58,6 @@ async function invoke(env: Bindings, name: string, args: unknown) {
       await sync.recover();
       return sync.request(input.connectionIds);
     }
-    case ToolName.accounts:
-      return finance.accounts(
-        ConnectionSelectionSchema.parse(args).connectionIds,
-      );
     case ToolName.transactions:
       return finance.query(TransactionQuerySchema.parse(args));
     case ToolName.aggregate:

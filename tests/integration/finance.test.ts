@@ -190,16 +190,16 @@ test("strict filters, scoped cursors and signed magnitude filters preserve unkno
 
 test("100 account references remain a valid bounded query within D1 parameter limits", async () => {
   await collect(source([transaction()]));
-  const accounts = Array.from({ length: 100 }, (_, index) => ({
-    accountId: index === 0 ? "a" : `missing-${index}`,
-    connectionId: "c",
-  }));
+  const accountIds = Array.from({ length: 100 }, (_, index) =>
+    index === 0 ? "a" : `missing-${index}`,
+  );
   assert.equal(
-    (await finance().query({ filter: { accounts }, limit: 10 })).records.length,
+    (await finance().query({ filter: { accountIds }, limit: 10 })).records
+      .length,
     1,
   );
   assert.equal(
-    (await finance().aggregate({ filter: { accounts }, metric: "debits" }))
+    (await finance().aggregate({ filter: { accountIds }, metric: "debits" }))
       .groups[0]?.totalMinor,
     "1000",
   );

@@ -1,8 +1,9 @@
 import { and, desc, eq, inArray, notExists, sql } from "drizzle-orm";
 
+import { connectionPartial, type RunStatus } from "../../../domain";
 import { tryCatch } from "../../../shared";
 import { database, required } from "../../database";
-import { accounts, connections, settings, sync_runs } from "../../schema";
+import { connections, settings, sync_runs } from "../../schema";
 import type { InstallationRepository } from "../entity";
 export function createInstallationRepository(
   binding: D1Database,
@@ -62,44 +63,29 @@ export function createInstallationRepository(
       throw error;
     },
     async state(selection = {}) {
-      const [config, items, accountRows, runs] = await db.batch([
+      const [config, items, runs] = await db.batch([
         db
           .select({ enabled: settings.syncEnabled })
           .from(settings)
           .where(eq(settings.id, 1)),
         db
-          .select()
+          .select({
+            accounts: connections.accounts,
+            id: connections.id,
+            importStatus: sql<RunStatus | null>`(SELECT ${sync_runs.status} FROM ${sync_runs} WHERE ${sync_runs.connectionId}=${connections.id} ORDER BY ${sync_runs.createdAt} DESC LIMIT 1)`,
+            lastAdmittedAt: connections.lastAdmittedAt,
+            lastSuccessAt: connections.lastSuccessAt,
+            name: connections.name,
+            nextImportAt: connections.nextImportAt,
+            observedAt: connections.observedAt,
+            status: connections.status,
+          })
           .from(connections)
           .where(
             selection.connectionIds &&
               inArray(connections.id, selection.connectionIds),
           )
           .orderBy(connections.id),
-        db
-          .select({
-            balanceMinor: accounts.balanceMinor,
-            collectionStatus: accounts.collectionStatus,
-            connectionId: accounts.connectionId,
-            currency: accounts.currency,
-            error: accounts.error,
-            id: accounts.id,
-            lastAttemptAt: accounts.lastAttemptAt,
-            lastCompletedFrom: accounts.lastCompletedFrom,
-            lastCompletedTo: accounts.lastCompletedTo,
-            lastSuccessAt: accounts.lastSuccessAt,
-            name: accounts.name,
-            observedAt: accounts.observedAt,
-            observedFrom: accounts.observedFrom,
-            observedTo: accounts.observedTo,
-            sourceUpdatedAt: accounts.sourceUpdatedAt,
-            type: accounts.type,
-          })
-          .from(accounts)
-          .where(
-            selection.connectionIds &&
-              inArray(accounts.connectionId, selection.connectionIds),
-          )
-          .orderBy(accounts.connectionId, accounts.id),
         db
           .select({
             connectionId: sync_runs.connectionId,
@@ -125,8 +111,10 @@ export function createInstallationRepository(
           .limit(50),
       ]);
       return {
-        accounts: accountRows,
-        connections: items,
+        connections: items.map(({ importStatus, ...item }) => ({
+          ...item,
+          partial: connectionPartial({ ...item, importStatus }),
+        })),
         enabled: !!required(config[0]).enabled,
         runs,
       };

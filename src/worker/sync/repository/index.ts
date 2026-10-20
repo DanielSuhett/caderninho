@@ -1,10 +1,8 @@
 import {
   and,
-  asc,
   desc,
   eq,
   exists,
-  gt,
   inArray,
   isNull,
   lte,
@@ -17,7 +15,7 @@ import type { Checkpoint } from "../../../domain";
 import { IMPORT_INTERVAL } from "../../../domain";
 import { tryCatch } from "../../../shared";
 import { database, required } from "../../database";
-import { accounts, connections, settings, sync_runs } from "../../schema";
+import { connections, settings, sync_runs } from "../../schema";
 import type { Admission, SyncRepository } from "../entity";
 import { publicationData } from "./publication.repository";
 
@@ -25,17 +23,6 @@ const active = () => inArray(sync_runs.status, ["pending", "running"]);
 export function createSyncRepository(binding: D1Database): SyncRepository {
   const db = database(binding);
   return {
-    async account(connectionId, id) {
-      return required(
-        await db
-          .select()
-          .from(accounts)
-          .where(
-            and(eq(accounts.connectionId, connectionId), eq(accounts.id, id)),
-          )
-          .get(),
-      );
-    },
     active: () =>
       db.select().from(sync_runs).where(active()).orderBy(sync_runs.createdAt),
     async admit(ids, now) {
@@ -177,6 +164,15 @@ export function createSyncRepository(binding: D1Database): SyncRepository {
         ),
       );
     },
+    async connectionAccounts(connectionId) {
+      return required(
+        await db
+          .select({ accounts: connections.accounts })
+          .from(connections)
+          .where(eq(connections.id, connectionId))
+          .get(),
+      ).accounts;
+    },
     async fail(id, code, now) {
       const run = await db
         .select()
@@ -205,36 +201,7 @@ export function createSyncRepository(binding: D1Database): SyncRepository {
           .update(sync_runs)
           .set({ error: code, status: "failed", updatedAt: now })
           .where(and(eq(sync_runs.id, id), active())),
-        db
-          .update(accounts)
-          .set({ collectionStatus: "partial", error: code })
-          .where(
-            and(
-              eq(accounts.connectionId, run.connectionId),
-              eq(accounts.lastSeenRun, id),
-              eq(accounts.collectionStatus, "collecting"),
-            ),
-          ),
       ]);
-    },
-    async nextAccount(run, after) {
-      return (
-        (
-          await db
-            .select({ id: accounts.id })
-            .from(accounts)
-            .where(
-              and(
-                eq(accounts.connectionId, run.connectionId),
-                eq(accounts.lastSeenRun, run.id),
-                gt(accounts.id, after),
-              ),
-            )
-            .orderBy(asc(accounts.id))
-            .limit(1)
-            .get()
-        )?.id ?? null
-      );
     },
     async publish(input) {
       const { run, now, next, done } = input;
@@ -283,7 +250,7 @@ export function createSyncRepository(binding: D1Database): SyncRepository {
             target: settings.id,
           }),
       ];
-      edits.push(...publicationData(db, input));
+      edits.push(...(await publicationData(db, input)));
       edits.push(
         db
           .update(sync_runs)

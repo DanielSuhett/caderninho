@@ -28,6 +28,16 @@ async function unique<T extends { id: string }>(records: T[]) {
     return !prior;
   });
 }
+async function catalog(
+  source: ImportDependencies["source"],
+  connectionId: string,
+) {
+  return (await unique(await source.accounts(connectionId)))
+    .map((row) => normalizeAccount(row, connectionId))
+    .sort((left, right) =>
+      left.id < right.id ? -1 : Number(left.id > right.id),
+    );
+}
 async function importAccounts(
   { repository, source, now }: ImportDependencies,
   run: SyncRun,
@@ -37,11 +47,7 @@ async function importAccounts(
     throw new Error("SOURCE_IDENTITY_MISMATCH");
   }
   assertPersonalConnector(connection.connector?.id);
-  const prepared = (await unique(await source.accounts(run.connectionId)))
-    .map((row) => normalizeAccount(row, run.connectionId))
-    .sort((left, right) =>
-      left.id < right.id ? -1 : Number(left.id > right.id),
-    );
+  const prepared = await catalog(source, run.connectionId);
   const [first] = prepared;
   return repository.publish({
     accounts: prepared,
@@ -64,25 +70,32 @@ async function importTransactions(
   if (!accountId) {
     throw new Error("INVALID_CHECKPOINT");
   }
-  const account = await repository.account(run.connectionId, accountId);
   const page = await source.transactions(accountId, cursor);
   const prepared = (await unique(page.records)).map((row) =>
-    normalizeTransaction(row, account),
+    normalizeTransaction(row, accountId),
   );
-  const following = page.next
-    ? accountId
-    : await repository.nextAccount(run, accountId);
+  let following: string | null = accountId;
+  if (!page.next) {
+    // Reread the small current catalog; retained metadata is not a traversal marker.
+    const [current, saved] = await Promise.all([
+      catalog(source, run.connectionId),
+      repository.connectionAccounts(run.connectionId),
+    ]);
+    if (current.some((account) => !saved[account.id])) {
+      throw new Error("SOURCE_ACCOUNTS_CHANGED");
+    }
+    following = current.find((account) => account.id > accountId)?.id ?? null;
+  }
   return repository.publish({
-    now: now(),
-    run,
-    transactions: prepared,
-    ...(!page.next && { completeAccountId: accountId }),
     done: false,
     next: {
       accountId: following,
       cursor: page.next,
       phase: following ? "transactions" : "finish",
     },
+    now: now(),
+    run,
+    transactions: prepared,
   });
 }
 async function importPage(dependencies: ImportDependencies, run: SyncRun) {
@@ -102,13 +115,22 @@ async function importPage(dependencies: ImportDependencies, run: SyncRun) {
       return importAccounts(dependencies, run);
     case "transactions":
       return importTransactions(dependencies, run);
-    default:
+    default: {
+      const [current, saved] = await Promise.all([
+        catalog(dependencies.source, run.connectionId),
+        repository.connectionAccounts(run.connectionId),
+      ]);
+      const complete =
+        current.length === Object.keys(saved).length &&
+        current.every((account) => !!saved[account.id]);
       return repository.publish({
+        complete,
         done: true,
         next: run.checkpoint,
         now: now(),
         run,
       });
+    }
   }
 }
 export async function runImport(

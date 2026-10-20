@@ -1,13 +1,10 @@
-import { eq } from "drizzle-orm";
 import { z } from "zod/v4";
 
 import { Fault, FaultCode, type FinancialSource } from "../../src/domain";
 import type { Bindings } from "../../src/worker/bindings";
-import { database } from "../../src/worker/database";
 import { createFinancialService } from "../../src/worker/finance";
 import { createFinancialRepository } from "../../src/worker/finance/repository";
 import { createInstallationRepository } from "../../src/worker/installation/repository";
-import { connections } from "../../src/worker/schema";
 import { createSyncService, runImport } from "../../src/worker/sync";
 import { createSyncRepository } from "../../src/worker/sync/repository";
 import { workflowSteps } from "../../src/worker/sync/workflow";
@@ -20,27 +17,41 @@ import {
 type RuntimeEnv = Pick<Bindings, "DB" | "FINANCE">;
 function syntheticSource(
   connectionId: string,
-  db: D1Database,
   referenceDay: string,
+  responseLost: () => boolean,
 ): FinancialSource {
   const sizes: Record<string, number> = {
     "volume-10000": 10_000,
     "volume-100000": 100_000,
   };
+  const resourceOffsets: Record<string, number> = {
+    c: 1,
+    failure: 300_000,
+    history: 500_000,
+    replay: 400_000,
+    "volume-10000": 10_000,
+    "volume-100000": 100_000,
+  };
+  const base = resourceOffsets[connectionId] ?? 1;
+  // Fixture resources are unique UUIDs, independently from bank account numbers.
+  const resourceId = (index: number) =>
+    `00000000-0000-4000-8000-${String(index).padStart(12, "0")}`;
+  const bankId = resourceId(base);
+  const cardId = resourceId(base + 1);
   const count = sizes[connectionId] ?? 1200;
   const perAccount = count / 2;
   return {
     accounts: async () =>
-      (connectionId === "history" ? ["a"] : ["a", "b"]).map((id) => ({
+      (connectionId === "history" ? [bankId] : [bankId, cardId]).map((id) => ({
         balance: "123.45",
         currencyCode: "BRL",
         id,
         itemId: connectionId,
         name: "Synthetic",
-        type: id === "a" ? "BANK" : "CREDIT",
+        type: id === bankId ? "BANK" : "CREDIT",
       })),
     connection: async () => ({ connector: { id: 200 }, id: connectionId }),
-    transactions: async (id, cursor) => {
+    transactions: (id, cursor) => {
       if (connectionId === "history") {
         if (cursor) {
           throw new Fault(FaultCode.UPSTREAM_AUTH);
@@ -64,7 +75,7 @@ function syntheticSource(
             { amount: "-40", id: "D" },
           ],
         };
-        return {
+        return Promise.resolve({
           next: referenceDay === "2026-10-05" ? "next" : null,
           records: (pages[referenceDay] ?? []).map((row) => ({
             ...row,
@@ -72,20 +83,19 @@ function syntheticSource(
             currencyCode: "BRL",
             date: "2026-10-01",
             description: "Synthetic history",
+            id: resourceId(base + 2 + row.id.charCodeAt(0)),
             status: "POSTED",
             type: "DEBIT",
           })),
-        };
+        });
       }
-      if (connectionId === "replay" && id === "a" && !cursor) {
-        const connection = await database(db)
-          .select({ status: connections.status })
-          .from(connections)
-          .where(eq(connections.id, connectionId))
-          .get();
-        if (connection?.status === "lost_response_committed") {
-          throw new Error("COMMITTED_PAGE_REFETCHED");
-        }
+      if (
+        connectionId === "replay" &&
+        id === bankId &&
+        !cursor &&
+        responseLost()
+      ) {
+        throw new Error("COMMITTED_PAGE_REFETCHED");
       }
       if (connectionId === "failure" && cursor) {
         throw new Fault(FaultCode.UPSTREAM_AUTH);
@@ -103,7 +113,7 @@ function syntheticSource(
             currencyCode: index % 3 === 0 ? "USD" : "BRL",
             date: "2026-10-01",
             description: "Synthetic transaction",
-            id: `tx-${String(index).padStart(6, "0")}`,
+            id: resourceId(base + 2 + (id === bankId ? 0 : perAccount) + index),
             status: "POSTED",
             type: "DEBIT",
           };
@@ -120,37 +130,36 @@ export class TestWorkflow extends WorkflowEntrypoint<
     const repository = createSyncRepository(this.env.DB);
     const run = await repository.read(event.payload.runId);
     const steps = workflowSteps(step);
+    let responseLost = false;
     await runImport(
       {
         now: () => new Date().toISOString(),
         repository,
         source: syntheticSource(
           run.connectionId,
-          this.env.DB,
           run.createdAt.slice(0, 10),
+          () => responseLost,
         ),
         steps: {
           do: async (name, fn) => {
             const result = await steps.do(name, async () => {
               const receipt = await fn();
-              if (run.connectionId === "replay" && receipt.sequence === 2) {
-                const row = await database(this.env.DB)
-                  .select({ status: connections.status })
-                  .from(connections)
-                  .where(eq(connections.id, run.connectionId))
-                  .get();
-                if (row?.status !== "lost_response_committed") {
-                  await database(this.env.DB)
-                    .update(connections)
-                    .set({ status: "lost_response_committed" })
-                    .where(eq(connections.id, run.connectionId));
-                  const lost = new Fault(FaultCode.UPSTREAM_RATE_LIMIT);
-                  lost.details = { retryAfterSeconds: 0 };
-                  throw lost;
-                }
+              if (
+                run.connectionId === "replay" &&
+                receipt.sequence === 2 &&
+                !responseLost
+              ) {
+                // Test-only response loss stays outside persisted financial metadata.
+                responseLost = true;
+                const lost = new Fault(FaultCode.UPSTREAM_RATE_LIMIT);
+                lost.details = { retryAfterSeconds: 0 };
+                throw lost;
               }
               return receipt;
             });
+            if (JSON.stringify(result).length > 1024) {
+              throw new Error("STEP_RESULT_TOO_LARGE");
+            }
             if (run.connectionId === "c") {
               await step.sleep(`${name}-inspection`, 200);
             }

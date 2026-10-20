@@ -18,9 +18,9 @@ reset automático em deploys posteriores. Não execute a migração em bancos an
 
 ## Dados e execução
 
-São cinco tabelas de aplicação: settings, connections, accounts, transactions e
-sync_runs. Contas/transações têm identidade composta e campos financeiros concretos
-em SQL. Não são guardados payloads genéricos, documentos pessoais ou marcadores de
+São quatro tabelas de aplicação: settings, connections, transactions e sync_runs.
+Contas e saldos ficam no mapa JSON tipado da conexão; transações usam os IDs
+globais dos recursos Pluggy e nove campos financeiros concretos em SQL. Não são guardados payloads genéricos, documentos pessoais ou marcadores de
 importação por transação. O histórico é alterado somente pela importação;
 categoria e descrição são as da origem.
 

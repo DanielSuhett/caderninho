@@ -1,30 +1,14 @@
-import type { CollectionStatusType, RunStatus } from "../domain";
+import type { AccountMap, RunStatus } from "../domain";
 export interface ConnectionInfo {
+  accounts: AccountMap;
   id: string;
   lastAdmittedAt: string | null;
   lastSuccessAt: string | null;
   name: string;
   nextImportAt: string | null;
   observedAt: string;
+  partial: boolean;
   status: string;
-}
-export interface AccountInfo {
-  balanceMinor: string | null;
-  collectionStatus: CollectionStatusType;
-  connectionId: string;
-  currency: string;
-  error: string | null;
-  id: string;
-  lastAttemptAt: string | null;
-  lastCompletedFrom: string | null;
-  lastCompletedTo: string | null;
-  lastSuccessAt: string | null;
-  name: string;
-  observedAt: string;
-  observedFrom: string | null;
-  observedTo: string | null;
-  sourceUpdatedAt: string | null;
-  type: "BANK" | "CREDIT";
 }
 export interface RunInfo {
   connectionId: string;
@@ -36,7 +20,6 @@ export interface RunInfo {
   updatedAt: string;
 }
 export interface InstallationState {
-  accounts: AccountInfo[];
   connections: ConnectionInfo[];
   enabled: boolean;
   runs: RunInfo[];

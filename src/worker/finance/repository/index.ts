@@ -3,12 +3,12 @@ import { and, desc, eq, inArray, type SQL, sql } from "drizzle-orm";
 import type {
   AggregateQuery,
   Metric,
+  RunStatus,
   TransactionFilter,
 } from "../../../domain";
-import { MetricDefinition } from "../../../domain";
+import { connectionPartial, MetricDefinition } from "../../../domain";
 import { database, required } from "../../database";
 import {
-  accounts as a,
   connections as c,
   settings,
   sync_runs,
@@ -16,33 +16,10 @@ import {
 } from "../../schema";
 import type { FinancialRepository } from "../entity";
 
-const joinAccount = and(
-  eq(a.connectionId, t.connectionId),
-  eq(a.id, t.accountId),
-);
-const accountFields = {
-  balanceMinor: a.balanceMinor,
-  collectionStatus: a.collectionStatus,
-  connectionId: a.connectionId,
-  currency: a.currency,
-  error: a.error,
-  id: a.id,
-  lastAttemptAt: a.lastAttemptAt,
-  lastCompletedFrom: a.lastCompletedFrom,
-  lastCompletedTo: a.lastCompletedTo,
-  lastSuccessAt: a.lastSuccessAt,
-  name: a.name,
-  observedAt: a.observedAt,
-  observedFrom: a.observedFrom,
-  observedTo: a.observedTo,
-  sourceUpdatedAt: a.sourceUpdatedAt,
-  type: a.type,
-};
 const transactionFields = {
   accountId: t.accountId,
   amountMinor: t.amountMinor,
   category: t.category,
-  connectionId: t.connectionId,
   currency: t.currency,
   date: t.date,
   description: t.description,
@@ -50,12 +27,15 @@ const transactionFields = {
   id: t.id,
   status: t.status,
 };
-function accountWhere(filter: TransactionFilter = {}) {
-  return and(
-    filter.connectionIds && inArray(a.connectionId, filter.connectionIds),
-    filter.accounts &&
-      sql`EXISTS(SELECT 1 FROM json_each(${JSON.stringify(filter.accounts)}) AS selected WHERE json_extract(selected.value,'$.connectionId')=${a.connectionId} AND json_extract(selected.value,'$.accountId')=${a.id})`,
+function accountMembership(filter: TransactionFilter = {}, bank = false) {
+  const condition = and(
+    filter.connectionIds && inArray(c.id, filter.connectionIds),
+    bank ? sql`json_extract(account.value,'$.type')='BANK'` : undefined,
   );
+  return sql`${t.accountId} IN (SELECT account.key FROM ${c}, json_each(${c.accounts}) AS account ${condition ? sql`WHERE ${condition}` : sql``})`;
+}
+function selectedAccounts(ids: string[]) {
+  return sql`SELECT value FROM json_each(${JSON.stringify(ids)})`;
 }
 function amountComparison(bound: string, minimum: boolean) {
   const value = BigInt(bound).toString();
@@ -74,9 +54,9 @@ function amountComparison(bound: string, minimum: boolean) {
 }
 function filterWhere(filter: TransactionFilter = {}) {
   return and(
-    filter.connectionIds && inArray(t.connectionId, filter.connectionIds),
-    filter.accounts &&
-      sql`EXISTS(SELECT 1 FROM json_each(${JSON.stringify(filter.accounts)}) AS selected WHERE json_extract(selected.value,'$.connectionId')=${t.connectionId} AND json_extract(selected.value,'$.accountId')=${t.accountId})`,
+    filter.connectionIds && accountMembership(filter),
+    filter.accountIds &&
+      sql`${t.accountId} IN (${selectedAccounts(filter.accountIds)})`,
     filter.from === undefined ? undefined : sql`${t.date}>=${filter.from}`,
     filter.to === undefined ? undefined : sql`${t.date}<=${filter.to}`,
     filter.currency === undefined ? undefined : eq(t.currency, filter.currency),
@@ -144,13 +124,12 @@ export function createFinancialRepository(
       .select({ revision: settings.revision })
       .from(settings)
       .where(eq(settings.id, 1));
-  const qualityAccounts = (filter?: TransactionFilter) =>
-    db.select(accountFields).from(a).where(accountWhere(filter));
   const qualityConnections = (filter: TransactionFilter = {}) =>
     db
       .select({
-        active: sql<number>`EXISTS(SELECT 1 FROM ${sync_runs} WHERE ${sync_runs.connectionId}=${c.id} AND ${sync_runs.status} IN ('pending','running'))`,
+        accounts: c.accounts,
         id: c.id,
+        importStatus: sql<RunStatus | null>`(SELECT ${sync_runs.status} FROM ${sync_runs} WHERE ${sync_runs.connectionId}=${c.id} ORDER BY ${sync_runs.createdAt} DESC LIMIT 1)`,
         lastAdmittedAt: c.lastAdmittedAt,
         lastSuccessAt: c.lastSuccessAt,
       })
@@ -158,36 +137,14 @@ export function createFinancialRepository(
       .where(
         and(
           filter.connectionIds && inArray(c.id, filter.connectionIds),
-          filter.accounts &&
-            sql`${c.id} IN (SELECT json_extract(value,'$.connectionId') FROM json_each(${JSON.stringify(filter.accounts)}))`,
+          filter.accountIds &&
+            sql`EXISTS(SELECT 1 FROM json_each(${c.accounts}) AS account WHERE account.key IN (${selectedAccounts(filter.accountIds)}))`,
         ),
       );
-  function partial(
-    rows: { collectionStatus: string }[],
-    connections: {
-      lastSuccessAt: string | null;
-      lastAdmittedAt: string | null;
-      active: number;
-    }[],
-  ) {
-    return (
-      !connections.length ||
-      connections.some(
-        (row) =>
-          !!row.active ||
-          !row.lastSuccessAt ||
-          !!(row.lastAdmittedAt && row.lastAdmittedAt > row.lastSuccessAt),
-      ) ||
-      rows.some((row) => row.collectionStatus !== "complete")
-    );
+  function partial(rows: Awaited<ReturnType<typeof qualityConnections>>) {
+    return !rows.length || rows.some(connectionPartial);
   }
   return {
-    accounts: (ids) =>
-      db
-        .select(accountFields)
-        .from(a)
-        .where(ids ? inArray(a.connectionId, ids) : undefined)
-        .orderBy(a.connectionId, a.id),
     async aggregate(input, referenceDay) {
       const absolute = sql<string | null>`replace(${t.amountMinor},'-','')`;
       const eligible =
@@ -195,7 +152,7 @@ export function createFinancialRepository(
           ? undefined
           : and(eq(t.status, "POSTED"), sql`${t.date}<=${referenceDay}`);
       const metricFilters: Record<Metric, SQL | undefined> = {
-        cash_flow: eq(a.type, "BANK"),
+        cash_flow: accountMembership(input.filter, true),
         count: undefined,
         credits: eq(t.direction, "CREDIT"),
         debits: eq(t.direction, "DEBIT"),
@@ -211,15 +168,15 @@ export function createFinancialRepository(
         NonNullable<AggregateQuery["groupBy"]>,
         SQL<string | null>
       > = {
-        account: sql`json_array(${t.connectionId},${t.accountId})`,
+        account: sql`${t.accountId}`,
         category: sql`${t.category}`,
         month: sql`substr(${t.date},1,7)`,
       };
       const group = input.groupBy
         ? groupings[input.groupBy]
         : sql<string | null>`NULL`;
-      const [before, groups, quality, connectionQuality, afterRevision] =
-        await db.batch([
+      const [before, groups, connectionQuality, afterRevision] = await db.batch(
+        [
           revision(),
           db
             .select({
@@ -237,18 +194,16 @@ export function createFinancialRepository(
                 ),
             })
             .from(t)
-            .innerJoin(a, joinAccount)
             .where(and(filterWhere(input.filter), eligible, metricFilter))
             .groupBy(t.currency, group)
             .orderBy(t.currency, group),
-          qualityAccounts(input.filter),
           qualityConnections(input.filter),
           revision(),
-        ]);
+        ],
+      );
       const version = required(before[0]).revision;
       assertRevision(version, required(afterRevision[0]).revision);
       return {
-        accounts: quality,
         definition: MetricDefinition[input.metric],
         groups: groups.map((row) => ({
           count: row.count,
@@ -262,7 +217,7 @@ export function createFinancialRepository(
         })),
         metric: input.metric,
         partial:
-          partial(quality, connectionQuality) ||
+          partial(connectionQuality) ||
           groups.some((row) => BigInt(row.unknownAmountCount) > 0n),
         referenceDay,
         revision: version,
@@ -274,26 +229,19 @@ export function createFinancialRepository(
       }
       const { cursor } = input;
       const after = cursor
-        ? sql`(${t.date},${t.connectionId},${t.accountId},${t.id})<(${cursor.date},${cursor.connectionId},${cursor.accountId},${cursor.id})`
+        ? sql`(${t.date},${t.accountId},${t.id})<(${cursor.date},${cursor.accountId},${cursor.id})`
         : undefined;
-      const [before, rows, quality, connectionQuality, afterRevision] =
-        await db.batch([
-          revision(),
-          db
-            .select(transactionFields)
-            .from(t)
-            .where(and(filterWhere(input.filter), after))
-            .orderBy(
-              desc(t.date),
-              desc(t.connectionId),
-              desc(t.accountId),
-              desc(t.id),
-            )
-            .limit(input.limit + 1),
-          qualityAccounts(input.filter),
-          qualityConnections(input.filter),
-          revision(),
-        ]);
+      const [before, rows, connectionQuality, afterRevision] = await db.batch([
+        revision(),
+        db
+          .select(transactionFields)
+          .from(t)
+          .where(and(filterWhere(input.filter), after))
+          .orderBy(desc(t.date), desc(t.accountId), desc(t.id))
+          .limit(input.limit + 1),
+        qualityConnections(input.filter),
+        revision(),
+      ]);
       const version = required(before[0]).revision;
       assertRevision(
         version,
@@ -303,19 +251,17 @@ export function createFinancialRepository(
       const records = rows.slice(0, input.limit);
       const last = records.at(-1);
       return {
-        accounts: quality,
         cursor:
           rows.length > input.limit && last
             ? {
                 accountId: last.accountId,
-                connectionId: last.connectionId,
                 date: last.date,
                 id: last.id,
                 revision: version,
                 scope,
               }
             : null,
-        partial: partial(quality, connectionQuality),
+        partial: partial(connectionQuality),
         records,
         referenceDay,
         revision: version,

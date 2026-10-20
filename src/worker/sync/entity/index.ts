@@ -1,4 +1,5 @@
 import type {
+  AccountMap,
   AccountProjection,
   Checkpoint,
   CommitResult,
@@ -17,7 +18,7 @@ export interface Admission {
 }
 export interface Publication {
   accounts?: AccountProjection[];
-  completeAccountId?: string;
+  complete?: boolean;
   connection?: ProviderConnection;
   done: boolean;
   next: Checkpoint;
@@ -26,12 +27,11 @@ export interface Publication {
   transactions?: TransactionProjection[];
 }
 export interface SyncRepository {
-  account: (connectionId: string, id: string) => Promise<AccountProjection>;
   active: () => Promise<SyncRun[]>;
   admit: (ids: string[] | undefined, now: string) => Promise<Admission[]>;
   compact: (before: string) => Promise<void>;
+  connectionAccounts: (connectionId: string) => Promise<AccountMap>;
   fail: (id: string, code: string, now: string) => Promise<void>;
-  nextAccount: (run: SyncRun, after: string) => Promise<string | null>;
   publish: (input: Publication) => Promise<CommitResult>;
   read: (id: string) => Promise<SyncRun>;
   start: (id: string, now: string) => Promise<void>;
@@ -53,6 +53,7 @@ export interface WorkflowPort {
 const importErrors = new Set<string>([
   ...Object.values(FaultCode),
   "SOURCE_IDENTITY_MISMATCH",
+  "SOURCE_ACCOUNTS_CHANGED",
   "DUPLICATE_CHANGED",
   "REPEATED_CURSOR",
   "STALE_COMMIT",

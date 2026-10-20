@@ -41,7 +41,7 @@ const requestMeta = {
   "io.modelcontextprotocol/protocolVersion": "2026-07-28",
 };
 beforeEach(setup);
-test("official OAuth, five standard tools/defaults, protocol errors and grant revocation work together", async () => {
+test("official OAuth, four standard tools/defaults, protocol errors and grant revocation work together", async () => {
   await collect(source([transaction()]));
   const app = fixture();
   const cookie = cookies(await login(app));
@@ -76,7 +76,6 @@ test("official OAuth, five standard tools/defaults, protocol errors and grant re
   const listing = wire.parse(await (await call(first, "tools/list")).json());
   assert.ok(listing.result, JSON.stringify(listing));
   assert.deepEqual(listing.result?.tools?.map((tool) => tool.name).sort(), [
-    "caderninho_accounts",
     "caderninho_aggregate",
     "caderninho_status",
     "caderninho_sync",
@@ -92,9 +91,57 @@ test("official OAuth, five standard tools/defaults, protocol errors and grant re
   );
   assert.equal(transactions.result?.isError, false);
   const payload = z
-    .object({ records: z.array(z.object({ id: z.string() })) })
+    .object({
+      accounts: z.never().optional(),
+      records: z.array(z.object({ id: z.string() })),
+    })
     .parse(JSON.parse(transactions.result?.content?.[0]?.text ?? "{}"));
   assert.equal(payload.records[0]?.id, "t");
+  await createInstallationRepository(env.DB).register(
+    { id: "unselected" },
+    "2026-10-01T00:00:00Z",
+  );
+  const status = wire.parse(
+    await (
+      await call(first, "tools/call", {
+        arguments: { connectionIds: ["c"] },
+        name: "caderninho_status",
+      })
+    ).json(),
+  );
+  assert.equal(status.result?.isError, false);
+  const statusPayload = z
+    .object({
+      accounts: z.never().optional(),
+      connections: z.array(
+        z.object({
+          accounts: z.record(
+            z.string(),
+            z
+              .object({
+                balanceMinor: z.string().nullable(),
+                balanceObservedAt: z.string().nullable(),
+                currency: z.string(),
+                name: z.string(),
+                type: z.enum(["BANK", "CREDIT"]),
+              })
+              .strict(),
+          ),
+          id: z.string(),
+        }),
+      ),
+    })
+    .parse(JSON.parse(status.result?.content?.[0]?.text ?? "{}"));
+  assert.deepEqual(
+    statusPayload.connections.map((connection) => connection.id),
+    ["c"],
+  );
+  assert.equal(statusPayload.connections[0]?.accounts.a?.balanceMinor, "12345");
+  assert.equal(
+    statusPayload.connections[0]?.accounts.a?.balanceObservedAt,
+    "2026-10-01T00:00:00.000Z",
+  );
+
   const invalid = wire.parse(
     await (
       await call(second, "tools/call", {
@@ -172,12 +219,8 @@ test("HTTP 200 tool failures remain visible and private arguments never enter di
             _meta: requestMeta,
             arguments: {
               filter: {
-                accounts: [
-                  {
-                    accountId: "private-account",
-                    connectionId: "private-connection",
-                  },
-                ],
+                accountIds: ["private-account"],
+                connectionIds: ["private-connection"],
                 description: "private-description",
                 minAmountMinor: "0",
               },
@@ -350,7 +393,6 @@ test("MCP accumulates imported history and updates only matching source IDs", as
     cursor: z
       .object({
         accountId: z.string(),
-        connectionId: z.string(),
         date: z.string(),
         id: z.string(),
         revision: z.number(),
@@ -364,7 +406,6 @@ test("MCP accumulates imported history and updates only matching source IDs", as
           accountId: z.string(),
           amountMinor: z.string().nullable(),
           category: z.string().nullable(),
-          connectionId: z.string(),
           currency: z.string(),
           date: z.string(),
           description: z.string(),

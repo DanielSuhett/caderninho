@@ -62,7 +62,7 @@ test("official SDK preserves numeric lexemes and only reads concrete account/tra
   const [tx] = page.records;
   assert.ok(tx);
   assert.equal(
-    normalizeTransaction(tx, normalizeAccount(a, "c")).amountMinor,
+    normalizeTransaction(tx, normalizeAccount(a, "c").id).amountMinor,
     "9007199254740993123456789012",
   );
   assert.deepEqual(a, account());

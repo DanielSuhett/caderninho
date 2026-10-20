@@ -24,7 +24,6 @@ export const ProviderAccountSchema = z.object({
   itemId: z.string().min(1),
   name: z.string(),
   type: z.enum(["BANK", "CREDIT"]),
-  updatedAt: z.string().nullish(),
 }) satisfies z.ZodType<ProviderAccount>;
 export const ProviderTransactionSchema = z.object({
   accountId: z.string().min(1),

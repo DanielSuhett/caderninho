@@ -1,3 +1,6 @@
+import type { AccountMap } from "./finance.entity";
+import type { RunStatus } from "./sync.entity";
+
 // The source validates the personal-use connector selected by the widget.
 export const PERSONAL_CONNECTOR_ID = 200;
 
@@ -19,4 +22,29 @@ export function assertConnectionCapacity({
   if (count >= MAX_PERSONAL_CONNECTIONS && !exists) {
     throw new Error("ITEM_LIMIT");
   }
+}
+
+// A successful import cannot promise complete data for an unread balance/account.
+export function connectionPartial(connection: {
+  accounts: AccountMap;
+  importStatus: RunStatus | null;
+  lastAdmittedAt: string | null;
+  lastSuccessAt: string | null;
+}) {
+  return (
+    !!(connection.importStatus && connection.importStatus !== "succeeded") ||
+    !connection.lastSuccessAt ||
+    !!(
+      connection.lastAdmittedAt &&
+      connection.lastAdmittedAt > connection.lastSuccessAt
+    ) ||
+    Object.values(connection.accounts).some(
+      (account) =>
+        !account.balanceObservedAt ||
+        !!(
+          connection.lastAdmittedAt &&
+          account.balanceObservedAt < connection.lastAdmittedAt
+        ),
+    )
+  );
 }

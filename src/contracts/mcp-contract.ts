@@ -7,7 +7,6 @@ import {
   TransactionQuerySchema,
 } from "./finance";
 export const ToolName = {
-  accounts: "caderninho_accounts",
   aggregate: "caderninho_aggregate",
   status: "caderninho_status",
   sync: "caderninho_sync",
@@ -26,13 +25,6 @@ const definitions = [
       "Importar contas e transações da origem. Retorna execução existente ou admissão/pausa/cooldown por conexão. Não exige coordenar páginas.",
     name: ToolName.sync,
     readOnly: false,
-    schema: ConnectionSelectionSchema,
-  },
-  {
-    description:
-      "Contas BANK/CREDIT e saldo observado com moeda e referência temporal. Saldo de cartão não é patrimônio disponível.",
-    name: ToolName.accounts,
-    readOnly: true,
     schema: ConnectionSelectionSchema,
   },
   {

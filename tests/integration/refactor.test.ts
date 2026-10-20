@@ -79,7 +79,7 @@ test("one import publishes exact transactions and repeating the request reuses t
   );
   const state = await createInstallationRepository(env.DB).state();
   assert.equal(state.runs[0]?.status, "succeeded");
-  assert.equal(state.accounts[0]?.balanceMinor, "12345");
+  assert.equal(state.connections[0]?.accounts.a?.balanceMinor, "12345");
 });
 
 test("a new installation registers only verified personal connections and keeps configuration across reads", async () => {

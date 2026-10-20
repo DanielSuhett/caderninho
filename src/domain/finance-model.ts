@@ -41,26 +41,23 @@ export function normalizeAccount(
   }
   return {
     balanceMinor: money(source.balance, source.currencyCode),
-    connectionId,
     currency: source.currencyCode,
     id: source.id,
     name: source.name,
-    sourceUpdatedAt: source.updatedAt ?? null,
     type: source.type,
   };
 }
 export function normalizeTransaction(
   source: ProviderTransaction,
-  account: AccountProjection,
+  accountId: string,
 ): TransactionProjection {
-  if (source.accountId !== account.id) {
+  if (source.accountId !== accountId) {
     throw new Error("SOURCE_IDENTITY_MISMATCH");
   }
   return {
-    accountId: account.id,
+    accountId,
     amountMinor: money(source.amount, source.currencyCode),
     category: source.category ?? null,
-    connectionId: account.connectionId,
     currency: source.currencyCode,
     date: accountingDay(source.date) ?? "",
     description: source.description,
