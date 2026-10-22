@@ -81,5 +81,7 @@ export type {
   TransactionQuery,
 } from "./query.entity";
 export { Metric, MetricDefinition } from "./query.entity";
+export type { RuleCondition, RuleFilter } from "./rules.entity";
+export { ruleMatches, ruleText } from "./rules.entity";
 export type { Checkpoint, CommitResult, FinancialSource } from "./sync.entity";
 export { IMPORT_INTERVAL, RunStatus } from "./sync.entity";

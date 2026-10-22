@@ -9,8 +9,10 @@ import {
   ConnectTokenActionSchema,
   HouseholdCommandSchema,
   ItemActionSchema,
+  PortalMutationSchema,
   PortalQuerySchema,
   RevokeGrantSchema,
+  RulePreviewSchema,
   SyncActionSchema,
   SyncHistorySelectionSchema,
 } from "../../../contracts";
@@ -31,6 +33,7 @@ import {
   householdService,
   installationService,
   planningService,
+  rulePreview,
   synchronizationHistory,
   syncService,
   workspaceCatalog,
@@ -72,7 +75,7 @@ export function installationRoutes(access: Hono<PortalEnv>) {
     csrf: string,
     schema: z.ZodType<T>,
   ) => {
-    const input = schema.parse(await boundedJson(request, 8192));
+    const input = schema.parse(await boundedJson(request, 32_768));
     if (input.csrf !== csrf) {
       throw new Error("SESSION_REQUIRED");
     }
@@ -118,6 +121,22 @@ export function installationRoutes(access: Hono<PortalEnv>) {
       PortalQuerySchema,
     );
     return c.json(await planningService(c.env).execute(input.query));
+  });
+  app.post("/api/account/planning", async (c) => {
+    const input = await command(
+      c.req.raw,
+      c.get("session").csrf,
+      PortalMutationSchema,
+    );
+    return c.json(await planningService(c.env).execute(input.command));
+  });
+  app.post("/api/account/rule-preview", async (c) => {
+    const input = await command(
+      c.req.raw,
+      c.get("session").csrf,
+      RulePreviewSchema,
+    );
+    return c.json(await rulePreview(c.env, input));
   });
   app.get("/api/account/history", async (c) =>
     c.json(

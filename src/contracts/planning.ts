@@ -1,5 +1,7 @@
 import { z } from "zod/v4";
 
+import { RuleFilterSchema } from "./rules";
+
 const id = z.string().min(1).max(160);
 const text = z.string().trim().min(1).max(240);
 const amount = z.string().regex(/^(0|[1-9]\d{0,29})$/);
@@ -102,9 +104,10 @@ const ruleFields = {
   categoryId: id,
   direction: direction.nullable().default(null),
   enabled: z.boolean().default(true),
+  filter: RuleFilterSchema.nullable().default(null),
   name: text,
   priority: z.number().int().min(0).max(1000).default(100),
-  text,
+  text: z.string().trim().max(240).default(""),
 };
 
 export const planningDefinitions = [
@@ -908,6 +911,13 @@ export const planningDefinitions = [
       })
       .strict(),
   },
+  {
+    description:
+      "Excluir um espaço vazio; preserva o grupo pessoal e impede referências órfãs.",
+    name: "delete_space",
+    readOnly: false,
+    schema: z.object({ ...mutation, id }).strict(),
+  },
 ] as const;
 export const PlanningCommandSchema = z.discriminatedUnion("tool", [
   planningDefinitions[0].schema.extend({ tool: z.literal("get_accounts") }),
@@ -1097,6 +1107,7 @@ export const PlanningCommandSchema = z.discriminatedUnion("tool", [
   planningDefinitions[88].schema.extend({
     tool: z.literal("set_notification_preference"),
   }),
+  planningDefinitions[89].schema.extend({ tool: z.literal("delete_space") }),
 ]);
 export type PlanningCommand = z.infer<typeof PlanningCommandSchema>;
 

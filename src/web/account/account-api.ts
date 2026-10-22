@@ -4,8 +4,11 @@ import {
   AccountConnectTokenSchema,
   AuditReportSchema,
   type HouseholdCommand,
+  type PortalMutation,
   type PortalQuery,
   PortalResponseSchema,
+  type RulePreviewInput,
+  RulePreviewResultSchema,
   SyncHistoryResultSchema,
   WorkspaceCatalogSchema,
 } from "../../contracts";
@@ -33,10 +36,12 @@ export function createAccountApi(
           connectionIds?: string[];
         }
       | HouseholdCommand
+      | { csrf: string; command: PortalMutation }
+      | RulePreviewInput
       | { csrf: string; query: PortalQuery }
       | { csrf: string; grantId: string },
   ) => {
-    const mutation = body && path !== "/query";
+    const mutation = body && path !== "/query" && path !== "/rule-preview";
     if (mutation) {
       cache.clear();
     }
@@ -106,6 +111,15 @@ export function createAccountApi(
       ),
     manage: async (input: HouseholdCommand, signal: AbortSignal) =>
       z.json().parse(await request("/manage", signal, input)),
+    planning: async (
+      command: PortalMutation,
+      csrf: string,
+      signal: AbortSignal,
+    ) => z.json().parse(await request("/planning", signal, { command, csrf })),
+    previewRule: async (input: RulePreviewInput, signal: AbortSignal) =>
+      RulePreviewResultSchema.parse(
+        await request("/rule-preview", signal, input),
+      ),
     query: (
       query: PortalQuery,
       csrf: string,

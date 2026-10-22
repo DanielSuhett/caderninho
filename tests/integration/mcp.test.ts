@@ -533,7 +533,7 @@ test("OAuth exposes 93 tools and executes confirmed local writes with durable re
     );
   }
   const listed = await rpc("tools/list", {});
-  assert.equal(listed.result?.tools?.length, 93);
+  assert.equal(listed.result?.tools?.length, 94);
   const args = {
     currency: "BRL",
     idempotency_key: "mcp-write",

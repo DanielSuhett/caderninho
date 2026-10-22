@@ -16,6 +16,15 @@ const paths = new Set([
   "/account/design-system",
 ]);
 const navigationEvent = "caderninho:navigate";
+let navigationGuard: (() => boolean) | null = null;
+export function guardWorkspaceNavigation(guard: () => boolean) {
+  navigationGuard = guard;
+  return () => {
+    if (navigationGuard === guard) {
+      navigationGuard = null;
+    }
+  };
+}
 
 export function isWorkspaceUrl(destination: URL, current: URL) {
   return (
@@ -29,11 +38,24 @@ function currentRoute() {
   return location.pathname + location.search;
 }
 function subscribe(notify: () => void) {
-  window.addEventListener("popstate", notify);
-  window.addEventListener(navigationEvent, notify);
+  let route = currentRoute();
+  const changed = () => {
+    route = currentRoute();
+    notify();
+  };
+  const popped = () => {
+    if (navigationGuard && !navigationGuard()) {
+      // Keep the draft mounted when Back is used; discard closes the editor first.
+      history.pushState(null, "", route);
+      return;
+    }
+    changed();
+  };
+  window.addEventListener("popstate", popped);
+  window.addEventListener(navigationEvent, changed);
   return () => {
-    window.removeEventListener("popstate", notify);
-    window.removeEventListener(navigationEvent, notify);
+    window.removeEventListener("popstate", popped);
+    window.removeEventListener(navigationEvent, changed);
   };
 }
 function closePanels() {
@@ -43,7 +65,7 @@ function closePanels() {
     }
   }
 }
-function navigate(url: URL) {
+export function navigateWorkspace(url: URL) {
   closePanels();
   if (url.pathname + url.search !== currentRoute()) {
     history.pushState(null, "", url.pathname + url.search);
@@ -75,7 +97,10 @@ function click(event: MouseEvent) {
     return;
   }
   event.preventDefault();
-  navigate(url);
+  if (navigationGuard && !navigationGuard()) {
+    return;
+  }
+  navigateWorkspace(url);
 }
 function submit(event: SubmitEvent) {
   const form = event.target;
@@ -101,7 +126,10 @@ function submit(event: SubmitEvent) {
     }
   }
   event.preventDefault();
-  navigate(url);
+  if (navigationGuard && !navigationGuard()) {
+    return;
+  }
+  navigateWorkspace(url);
 }
 
 export function useAccountNavigation() {

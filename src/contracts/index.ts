@@ -34,7 +34,15 @@ export {
   PortalResponseSchema,
   SyncActionSchema,
 } from "./portal-contract";
+export type { RulePreviewInput, RulePreviewResult } from "./rules";
+export {
+  RuleConditionSchema,
+  RuleFilterSchema,
+  RulePreviewResultSchema,
+  RulePreviewSchema,
+} from "./rules";
 export type {
+  PortalMutation,
   PortalQuery,
   SyncHistoryResult,
   SyncHistorySelection,
@@ -43,6 +51,7 @@ export type {
 export {
   AccountListSchema,
   CatalogSelectionSchema,
+  PortalMutationSchema,
   PortalQuerySchema,
   SyncHistoryCursorSchema,
   SyncHistoryResultSchema,

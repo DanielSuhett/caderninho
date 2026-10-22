@@ -1,9 +1,18 @@
-import { useCallback, useState } from "react";
+import { type MouseEvent, useCallback, useState } from "react";
 
-import type { PortalResponse } from "../../contracts";
+import {
+  AccountListSchema,
+  type PortalResponse,
+  type WorkspaceCatalog,
+} from "../../contracts";
+import { UiButton } from "../ui";
 import type { createAccountApi } from "./account-api";
+import { navigateWorkspace } from "./account-navigation";
 import { formatBalance } from "./dashboard-view";
 import { DisclosureItem } from "./disclosure-item";
+import { DeleteOrganizationItem, GroupEditor } from "./group-editor";
+import { conditionFields } from "./rule-draft";
+import { RuleEditor } from "./rule-editor";
 import { EmptyView, ScopeFields } from "./workspace-filters";
 import {
   ResourceFeedback,
@@ -31,11 +40,31 @@ export function OrganizationView({
   snapshot: PortalResponse;
   page: "rules" | "groups";
 }) {
+  const [editor, setEditor] = useState<{
+    kind: "rule" | "space";
+    id?: string;
+    remove?: boolean;
+  } | null>(null);
+  const [notice, setNotice] = useState("");
   const [params] = useState(() => new URLSearchParams(location.search));
   const spaceId = params.get("space") || "personal";
   const load = useCallback(
-    (signal: AbortSignal, fresh = false) => api.catalog(spaceId, signal, fresh),
-    [api, spaceId],
+    async (signal: AbortSignal, fresh = false) => {
+      const [catalog, accountList] = await Promise.all([
+        api.catalog(spaceId, signal, fresh),
+        api.query(
+          { include_hidden: true, spaceId, tool: "get_accounts" },
+          snapshot.csrf,
+          signal,
+          fresh,
+        ),
+      ]);
+      return {
+        ...catalog,
+        accounts: AccountListSchema.parse(accountList).data.records,
+      };
+    },
+    [api, spaceId, snapshot.csrf],
   );
   const resource = useResource(load);
   const { data } = resource;
@@ -48,16 +77,96 @@ export function OrganizationView({
       (!params.get("enabled") || String(r.enabled) === params.get("enabled")),
   );
   const current = data?.spaces.find((s) => s.id === spaceId);
+  const closeEditor = useCallback(() => setEditor(null), []);
+  const saved = useCallback(() => {
+    setEditor(null);
+    setNotice("Alteração salva. O histórico financeiro foi preservado.");
+    if (editor?.remove && editor.kind === "space" && editor.id === spaceId) {
+      navigateWorkspace(new URL("/account/groups", location.origin));
+      return;
+    }
+    resource.retry();
+  }, [resource.retry, editor, spaceId]);
+  const newItem = useCallback(
+    () => setEditor({ kind: page === "rules" ? "rule" : "space" }),
+    [page],
+  );
+  const openItem = useCallback((event: MouseEvent<HTMLButtonElement>) => {
+    const { id, kind, remove } = event.currentTarget.dataset;
+    setEditor({
+      kind: kind === "rule" ? "rule" : "space",
+      ...(id && { id }),
+      remove: remove === "true",
+    });
+  }, []);
   return (
     <>
       <WorkspaceHeading
         description={
           page === "rules"
-            ? "Condições de classificação. Crie, altere e aplique pelo assistente."
+            ? "Classificação por condições, com prévia antes de salvar."
             : "Espaços para organizar o dinheiro. A titularidade continua ligada à pessoa."
         }
         title={page === "rules" ? "Regras" : "Grupos"}
-      />
+      >
+        <UiButton
+          disabled={!data}
+          onClick={newItem}
+          type="button"
+        >
+          {page === "rules" ? "Nova regra" : "Novo grupo"}
+        </UiButton>
+      </WorkspaceHeading>
+      {!!notice && (
+        <p
+          className="notice"
+          role="status"
+        >
+          {notice}
+        </p>
+      )}
+      {!!(editor && data) &&
+        (() => {
+          const rule = data.rules.find((row) => row.id === editor.id);
+          const space = data.spaces.find((row) => row.id === editor.id);
+          if (editor.remove) {
+            const item = editor.kind === "rule" ? rule : space;
+            return item ? (
+              <DeleteOrganizationItem
+                api={api}
+                close={closeEditor}
+                deleted={saved}
+                item={item}
+                kind={editor.kind}
+                snapshot={snapshot}
+                spaceId={editor.kind === "space" ? item.id : spaceId}
+              />
+            ) : null;
+          }
+          if (editor.kind === "space") {
+            return (
+              <GroupEditor
+                api={api}
+                snapshot={snapshot}
+                {...(space && { space })}
+                close={closeEditor}
+                saved={saved}
+              />
+            );
+          }
+          return (
+            <RuleEditor
+              accounts={data.accounts}
+              api={api}
+              catalog={data}
+              snapshot={snapshot}
+              spaceId={spaceId}
+              {...(rule && { rule })}
+              close={closeEditor}
+              saved={saved}
+            />
+          );
+        })()}
       <ResourceFeedback {...resource} />
       {!!data && (
         <>
@@ -109,8 +218,9 @@ export function OrganizationView({
                 </span>
               </div>
               <p className="muted">
-                As regras pertencem ao grupo e podem abranger várias pessoas. A
-                aplicação depende de uma ação explícita pelo assistente.
+                As regras pertencem ao grupo e podem abranger várias pessoas.
+                Salvar não reclassifica transações existentes. Regras ativas
+                valem nas próximas importações.
               </p>
               {rules?.length ? (
                 <ul
@@ -121,12 +231,16 @@ export function OrganizationView({
                     const category =
                       data.categories.find((c) => c.id === r.categoryId)
                         ?.name ?? "Categoria não identificada";
-                    const account = r.accountId
-                      ? (snapshot.connections
-                          .flatMap((c) => Object.entries(c.accounts))
-                          .find(([id]) => id === r.accountId)?.[1].name ??
-                        "Conta não identificada")
-                      : "Todas as contas do grupo";
+                    const account =
+                      data.accounts.find((item) => item.id === r.accountId)
+                        ?.name ?? "Todas as contas do grupo";
+                    const movement = movementLabel(r.direction);
+                    const accountLabel = account;
+                    const context = r.filter
+                      ? `${r.filter.alternatives.length} alternativa(s) de condições`
+                      : `Contém “${r.text}”`;
+                    const href = ruleTransactionsHref(r, spaceId);
+                    const linkLabel = ruleLinkLabel(r);
                     return (
                       <li key={r.id}>
                         <DisclosureItem
@@ -143,30 +257,59 @@ export function OrganizationView({
                                 </span>
                               </span>
                               <span className="record-context">
-                                Contém “{r.text}” · {category}
+                                {context} · {category}
                               </span>
                               <span className="record-meta">
                                 <span>Prioridade {r.priority}</span>
-                                <span>{movementLabel(r.direction)}</span>
-                                <span>{account}</span>
+                                <RuleScope
+                                  account={accountLabel}
+                                  movement={movement}
+                                  rule={r}
+                                />
                               </span>
                             </>
                           }
                         >
                           <div className="record-detail">
+                            <div className="record-actions">
+                              <UiButton
+                                data-id={r.id}
+                                data-kind="rule"
+                                onClick={openItem}
+                                type="button"
+                                variant="secondary"
+                              >
+                                Editar regra
+                              </UiButton>
+                              <UiButton
+                                data-id={r.id}
+                                data-kind="rule"
+                                data-remove="true"
+                                onClick={openItem}
+                                tone="danger"
+                                type="button"
+                                variant="secondary"
+                              >
+                                Excluir regra
+                              </UiButton>
+                            </div>
                             <p>
-                              Quando a descrição contém{" "}
-                              <strong>“{r.text}”</strong>, classificar como{" "}
-                              <strong>{category}</strong>.
+                              Quando as condições da regra corresponderem,
+                              classificar como <strong>{category}</strong>.
                             </p>
+                            <RuleConditions
+                              accounts={data.accounts}
+                              people={snapshot.people}
+                              rule={r}
+                            />
                             <dl className="detail-list">
-                              <div>
+                              <div hidden={!!r.filter}>
                                 <dt>Movimento</dt>
-                                <dd>{movementLabel(r.direction)}</dd>
+                                <dd>{movement}</dd>
                               </div>
-                              <div>
+                              <div hidden={!!r.filter}>
                                 <dt>Conta</dt>
-                                <dd>{account}</dd>
+                                <dd>{accountLabel}</dd>
                               </div>
                               <div>
                                 <dt>Categoria</dt>
@@ -179,11 +322,7 @@ export function OrganizationView({
                                 </dd>
                               </div>
                             </dl>
-                            <a
-                              href={`/account/transactions?${new URLSearchParams({ space: spaceId, text: r.text, ...(r.accountId && { accountId: r.accountId }), ...(r.direction && { direction: r.direction }) })}`}
-                            >
-                              Ver lançamentos com esta condição
-                            </a>
+                            <a href={href}>{linkLabel}</a>
                           </div>
                         </DisclosureItem>
                       </li>
@@ -192,8 +331,8 @@ export function OrganizationView({
                 </ul>
               ) : (
                 <EmptyView title="Nenhuma regra encontrada">
-                  Você pode pedir ao assistente para criar uma regra neste
-                  grupo. Ela aparecerá aqui após atualizar a página.
+                  Use Nova regra para começar com um preset e conferir as
+                  transações correspondentes.
                 </EmptyView>
               )}
             </>
@@ -235,6 +374,28 @@ export function OrganizationView({
                       }
                     >
                       <div className="record-detail">
+                        <div className="record-actions">
+                          <UiButton
+                            data-id={s.id}
+                            data-kind="space"
+                            onClick={openItem}
+                            type="button"
+                            variant="secondary"
+                          >
+                            Editar grupo
+                          </UiButton>
+                          <UiButton
+                            data-id={s.id}
+                            data-kind="space"
+                            data-remove="true"
+                            onClick={openItem}
+                            tone="danger"
+                            type="button"
+                            variant="secondary"
+                          >
+                            Excluir grupo
+                          </UiButton>
+                        </div>
                         <dl className="detail-list">
                           <div>
                             <dt>Moeda do grupo</dt>
@@ -352,4 +513,114 @@ function organizationFilterSummary(
     summary.push(enabled === "true" ? "Ativas" : "Pausadas");
   }
   return summary;
+}
+
+function ruleTransactionsHref(
+  rule: {
+    filter?: unknown;
+    text: string;
+    accountId: string | null;
+    direction: string | null;
+  },
+  spaceId: string,
+) {
+  const params = new URLSearchParams({ space: spaceId });
+  if (!rule.filter) {
+    params.set("text", rule.text);
+    if (rule.accountId) {
+      params.set("accountId", rule.accountId);
+    }
+    if (rule.direction) {
+      params.set("direction", rule.direction);
+    }
+  }
+  return `/account/transactions?${params}`;
+}
+
+function ruleLinkLabel(rule: { filter?: unknown }) {
+  return rule.filter
+    ? "Ver todas as transações do grupo"
+    : "Ver lançamentos com esta condição";
+}
+
+function RuleScope({
+  rule,
+  movement,
+  account,
+}: {
+  rule: WorkspaceCatalog["rules"][number];
+  movement: string;
+  account: string;
+}) {
+  if (rule.filter) {
+    return <span>{rule.filter.currency ?? "Todas as moedas"}</span>;
+  }
+  return (
+    <>
+      <span>{movement}</span>
+      <span>{account}</span>
+    </>
+  );
+}
+function RuleConditions({
+  rule,
+  accounts,
+  people,
+}: {
+  rule: WorkspaceCatalog["rules"][number];
+  accounts: { id: string; name: string; personName: string }[];
+  people: { id: string; name: string }[];
+}) {
+  if (!rule.filter) {
+    return null;
+  }
+  const operators: Record<string, string> = {
+    contains: "contém",
+    equals: "é",
+    gte: "≥",
+    lte: "≤",
+    not_contains: "não contém",
+    starts_with: "começa com",
+  };
+  const values: Record<string, string> = {
+    CREDIT: "Entrada",
+    DEBIT: "Saída",
+    PENDING: "Pendente",
+    POSTED: "Confirmada",
+  };
+  function label(
+    condition: NonNullable<
+      typeof rule.filter
+    >["alternatives"][number]["conditions"][number],
+  ) {
+    let value = values[condition.value] ?? condition.value;
+    if (condition.field === "accountId") {
+      const account = accounts.find((row) => row.id === condition.value);
+      value = account
+        ? `${account.name} · ${account.personName}`
+        : "Conta não identificada";
+    }
+    if (condition.field === "personId") {
+      value =
+        people.find((row) => row.id === condition.value)?.name ??
+        "Pessoa não identificada";
+    }
+    if (condition.field === "amount") {
+      value = formatBalance(condition.value, rule.filter?.currency ?? "BRL");
+    }
+    const field =
+      conditionFields.find((row) => row.value === condition.field)?.label ??
+      condition.field;
+    return `${field} ${operators[condition.operator]} ${value}`;
+  }
+  return (
+    <p className="rule-condition-summary">
+      {rule.filter.alternatives
+        .map(
+          (alternative, index) =>
+            `${index ? "OU: " : "Todas: "}${alternative.conditions.map(label).join(" · E ")}`,
+        )
+        .join("\n\n")}
+    </p>
+  );
 }

@@ -1,4 +1,4 @@
-import type { SyncHistorySelection } from "../../contracts";
+import type { RulePreviewInput, SyncHistorySelection } from "../../contracts";
 import { DEFAULT_PROFILE } from "../../domain";
 import { createAuditRepository } from "../audit/repository";
 import type { Bindings } from "../bindings";
@@ -18,7 +18,7 @@ import {
   reportDiagnostic,
   SpanName,
 } from "../observability";
-import { createPlanningService } from "../planning";
+import { createPlanningService, previewRule } from "../planning";
 import { createPlanningRepository } from "../planning/repository";
 import { createCatalogRepository } from "../planning/repository/catalog.repository";
 import { createPluggyAdapter, createProfileSource } from "../pluggy";
@@ -190,4 +190,8 @@ export function workspaceCatalog(env: Bindings, spaceId: string) {
 
 export function auditRepository(env: Bindings) {
   return createAuditRepository(env.DB);
+}
+
+export function rulePreview(env: Bindings, input: RulePreviewInput) {
+  return previewRule(createPlanningRepository(env.DB), input);
 }

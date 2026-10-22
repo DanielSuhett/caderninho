@@ -15,12 +15,15 @@ não afirma paridade de assinatura com tools privadas ou habilitadas por plano.
 A Pluggy fornece contas, transações, faturas, investimentos e empréstimos, com
 cobertura dependente da instituição/conexão. Planejamento e edição são locais.
 As quatro tools `caderninho_*` continuam disponíveis com seus contratos originais.
-As 89 tools adicionais usam a visão efetiva, com sobreposições e dados manuais.
+As 90 tools adicionais usam a visão efetiva, com sobreposições e dados manuais.
+
+A extensão de [backoffice](backoffice.md) acrescenta `delete_space` e condições
+compostas em regras, chegando a 94 tools.
 
 ## Pessoas e perfis Pluggy
 
 A extensão de [titularidade](household.md) acrescenta múltiplos perfis e filtros
-por `personId`, preservando as 93 ferramentas. `caderninho_status` fornece os IDs
+por `personId`, preservando os contratos existentes. `caderninho_status` fornece os IDs
 das pessoas e perfis. Espaço, pessoa e aplicação são conceitos independentes.
 
 ## Contrato comum
@@ -99,8 +102,8 @@ usam apenas dados sintéticos e não constituem prova dessas etapas.
 19 testes Node, 59 testes de integração em 11 arquivos e build Wrangler dry-run.
 O teste nativo de Workflow/D1 passou com 10 mil e 100 mil transações sintéticas,
 replay, falhas parciais e reinício do Worker com preservação do banco. Os cenários
-de integração exercitam as 89 ferramentas novas; o transporte MCP autenticado
-verifica o catálogo de 93 tools e escritas com confirmação e repetição idempotente.
+de integração exercitam as ferramentas de planejamento; o transporte MCP autenticado
+verifica o catálogo original de 93 tools e escritas com confirmação e repetição idempotente.
 
 ## Fontes primárias
 

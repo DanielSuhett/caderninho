@@ -23,6 +23,7 @@ com confiança?**
 | Cabeçalho, filtros, métricas, refresh e skeleton | `src/web/account/workspace-ui.tsx` | Compor os componentes existentes; não criar outro cabeçalho local com escala própria. |
 | Campos de escopo e estado vazio | `src/web/account/workspace-filters.tsx` | `ScopeFields` e `EmptyView`; aplicação/limpeza pertencem a `FilterDrawer`. |
 | Drawer modal compartilhado | `src/web/account/workspace-drawer.tsx` | `WorkspaceDrawer`: diálogo nativo, cabeçalho, corpo rolável e ações Kumo. |
+| Editor de backoffice | `src/web/account/backoffice-dialog.tsx` | Drawer de 720 px, cabeçalho/ações fixos, corpo rolável, confirmação de descarte e foco restaurado. |
 | Item expansível compartilhado | `src/web/account/disclosure-item.tsx` | `DisclosureItem` fornece interação nativa; os domínios montam resumo e detalhe. |
 | Lista financeira | `src/web/account/transaction-list.tsx` | `TransactionList` compõe a peça comum com dados financeiros e a mesma apresentação na galeria. |
 | Identificação visual de banco | `src/web/account/bank-mark.tsx` | `BankMark` e catálogo `bankMarks`; fallback neutro sem identidade confirmada. |

@@ -4,7 +4,7 @@ import type {
   PlanningState,
   TransactionEdit,
 } from "../../domain";
-import { localDay, monthDate, sacSchedule } from "../../domain";
+import { localDay, monthDate, ruleMatches, sacSchedule } from "../../domain";
 import { effectiveBills } from "./bills.service";
 import type { PlanningRepository, PlanningSnapshot } from "./entity";
 import {
@@ -15,10 +15,6 @@ import {
   transactionStream,
 } from "./projection";
 import { cardCatalog } from "./queries.service";
-
-// Match SQLite lower() used by the atomic import trigger, independent of locale.
-const ruleText = (text: string) =>
-  text.replace(/[A-Z]/g, (letter) => letter.toLowerCase());
 
 export async function planningMutation(
   command: PlanningCommand,
@@ -413,12 +409,7 @@ export async function planningMutation(
           );
           break;
         case "apply_rules": {
-          const rule = rules.find(
-            (r) =>
-              (!r.accountId || r.accountId === row.accountId) &&
-              (!r.direction || r.direction === row.direction) &&
-              ruleText(row.description).includes(ruleText(r.text)),
-          );
+          const rule = rules.find((r) => ruleMatches(row, r));
           if (rule) {
             patch.category = rule.categoryId;
           }
@@ -660,7 +651,23 @@ export async function planningMutation(
   function handleCreateRule(
     input: Extract<PlanningCommand, { tool: "create_rule" | "update_rule" }>,
   ) {
+    if (!(input.text || input.filter)) {
+      throw new Error("INVALID_RULE");
+    }
     category(input.categoryId);
+    for (const condition of input.filter?.alternatives.flatMap(
+      (a) => a.conditions,
+    ) ?? []) {
+      if (condition.field === "accountId") {
+        account(condition.value);
+      }
+      if (
+        condition.field === "personId" &&
+        !snapshot.people.some((p) => p.id === condition.value)
+      ) {
+        throw new Error("NOT_FOUND");
+      }
+    }
     if (input.accountId) {
       account(input.accountId);
     }
@@ -673,6 +680,7 @@ export async function planningMutation(
       categoryId: input.categoryId,
       direction: input.direction,
       enabled: input.enabled,
+      filter: input.filter,
       id,
       name: input.name,
       priority: input.priority,
@@ -1192,6 +1200,41 @@ export async function planningMutation(
     return row;
   }
 
+  function handleDeleteSpace(
+    input: Extract<PlanningCommand, { tool: "delete_space" }>,
+  ) {
+    if (input.id !== input.spaceId) {
+      throw new Error("SPACE_MISMATCH");
+    }
+    if (input.id === "personal") {
+      throw new Error("SPACE_PROTECTED");
+    }
+    const linked = [
+      state.accounts,
+      state.edits,
+      state.rules,
+      state.tags,
+      state.goals,
+      state.investments,
+      state.loans,
+      state.recurrences,
+      state.installments,
+      state.notifications,
+    ].some((rows) => rows.some((row) => row.spaceId === input.id));
+    if (
+      linked ||
+      accountList.some((row) => row.spaceId === input.id) ||
+      state.categories.some((row) => row.spaceId === input.id && !row.system)
+    ) {
+      throw new Error("SPACE_NOT_EMPTY");
+    }
+    state.spaces = state.spaces.filter((row) => row.id !== input.id);
+    state.categories = state.categories.filter(
+      (row) => row.spaceId !== input.id,
+    );
+    return { deleted: true, id: input.id };
+  }
+
   function moveTarget(
     target: import("../../domain").PlanningAccount,
     targetSpaceId: string,
@@ -1375,6 +1418,8 @@ export async function planningMutation(
       return handleUpdateTag(command);
     case "delete_tag":
       return handleDeleteTag(command);
+    case "delete_space":
+      return handleDeleteSpace(command);
     case "create_space":
       return handleCreateSpace(command);
     case "update_space":

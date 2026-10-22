@@ -72,6 +72,7 @@ export interface Rule {
   categoryId: string;
   direction: "DEBIT" | "CREDIT" | null;
   enabled: boolean;
+  filter?: import("./rules.entity").RuleFilter | null;
   id: string;
   name: string;
   priority: number;

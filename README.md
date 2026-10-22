@@ -27,7 +27,7 @@ O botão usa o código publicado no GitHub; alterações locais não aparecem ne
 O provisionamento completo numa conta Cloudflare nova ainda exige validação real.
 O software é gratuito; Cloudflare e Pluggy têm seus próprios limites e custos.
 
-O MCP oferece 93 ferramentas: as quatro consultas/operações originais e 89
+O MCP oferece 94 ferramentas: as quatro consultas/operações originais e 90
 ferramentas de planejamento e organização, documentadas no
 [catálogo financeiro](docs/mcp-finance.md). A importação lê contas, transações,
 faturas, investimentos e empréstimos disponíveis na Pluggy. Categorias, tags,

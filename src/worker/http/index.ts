@@ -4,6 +4,10 @@ import { z } from "zod/v4";
 import type { SafeFields } from "../observability";
 
 const invalidRequests = new Set([
+  "INVALID_RULE",
+  "SPACE_PROTECTED",
+  "SPACE_NOT_EMPTY",
+  "SPACE_MISMATCH",
   "EMPTY_FORM",
   "FORM_TOO_LARGE",
   "DUPLICATE_FORM_FIELD",
@@ -26,7 +30,11 @@ export function failureStatus(error: Error): 400 | 403 | 404 | 409 | 500 | 503 {
   if (error.message === "NOT_CONFIGURED") {
     return 503;
   }
-  if (error.message === "ITEM_LIMIT" || error.message === "RESTART_REQUIRED") {
+  if (
+    error.message === "ITEM_LIMIT" ||
+    error.message === "RESTART_REQUIRED" ||
+    error.message === "IDEMPOTENCY_CONFLICT"
+  ) {
     return 409;
   }
   return error instanceof z.ZodError ||

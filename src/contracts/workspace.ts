@@ -2,6 +2,7 @@ import { z } from "zod/v4";
 
 import { RunStatus } from "../domain";
 import { planningDefinitions } from "./planning";
+import { RuleFilterSchema } from "./rules";
 
 // Deliberate read-only allowlist; the portal cannot forward arbitrary MCP mutations.
 export const PortalQuerySchema = z
@@ -57,6 +58,7 @@ const RuleListSchema = z.object({
         categoryId: id,
         direction: z.enum(["DEBIT", "CREDIT"]).nullable(),
         enabled: z.boolean(),
+        filter: RuleFilterSchema.nullable().optional(),
         priority: z.number(),
         text: z.string(),
       }),
@@ -136,3 +138,24 @@ export const WorkspaceCatalogSchema = z.object({
   tags: TagListSchema.shape.data.shape.records,
 });
 export type WorkspaceCatalog = z.infer<typeof WorkspaceCatalogSchema>;
+
+export const PortalMutationSchema = z
+  .object({
+    command: z.discriminatedUnion("tool", [
+      planningDefinitions[56].schema.extend({ tool: z.literal("create_rule") }),
+      planningDefinitions[57].schema.extend({ tool: z.literal("update_rule") }),
+      planningDefinitions[58].schema.extend({ tool: z.literal("delete_rule") }),
+      planningDefinitions[84].schema.extend({
+        tool: z.literal("create_space"),
+      }),
+      planningDefinitions[85].schema.extend({
+        tool: z.literal("update_space"),
+      }),
+      planningDefinitions[89].schema.extend({
+        tool: z.literal("delete_space"),
+      }),
+    ]),
+    csrf: z.string(),
+  })
+  .strict();
+export type PortalMutation = z.input<typeof PortalMutationSchema>["command"];
