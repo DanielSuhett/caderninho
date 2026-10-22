@@ -4,10 +4,13 @@ import type { z } from "zod/v4";
 
 import {
   AccountActionSchema,
+  CatalogSelectionSchema,
   ConnectTokenActionSchema,
   HouseholdCommandSchema,
   ItemActionSchema,
+  PortalQuerySchema,
   SyncActionSchema,
+  SyncHistorySelectionSchema,
 } from "../../../contracts";
 import { accountPage, renderPage } from "../../../web";
 import { revokeAssistantGrants } from "../../auth/grants";
@@ -20,7 +23,10 @@ import {
 import {
   householdService,
   installationService,
+  planningService,
+  synchronizationHistory,
   syncService,
+  workspaceCatalog,
 } from "../../composition";
 import { boundedJson, requestOrigin } from "../../http";
 
@@ -39,6 +45,7 @@ export function installationRoutes(access: Hono<PortalEnv>) {
   });
   app.route("/", access);
   app.use("/account", sessionMiddleware);
+  app.use("/account/*", sessionMiddleware);
   app.use("/api/account", sessionMiddleware);
   app.use("/api/account/*", sessionMiddleware);
   app.use("/api/account/*", async (c, next) => {
@@ -65,6 +72,35 @@ export function installationRoutes(access: Hono<PortalEnv>) {
     return input;
   };
   app.get("/account", (c) => c.html(renderPage(accountPage())));
+  for (const path of [
+    "transactions",
+    "rules",
+    "groups",
+    "sync",
+    "connections",
+  ]) {
+    app.get(`/account/${path}`, (c) => c.html(renderPage(accountPage())));
+  }
+  app.get("/api/account/catalog", async (c) => {
+    const input = CatalogSelectionSchema.parse(c.req.query());
+    return c.json(await workspaceCatalog(c.env, input.spaceId));
+  });
+  app.post("/api/account/query", async (c) => {
+    const input = await command(
+      c.req.raw,
+      c.get("session").csrf,
+      PortalQuerySchema,
+    );
+    return c.json(await planningService(c.env).execute(input.query));
+  });
+  app.get("/api/account/history", async (c) =>
+    c.json(
+      await synchronizationHistory(
+        c.env,
+        SyncHistorySelectionSchema.parse(c.req.query()),
+      ),
+    ),
+  );
   app.get("/api/account", async (c) =>
     c.json({
       ...(await installationService(c.env).state()),

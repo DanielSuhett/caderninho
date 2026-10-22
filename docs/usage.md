@@ -1,8 +1,11 @@
 # Usar o Caderninho
 
-Abra `/account`, entre com sua senha e escolha **Conectar Meu Pluggy**. Use a mesma
+Abra `/account`, entre com sua senha e acesse **Conexões** para escolher **Conectar Meu Pluggy**. Use a mesma
 aplicação Pluggy das suas conexões pessoais. Depois, escolha **Importar esta visão** e
 acompanhe o estado das contas no painel.
+
+Consulte [as páginas da instalação](frontend-workspace.md) para navegar por transações,
+regras, grupos e histórico de sincronizações.
 
 ## Pessoas e perfis
 

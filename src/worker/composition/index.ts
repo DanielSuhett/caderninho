@@ -1,3 +1,4 @@
+import type { SyncHistorySelection } from "../../contracts";
 import { DEFAULT_PROFILE } from "../../domain";
 import type { Bindings } from "../bindings";
 import { createFinancialService } from "../finance";
@@ -18,9 +19,11 @@ import {
 } from "../observability";
 import { createPlanningService } from "../planning";
 import { createPlanningRepository } from "../planning/repository";
+import { createCatalogRepository } from "../planning/repository/catalog.repository";
 import { createPluggyAdapter, createProfileSource } from "../pluggy";
 import { createSyncService } from "../sync";
 import { createSyncRepository } from "../sync/repository";
+import { createSyncHistoryRepository } from "../sync/repository/history.repository";
 
 export function householdService(env: Bindings) {
   return createHouseholdService({
@@ -171,4 +174,15 @@ export function syncService(env: Bindings, now: () => Date = () => new Date()) {
 
 export function planningService(env: Bindings) {
   return createPlanningService(createPlanningRepository(env.DB));
+}
+
+export function synchronizationHistory(
+  env: Bindings,
+  selection: SyncHistorySelection,
+) {
+  return createSyncHistoryRepository(env.DB).query(selection);
+}
+
+export function workspaceCatalog(env: Bindings, spaceId: string) {
+  return createCatalogRepository(env.DB).read(spaceId);
 }

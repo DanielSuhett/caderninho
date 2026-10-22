@@ -164,3 +164,11 @@ O adapter seleciona exatamente um perfil, valida a origem e aplica namespace aos
 IDs novos. A origem legada mantém os IDs. Credenciais adicionais ficam no KV;
 metadados e hash da aplicação ficam no D1. Painel e consultas financeiras usam
 a mesma atribuição de pessoa. Veja [decisões e operação](household.md).
+
+## Histórico e páginas da instalação
+
+`0004_sync_history.sql` adiciona o registro durável das rodadas sem substituir o
+checkpoint corrente. O trigger acompanha a mesma escrita atômica de progresso;
+pessoa e perfil são fixados na admissão. O painel consulta catálogo de planejamento
+e histórico por repositories específicos, e reutiliza o serviço de consultas MCP
+para a visão financeira efetiva. Veja [o guia do workspace](frontend-workspace.md).

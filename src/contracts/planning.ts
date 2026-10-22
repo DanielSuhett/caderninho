@@ -132,6 +132,7 @@ export const planningDefinitions = [
         ...selection,
         cursor: z.string().max(4096).optional(),
         limit: z.number().int().min(1).max(500).default(100),
+        order: z.enum(["id", "date_desc"]).default("id"),
       })
       .strict(),
   },

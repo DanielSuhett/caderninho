@@ -173,3 +173,9 @@ A migração `0003_household.sql` adiciona três tabelas de titularidade e remov
 limite local antigo. O perfil legado usa os secrets existentes; perfis adicionais
 são configurados no painel e armazenados no KV, sem novos bindings ou deploys.
 Leia [o modelo e os limites](household.md) antes da migração real.
+
+## Histórico de sincronizações
+
+`0004_sync_history.sql` registra cada admissão e acompanha seus checkpoints por
+trigger atômico. A migração é aditiva e recupera somente a última rodada ainda
+presente em cada conexão. Consulte [as páginas e os limites do histórico](frontend-workspace.md).

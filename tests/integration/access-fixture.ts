@@ -111,7 +111,7 @@ export async function command(
   app: ReturnType<typeof fixture>,
   cookie: string,
   action: string,
-  fields: Record<string, string> = {},
+  fields: Record<string, unknown> = {},
 ) {
   const state = PortalResponseSchema.parse(
     await (

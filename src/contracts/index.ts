@@ -26,3 +26,19 @@ export {
   PortalResponseSchema,
   SyncActionSchema,
 } from "./portal-contract";
+export type {
+  PortalQuery,
+  SyncHistoryResult,
+  SyncHistorySelection,
+  WorkspaceCatalog,
+} from "./workspace";
+export {
+  AccountListSchema,
+  CatalogSelectionSchema,
+  PortalQuerySchema,
+  SyncHistoryCursorSchema,
+  SyncHistoryResultSchema,
+  SyncHistorySelectionSchema,
+  TransactionListSchema,
+  WorkspaceCatalogSchema,
+} from "./workspace";

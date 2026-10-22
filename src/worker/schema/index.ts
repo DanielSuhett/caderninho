@@ -195,3 +195,17 @@ export const connectionOwners = sqliteTable("connection_owners", {
     .notNull()
     .references(() => pluggyProfiles.id),
 });
+
+export const syncHistory = sqliteTable("sync_history", {
+  admittedAt: text("admitted_at").notNull(),
+  connectionId: text("connection_id").notNull(),
+  error: text("error"),
+  finishedAt: text("finished_at"),
+  id: text("id").primaryKey(),
+  legacy: integer("legacy", { mode: "boolean" }).notNull().default(false),
+  personId: text("person_id").notNull(),
+  phase: text("phase"),
+  profileId: text("profile_id").notNull(),
+  sequence: integer("sequence").notNull(),
+  status: text("status").$type<RunStatus>().notNull(),
+});

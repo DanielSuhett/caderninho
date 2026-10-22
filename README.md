@@ -22,7 +22,7 @@ Os três valores ficam nos secrets da sua Cloudflare. Nenhuma chave técnica pre
 ser gerada manualmente. O painel permite cadastrar várias pessoas e perfis Pluggy autorizados. Consulte [pessoas e perfis](docs/household.md).
 
 Instalações anteriores ao modelo mínimo exigem **banco novo**. A extensão de
-planejamento aceita uma base que já usa `0001_initial.sql`, pelas migrações aditivas 0002 e 0003.
+planejamento aceita uma base que já usa `0001_initial.sql`, pelas migrações aditivas 0002, 0003 e 0004.
 O botão usa o código publicado no GitHub; alterações locais não aparecem nele.
 O provisionamento completo numa conta Cloudflare nova ainda exige validação real.
 O software é gratuito; Cloudflare e Pluggy têm seus próprios limites e custos.
@@ -60,3 +60,5 @@ senha de 16 a 256 caracteres. Os testes usam fixtures e não precisam de contas 
 [Referência técnica](docs/cloudflare-product.md) · [Identidade visual](DESIGN.md)
 
 O projeto usa a [licença MIT](LICENSE); código de terceiros mantém seus avisos.
+
+O [painel da instalação](docs/frontend-workspace.md) reúne visão geral, transações, regras, grupos, sincronizações e conexões.

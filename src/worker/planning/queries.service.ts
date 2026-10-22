@@ -1,6 +1,6 @@
 import type { PlanningCommand } from "../../contracts";
 import { PlanningCursorSchema } from "../../contracts";
-import type { PlanningState } from "../../domain";
+import type { PlanningState, PlanningTransaction } from "../../domain";
 import { financialCharts, localDay, monthDate } from "../../domain";
 import { hash } from "../../shared";
 import { type ProjectedPayment, recurrencePayments } from "./billing";
@@ -35,6 +35,18 @@ const absolute = (value: string) => {
   const amount = BigInt(value);
   return amount < 0n ? -amount : amount;
 };
+function transactionOrder(order: "id" | "date_desc", after: string) {
+  const descending = order === "date_desc";
+  const key = (row: PlanningTransaction) =>
+    descending ? `${row.date}:${row.id}` : row.id;
+  return {
+    compare: (a: PlanningTransaction, b: PlanningTransaction) =>
+      (key(a) < key(b) ? -1 : Number(key(a) > key(b))) * (descending ? -1 : 1),
+    following: (row: PlanningTransaction) =>
+      !after || (descending ? key(row) < after : key(row) > after),
+    key,
+  };
+}
 export function cardCatalog(snapshot: PlanningSnapshot, state: PlanningState) {
   const result = new Map<
     string,
@@ -430,10 +442,11 @@ export async function planningQuery(
       after = decoded[2] ?? "";
     }
     const rows: import("../../domain").PlanningTransaction[] = [];
+    const order = transactionOrder(input.order, after);
     for await (const row of stream(input)) {
-      if (row.id > after) {
+      if (order.following(row)) {
         rows.push(row);
-        rows.sort((a, b) => (a.id < b.id ? -1 : Number(a.id > b.id)));
+        rows.sort(order.compare);
         if (rows.length > limit + 1) {
           rows.pop();
         }
@@ -447,7 +460,7 @@ export async function planningQuery(
             JSON.stringify([
               snapshot.revision,
               scope,
-              found(records.at(-1)).id,
+              order.key(found(records.at(-1))),
             ]),
           )
         : null,

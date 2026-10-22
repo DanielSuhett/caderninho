@@ -3,7 +3,10 @@ import { z } from "zod/v4";
 import {
   AccountConnectTokenSchema,
   type HouseholdCommand,
+  type PortalQuery,
   PortalResponseSchema,
+  SyncHistoryResultSchema,
+  WorkspaceCatalogSchema,
 } from "../../contracts";
 import { httpClient, requestJson } from "../../shared";
 export function createAccountApi(
@@ -25,7 +28,8 @@ export function createAccountApi(
           profileId?: string;
           connectionIds?: string[];
         }
-      | HouseholdCommand,
+      | HouseholdCommand
+      | { csrf: string; query: PortalQuery },
   ) =>
     requestJson({
       client,
@@ -39,6 +43,10 @@ export function createAccountApi(
       },
     });
   return {
+    catalog: async (spaceId: string, signal: AbortSignal) =>
+      WorkspaceCatalogSchema.parse(
+        await request(`/catalog?${new URLSearchParams({ spaceId })}`, signal),
+      ),
     command: async (
       action: string,
       csrf: string,
@@ -56,8 +64,12 @@ export function createAccountApi(
         }),
       );
     },
+    history: async (query: URLSearchParams, signal: AbortSignal) =>
+      SyncHistoryResultSchema.parse(await request(`/history?${query}`, signal)),
     manage: async (input: HouseholdCommand, signal: AbortSignal) =>
       z.json().parse(await request("/manage", signal, input)),
+    query: (query: PortalQuery, csrf: string, signal: AbortSignal) =>
+      request("/query", signal, { csrf, query }),
     read: async (signal: AbortSignal) =>
       PortalResponseSchema.parse(await request("", signal)),
     token: async (

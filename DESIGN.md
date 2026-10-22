@@ -29,7 +29,7 @@ Títulos de uma cor. Sem palavra isolada em laranja, etiquetas em caixa alta ou 
 
 ## Composição
 
-Telas operacionais: largura máxima 850 px; dashboard de múltiplas pessoas até 1200 px, formulários alinhados à esquerda. Margens móveis entre 18 e 24 px. Espaçamento cria hierarquia antes de bordas e fundos.
+Telas operacionais: largura máxima 850 px; workspace com navegação até 1480 px, formulários alinhados à esquerda. Margens móveis entre 18 e 24 px. Espaçamento cria hierarquia antes de bordas e fundos.
 
 Superfícies só para agrupar trabalho relacionado. Raios: 10 px nos grupos; 6 px nos controles; 4 px nos badges. Sem brilhos, gradientes, sombras decorativas, texturas, avatares fictícios ou grids de cards para preencher espaço. Numeração apenas para sequências reais.
 
@@ -62,13 +62,23 @@ regras no navegador. A lógica financeira continua no domínio e no Worker.
 A cor de ação usa o token `kumo-brand` (#f6821f) da biblioteca oficial Kumo.
 Preserve fonte local, foco visível e navegação por teclado em desktop e celular.
 
-## Playground da instância
+## Navegação da instalação
 
-`/account` reúne onboarding e manutenção. Dois passos, Bancos e Assistente, concentram a configuração; o progresso da cópia aparece junto dos bancos. A origem e o ambiente ficam visíveis. A distribuição e a recuperação de acesso são documentadas no README.
+`/account` apresenta a visão geral. Transações, Regras, Grupos, Sincronizações e
+Conexões têm páginas próprias; a navegação permanece à esquerda no desktop e
+vira uma grade de três colunas no celular. A página ativa tem texto e borda
+laranja, além de `aria-current`. O link de salto permite ir direto ao conteúdo.
 
-Use Hanken, os tokens existentes e controles Kumo. A trilha fica à esquerda no desktop e permite rolagem horizontal no celular. A seleção usa laranja persistente; transição breve de posição respeita reduced-motion. Atualizações de status preservam os elementos e alteram apenas texto/valor. Não adicionar flashes, terminais fictícios, medalhas ou progresso baseado em tempo.
+A leitura financeira fica separada da gestão de credenciais. Filtros principais
+permanecem visíveis; filtros avançados de transações usam disclosure e abrem quando
+ativos. Tabelas viram registros com rótulos no celular. Regras explicam condições
+em linguagem legível; grupos exibem espaços, categorias e tags. Falhas e dados
+parciais aparecem com texto e ações de recuperação.
 
-Confirmação de configuração, autorização OAuth e requisição autenticada são evidências diferentes. A UI não atribui marca verificada a um nome declarado pelo cliente. Falhas de leitura preservam a evidência anterior e oferecem renovação de sessão ou nova verificação. Privacidade e manutenção ficam em disclosures, sem esconder falhas da missão ativa.
+Confirmação de configuração, autorização OAuth e requisição autenticada são
+evidências diferentes. A UI não atribui marca verificada a um nome declarado pelo
+cliente. Privacidade e manutenção ficam em disclosures, sem esconder falhas.
+O [guia das páginas](docs/frontend-workspace.md) documenta os recortes e limites.
 
 ## Gestão de múltiplas pessoas
 
