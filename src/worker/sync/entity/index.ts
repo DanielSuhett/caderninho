@@ -4,6 +4,7 @@ import type {
   Checkpoint,
   CommitResult,
   FinancialSource,
+  ProductPage,
   RunStatus,
   TransactionProjection,
 } from "../../../domain";
@@ -28,6 +29,7 @@ export interface Publication {
   error?: string;
   next: Checkpoint;
   now: string;
+  products?: ProductPage;
   run: SyncRun;
   transactions?: TransactionProjection[];
 }

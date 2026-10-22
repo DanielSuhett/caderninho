@@ -1,5 +1,7 @@
+import type { ProductKind } from "../../domain";
 import { PluggyCredentialsSchema } from "../../domain";
 import { PersonalPluggyClient } from "./client.adapter";
+import { productPage } from "./products";
 import { connectToken, financialSource } from "./source";
 export function createPluggyAdapter(input: {
   clientId: string | undefined;
@@ -18,6 +20,12 @@ export function createPluggyAdapter(input: {
     accounts: (id: string) => financialSource(client()).accounts(id),
     configured: parsed.success,
     connection: (id: string) => financialSource(client()).connection(id),
+    products: (request: {
+      kind: ProductKind;
+      id: string;
+      page: number;
+      observedAt: string;
+    }) => productPage(client(), request),
     token: (id?: string) => connectToken(client(), id),
     transactions: (id: string, cursor: string | null) =>
       financialSource(client()).transactions(id, cursor),

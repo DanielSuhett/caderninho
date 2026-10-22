@@ -7,7 +7,30 @@ import {
   text,
 } from "drizzle-orm/sqlite-core";
 
-import type { AccountMap, Checkpoint, RunStatus } from "../../domain";
+import type {
+  AccountDetails,
+  AccountMap,
+  AccountSettings,
+  Bill,
+  BillPayment,
+  CardSettings,
+  Category,
+  Checkpoint,
+  Contribution,
+  Goal,
+  Installment,
+  Investment,
+  Loan,
+  NotificationPreference,
+  Recurrence,
+  Rule,
+  RunStatus,
+  ScheduledPayment,
+  Space,
+  Tag,
+  TransactionDetails,
+  TransactionEdit,
+} from "../../domain";
 export const connections = sqliteTable(
   "connections",
   {
@@ -54,3 +77,95 @@ export const transactions = sqliteTable(
     index("transaction_category").on(t.category),
   ],
 );
+
+export const planningSpaces = sqliteTable("planning_spaces", {
+  data: text("data", { mode: "json" }).$type<Space>().notNull(),
+  id: text("id").primaryKey(),
+});
+export const planningAccounts = sqliteTable("planning_accounts", {
+  data: text("data", { mode: "json" }).$type<AccountSettings>().notNull(),
+  id: text("id").primaryKey(),
+});
+export const planningCards = sqliteTable("planning_cards", {
+  data: text("data", { mode: "json" }).$type<CardSettings>().notNull(),
+  id: text("id").primaryKey(),
+});
+export const planningEdits = sqliteTable("planning_edits", {
+  data: text("data", { mode: "json" }).$type<TransactionEdit>().notNull(),
+  id: text("id").primaryKey(),
+});
+export const planningCategories = sqliteTable("planning_categories", {
+  data: text("data", { mode: "json" }).$type<Category>().notNull(),
+  id: text("id").primaryKey(),
+});
+export const planningTags = sqliteTable("planning_tags", {
+  data: text("data", { mode: "json" }).$type<Tag>().notNull(),
+  id: text("id").primaryKey(),
+});
+export const planningRules = sqliteTable("planning_rules", {
+  data: text("data", { mode: "json" }).$type<Rule>().notNull(),
+  id: text("id").primaryKey(),
+});
+export const planningRecurrences = sqliteTable("planning_recurrences", {
+  data: text("data", { mode: "json" }).$type<Recurrence>().notNull(),
+  id: text("id").primaryKey(),
+});
+export const planningInstallments = sqliteTable("planning_installments", {
+  data: text("data", { mode: "json" }).$type<Installment>().notNull(),
+  id: text("id").primaryKey(),
+});
+export const planningGoals = sqliteTable("planning_goals", {
+  data: text("data", { mode: "json" }).$type<Goal>().notNull(),
+  id: text("id").primaryKey(),
+});
+export const planningContributions = sqliteTable("planning_contributions", {
+  data: text("data", { mode: "json" }).$type<Contribution>().notNull(),
+  id: text("id").primaryKey(),
+});
+export const planningInvestments = sqliteTable("planning_investments", {
+  data: text("data", { mode: "json" }).$type<Investment>().notNull(),
+  id: text("id").primaryKey(),
+});
+export const planningLoans = sqliteTable("planning_loans", {
+  data: text("data", { mode: "json" }).$type<Loan>().notNull(),
+  id: text("id").primaryKey(),
+});
+export const planningSchedules = sqliteTable("planning_schedules", {
+  data: text("data", { mode: "json" }).$type<ScheduledPayment>().notNull(),
+  id: text("id").primaryKey(),
+});
+export const planningBillPayments = sqliteTable("planning_billPayments", {
+  data: text("data", { mode: "json" }).$type<BillPayment>().notNull(),
+  id: text("id").primaryKey(),
+});
+export const planningNotifications = sqliteTable("planning_notifications", {
+  data: text("data", { mode: "json" })
+    .$type<NotificationPreference>()
+    .notNull(),
+  id: text("id").primaryKey(),
+});
+export const planningBills = sqliteTable("planning_bills", {
+  data: text("data", { mode: "json" }).$type<Bill>().notNull(),
+  id: text("id").primaryKey(),
+});
+export const planningAccountDetails = sqliteTable("planning_accountDetails", {
+  data: text("data", { mode: "json" }).$type<AccountDetails>().notNull(),
+  id: text("id").primaryKey(),
+});
+export const planningTransactionDetails = sqliteTable(
+  "planning_transactionDetails",
+  {
+    data: text("data", { mode: "json" }).$type<TransactionDetails>().notNull(),
+    id: text("id").primaryKey(),
+  },
+);
+export const planningRevision = sqliteTable("planning_revision", {
+  id: integer("id").primaryKey(),
+  revision: integer("revision").notNull(),
+});
+export const planningReceipts = sqliteTable("planning_receipts", {
+  createdAt: text("created_at").notNull(),
+  digest: text("digest").notNull(),
+  id: text("id").primaryKey(),
+  result: text("result", { mode: "json" }).$type<unknown>().notNull(),
+});

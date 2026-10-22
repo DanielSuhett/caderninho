@@ -41,7 +41,7 @@ const requestMeta = {
   "io.modelcontextprotocol/protocolVersion": "2026-07-28",
 };
 beforeEach(setup);
-test("official OAuth, four standard tools/defaults, protocol errors and grant revocation work together", async () => {
+test("official OAuth, legacy standard tools/defaults, protocol errors and grant revocation work together", async () => {
   await collect(source([transaction()]));
   const app = fixture();
   const cookie = cookies(await login(app));
@@ -75,12 +75,18 @@ test("official OAuth, four standard tools/defaults, protocol errors and grant re
     });
   const listing = wire.parse(await (await call(first, "tools/list")).json());
   assert.ok(listing.result, JSON.stringify(listing));
-  assert.deepEqual(listing.result?.tools?.map((tool) => tool.name).sort(), [
-    "caderninho_aggregate",
-    "caderninho_status",
-    "caderninho_sync",
-    "caderninho_transactions",
-  ]);
+  assert.deepEqual(
+    listing.result?.tools
+      ?.filter((tool) => tool.name.startsWith("caderninho_"))
+      .map((tool) => tool.name)
+      .sort(),
+    [
+      "caderninho_aggregate",
+      "caderninho_status",
+      "caderninho_sync",
+      "caderninho_transactions",
+    ],
+  );
   const transactions = wire.parse(
     await (
       await call(first, "tools/call", {
@@ -498,4 +504,83 @@ test("MCP accumulates imported history and updates only matching source IDs", as
   );
   assert.equal(partialTotal.groups[0]?.totalMinor, "10700");
   assert.equal(partialTotal.partial, true);
+});
+
+test("OAuth exposes 93 tools and executes confirmed local writes with durable replay", async () => {
+  const app = fixture();
+  const token = await grant(app, cookies(await login(app)));
+  async function rpc(method: string, params: Record<string, unknown>) {
+    return wire.parse(
+      await (
+        await app.request("/mcp", {
+          body: JSON.stringify({
+            id: 1,
+            jsonrpc: "2.0",
+            method,
+            params: { ...params, _meta: requestMeta },
+          }),
+          headers: {
+            Accept: "application/json, text/event-stream",
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+            "Mcp-Method": method,
+            "Mcp-Protocol-Version": "2026-07-28",
+            ...(typeof params.name === "string" && { "Mcp-Name": params.name }),
+          },
+          method: "POST",
+        })
+      ).json(),
+    );
+  }
+  const listed = await rpc("tools/list", {});
+  assert.equal(listed.result?.tools?.length, 93);
+  const args = {
+    currency: "BRL",
+    idempotency_key: "mcp-write",
+    name: "MCP account",
+    openingBalanceMinor: "100",
+    spaceId: "personal",
+    type: "BANK",
+  };
+  const refused = await rpc("tools/call", {
+    arguments: args,
+    name: "create_manual_account",
+  });
+  assert.equal(refused.result?.isError, true);
+  const request = {
+    arguments: { ...args, confirmed: true },
+    name: "create_manual_account",
+  };
+  const created = await rpc("tools/call", request);
+  assert.equal(created.result?.isError, false);
+  assert.deepEqual(await rpc("tools/call", request), created);
+  const conflicting = await rpc("tools/call", {
+    ...request,
+    arguments: { ...args, confirmed: true, name: "Different" },
+  });
+  assert.equal(conflicting.result?.isError, true);
+  assert.deepEqual(JSON.parse(conflicting.result?.content?.[0]?.text ?? "{}"), {
+    error: "IDEMPOTENCY_CONFLICT",
+  });
+  const queried = await rpc("tools/call", {
+    arguments: {},
+    name: "get_accounts",
+  });
+  assert.equal(queried.result?.isError, false);
+  const payload = z
+    .object({
+      data: z.object({
+        records: z.array(
+          z.object({ balanceMinor: z.string(), name: z.string() }),
+        ),
+      }),
+    })
+    .parse(JSON.parse(queried.result?.content?.[0]?.text ?? "{}"));
+  assert.deepEqual(
+    payload.data.records.map((row) => ({
+      balanceMinor: row.balanceMinor,
+      name: row.name,
+    })),
+    [{ balanceMinor: "100", name: "MCP account" }],
+  );
 });

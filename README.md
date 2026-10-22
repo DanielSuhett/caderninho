@@ -21,16 +21,23 @@ Conecte os bancos em [Meu Pluggy](https://meu.pluggy.ai/) antes de importá-los.
 Os três valores ficam nos secrets da sua Cloudflare. Nenhuma chave técnica precisa
 ser gerada manualmente. Uma pessoa e uma aplicação Pluggy usam cada instalação.
 
-Esta versão exige **banco novo**. Não atualize uma instalação com o schema anterior.
+Instalações anteriores ao modelo mínimo exigem **banco novo**. A extensão de
+planejamento aceita uma base que já usa `0001_initial.sql`, pela migração aditiva 0002.
 O botão usa o código publicado no GitHub; alterações locais não aparecem nele.
 O provisionamento completo numa conta Cloudflare nova ainda exige validação real.
 O software é gratuito; Cloudflare e Pluggy têm seus próprios limites e custos.
 
-O lançamento cobre contas BANK/CREDIT e transações, com histórico cumulativo
-alterado somente pela importação e totais objetivos exatos. O modelo usa duas
-tabelas D1 (`connections` e `transactions`), nove colunas em cada uma, e quatro
-tools MCP (`status`, `sync`, `transactions` e `aggregate`). Importações rodam no
-servidor, sem lotes coordenados pelo assistente.
+O MCP oferece 93 ferramentas: as quatro consultas/operações originais e 89
+ferramentas de planejamento e organização, documentadas no
+[catálogo financeiro](docs/mcp-finance.md). A importação lê contas, transações,
+faturas, investimentos e empréstimos disponíveis na Pluggy. Categorias, tags,
+regras, orçamento, metas, recorrências e lançamentos manuais ficam no D1.
+Edições locais preservam os registros bancários. Escritas exigem confirmação e
+chave de idempotência; o MCP não realiza pagamentos bancários.
+
+A migração `0002_planning.sql` é aditiva sobre `0001_initial.sql` deste repositório.
+Não é uma migração dos schemas históricos anteriores ao modelo mínimo.
+Esta implementação permanece local até revisão e publicação autorizada.
 
 Consulte o [guia de uso](docs/usage.md) para manutenção e recuperação de acesso.
 

@@ -147,3 +147,89 @@ test("transport retries stay disabled and rate-limit metadata is safe for the Wo
   );
   assert.equal(calls, 1);
 });
+
+test("supplemental SDK pages preserve exact money, product identity, currencies and pagination", async () => {
+  let kind = "investments";
+  const state = { itemId: "c" };
+  mockNetwork((input) => {
+    const url = sourceUrl(input);
+    if (url.pathname === "/auth") {
+      return Promise.resolve(Response.json({ apiKey: syntheticJwt() }));
+    }
+    assert.equal(url.pathname, `/${kind}`);
+    if (kind === "investments") {
+      return Promise.resolve(
+        new Response(
+          `{"page":1,"total":2,"totalPages":2,"results":[{"id":"i","itemId":"${state.itemId}","name":"Fund","type":"MUTUAL_FUND","currencyCode":"BRL","amount":9007199254740993.01,"date":"2026-10-20"}]}`,
+        ),
+      );
+    }
+    if (kind === "loans") {
+      return Promise.resolve(
+        Response.json({
+          page: 1,
+          results: [
+            {
+              contractAmount: "123.45",
+              currencyCode: "USD",
+              id: "l",
+              installments: {
+                paidInstallments: 1,
+                totalNumberOfInstallments: 4,
+              },
+              itemId: "c",
+              productName: "Loan",
+            },
+          ],
+          total: 1,
+          totalPages: 1,
+        }),
+      );
+    }
+    return Promise.resolve(
+      Response.json({
+        page: 1,
+        results: [
+          {
+            dueDate: "2026-10-28",
+            financeCharges: [
+              { amount: "0.01", currencyCode: "BRL", type: "IOF" },
+            ],
+            id: "b",
+            payments: [
+              {
+                amount: "10.01",
+                currencyCode: "BRL",
+                paymentDate: "2026-10-21",
+              },
+            ],
+            totalAmount: "100.01",
+            totalAmountCurrencyCode: "BRL",
+          },
+        ],
+        total: 1,
+        totalPages: 1,
+      }),
+    );
+  });
+  const client = adapter();
+  const request = { id: "c", observedAt: "2026-10-22T00:00:00Z", page: 1 };
+  const investments = await client.products({
+    ...request,
+    kind: "investments",
+  });
+  assert.equal(investments.next, 2);
+  assert.equal(investments.records[0]?.amountMinor, "900719925474099301");
+  state.itemId = "other";
+  await assert.rejects(
+    () => client.products({ ...request, kind: "investments" }),
+    { message: "SOURCE_IDENTITY_MISMATCH" },
+  );
+  state.itemId = "c";
+  kind = "loans";
+  const loans = await client.products({ ...request, kind: "loans" });
+  assert.equal(loans.records[0]?.currency, "USD");
+  kind = "bills";
+  const bills = await client.products({ ...request, kind: "bills" });
+  assert.equal(bills.records[0]?.amountMinor, "10001");
+});

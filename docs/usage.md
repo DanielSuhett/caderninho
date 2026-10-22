@@ -6,7 +6,7 @@ acompanhe o estado das contas no painel.
 
 ## Importações
 
-O Caderninho relê as contas e transações disponíveis na origem. Uma coleta
+O Caderninho relê contas, transações, investimentos, empréstimos e faturas disponíveis na origem. Uma coleta
 concluída significa que essa enumeração terminou; a instituição pode disponibilizar
 somente parte do histórico. Uma falha preserva páginas confirmadas e aparece como
 coleta parcial. O painel e `caderninho_status` exibem a importação corrente de
@@ -26,7 +26,7 @@ consultar o Workflow mantém a importação ativa até confirmar seu estado.
 
 Copie a URL `https://SEU-WORKER/mcp` exibida no painel, configure seu conector MCP
 e aprove o OAuth no Caderninho. Cada assistente recebe sua própria autorização.
-Há quatro ferramentas:
+As quatro ferramentas originais preservam a visão bancária:
 
 | Tool | Uso |
 | --- | --- |
@@ -64,12 +64,29 @@ se pareçam. Categoria e descrição vêm da origem e só mudam por outra import
 O frescor é informado pela conexão e pela leitura do saldo, sem auditoria individual
 de transações.
 
-O status é o único caminho MCP para contas e saldos; `connectionIds` seleciona
+Na visão original, o status informa contas e saldos; `connectionIds` seleciona
 conexões. Cada conexão contém `accounts`, um mapa indexado pelo ID Pluggy da conta,
 com `name`, `type`, `currency`, `balanceMinor` e `balanceObservedAt`. A referência
 informa quando o saldo foi lido pelo Caderninho, sem prometer atualização bancária.
 Conta ausente e saldo não relido conservam o valor e o horário anteriores; a
 parcialidade acompanha a conexão, sem estados ou intervalos por conta.
+
+## Planejamento e edição
+
+As 89 ferramentas adicionais e seus contratos estão no [catálogo](mcp-finance.md).
+`get_transactions` aplica edições locais; `caderninho_transactions` mantém a
+projeção da origem. O mesmo vale para totais: as ferramentas de planejamento
+separam despesas explicitamente classificadas de movimentos não classificados.
+Não use o fluxo BANK como sinônimo de renda disponível.
+
+Cada escrita precisa de `spaceId`, `confirmed: true` e `idempotency_key`.
+Obtenha confirmação do proprietário antes de chamar. Reutilize a chave apenas
+para repetir a mesma operação; outra solicitação exige outra chave.
+`RESTART_REQUIRED` pede nova leitura; nunca repita automaticamente uma escrita
+com dados alterados sem reavaliar a solicitação confirmada.
+
+O espaço inicial é `personal`. Espaços são organização de uma instalação pessoal,
+sem usuários adicionais nem isolamento de autorizações.
 
 ## Filtros
 

@@ -38,6 +38,11 @@ async function catalog(
       left.id < right.id ? -1 : Number(left.id > right.id),
     );
 }
+function afterTransactions(
+  source: ImportDependencies["source"],
+): SyncRun["checkpoint"]["phase"] {
+  return source.products ? "investments" : "finish";
+}
 async function importAccounts(
   { repository, source, now }: ImportDependencies,
   run: SyncRun,
@@ -55,7 +60,7 @@ async function importAccounts(
     next: {
       accountId: first?.id ?? null,
       cursor: null,
-      phase: first ? "transactions" : "finish",
+      phase: first ? "transactions" : afterTransactions(source),
     },
     now: now(),
     run,
@@ -93,12 +98,67 @@ async function importTransactions(
     next: {
       accountId: following,
       cursor: page.next,
-      phase: following ? "transactions" : "finish",
+      phase: following ? "transactions" : afterTransactions(source),
     },
     now: now(),
     run,
     transactions: prepared,
   });
+}
+async function importProducts(
+  { repository, source, now }: ImportDependencies,
+  run: SyncRun,
+) {
+  const { phase } = run.checkpoint;
+  if (!(source.products && ["investments", "loans", "bills"].includes(phase))) {
+    throw new Error("INVALID_CHECKPOINT");
+  }
+  if (phase !== "investments" && phase !== "loans" && phase !== "bills") {
+    throw new Error("INVALID_CHECKPOINT");
+  }
+  const page = Number(run.checkpoint.cursor ?? "1");
+  if (!Number.isSafeInteger(page) || page < 1) {
+    throw new Error("INVALID_CHECKPOINT");
+  }
+  const id = phase === "bills" ? run.checkpoint.accountId : run.connectionId;
+  if (!id) {
+    throw new Error("INVALID_CHECKPOINT");
+  }
+  const products = await source.products({
+    id,
+    kind: phase,
+    observedAt: now(),
+    page,
+  });
+  if (products.kind !== phase) {
+    throw new Error("SOURCE_IDENTITY_MISMATCH");
+  }
+  if (products.next !== null && products.next !== page + 1) {
+    throw new Error("INVALID_PAGINATION");
+  }
+  let next: SyncRun["checkpoint"] = {
+    ...run.checkpoint,
+    cursor: products.next === null ? null : String(products.next),
+  };
+  if (products.next !== null) {
+    return repository.publish({ done: false, next, now: now(), products, run });
+  }
+  if (phase === "investments") {
+    next = { accountId: null, cursor: null, phase: "loans" };
+  } else {
+    const saved = await repository.connectionAccounts(run.connectionId);
+    const cards = Object.entries(saved)
+      .filter(([, a]) => a.type === "CREDIT")
+      .map(([key]) => key)
+      .sort();
+    const following = cards.find((key) => phase === "loans" || key > id);
+    next = {
+      accountId: following ?? null,
+      cursor: null,
+      phase: following ? "bills" : "finish",
+    };
+  }
+  return repository.publish({ done: false, next, now: now(), products, run });
 }
 async function importPage(dependencies: ImportDependencies, run: SyncRun) {
   const { repository, now } = dependencies;
@@ -122,6 +182,10 @@ async function importPage(dependencies: ImportDependencies, run: SyncRun) {
       return importAccounts(dependencies, run);
     case "transactions":
       return importTransactions(dependencies, run);
+    case "investments":
+    case "loans":
+    case "bills":
+      return importProducts(dependencies, run);
     default: {
       const [current, saved] = await Promise.all([
         catalog(dependencies.source, run.connectionId),

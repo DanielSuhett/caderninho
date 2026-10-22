@@ -4,6 +4,12 @@ export {
   TransactionQuerySchema,
 } from "./finance";
 export { PRODUCT_INSTRUCTIONS, ToolName, tools } from "./mcp-contract";
+export type { PlanningCommand } from "./planning";
+export {
+  PlanningCommandSchema,
+  PlanningCursorSchema,
+  planningDefinitions,
+} from "./planning";
 export type {
   AccountConnectToken,
   InstallationState,

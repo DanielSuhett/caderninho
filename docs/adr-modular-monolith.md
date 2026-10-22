@@ -2,8 +2,8 @@
 
 Um pacote npm e um deploy Cloudflare atendem painel, OAuth, MCP e importação.
 O produto é pessoal: uma instalação pertence a uma pessoa e pode ter até dez
-conexões Meu Pluggy. O primeiro lançamento importa somente contas BANK/CREDIT e
-transações. As consultas e a importação estão descritas no [guia de uso](usage.md).
+conexões Meu Pluggy. A importação cobre contas BANK/CREDIT, transações, faturas, investimentos e
+empréstimos disponibilizados pela Pluggy. As consultas e a importação estão descritas no [guia de uso](usage.md).
 
 ## Código
 
@@ -21,7 +21,8 @@ transações. As consultas e a importação estão descritas no [guia de uso](us
 | `auth` | Senha, cookies assinados, OAuth oficial e revogação de assistentes |
 | `finance` | Contas, transações, consultas e totais objetivos |
 | `sync` | Admissão diária, despacho, páginas e commits duráveis |
-| `mcp` | Quatro tools comuns do SDK |
+| `planning` | Organização, lançamentos manuais e cálculos de planejamento |
+| `mcp` | 93 ferramentas no SDK, mantendo as quatro originais |
 
 Controllers validam transporte. Services coordenam casos de uso por portas em
 `entity/index.ts`, sem SQL, HTTP ou Bindings. Repositories implementam essas portas
@@ -46,6 +47,29 @@ são resolvidos pelo mapa pequeno de contas, sem repetir esses dados no históri
 Não são guardados documentos pessoais, payloads ou marcadores de qualidade por conta.
 A [referência técnica](cloudflare-product.md#contrato-mínimo-e-consumidores)
 registra o consumidor de cada coluna e dos cinco valores por conta.
+
+### Extensão de planejamento
+
+`0002_planning.sql` acrescenta 21 tabelas, sem alterar as duas tabelas de origem.
+Cada conceito possui uma tabela tipada com `id` e JSON pequeno por registro:
+espaços, preferências de contas/cartões, sobreposições de transações, categorias,
+tags, regras, recorrências, parcelas, metas, contribuições, investimentos,
+empréstimos, cronogramas, marcações de faturas e preferências de notificação.
+Faturas e metadados de contas/transações têm tabelas próprias. Revisão e recibos
+completam o controle de concorrência e de repetição. Não há tabela universal de
+recursos nem snapshot único com todo o histórico.
+
+A leitura do planejamento captura a revisão junto das tabelas. Transações são
+percorridas em páginas de 500 registros; uma mudança concorrente invalida o
+resultado/cursor. Escritas calculam mudanças em memória e confirmam apenas os
+registros alterados, a revisão e o recibo no mesmo batch. O CHECK da revisão
+aborta commits obsoletos; a chave única impede duplicação. Triggers de publicação
+invalidam cursores e aplicam regras a transações novas. As quatro ferramentas
+originais conservam seus contratos e sua paginação seletiva.
+
+O [catálogo e decisões financeiras](mcp-finance.md) registra limites e diferenças
+da referência Visor. O schema inicial ainda não migra instalações históricas
+anteriores ao modelo mínimo.
 
 ## Importação
 
@@ -82,7 +106,8 @@ completo não avança. Saldo não relido mantém seu horário anterior.
 A origem pode mudar de ID ou reduzir a janela histórica. A importação atualiza
 IDs existentes e acrescenta os novos. Ausência não remove nem desqualifica registros:
 A/B seguido de B atualizado/C resulta em A/B atualizado/C nos totais elegíveis.
-Não há classificação de consumo, edição local ou deduplicação por similaridade.
+A projeção da origem não sofre edição local nem deduplicação por similaridade;
+o planejamento mantém suas classificações e sobreposições em separado.
 Coleta parcial preserva páginas confirmadas e continua sinalizada como parcial.
 
 O adapter rejeita cursores inválidos, de outra conta, repetidos imediatamente ou

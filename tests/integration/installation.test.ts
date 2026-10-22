@@ -115,6 +115,10 @@ test("a fresh installation connects/reconnects the widget, imports cumulative pa
         totalPages: 1,
       });
     }
+    if (["/investments", "/loans"].includes(url.pathname)) {
+      assert.equal(url.searchParams.get("itemId"), itemId);
+      return Response.json({ page: 1, results: [], total: 0, totalPages: 0 });
+    }
     assert.equal(url.pathname, "/v2/transactions");
     assert.equal(url.searchParams.get("accountId"), accountId);
     const secondWindow = Date.now() >= Date.parse("2026-10-02T12:00:00Z");
@@ -259,7 +263,8 @@ test("a fresh installation connects/reconnects the widget, imports cumulative pa
   assert.deepEqual(
     wire
       .parse(await (await mcp("tools/list")).json())
-      .result.tools?.map((tool) => tool.name)
+      .result.tools?.filter((tool) => tool.name.startsWith("caderninho_"))
+      .map((tool) => tool.name)
       .sort(),
     [
       "caderninho_aggregate",
@@ -326,9 +331,9 @@ test("a fresh installation connects/reconnects the widget, imports cumulative pa
   }
 });
 
-test("an empty D1 has exactly the eighteen application columns and bounded account/checkpoint JSON", async () => {
+test("the source tables retain eighteen columns alongside additive planning storage", async () => {
   const tables = await env.DB.prepare(
-    "SELECT name FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' AND name!='d1_migrations' ORDER BY name",
+    "SELECT name FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' AND name!='d1_migrations' AND name NOT LIKE 'planning_%' ORDER BY name",
   ).all<{ name: string }>();
   assert.deepEqual(
     tables.results.map((row) => row.name),

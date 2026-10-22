@@ -2,13 +2,14 @@
 
 Uma instalação pessoal usa Worker, D1, KV OAuth, Workflow, assets e o binding
 nativo de rate limit. O painel fica em `/account`; o MCP com OAuth fica em `/mcp`.
-O lançamento cobre contas BANK/CREDIT e transações.
+A importação cobre contas BANK/CREDIT, transações, faturas, investimentos e empréstimos.
+As 89 ferramentas adicionais estão no [catálogo financeiro](mcp-finance.md).
 
 ## Instalação
 
 Os três secrets são ADMIN_PASSWORD (16–256 caracteres), PLUGGY_CLIENT_ID e
 PLUGGY_CLIENT_SECRET. Eles não entram no D1 ou nos logs. O botão provisiona D1/KV;
-o deploy aplica `migrations/0001_initial.sql` pelo binding DB e declara FINANCE e
+o deploy aplica as migrações em `migrations/` pelo binding DB e declara FINANCE e
 LOGIN_LIMITER. Não é preciso criar bucket, webhook, chave de cofre ou tabela de
 usuários. O provisionamento completo em conta nova continua pendente de validação
 real; build dry-run não o comprova.
@@ -18,7 +19,8 @@ reset automático em deploys posteriores. Não execute a migração em bancos an
 
 ## Dados e execução
 
-São duas tabelas de aplicação: connections (nove colunas) e transactions (nove).
+A origem conserva duas tabelas: connections (nove colunas) e transactions (nove).
+A migração aditiva 0002 acrescenta 21 tabelas de planejamento, metadados e recibos.
 Contas e saldos ficam no mapa JSON tipado da conexão; transações usam os IDs
 globais dos recursos Pluggy e campos financeiros concretos em SQL. Não são
 guardados payloads genéricos, documentos pessoais ou marcadores de
@@ -128,14 +130,17 @@ acima da precisão de Number. O binding de despacho executa o importador localme
 os steps nativos, falhas/replay, 100 mil registros e reinício são uma prova separada
 em `tests/integration/run-runtime.ts`. Nenhuma delas demonstra provedor ou host real.
 
-A inspeção de D1 verifica exclusivamente o contrato de persistência: duas tabelas,
+A inspeção de D1 preserva o contrato das duas tabelas de origem,
 nove colunas cada, cinco valores por conta e três no checkpoint. O comportamento
 financeiro é verificado por HTTP/MCP, não pela leitura de fontes ou configurações.
 Respostas/logs são conferidos com credenciais sintéticas, inclusive falha da origem;
 o harness verifica também os assets construídos. Cookies expirados/adulterados,
 visitantes e bearer MCP isolado não chegam aos endpoints owner da Pluggy/consentimento.
 
-## Redução de código e modelo
+## Histórico: redução anterior ao planejamento
+
+A comparação abaixo registra o modelo mínimo anterior à extensão de 93 tools;
+não descreve o tamanho atual desta branch.
 
 | Medida | Baseline `cc59a79` | Produto mínimo |
 | --- | --- | --- |

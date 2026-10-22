@@ -1,3 +1,4 @@
+import type { AccountDetails, TransactionDetails } from "./planning.entity";
 export interface AccountMetadata {
   balanceMinor: string | null;
   balanceObservedAt: string | null;
@@ -8,6 +9,7 @@ export interface AccountMetadata {
 export type AccountMap = Record<string, AccountMetadata>;
 export interface AccountProjection
   extends Omit<AccountMetadata, "balanceObservedAt"> {
+  details?: AccountDetails;
   id: string;
 }
 export interface TransactionProjection {
@@ -17,6 +19,7 @@ export interface TransactionProjection {
   currency: string;
   date: string;
   description: string;
+  details?: TransactionDetails;
   direction: "DEBIT" | "CREDIT";
   id: string;
   status: "PENDING" | "POSTED";

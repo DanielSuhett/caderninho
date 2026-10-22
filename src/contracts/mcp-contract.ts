@@ -5,6 +5,7 @@ import {
   ConnectionSelectionSchema,
   TransactionQuerySchema,
 } from "./finance";
+import { planningDefinitions } from "./planning";
 export const ToolName = {
   aggregate: "caderninho_aggregate",
   status: "caderninho_status",
@@ -41,9 +42,9 @@ const definitions = [
     schema: AggregateQuerySchema,
   },
 ];
-export const tools = definitions.map((d) => ({
+export const tools = [...definitions, ...planningDefinitions].map((d) => ({
   annotations: {
-    destructiveHint: false,
+    destructiveHint: !d.readOnly && d.name !== ToolName.sync,
     openWorldHint: d.name === ToolName.sync,
     readOnlyHint: d.readOnly,
   },
@@ -52,4 +53,4 @@ export const tools = definitions.map((d) => ({
   name: d.name,
 }));
 export const PRODUCT_INSTRUCTIONS =
-  "Consulte contas e transações locais. Use aggregate para totais exatos, nunca some uma página. Preserve moedas e a semântica BANK/CREDIT, pendentes e transferências. Não chame subtotal incerto de total definitivo. Saldo tem referência temporal. Inicie sync explicitamente e acompanhe por status; nunca coordene páginas Pluggy. O histórico acumula registros e só muda pela importação. Débito não é gasto e crédito não é renda. Não peça secrets ao proprietário.";
+  "Consulte contas e transações locais. Use aggregate para totais exatos, nunca some uma página. Preserve moedas e a semântica BANK/CREDIT, pendentes e transferências. Não chame subtotal incerto de total definitivo. Saldo tem referência temporal. Inicie sync explicitamente e acompanhe por status; nunca coordene páginas Pluggy. As quatro ferramentas caderninho_* preservam a visão da origem. As demais consultam a visão efetiva com edições locais. Para escritas, confirme o espaço e a ação com o proprietário e envie confirmed=true e idempotency_key único; repita a chave somente para a mesma solicitação. Edições nunca alteram dados no banco. Débito não é gasto e crédito não é renda. Não peça secrets ao proprietário.";

@@ -22,7 +22,14 @@ export const PortalResponseSchema = z.object({
       importCheckpoint: z
         .object({
           accountId: z.string().nullable(),
-          phase: z.enum(["accounts", "transactions", "finish"]),
+          phase: z.enum([
+            "accounts",
+            "transactions",
+            "investments",
+            "loans",
+            "bills",
+            "finish",
+          ]),
         })
         .nullable(),
       importError: z.string().nullable(),

@@ -1,3 +1,4 @@
+export { financialCharts } from "./chart.entity";
 export {
   assertConnectionCapacity,
   assertPersonalConnector,
@@ -20,7 +21,38 @@ export type {
   AccountProjection,
   TransactionProjection,
 } from "./finance.entity";
-export { normalizeAccount, normalizeTransaction } from "./finance-model";
+export {
+  normalizeAccount,
+  normalizeMoney,
+  normalizeTransaction,
+} from "./finance-model";
+export type {
+  AccountDetails,
+  AccountSettings,
+  Bill,
+  BillPayment,
+  CardSettings,
+  Category,
+  Contribution,
+  Goal,
+  Installment,
+  Investment,
+  Loan,
+  NotificationPreference,
+  PlanningAccount,
+  PlanningState,
+  PlanningTransaction,
+  ProductKind,
+  ProductPage,
+  Recurrence,
+  Rule,
+  ScheduledPayment,
+  Space,
+  Tag,
+  TransactionDetails,
+  TransactionEdit,
+} from "./planning.entity";
+export { monthDate, sacSchedule } from "./planning.entity";
 export type {
   ProviderAccount,
   ProviderConnection,

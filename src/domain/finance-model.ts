@@ -10,7 +10,7 @@ import type {
   ProviderTransaction,
 } from "./provider.entity";
 
-function money(value: MoneyInput, currency: string) {
+export function normalizeMoney(value: MoneyInput, currency: string) {
   if (value === null || value === undefined) {
     return null;
   }
@@ -40,7 +40,23 @@ export function normalizeAccount(
     throw new Error("SOURCE_IDENTITY_MISMATCH");
   }
   return {
-    balanceMinor: money(source.balance, source.currencyCode),
+    ...(source.creditData && {
+      details: {
+        availableCreditMinor: normalizeMoney(
+          source.creditData.availableCreditLimit,
+          source.currencyCode,
+        ),
+        cardNumber: source.number?.replace(/\D/g, "").slice(-4) || null,
+        closeDate: accountingDay(source.creditData.balanceCloseDate),
+        creditLimitMinor: normalizeMoney(
+          source.creditData.creditLimit,
+          source.currencyCode,
+        ),
+        dueDate: accountingDay(source.creditData.balanceDueDate),
+        id: source.id,
+      },
+    }),
+    balanceMinor: normalizeMoney(source.balance, source.currencyCode),
     currency: source.currencyCode,
     id: source.id,
     name: source.name,
@@ -55,8 +71,22 @@ export function normalizeTransaction(
     throw new Error("SOURCE_IDENTITY_MISMATCH");
   }
   return {
+    ...((source.creditCardMetadata || source.operationType) && {
+      details: {
+        accountId,
+        billId: source.creditCardMetadata?.billId ?? null,
+        cardNumber:
+          source.creditCardMetadata?.cardNumber?.replace(/\D/g, "").slice(-4) ||
+          null,
+        id: source.id,
+        installmentNumber: source.creditCardMetadata?.installmentNumber ?? null,
+        operationType: source.operationType ?? null,
+        purchaseDate: accountingDay(source.creditCardMetadata?.purchaseDate),
+        totalInstallments: source.creditCardMetadata?.totalInstallments ?? null,
+      },
+    }),
     accountId,
-    amountMinor: money(source.amount, source.currencyCode),
+    amountMinor: normalizeMoney(source.amount, source.currencyCode),
     category: source.category ?? null,
     currency: source.currencyCode,
     date: accountingDay(source.date) ?? "",

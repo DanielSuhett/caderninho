@@ -40,7 +40,10 @@ export const Outcome = {
 export type Outcome = (typeof Outcome)[keyof typeof Outcome];
 export const Phase = {
   accounts: "accounts",
+  bills: "bills",
   finish: "finish",
+  investments: "investments",
+  loans: "loans",
   transactions: "transactions",
 } as const;
 export type Phase = (typeof Phase)[keyof typeof Phase];

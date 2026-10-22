@@ -12,6 +12,8 @@ import {
   reportDiagnostic,
   SpanName,
 } from "../observability";
+import { createPlanningService } from "../planning";
+import { createPlanningRepository } from "../planning/repository";
 import { createPluggyAdapter } from "../pluggy";
 import { createSyncService } from "../sync";
 import { createSyncRepository } from "../sync/repository";
@@ -31,6 +33,7 @@ function source(env: Bindings) {
       observeSpan(SpanName.providerRead, () => adapter.connection(id), {
         resource: "connections",
       }),
+    products: adapter.products,
     token: (id?: string) =>
       observeSpan(SpanName.accountAction, () => adapter.token(id), {
         action: "token",
@@ -117,4 +120,8 @@ export function syncService(env: Bindings, now: () => Date = () => new Date()) {
         return service.request(ids);
       }),
   };
+}
+
+export function planningService(env: Bindings) {
+  return createPlanningService(createPlanningRepository(env.DB));
 }

@@ -33,7 +33,7 @@ const httpFaults: Record<HttpFailureKind, FaultCode> = {
 
 // Translate only transport metadata into public faults. Upstream bodies, URLs and credentials
 // stay inside the SDK error and never become a Fault cause, message, detail or log.
-async function sdkResult<T>(operation: () => Promise<T>): Promise<T> {
+export async function sdkResult<T>(operation: () => Promise<T>): Promise<T> {
   const { data, error } = await tryCatch(operation);
   if (!error) {
     return data;

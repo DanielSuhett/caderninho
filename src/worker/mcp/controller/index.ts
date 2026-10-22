@@ -9,7 +9,9 @@ import { z } from "zod/v4";
 import {
   AggregateQuerySchema,
   ConnectionSelectionSchema,
+  PlanningCommandSchema,
   PRODUCT_INSTRUCTIONS,
+  planningDefinitions,
   ToolName,
   TransactionQuerySchema,
   tools,
@@ -20,6 +22,7 @@ import type { Bindings } from "../../bindings";
 import {
   financialService,
   installationService,
+  planningService,
   syncService,
 } from "../../composition";
 import {
@@ -41,6 +44,13 @@ const catalog = tools.map((tool) => {
   return result.value;
 });
 async function invoke(env: Bindings, name: string, args: unknown) {
+  if (planningDefinitions.some((tool) => tool.name === name)) {
+    const input = PlanningCommandSchema.parse({
+      ...z.record(z.string(), z.unknown()).parse(args),
+      tool: name,
+    });
+    return planningService(env).execute(input);
+  }
   const finance = financialService(env);
   switch (name) {
     case ToolName.status: {
@@ -67,6 +77,34 @@ async function invoke(env: Bindings, name: string, args: unknown) {
 }
 const safeErrors = new Set([
   "NOT_CONFIGURED",
+  "SPACE_MISMATCH",
+  "INVALID_PERIOD",
+  "CURRENCY_MISMATCH",
+  "AMOUNT_MISMATCH",
+  "SOURCE_READ_ONLY",
+  "RESOURCE_IN_USE",
+  "PRIMARY_CARD_REQUIRED",
+  "MANUAL_ACCOUNT_REQUIRED",
+  "MANUAL_CARD_REQUIRED",
+  "BILLING_CYCLE_REQUIRED",
+  "INVALID_INSTALLMENT",
+  "CARD_REQUIRED",
+  "BUDGET_DISABLED",
+  "SYSTEM_CATEGORY",
+  "ONE_ASSET_REQUIRED",
+  "SCHEDULE_EXISTS",
+  "PENDING_PAYMENTS",
+  "ALREADY_RECONCILED",
+  "PAYMENT_ORDER",
+  "PAYMENT_MISMATCH",
+  "NOT_RECONCILED",
+  "SELECTION_TOO_LARGE",
+  "PROJECTION_TOO_LARGE",
+  "PROJECTION_REQUIRES_CURRENT_OR_FUTURE_PERIOD",
+  "IDEMPOTENCY_CONFLICT",
+  "CONFIRMATION_REQUIRED",
+  "CHART_TOO_LARGE",
+  "CHART_NEGATIVE_VALUES",
   "NOT_FOUND",
   "RESTART_REQUIRED",
   "CURSOR_SCOPE_MISMATCH",
@@ -87,7 +125,11 @@ export async function fetchMcp(request: Request, env: Bindings) {
       server.setRequestHandler("tools/list", async () => ({ tools: catalog }));
       server.setRequestHandler("tools/call", (r) => {
         const action =
-          tools.find((tool) => tool.name === r.params.name)?.name ?? "unknown";
+          Object.values(ToolName).find((name) => name === r.params.name) ??
+          (planningDefinitions.find((tool) => tool.name === r.params.name)
+            ?.readOnly
+            ? "query"
+            : "write");
         return observeSpan(
           SpanName.mcpCall,
           async (span) => {
@@ -117,7 +159,7 @@ export async function fetchMcp(request: Request, env: Bindings) {
     {
       keepAliveMs: 0,
       legacy: "stateless",
-      maxRequestBodySize: 32_768,
+      maxRequestBodySize: 131_072,
       responseMode: "auto",
     },
   );
