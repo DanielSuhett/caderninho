@@ -1,6 +1,7 @@
 import { OAuthProvider } from "@cloudflare/workers-oauth-provider";
 import { Hono } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
+import { z } from "zod/v4";
 
 import { tryCatch } from "../../../shared";
 import { accessPage, consentPage, renderPage } from "../../../web";
@@ -26,7 +27,14 @@ import {
   readSession,
 } from "../session";
 
-type McpHandler = (request: Request, env: Bindings) => Promise<Response>;
+type McpHandler = (
+  request: Request,
+  env: Bindings,
+  access: {
+    clientId: string | null;
+    keepAlive: (lifetime: Promise<void>) => void;
+  },
+) => Promise<Response>;
 
 export function oauth(api: McpHandler, origin: string) {
   const routes = new Hono<{ Bindings: Bindings }>();
@@ -96,7 +104,16 @@ export function oauth(api: McpHandler, origin: string) {
 
   return new OAuthProvider<Bindings>({
     apiHandler: {
-      fetch: (request, bindings) => api(request, bindings),
+      fetch: (request, bindings, context) => {
+        // OAuthProvider verifies this context from the token, never from request headers.
+        const identity = z
+          .object({ auth: z.object({ clientId: z.string().optional() }) })
+          .parse(context);
+        return api(request, bindings, {
+          clientId: identity.auth.clientId ?? null,
+          keepAlive: (lifetime) => context.waitUntil(lifetime),
+        });
+      },
     },
     apiRoute: "/mcp",
     authorizeEndpoint: "/authorize",

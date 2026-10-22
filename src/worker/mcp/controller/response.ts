@@ -17,6 +17,7 @@ export function streamMcpResponse(input: {
   signal: AbortSignal;
   close: () => Promise<void>;
   keepAlive?: (lifetime: Promise<void>) => void;
+  onFinish?: (outcome: Outcome, outputBytes: number) => Promise<void>;
 }) {
   const { response, signal } = input;
   if (!response.body) {
@@ -25,6 +26,7 @@ export function streamMcpResponse(input: {
   const reader = response.body.getReader();
   const inStream = captureObservation();
   const span = openSpan(SpanName.mcpStream, { action: input.action });
+  let outputBytes = 0;
   let closing: Promise<void> | undefined;
   let clientClosed = false;
   let failureReported = false;
@@ -66,6 +68,10 @@ export function streamMcpResponse(input: {
         // A concurrent pending read may already have released the reader.
       }
       const error = cancelError ?? closeError;
+      await input.onFinish?.(
+        error || failureReported ? Outcome.failed : outcome,
+        outputBytes,
+      );
       if (error && outcome !== Outcome.cancelled) {
         fail(error);
         return;
@@ -109,6 +115,7 @@ export function streamMcpResponse(input: {
         }
         return;
       }
+      outputBytes += chunk.value.byteLength;
       controller.enqueue(chunk.value);
     },
     start(controller) {

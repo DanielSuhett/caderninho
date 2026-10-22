@@ -9,6 +9,7 @@ import {
   scopedHref,
   useResource,
 } from "./workspace-resource";
+import { FilterBar, WorkspaceHeading } from "./workspace-ui";
 
 const groupTypes = {
   business: "Profissional",
@@ -48,23 +49,18 @@ export function OrganizationView({
   const current = data?.spaces.find((s) => s.id === spaceId);
   return (
     <>
-      <header className="workspace-heading">
-        <p className="eyebrow">Organização do planejamento</p>
-        <h1>{page === "rules" ? "Regras" : "Grupos"}</h1>
-        <p>
-          {page === "rules"
-            ? "Entenda quais condições direcionam a classificação dos lançamentos. Alterações e aplicação das regras continuam disponíveis pelo assistente."
-            : "Grupos são os espaços de planejamento. Uma pessoa identifica o titular; um grupo organiza o uso do dinheiro."}
-        </p>
-      </header>
+      <WorkspaceHeading
+        description={
+          page === "rules"
+            ? "Condições de classificação. Crie, altere e aplique pelo assistente."
+            : "Espaços para organizar o dinheiro. A titularidade continua ligada à pessoa."
+        }
+        title={page === "rules" ? "Regras" : "Grupos"}
+      />
       <ResourceFeedback {...resource} />
       {!!data && (
         <>
-          <form
-            action={`/account/${page}`}
-            className="workspace-filters"
-            method="get"
-          >
+          <FilterBar action={`/account/${page}`}>
             <ScopeFields
               catalog={data}
               params={params}
@@ -96,7 +92,7 @@ export function OrganizationView({
               </>
             )}
             <FilterActions />
-          </form>
+          </FilterBar>
           {page === "rules" ? (
             <>
               <div className="results-heading">

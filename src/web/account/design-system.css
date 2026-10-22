@@ -1,0 +1,67 @@
+.design-system > section {
+  margin-block: var(--space-8);
+}
+.design-system p {
+  max-width: 65ch;
+}
+.design-swatches,
+.design-spacing,
+.design-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: center;
+  margin-block: var(--space-4);
+}
+.design-swatches > div {
+  flex: 1 1 100px;
+  font-size: var(--text-caption);
+}
+.design-swatches span {
+  display: block;
+  height: 40px;
+  margin-bottom: var(--space-2);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+.design-type-scale > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  align-items: baseline;
+  padding-block: var(--space-2);
+  border-bottom: 1px solid var(--line);
+}
+.design-type-scale dt {
+  width: 100px;
+  font-size: var(--text-caption);
+  color: var(--muted);
+}
+.design-type-scale dd {
+  margin: 0;
+}
+.design-title-sample {
+  font-size: clamp(28px, 3vw, var(--text-title));
+  font-weight: 600;
+}
+.design-section-sample {
+  font-size: var(--text-section);
+  font-weight: 550;
+}
+.design-control-sample {
+  font-size: var(--text-control);
+}
+.design-caption-sample {
+  font-size: var(--text-caption);
+}
+.design-spacing > div {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  font-size: var(--text-caption);
+}
+.design-spacing span {
+  display: block;
+  height: 16px;
+  background: var(--muted);
+}

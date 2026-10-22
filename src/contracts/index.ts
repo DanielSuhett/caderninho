@@ -1,3 +1,11 @@
+export type { AuditReport } from "./audit";
+export {
+  AuditModelSchema,
+  AuditOutcome,
+  AuditReportSchema,
+  AuditSelectionSchema,
+  RevokeGrantSchema,
+} from "./audit";
 export {
   AggregateQuerySchema,
   ConnectionSelectionSchema,

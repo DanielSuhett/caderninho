@@ -4,16 +4,22 @@ import type { z } from "zod/v4";
 
 import {
   AccountActionSchema,
+  AuditSelectionSchema,
   CatalogSelectionSchema,
   ConnectTokenActionSchema,
   HouseholdCommandSchema,
   ItemActionSchema,
   PortalQuerySchema,
+  RevokeGrantSchema,
   SyncActionSchema,
   SyncHistorySelectionSchema,
 } from "../../../contracts";
 import { accountPage, renderPage } from "../../../web";
-import { revokeAssistantGrants } from "../../auth/grants";
+import {
+  assistantGrants,
+  revokeAssistantGrant,
+  revokeAssistantGrants,
+} from "../../auth/grants";
 import {
   cookieOptions,
   type PortalEnv,
@@ -21,6 +27,7 @@ import {
   sessionMiddleware,
 } from "../../auth/session";
 import {
+  auditRepository,
   householdService,
   installationService,
   planningService,
@@ -78,9 +85,28 @@ export function installationRoutes(access: Hono<PortalEnv>) {
     "groups",
     "sync",
     "connections",
+    "audit",
+    "design-system",
   ]) {
     app.get(`/account/${path}`, (c) => c.html(renderPage(accountPage())));
   }
+  app.get("/api/account/audit", async (c) => {
+    const input = AuditSelectionSchema.parse(c.req.query());
+    const [report, grants] = await Promise.all([
+      auditRepository(c.env).report(input.days, new Date()),
+      assistantGrants(c.env.OAUTH_PROVIDER, input.grantCursor),
+    ]);
+    return c.json({ ...report, ...grants });
+  });
+  app.post("/api/account/revoke-grant", async (c) => {
+    const input = await command(
+      c.req.raw,
+      c.get("session").csrf,
+      RevokeGrantSchema,
+    );
+    await revokeAssistantGrant(c.env.OAUTH_PROVIDER, input.grantId);
+    return c.json({ ok: true });
+  });
   app.get("/api/account/catalog", async (c) => {
     const input = CatalogSelectionSchema.parse(c.req.query());
     return c.json(await workspaceCatalog(c.env, input.spaceId));

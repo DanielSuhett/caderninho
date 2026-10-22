@@ -81,10 +81,8 @@ export function HouseholdPanel({
     >
       <div className="section-heading">
         <div>
-          <p className="eyebrow">Quem participa</p>
           <h2 id="household-heading">Pessoas e perfis Pluggy</h2>
         </div>
-        <span className="muted">Um painel. Origens identificadas.</span>
       </div>
       <p>
         Cada conexão tem um titular. Os perfis guardam as credenciais usadas

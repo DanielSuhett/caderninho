@@ -2,6 +2,7 @@ import { z } from "zod/v4";
 
 import {
   AccountConnectTokenSchema,
+  AuditReportSchema,
   type HouseholdCommand,
   type PortalQuery,
   PortalResponseSchema,
@@ -29,7 +30,8 @@ export function createAccountApi(
           connectionIds?: string[];
         }
       | HouseholdCommand
-      | { csrf: string; query: PortalQuery },
+      | { csrf: string; query: PortalQuery }
+      | { csrf: string; grantId: string },
   ) =>
     requestJson({
       client,
@@ -43,6 +45,8 @@ export function createAccountApi(
       },
     });
   return {
+    audit: async (query: URLSearchParams, signal: AbortSignal) =>
+      AuditReportSchema.parse(await request(`/audit?${query}`, signal)),
     catalog: async (spaceId: string, signal: AbortSignal) =>
       WorkspaceCatalogSchema.parse(
         await request(`/catalog?${new URLSearchParams({ spaceId })}`, signal),
@@ -72,6 +76,10 @@ export function createAccountApi(
       request("/query", signal, { csrf, query }),
     read: async (signal: AbortSignal) =>
       PortalResponseSchema.parse(await request("", signal)),
+    revokeGrant: async (grantId: string, csrf: string, signal: AbortSignal) =>
+      z
+        .object({ ok: z.literal(true) })
+        .parse(await request("/revoke-grant", signal, { csrf, grantId })),
     token: async (
       csrf: string,
       signal: AbortSignal,

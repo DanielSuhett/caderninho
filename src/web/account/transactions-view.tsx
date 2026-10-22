@@ -10,6 +10,7 @@ import type { createAccountApi } from "./account-api";
 import { formatBalance } from "./dashboard-view";
 import { EmptyView, FilterActions, ScopeFields } from "./workspace-filters";
 import { dayLabel, ResourceFeedback, useResource } from "./workspace-resource";
+import { FilterBar, WorkspaceHeading } from "./workspace-ui";
 
 export function TransactionsView({
   api,
@@ -74,22 +75,14 @@ export function TransactionsView({
   first.delete("cursor");
   return (
     <>
-      <header className="workspace-heading">
-        <p className="eyebrow">Seu histórico financeiro</p>
-        <h1>Transações</h1>
-        <p>
-          Explore os lançamentos com titular, conta e classificação. Os valores
-          mantêm a moeda de origem.
-        </p>
-      </header>
+      <WorkspaceHeading
+        description="Lançamentos por titular, conta e categoria, na moeda de origem."
+        title="Transações"
+      />
       <ResourceFeedback {...resource} />
       {!!data && (
         <>
-          <form
-            action="/account/transactions"
-            className="workspace-filters"
-            method="get"
-          >
+          <FilterBar action="/account/transactions">
             <ScopeFields
               catalog={data.catalog}
               params={params}
@@ -202,7 +195,7 @@ export function TransactionsView({
                 </label>
               </div>
             </details>
-          </form>
+          </FilterBar>
           {!!data.result.partial && (
             <p className="notice">
               Há dados parciais na instalação. Consulte as sincronizações antes

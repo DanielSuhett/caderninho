@@ -3,6 +3,7 @@ import { type FormEvent, type MouseEvent, useCallback } from "react";
 import type { HouseholdCommand, PortalResponse } from "../../contracts";
 import { UiButton } from "../ui";
 import { HouseholdPanel } from "./household-view";
+import { WorkspaceHeading, WorkspaceMetrics } from "./workspace-ui";
 
 const importLabels = {
   failed: "Precisa de atenção",
@@ -121,17 +122,14 @@ export function DashboardView(props: {
   );
   return (
     <div className="finance-dashboard">
-      <header className="dashboard-header">
-        <div>
-          <p className="eyebrow">Finanças em conjunto</p>
-          <h1>{props.section === "overview" ? "Visão geral" : "Conexões"}</h1>
-          <p>
-            {props.section === "overview"
-              ? "Contas, cartões e titulares. Veja tudo junto ou acompanhe uma pessoa."
-              : "Gerencie pessoas, credenciais Pluggy e autorizações. Acompanhe os resultados na página Sincronizações."}
-          </p>
-        </div>
-      </header>
+      <WorkspaceHeading
+        description={
+          props.section === "overview"
+            ? "Contas e cartões, com titular e origem identificados."
+            : "Pessoas, perfis Pluggy e acesso aos bancos."
+        }
+        title={props.section === "overview" ? "Visão geral" : "Conexões"}
+      />
       <fieldset className="person-switch">
         <legend>Filtrar por pessoa</legend>
         <button
@@ -162,24 +160,21 @@ export function DashboardView(props: {
         {props.message ||
           (visible.some((c) => c.partial)
             ? "Há conexões com dados parciais. Confira a situação abaixo antes de analisar totais."
-            : "A origem e a data de cada saldo aparecem junto à conta.")}
+            : "")}
       </p>
       {props.section === "overview" && (
         <>
-          <dl className="dashboard-metrics">
-            <div>
-              <dt>Pessoas nesta visão</dt>
-              <dd>{personId ? 1 : snapshot.people.length}</dd>
-            </div>
-            <div>
-              <dt>Conexões bancárias</dt>
-              <dd>{visible.length}</dd>
-            </div>
-            <div>
-              <dt>Contas e cartões importados</dt>
-              <dd>{accounts.length}</dd>
-            </div>
-          </dl>
+          <WorkspaceMetrics
+            items={[
+              {
+                label: "Pessoas nesta visão",
+                value: personId ? 1 : snapshot.people.length,
+              },
+              { label: "Conexões bancárias", value: visible.length },
+              { label: "Contas e cartões importados", value: accounts.length },
+            ]}
+          />
+
           <section aria-labelledby="accounts-heading">
             <div className="section-heading">
               <h2 id="accounts-heading">Contas e cartões</h2>
@@ -234,6 +229,7 @@ export function DashboardView(props: {
                 onClick={action}
                 type="button"
                 value="sync"
+                variant="secondary"
               >
                 Importar esta visão
               </UiButton>

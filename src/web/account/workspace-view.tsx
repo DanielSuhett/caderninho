@@ -3,12 +3,19 @@ import { type ReactNode, useCallback } from "react";
 import type { PortalResponse } from "../../contracts";
 import { UiButton } from "../ui";
 import type { createAccountApi } from "./account-api";
+import { AuditView } from "./audit-view";
+import { DesignSystemView } from "./design-system-view";
 import { OrganizationView } from "./organization-view";
 import { SyncHistoryView } from "./sync-history-view";
 import { TransactionsView } from "./transactions-view";
 import { scopedHref } from "./workspace-resource";
 
 const pages = [
+  {
+    caption: "Acesso e uso do assistente",
+    name: "Auditoria MCP",
+    path: "/account/audit",
+  },
   { caption: "Contas e titulares", name: "Visão geral", path: "/account" },
   {
     caption: "Seu histórico financeiro",
@@ -74,6 +81,17 @@ export function WorkspaceView({
       />
     );
   }
+  if (path === "/account/audit") {
+    content = (
+      <AuditView
+        api={api}
+        snapshot={snapshot}
+      />
+    );
+  }
+  if (path === "/account/design-system") {
+    content = <DesignSystemView />;
+  }
   return (
     <div className="workspace">
       <a
@@ -92,13 +110,22 @@ export function WorkspaceView({
               aria-current={path === p.path ? "page" : undefined}
               href={scopedHref(p.path, params)}
               key={p.path}
+              title={p.caption}
             >
               <span>{p.name}</span>
-              <small>{p.caption}</small>
             </a>
           ))}
         </nav>
         <div className="sidebar-session">
+          <a
+            aria-current={
+              path === "/account/design-system" ? "page" : undefined
+            }
+            className="design-reference-link"
+            href="/account/design-system"
+          >
+            Referência visual
+          </a>
           <p>
             Instalação privada
             <br />

@@ -1,5 +1,6 @@
 import type { SyncHistorySelection } from "../../contracts";
 import { DEFAULT_PROFILE } from "../../domain";
+import { createAuditRepository } from "../audit/repository";
 import type { Bindings } from "../bindings";
 import { createFinancialService } from "../finance";
 import { createFinancialRepository } from "../finance/repository";
@@ -185,4 +186,8 @@ export function synchronizationHistory(
 
 export function workspaceCatalog(env: Bindings, spaceId: string) {
   return createCatalogRepository(env.DB).read(spaceId);
+}
+
+export function auditRepository(env: Bindings) {
+  return createAuditRepository(env.DB);
 }

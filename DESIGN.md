@@ -2,6 +2,8 @@
 
 Direção visual das telas próprias do produto: conexão Pluggy, gestão e consentimento OAuth.
 
+Para compor páginas desde a base, use a [referência de interface para desenvolvimento](docs/design-system.md): tokens, peças existentes, estados, layouts e três receitas de composição.
+
 ## Produto e público
 
 Caderninho é um MCP financeiro pessoal para pessoas técnicas. O conteúdo deve explicar ferramentas, contratos, sincronização, autenticação e operação na própria Cloudflare. O painel facilita a conexão e a autorização do assistente; não transforma o produto em um chat financeiro para leigos.
@@ -23,9 +25,9 @@ Feedback: sucesso usa `#c3d7bd` sobre `#263126`; pendência usa `#e4cc96` sobre 
 
 ## Tipografia
 
-Hanken Grotesk variável, servida localmente, com licença OFL em `src/web/assets/fonts/`. Fallback sans-serif. Corpo 17 px, entrelinha 1,55. Títulos com peso 550–600 e tracking negativo moderado. Hero 44–88 px; títulos de fluxo 34–58 px; seções 26–42 px. Linhas de texto até 65 caracteres. Monoespaçada somente em código, IDs, argumentos e valores técnicos.
+Hanken Grotesk variável, servida localmente, com licença OFL em `src/web/assets/fonts/`. Fallback sans-serif. Apresentação pública: corpo 17 px e entrelinha 1,55; hero 44–88 px. Workspace operacional: corpo 15 px e entrelinha 1,5; página 28–32 px; seção 20 px; registro 17 px; tabela 14 px; metadado 12 px. Títulos com peso 550–600 e tracking negativo moderado. Linhas de texto até 65 caracteres. Valores financeiros usam algarismos tabulares; fonte monoespaçada não substitui a hierarquia. Monoespaçada somente em código, IDs, argumentos e valores técnicos.
 
-Títulos de uma cor. Sem palavra isolada em laranja, etiquetas em caixa alta ou subtítulo decorativo acima de cada seção. O wordmark é tipográfico: `caderninho.`
+Títulos de uma cor. Sem palavra isolada em laranja, etiquetas em caixa alta ou subtítulo decorativo acima de cada seção. O laranja identifica ação, foco e página ativa; não é decoração repetida. O wordmark é tipográfico: `caderninho.`
 
 ## Composição
 
@@ -39,7 +41,7 @@ Superfícies só para agrupar trabalho relacionado. Raios: 10 px nos grupos; 6 p
 - `src/web/ui.tsx`: adaptadores SSR dos componentes Kumo. Botão principal laranja com texto escuro; secundário sobre superfície escura. O adaptador usa a variante neutra Kumo para evitar o gradiente e o texto branco obrigatório da variante primary, mantendo suas semânticas e estados.
 - `src/web/portal-view.tsx`: shell operacional compartilhado. O painel em `src/web/account/account-view.tsx` usa React e Kumo; `src/web/consent-view.tsx` exporta o formulário React renderizado no servidor.
 - Fonte copiada para assets no build, CSP `font-src 'self'`; nenhum carregamento de fonte externa. Sem JavaScript para identidade visual.
-- Botões, inputs e summaries com alvos de pelo menos 44 px, preferencialmente 48 px. Foco visível, labels associados, estados disabled legíveis. Cor nunca é a única indicação.
+- Botões, inputs e summaries com alvos de pelo menos 44 px no workspace e 48 px nos fluxos de apresentação. Compactar conteúdo e espaços, nunca diminuir a área de toque. Foco visível, labels associados, estados disabled legíveis. Cor nunca é a única indicação.
 
 ## Conteúdo e interação
 
@@ -64,7 +66,7 @@ Preserve fonte local, foco visível e navegação por teclado em desktop e celul
 
 ## Navegação da instalação
 
-`/account` apresenta a visão geral. Transações, Regras, Grupos, Sincronizações e
+`/account` apresenta a visão geral. Auditoria MCP, Transações, Regras, Grupos, Sincronizações e
 Conexões têm páginas próprias; a navegação permanece à esquerda no desktop e
 vira uma grade de três colunas no celular. A página ativa tem texto e borda
 laranja, além de `aria-current`. O link de salto permite ir direto ao conteúdo.
@@ -88,3 +90,26 @@ conexões e contas resumem a seleção real. Contas usam grupos com saldo, moeda
 origem e data; cartões deixam explícito que o saldo não é dinheiro disponível.
 Formulários de credenciais ficam recolhidos e nunca mostram valores persistidos.
 Em telas até 700 px, listas de contas e formulários ocupam uma coluna.
+
+## Densidade e estados operacionais
+
+O painel é suporte ao MCP. Uma primeira tela deve mostrar dados ou a próxima ação,
+não repetir o nome da navegação em um eyebrow. Cabeçalhos operacionais usam
+`WorkspaceHeading`; atualização usa `RefreshButton`. A marca, fonte e paleta não
+mudam ao navegar entre leitura financeira e gestão.
+
+`UiButton` conserva a semântica do Kumo. Na área operacional os controles têm altura
+mínima de 44 px, texto de 14 px e padding de 8 × 14 px. Há um destaque principal por
+tarefa; atualização/importação auxiliar usa secundário. Ícones são do Phosphor,
+compartilhado com o Kumo, com nome acessível e dica no foco/hover. Ações de impacto,
+como revogar acesso, mantêm texto explícito e confirmação.
+
+`WorkspaceSkeleton` aparece na carga inicial. Na atualização da mesma consulta, os
+dados existentes permanecem visíveis; um aviso indica atualização ou falha, sem
+transformar dados antigos em resultado novo. Mudanças de consulta limpam o recorte
+anterior. Skeletons respeitam `prefers-reduced-motion`. Não animar valores monetários
+nem usar brilhos, shimmer ou spinners contínuos como decoração.
+
+A [crítica de produto](docs/design-critical-review.md) registra evidências e cinco
+prioridades, incluindo a distinção entre titular financeiro, perfil Pluggy,
+concessão OAuth, cliente declarado e modelo informado.

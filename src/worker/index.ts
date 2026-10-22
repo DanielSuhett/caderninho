@@ -57,8 +57,8 @@ function createRoutes(ctx: ExecutionContext) {
   });
 
   routes.all("*", (c) =>
-    authenticatedFetch(c.req.raw, c.env, ctx, (request, bindings) =>
-      fetchMcp(request, bindings),
+    authenticatedFetch(c.req.raw, c.env, ctx, (request, bindings, access) =>
+      fetchMcp(request, bindings, access),
     ),
   );
   return routes;

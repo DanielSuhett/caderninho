@@ -1,7 +1,6 @@
 import { useCallback, useState } from "react";
 
 import type { PortalResponse } from "../../contracts";
-import { UiButton } from "../ui";
 import type { createAccountApi } from "./account-api";
 import { EmptyView, FilterActions } from "./workspace-filters";
 import {
@@ -9,6 +8,7 @@ import {
   ResourceFeedback,
   useResource,
 } from "./workspace-resource";
+import { FilterBar, RefreshButton, WorkspaceHeading } from "./workspace-ui";
 
 const statuses = {
   failed: "Falhou",
@@ -58,19 +58,11 @@ export function SyncHistoryView({
   first.delete("cursor");
   return (
     <>
-      <header className="workspace-heading">
-        <p className="eyebrow">Da origem até o Caderninho</p>
-        <h1>Sincronizações</h1>
-        <p>
-          Acompanhe cada rodada, suas etapas confirmadas e eventuais falhas. O
-          titular mostrado é o registrado no início da rodada.
-        </p>
-      </header>
-      <form
-        action="/account/sync"
-        className="workspace-filters"
-        method="get"
-      >
+      <WorkspaceHeading
+        description="Rodadas, etapas confirmadas e falhas. O titular é o registrado no início."
+        title="Sincronizações"
+      />
+      <FilterBar action="/account/sync">
         <label>
           Pessoa
           <select
@@ -111,17 +103,14 @@ export function SyncHistoryView({
           </select>
         </label>
         <FilterActions />
-      </form>
+      </FilterBar>
       <div className="results-heading">
         <h2>Rodadas registradas</h2>
-        <UiButton
+        <RefreshButton
           disabled={resource.loading}
+          label="Atualizar histórico"
           onClick={resource.retry}
-          type="button"
-          variant="secondary"
-        >
-          Atualizar histórico
-        </UiButton>
+        />
       </div>
       <p className="muted">
         Histórico disponível a partir desta versão. A última rodada de cada

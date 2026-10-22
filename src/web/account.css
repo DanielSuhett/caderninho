@@ -11,13 +11,11 @@ main:has(.finance-dashboard) {
 .inline-fields,
 .connection-row {
   display: flex;
-  gap: 20px;
+  gap: 16px;
   align-items: start;
   justify-content: space-between;
 }
-.dashboard-header h1 {
-  font-size: clamp(36px, 5vw, 56px);
-}
+
 .dashboard-header p {
   margin-block: 8px;
 }
@@ -32,16 +30,17 @@ main:has(.finance-dashboard) {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-top: 32px;
+  margin-top: 16px;
 }
 .person-switch button {
-  padding: 10px 20px;
+  min-height: var(--control-height, 44px);
+  padding: 8px 14px;
   font: inherit;
   color: var(--text);
   cursor: pointer;
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 24px;
+  border-radius: 6px;
 }
 .person-switch button[aria-pressed="true"] {
   color: var(--page);
@@ -49,23 +48,26 @@ main:has(.finance-dashboard) {
   border-color: var(--text);
 }
 .dashboard-message {
-  min-height: 52px;
   color: var(--muted);
 }
-.dashboard-metrics {
+.dashboard-message:empty {
+  margin: 0;
+}
+.workspace-metrics {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 24px;
-  padding: 20px 0;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 20px;
+  padding: 14px 0;
   border-block: 1px solid var(--line);
 }
-.dashboard-metrics dt {
+.workspace-metrics dt,
+.workspace-metrics small {
   font-size: 14px;
   color: var(--muted);
 }
-.dashboard-metrics dd {
+.workspace-metrics dd {
   margin: 4px 0 0;
-  font-size: 36px;
+  font-size: 22px;
   font-weight: 550;
   font-variant-numeric: tabular-nums;
 }
@@ -84,10 +86,10 @@ main:has(.finance-dashboard) {
 }
 .bank-account {
   min-width: 0;
-  padding: 24px;
+  padding: 16px;
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 14px;
+  border-radius: 10px;
 }
 .account-owner {
   display: flex;
@@ -102,24 +104,24 @@ main:has(.finance-dashboard) {
   color: var(--muted);
 }
 .bank-account h3 {
-  margin: 20px 0 8px;
-  font-size: 20px;
+  margin: 8px 0;
+  font-size: 17px;
   font-weight: 550;
 }
 .bank-account .account-balance {
   margin: 8px 0;
-  font-size: clamp(20px, 3vw, 30px);
+  font-size: 24px;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.025em;
   overflow-wrap: anywhere;
 }
 .bank-account footer {
-  padding-top: 16px;
-  margin-top: 20px;
+  padding-top: 12px;
+  margin-top: 12px;
   font-size: 13px;
 }
 .empty-state {
-  padding: 24px;
+  padding: 16px;
   background: var(--surface);
   border: 1px dashed var(--line);
   border-radius: 12px;
@@ -156,7 +158,7 @@ main:has(.finance-dashboard) {
   margin-top: 24px;
 }
 .connection-row {
-  padding-block: 24px;
+  padding-block: 16px;
   border-top: 1px solid var(--line);
 }
 .connection-row h3 {
@@ -241,11 +243,8 @@ main:has(.finance-dashboard) {
   .people-editor {
     grid-template-columns: 1fr;
   }
-  .dashboard-metrics {
+  .workspace-metrics {
     gap: 12px;
-  }
-  .dashboard-metrics dd {
-    font-size: 28px;
   }
   .connection-row,
   .section-heading {
@@ -280,15 +279,29 @@ main:has(.finance-dashboard) {
 /* App workspace: the existing identity with a persistent operational navigation. */
 main:has(.workspace) {
   max-width: 1480px;
-  padding-top: 28px;
+  padding-top: 24px;
 }
 main:has(.workspace) > nav {
-  margin-bottom: 28px;
+  margin-bottom: 20px;
 }
 .workspace {
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --text-caption: 12px;
+  --text-control: 14px;
+  --text-body: 15px;
+  --text-section: 20px;
+  --text-title: 32px;
+  --control-height: 44px;
   display: grid;
-  grid-template-columns: 210px minmax(0, 1fr);
-  gap: 48px;
+  grid-template-columns: 184px minmax(0, 1fr);
+  gap: var(--space-8);
+  font-size: var(--text-body);
+  line-height: 1.5;
 }
 .workspace-sidebar {
   position: sticky;
@@ -303,8 +316,9 @@ main:has(.workspace) > nav {
 }
 .workspace-nav a {
   display: block;
-  padding: 12px 16px;
-  font-size: 17px;
+  min-height: var(--control-height, 44px);
+  padding: 10px 12px;
+  font-size: 15px;
   font-weight: 550;
   letter-spacing: 0;
   border-left: 3px solid transparent;
@@ -315,13 +329,7 @@ main:has(.workspace) > nav {
   font: inherit;
   color: inherit;
 }
-.workspace-nav small {
-  display: block;
-  margin-top: 2px;
-  font-size: 12px;
-  font-weight: 400;
-  color: var(--muted);
-}
+
 .workspace-nav a[aria-current="page"] {
   color: var(--accent);
   background: var(--surface);
@@ -340,24 +348,30 @@ main:has(.workspace) > nav {
   min-width: 0;
 }
 .workspace h1 {
-  margin: 8px 0 14px;
-  font-size: clamp(32px, 4vw, 46px);
+  margin: 0 0 8px;
+  font-size: clamp(28px, 3vw, var(--text-title));
+  font-weight: 600;
+  line-height: 1.2;
 }
 .workspace-heading {
-  margin-bottom: 28px;
+  display: flex;
+  gap: 16px;
+  align-items: start;
+  justify-content: space-between;
+  margin-bottom: 20px;
 }
 .workspace-heading p {
+  max-width: 65ch;
+  margin: 0;
   color: var(--muted);
 }
-.workspace .eyebrow {
-  color: var(--accent);
-}
 .workspace h2 {
-  font-size: 24px;
+  font-size: var(--text-section);
 }
 .workspace h3 {
   margin: 0;
-  font-size: 20px;
+  font-size: 17px;
+  font-weight: 550;
 }
 .workspace .muted {
   font-size: 14px;
@@ -365,10 +379,11 @@ main:has(.workspace) > nav {
 }
 .workspace-filters {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
-  padding: 20px;
-  margin-block: 24px;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+  gap: 12px;
+  align-items: end;
+  padding: 16px;
+  margin-block: 20px;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 10px;
@@ -381,8 +396,8 @@ main:has(.workspace) > nav {
   display: block;
   width: 100%;
   min-width: 0;
-  min-height: 44px;
-  padding: 10px 12px;
+  min-height: var(--control-height, 44px);
+  padding: 8px 10px;
   margin-top: 6px;
   font: inherit;
   color: var(--text);
@@ -407,8 +422,7 @@ main:has(.workspace) > nav {
 .filter-actions {
   display: flex;
   flex-wrap: wrap;
-  grid-column: 1 / -1;
-  gap: 16px;
+  gap: 12px;
   align-items: center;
   font-size: 14px;
 }
@@ -417,7 +431,7 @@ main:has(.workspace) > nav {
   gap: 16px;
   align-items: center;
   justify-content: space-between;
-  margin-top: 28px;
+  margin-top: 20px;
 }
 .results-heading span {
   font-size: 14px;
@@ -434,13 +448,13 @@ main:has(.workspace) > nav {
   border-collapse: collapse;
 }
 .ledger th {
-  padding: 14px 10px;
+  padding: 12px 10px;
   font-size: 12px;
   font-weight: 550;
   color: var(--muted);
 }
 .ledger td {
-  padding: 18px 10px;
+  padding: 12px 10px;
   vertical-align: top;
   overflow-wrap: anywhere;
   border-top: 1px solid var(--line);
@@ -466,7 +480,7 @@ main:has(.workspace) > nav {
 }
 .row-details {
   padding: 0;
-  margin: 12px 0 0;
+  margin: 4px 0 0;
   font-size: 14px;
   border: 0;
 }
@@ -505,7 +519,7 @@ main:has(.workspace) > nav {
 }
 .rule-row,
 .run-row {
-  padding: 24px 0;
+  padding: 16px 0;
   margin: 0;
   border-top: 1px solid var(--line);
 }
@@ -541,7 +555,7 @@ main:has(.workspace) > nav {
   display: flex;
   flex-wrap: wrap;
   gap: 24px;
-  margin: 20px 0;
+  margin: 14px 0;
   font-size: 14px;
 }
 .detail-list dt {
@@ -559,7 +573,7 @@ main:has(.workspace) > nav {
   margin-top: 20px;
 }
 .group-card {
-  padding: 24px;
+  padding: 16px;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 10px;
@@ -629,6 +643,9 @@ main:has(.workspace) > nav {
   .workspace-filters {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+  .filter-actions {
+    grid-column: 1 / -1;
+  }
   .ledger td {
     padding-inline: 6px;
   }
@@ -651,7 +668,7 @@ main:has(.workspace) > nav {
   }
   .workspace-sidebar {
     position: static;
-    margin-bottom: 28px;
+    margin-bottom: 20px;
   }
   .workspace-nav {
     display: grid;
@@ -667,9 +684,6 @@ main:has(.workspace) > nav {
   }
   .workspace-nav a[aria-current="page"] {
     border-bottom-color: var(--accent);
-  }
-  .workspace-nav small {
-    display: none;
   }
   .sidebar-session {
     display: flex;
@@ -749,4 +763,97 @@ main:has(.workspace) > nav {
   .advanced-filter-grid {
     grid-template-columns: 1fr;
   }
+}
+
+/* Shared operational controls: compact appearance, full touch target. */
+.workspace :is(button, a)[data-kumo-component] {
+  min-height: var(--control-height, 44px);
+  padding: 8px 14px;
+  font-size: 14px;
+}
+.workspace section {
+  padding-top: 16px;
+  margin-top: 24px;
+}
+.workspace-metrics + section {
+  padding-top: 0;
+  border-top: 0;
+}
+.workspace section > .results-heading {
+  margin-top: 0;
+}
+.workspace .icon-button[data-kumo-component] {
+  width: 44px;
+  min-width: 44px;
+  padding: 10px;
+}
+.icon-action {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+}
+.action-tooltip {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 2;
+  visibility: hidden;
+  width: max-content;
+  max-width: 240px;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: var(--text);
+  pointer-events: none;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+.icon-action:focus-within .action-tooltip,
+.icon-action:hover .action-tooltip {
+  visibility: visible;
+}
+.workspace-skeleton {
+  margin-block: 20px;
+}
+.skeleton-controls,
+.skeleton-row span {
+  background: var(--surface);
+  border-radius: 6px;
+  animation: skeleton-pulse 1.8s ease-in-out infinite alternate;
+}
+.skeleton-controls {
+  height: 112px;
+  margin-bottom: 24px;
+}
+.skeleton-row {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr;
+  gap: 20px;
+  padding-block: 20px;
+  border-top: 1px solid var(--line);
+}
+.skeleton-row span {
+  height: 24px;
+}
+@keyframes skeleton-pulse {
+  from {
+    opacity: 0.45;
+  }
+  to {
+    opacity: 0.9;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-controls,
+  .skeleton-row span {
+    animation: none;
+  }
+}
+
+.design-reference-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--control-height);
+  font-size: var(--text-caption);
+  color: var(--muted);
 }

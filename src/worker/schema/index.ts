@@ -209,3 +209,18 @@ export const syncHistory = sqliteTable("sync_history", {
   sequence: integer("sequence").notNull(),
   status: text("status").$type<RunStatus>().notNull(),
 });
+
+export const mcpAudit = sqliteTable("mcp_audit", {
+  clientId: text("client_id"),
+  durationMs: integer("duration_ms").notNull(),
+  id: text("id").primaryKey(),
+  inputBytes: integer("input_bytes").notNull(),
+  model: text("model"),
+  outcome: text("outcome")
+    .$type<"success" | "failed" | "cancelled">()
+    .notNull(),
+  outputBytes: integer("output_bytes").notNull(),
+  startedAt: text("started_at").notNull(),
+  status: integer("status").notNull(),
+  tool: text("tool"),
+});

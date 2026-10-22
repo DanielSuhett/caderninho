@@ -1,0 +1,134 @@
+.audit-period {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-start;
+  margin: 16px 0;
+  font-size: 14px;
+}
+.audit-period a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 8px 14px;
+  font-size: 14px;
+  font-weight: 550;
+  letter-spacing: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+.audit-period a[aria-current="page"] {
+  color: var(--text);
+  background: var(--surface);
+  border-color: var(--accent);
+}
+.grant-row {
+  display: flex;
+  gap: 20px;
+  align-items: start;
+  justify-content: space-between;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--line);
+}
+.grant-row:last-child {
+  border-bottom: 0;
+}
+.grant-row > div {
+  min-width: 0;
+}
+.grant-row p {
+  margin: 6px 0;
+  font-size: var(--text-caption);
+  color: var(--muted);
+}
+.grant-row details {
+  margin-top: var(--space-2);
+}
+.revoke-confirm {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  max-width: 330px;
+}
+.revoke-confirm p {
+  width: 100%;
+  color: var(--text);
+}
+.audit-table-wrap {
+  margin-block: 12px;
+  overflow-x: auto;
+}
+.audit-table {
+  width: 100%;
+  font-size: var(--text-control);
+  border-collapse: collapse;
+}
+.audit-table th {
+  font-weight: 500;
+  color: var(--muted);
+  text-align: left;
+}
+.audit-table th,
+.audit-table td {
+  padding: 12px 10px;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+  border-bottom: 1px solid var(--line);
+}
+.audit-table td:first-child {
+  max-width: 260px;
+}
+.audit-table small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+}
+.audit-bars {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 24px;
+  margin-block: 16px;
+}
+.audit-day {
+  display: grid;
+  grid-template-columns: 40px minmax(40px, 1fr) 105px;
+  gap: 10px;
+  align-items: center;
+  font-size: 12px;
+}
+.audit-day meter {
+  width: 100%;
+  height: 12px;
+}
+.audit-day meter::-webkit-meter-bar {
+  background: var(--surface);
+  border: 0;
+}
+.audit-day meter::-webkit-meter-optimum-value {
+  background: var(--muted);
+}
+.audit-day meter::-moz-meter-bar {
+  background: var(--muted);
+}
+.audit-day small {
+  color: var(--muted);
+}
+.audit-events,
+.audit-limits {
+  margin-top: 24px;
+}
+.audit-limits p {
+  font-size: var(--text-caption);
+  color: var(--muted);
+}
+@media (max-width: 600px) {
+  .grant-row {
+    flex-direction: column;
+    gap: 12px;
+  }
+  .audit-bars {
+    grid-template-columns: 1fr;
+  }
+  .audit-table {
+    min-width: 540px;
+  }
+}

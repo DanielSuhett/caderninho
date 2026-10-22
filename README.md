@@ -22,7 +22,7 @@ Os três valores ficam nos secrets da sua Cloudflare. Nenhuma chave técnica pre
 ser gerada manualmente. O painel permite cadastrar várias pessoas e perfis Pluggy autorizados. Consulte [pessoas e perfis](docs/household.md).
 
 Instalações anteriores ao modelo mínimo exigem **banco novo**. A extensão de
-planejamento aceita uma base que já usa `0001_initial.sql`, pelas migrações aditivas 0002, 0003 e 0004.
+planejamento aceita uma base que já usa `0001_initial.sql`, pelas migrações aditivas 0002, 0003, 0004 e 0005.
 O botão usa o código publicado no GitHub; alterações locais não aparecem nele.
 O provisionamento completo numa conta Cloudflare nova ainda exige validação real.
 O software é gratuito; Cloudflare e Pluggy têm seus próprios limites e custos.
@@ -57,8 +57,10 @@ senha de 16 a 256 caracteres. Os testes usam fixtures e não precisam de contas 
 `npm run build` prepara os assets e o dry-run do Worker; não publica o serviço.
 
 [Contribuição e checks](CONTRIBUTING.md) · [Arquitetura](docs/adr-modular-monolith.md) ·
-[Referência técnica](docs/cloudflare-product.md) · [Identidade visual](DESIGN.md)
+[Referência técnica](docs/cloudflare-product.md) · [Identidade visual](DESIGN.md) · [Componentes e layouts](docs/design-system.md)
 
 O projeto usa a [licença MIT](LICENSE); código de terceiros mantém seus avisos.
 
 O [painel da instalação](docs/frontend-workspace.md) reúne visão geral, transações, regras, grupos, sincronizações e conexões.
+
+A [Auditoria MCP](docs/mcp-audit.md) mostra autorizações, chamadas, volume e falhas. A galeria autenticada `/account/design-system` demonstra os componentes reais do painel com dados fictícios.

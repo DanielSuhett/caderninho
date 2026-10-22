@@ -11,6 +11,8 @@ páginas; no celular vira uma grade de destinos acima do conteúdo.
 | `/account/rules` | Condições, categoria de destino, prioridade e estado das regras |
 | `/account/groups` | Espaços de planejamento, orçamento, categorias e tags |
 | `/account/sync` | Rodadas admitidas, etapas, conclusão e falhas |
+| `/account/audit` | Autorizações OAuth, uso por cliente/modelo declarado, bytes e falhas |
+| `/account/design-system` | Referência viva de componentes e layouts, com exemplos fictícios |
 | `/account/connections` | Pessoas, aplicações Pluggy, conexões e acesso do assistente |
 
 ## Pessoa, perfil e grupo
@@ -70,3 +72,5 @@ titularidade, autenticação, CSRF, bloqueio de mutações e paginação cronol�
 com valores acima do limite inteiro seguro de JavaScript. A revisão de navegador
 usa apenas dados fictícios locais; evidências visuais ficam em `design-qa.md`.
 Publicação, migração remota e validação com Pluggy/OAuth reais não foram executadas.
+
+O [guia de componentes](design-system.md) define a composição das páginas. Cabeçalhos, filtros, métricas, atualização e skeleton são compartilhados. A [auditoria](mcp-audit.md) explica identidade, volume, retenção e limites.

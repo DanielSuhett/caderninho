@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { tryCatch } from "../../shared";
 import { UiButton } from "../ui";
+import { WorkspaceSkeleton } from "./workspace-ui";
 
 export function useResource<T>(load: (signal: AbortSignal) => Promise<T>) {
   const [version, setVersion] = useState(0);
+  const previousLoad = useRef(load);
   const [state, setState] = useState<{
     data: T | undefined;
     error: boolean;
@@ -14,24 +16,26 @@ export function useResource<T>(load: (signal: AbortSignal) => Promise<T>) {
   const retry = useCallback(() => setVersion((value) => value + 1), []);
   useEffect(() => {
     const controller = new AbortController();
-    setState({
-      data: undefined,
+    const sameQuery = previousLoad.current === load;
+    previousLoad.current = load;
+    setState((previous) => ({
+      data: sameQuery ? previous.data : undefined,
       error: false,
       loading: true,
       request: version,
-    });
+    }));
     tryCatch(() => load(controller.signal)).then(
       ({ data, error }) => {
         if (controller.signal.aborted) {
           return;
         }
         if (error) {
-          setState({
-            data: undefined,
+          setState((previous) => ({
+            data: previous.data,
             error: true,
             loading: false,
             request: version,
-          });
+          }));
           return;
         }
         setState({ data, error: false, loading: false, request: version });
@@ -46,20 +50,25 @@ export function ResourceFeedback({
   error,
   loading,
   retry,
+  data,
 }: {
   error: boolean;
   loading: boolean;
   retry: () => void;
+  data?: unknown;
 }) {
   const first = new URLSearchParams(location.search);
   first.delete("cursor");
+  if (loading && !data) {
+    return <WorkspaceSkeleton />;
+  }
   if (loading) {
     return (
       <p
         className="workspace-feedback"
         role="status"
       >
-        Carregando dados salvos…
+        Atualizando dados…
       </p>
     );
   }
@@ -70,8 +79,9 @@ export function ResourceFeedback({
         role="alert"
       >
         <p>
-          Não foi possível consultar esta visão. Confira os filtros, renove a
-          sessão ou reabra a lista se os dados mudaram durante a paginação.
+          Não foi possível atualizar esta visão. Dados já exibidos podem estar
+          desatualizados. Confira os filtros, renove a sessão ou reabra a lista
+          se os dados mudaram durante a paginação.
         </p>
         <UiButton
           onClick={retry}

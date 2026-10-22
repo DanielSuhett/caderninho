@@ -8,6 +8,8 @@ import { z } from "zod/v4";
 
 import {
   AggregateQuerySchema,
+  AuditModelSchema,
+  AuditOutcome,
   ConnectionSelectionSchema,
   PlanningCommandSchema,
   PRODUCT_INSTRUCTIONS,
@@ -20,6 +22,7 @@ import { Fault } from "../../../domain";
 import { tryCatch } from "../../../shared";
 import type { Bindings } from "../../bindings";
 import {
+  auditRepository,
   financialService,
   installationService,
   planningService,
@@ -110,7 +113,66 @@ const safeErrors = new Set([
   "UNKNOWN_TOOL",
   "IMPORT_FAILED",
 ]);
-export async function fetchMcp(request: Request, env: Bindings) {
+export async function fetchMcp(
+  request: Request,
+  env: Bindings,
+  access?: {
+    clientId: string | null;
+    keepAlive: (lifetime: Promise<void>) => void;
+  },
+) {
+  const startedAt = new Date().toISOString();
+  const started = performance.now();
+  let inputBytes = 0;
+  let calledTool: string | null = null;
+  let model: string | null = null;
+  let toolFailed = false;
+  let recorded = false;
+  const measuredRequest = request.body
+    ? new Request(request, {
+        body: request.body.pipeThrough(
+          new TransformStream<Uint8Array, Uint8Array>({
+            transform(chunk, controller) {
+              inputBytes += chunk.byteLength;
+              controller.enqueue(chunk);
+            },
+          }),
+        ),
+      })
+    : request;
+  async function finish(status: number, outcome: Outcome, outputBytes: number) {
+    if (recorded) {
+      return;
+    }
+    recorded = true;
+    let finalOutcome: (typeof AuditOutcome)[keyof typeof AuditOutcome] =
+      AuditOutcome.success;
+    if (toolFailed || status >= 400 || outcome === Outcome.failed) {
+      finalOutcome = AuditOutcome.failed;
+    }
+    if (outcome === Outcome.cancelled) {
+      finalOutcome = AuditOutcome.cancelled;
+    }
+    // Audit is best effort: failure cannot replay a tool or replace its response.
+    const { data: _data, error } = await tryCatch(() =>
+      auditRepository(env).record({
+        clientId: access?.clientId ?? null,
+        durationMs: Math.max(0, Math.round(performance.now() - started)),
+        id: crypto.randomUUID(),
+        inputBytes,
+        model,
+        outcome: finalOutcome,
+        outputBytes,
+        startedAt,
+        status,
+        tool: calledTool,
+      }),
+    );
+    if (error) {
+      markFailure(error, { phase: SpanName.mcpStream });
+    }
+  }
+
   const handler = createMcpHandler(
     () => {
       const server = new Server(
@@ -123,6 +185,13 @@ export async function fetchMcp(request: Request, env: Bindings) {
       );
       server.setRequestHandler("tools/list", async () => ({ tools: catalog }));
       server.setRequestHandler("tools/call", (r) => {
+        calledTool = tools.some((entry) => entry.name === r.params.name)
+          ? r.params.name
+          : "unknown";
+        const declared = AuditModelSchema.safeParse(
+          r.params._meta?.["caderninho.app/model"],
+        );
+        model = declared.success ? declared.data : null;
         const action =
           Object.values(ToolName).find((name) => name === r.params.name) ??
           (planningDefinitions.find((tool) => tool.name === r.params.name)
@@ -135,6 +204,7 @@ export async function fetchMcp(request: Request, env: Bindings) {
             const { data, error } = await tryCatch(() =>
               invoke(env, r.params.name, r.params.arguments ?? {}),
             );
+            toolFailed = !!error;
             if (error) {
               markFailure(error, { phase: SpanName.mcpCall });
               span.annotate({ failure: classifyFailure(error) });
@@ -163,19 +233,23 @@ export async function fetchMcp(request: Request, env: Bindings) {
     },
   );
   const { data: response, error } = await tryCatch(() =>
-    handler.fetch(request),
+    handler.fetch(measuredRequest),
   );
   if (error) {
     await handler.close();
+    await finish(500, Outcome.failed, 0);
     throw error;
   }
   if (!response.body) {
     await handler.close();
+    await finish(response.status, Outcome.success, 0);
     return response;
   }
   return streamMcpResponse({
     action: "unknown",
+    ...(access && { keepAlive: access.keepAlive }),
     close: () => handler.close(),
+    onFinish: (outcome, bytes) => finish(response.status, outcome, bytes),
     response,
     signal: request.signal,
   });
