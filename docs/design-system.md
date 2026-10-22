@@ -324,6 +324,59 @@ mas não é a única forma de descobrir o nome por toque: “Abrir navegação�
 alvos mínimos de 44 px. Não usar `role="menu"` para navegação comum nem trocar a
 lateral por grade superior, abas ou barra inferior nas telas estreitas.
 
+
+#### Grade geométrica da navegação
+
+Os valores abaixo são o contrato a medir em CSS px, não uma declaração de que a
+captura ou o browser atual já passou. Aplicar a mesma regra `.sidebar-control` aos
+links de destino, Referência visual e botão Kumo Sair. O gatilho “Abrir navegação”
+compartilha suas dimensões; estilos gerais de botões não podem reintroduzir padding
+ou alinhamento diferente por especificidade. Todos esses alvos têm `margin: 0`;
+margens globais de botão não podem somar espaço ao gap da grade.
+
+| Medida | Compacto, até 760 px | Desktop, acima de 760 px |
+| --- | --- | --- |
+| Coluna lateral | 56 px | 208 px |
+| Padding lateral da sidebar | 6 px | 6 px |
+| Alvo de navegação | 44 × 44 px, padding zero | 196 × 44 px, padding horizontal de 12 px |
+| Ícone | 20 × 20 px, centralizado | 20 × 20 px em coluna própria |
+| Centro X do ícone | `sidebar.left + 28` | `sidebar.left + 28` |
+| Texto | Oculto no rail; disponível no drawer | Coluna flexível após intervalo de 12 px; início em `sidebar.left + 50` |
+| Intervalo entre alvos | 4 px | 4 px |
+| Intervalo para o conteúdo | 16 px | 24 px |
+
+Para o topo compacto, o alvo do menu precede os sete destinos com intervalo de
+12 px. Após o último destino, o rodapé tem `margin-top: 16px`, separador de 1 px
+e `padding-top: 12px`; Referência e Sair têm intervalo de 4 px. O separador ocupa
+a largura interna (44 px no rail), fora das áreas acionáveis. Metadados da
+instalação aparecem depois das ações e ficam ocultos no rail.
+
+Padding vertical de 6 px e margem vertical de -6 px na sidebar reservam espaço
+para foco sem deslocar o primeiro alvo em relação ao topo de `WorkspaceHeading`.
+Outline de 2 px com offset de 3 px precisa permanecer visível, sem corte pelo
+contêiner rolável. A seleção usa marcador interno de 3 px; não adicionar borda
+estrutural em somente um lado do alvo, pois isso altera o centro de seu conteúdo.
+
+O drawer conserva os nomes e a grade de ícone + texto, com itens de 44 px de altura
+ocupando a largura interna disponível. Seu padding externo vem de `.drawer-body`;
+não herdar a largura de 44 px nem esconder labels por estar dentro da sidebar.
+Menu principal, referência e saída devem manter a mesma coordenada X de ícone
+dentro do painel. Botões Fechar/Cancelar do drawer conservam seu papel separado.
+
+Consolidar os seletores da navegação por responsabilidade. Em 760 px usar rail;
+em 761 px usar sidebar aberta. Em 1000 e 1001 px a geometria interna e o intervalo
+para o conteúdo continuam iguais: não existe mais breakpoint exclusivo de 1000 px.
+O cabeçalho externo segue o padding do `main`; não deslocar a sidebar para alinhar
+ícones pela forma óptica do wordmark.
+
+Antes de aprovar, medir `getBoundingClientRect()` dos alvos e SVGs depois de
+estabilizar animações, além de padding/grid computados. Comparar menu, sete
+destinos, referência e saída; tolerância máxima de 0,5 CSS px entre centros que
+deveriam coincidir. Repetir com drawer aberto e em 390, 564, 760, 761, 1000, 1001
+e 1280 px, considerando o viewport real informado pelo DOM. Conferir também
+intervalos verticais, foco e rolagem em altura reduzida. `scrollWidth === clientWidth`
+é requisito separado: pode passar mesmo com centros e alvos desalinhados.
+
 ### Filtros e recorte aplicado
 
 `FilterDrawer` substitui a barra de formulário na página. Todas as oito páginas do

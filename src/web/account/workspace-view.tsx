@@ -123,6 +123,7 @@ export function WorkspaceView({
           <a
             aria-current={path === p.path ? "page" : undefined}
             aria-label={p.name}
+            className="sidebar-control"
             href={scopedHref(p.path, params)}
             key={p.path}
             title={p.name}
@@ -139,7 +140,7 @@ export function WorkspaceView({
         <a
           aria-current={path === "/account/design-system" ? "page" : undefined}
           aria-label="Referência visual"
-          className="design-reference-link"
+          className="sidebar-control design-reference-link"
           href="/account/design-system"
         >
           <PaletteIcon
@@ -148,16 +149,9 @@ export function WorkspaceView({
           />
           <span className="nav-label">Referência visual</span>
         </a>
-        <p>
-          Instalação privada
-          <br />
-          <small>
-            {snapshot.people.length} pessoas · {snapshot.connections.length}{" "}
-            conexões
-          </small>
-        </p>
         <UiButton
           aria-label="Sair"
+          className="sidebar-control"
           disabled={busy}
           onClick={logout}
           type="button"
@@ -169,6 +163,14 @@ export function WorkspaceView({
           />
           <span className="nav-label">Sair</span>
         </UiButton>
+        <p>
+          Instalação privada
+          <br />
+          <small>
+            {snapshot.people.length} pessoas · {snapshot.connections.length}{" "}
+            conexões
+          </small>
+        </p>
       </div>
     </>
   );

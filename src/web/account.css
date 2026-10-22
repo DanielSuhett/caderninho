@@ -199,8 +199,8 @@ main:has(.finance-dashboard) {
 
 /* App workspace: the existing identity with a persistent operational navigation. */
 main:has(.workspace) {
-  max-width: 1480px;
-  padding-top: 24px;
+  max-width: none;
+  padding: 24px 32px 48px;
 }
 main:has(.workspace) > nav {
   margin-bottom: 20px;
@@ -220,55 +220,133 @@ main:has(.workspace) > nav {
   --control-height: 44px;
   display: grid;
   grid-template-columns: 208px minmax(0, 1fr);
-  gap: var(--space-8);
+  gap: var(--space-6);
   font-size: var(--text-body);
   line-height: 1.5;
 }
+/* One grid for every navigation target, including the Kumo buttons. */
 .workspace-sidebar {
   position: sticky;
-  top: 24px;
+  top: 18px;
   align-self: start;
+  max-height: calc(100dvh - 36px);
+  padding: 6px;
+  margin-block: -6px;
+  overflow-y: auto;
 }
-.workspace-nav {
-  display: flex;
-  flex-direction: column;
+.workspace-nav,
+.sidebar-session {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 4px;
   margin: 0;
 }
-.workspace-nav a {
-  display: flex;
-  gap: 10px;
+.workspace .sidebar-control,
+.workspace .sidebar-control[data-kumo-component],
+.workspace .sidebar-toggle > button[data-kumo-component] {
+  box-sizing: border-box;
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  gap: 12px;
   align-items: center;
-  min-height: var(--control-height, 44px);
-  padding: 10px 12px;
-  font-size: 15px;
+  justify-content: start;
+  width: 100%;
+  min-width: 0;
+  height: 44px;
+  min-height: 44px;
+  padding: 0 12px;
+  margin: 0;
+  font-size: 14px;
   font-weight: 550;
+  line-height: 20px;
+  color: var(--muted);
+  text-align: left;
+  text-decoration: none;
   letter-spacing: 0;
-  border-left: 3px solid transparent;
+  background: transparent;
+  border: 0;
   border-radius: 6px;
+  box-shadow: none;
 }
-.workspace-nav span {
+.sidebar-control svg,
+.sidebar-toggle > button svg {
+  display: block;
+  width: 20px;
+  height: 20px;
+}
+.sidebar-control .nav-label {
   display: block;
   font: inherit;
   color: inherit;
 }
-
-.workspace-nav a[aria-current="page"] {
-  color: var(--selected-text);
-  background: var(--selected-bg);
-  border-left-color: var(--accent);
-}
-.workspace-nav a:hover {
+.workspace .sidebar-control:hover,
+.workspace .sidebar-toggle > button:hover {
+  color: var(--text);
   background: var(--surface-hover);
 }
-.workspace-nav a[aria-current="page"]:hover {
+.workspace .sidebar-control[aria-current="page"] {
+  color: var(--selected-text);
   background: var(--selected-bg);
+  box-shadow: inset 3px 0 var(--accent);
+}
+.workspace .sidebar-control:focus-visible,
+.workspace .sidebar-toggle > button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
 }
 .sidebar-session {
-  padding: 12px 16px;
-  margin-top: 24px;
-  font-size: 14px;
+  padding-top: 12px;
+  margin-top: 16px;
+  font-size: 12px;
   border-top: 1px solid var(--line);
+}
+.sidebar-session p {
+  padding-inline: 12px;
+  margin: 12px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+.sidebar-toggle {
+  display: contents;
+}
+.workspace .sidebar-toggle > button[data-kumo-component] {
+  display: none;
+}
+@media (max-width: 760px) {
+  main:has(.workspace) {
+    padding: 20px 12px 32px;
+  }
+  main:has(.workspace) > nav {
+    margin-bottom: 24px;
+  }
+  .workspace {
+    grid-template-columns: 56px minmax(0, 1fr);
+    gap: 16px;
+  }
+  .workspace-sidebar {
+    top: 6px;
+    max-height: calc(100dvh - 12px);
+  }
+  .workspace-sidebar > .workspace-nav .nav-label,
+  .workspace-sidebar > .sidebar-session .nav-label,
+  .workspace-sidebar > .sidebar-session p {
+    display: none;
+  }
+  .workspace-sidebar > .workspace-nav .sidebar-control,
+  .workspace-sidebar > .sidebar-session .sidebar-control,
+  .workspace .sidebar-toggle > button[data-kumo-component] {
+    grid-template-columns: 20px;
+    justify-content: center;
+    width: 44px;
+    padding: 0;
+  }
+  .sidebar-toggle {
+    display: grid;
+    margin-bottom: 12px;
+  }
+  .workspace .sidebar-toggle > button[data-kumo-component] {
+    display: grid;
+  }
 }
 .workspace-content {
   min-width: 0;
@@ -643,12 +721,6 @@ main:has(.workspace) > nav {
   outline: 3px solid var(--accent);
   outline-offset: 3px;
 }
-@media (max-width: 1000px) {
-  .workspace {
-    grid-template-columns: 208px minmax(0, 1fr);
-    gap: 24px;
-  }
-}
 .advanced-filter-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -656,36 +728,6 @@ main:has(.workspace) > nav {
   padding-top: 12px;
 }
 @media (max-width: 760px) {
-  .workspace {
-    grid-template-columns: 56px minmax(0, 1fr);
-    gap: 16px;
-  }
-  .workspace-sidebar > .workspace-nav .nav-label,
-  .workspace-sidebar > .sidebar-session .nav-label,
-  .workspace-sidebar > .sidebar-session p {
-    display: none;
-  }
-  .workspace-sidebar > .workspace-nav a {
-    justify-content: center;
-    padding: 10px 8px;
-  }
-  .workspace-sidebar > .sidebar-session {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    gap: 8px;
-    padding: 12px 0;
-  }
-  .workspace-sidebar > .sidebar-session a {
-    justify-content: center;
-    min-width: 0;
-  }
-  .workspace-sidebar .sidebar-toggle {
-    display: block;
-    margin-bottom: 12px;
-  }
-  .workspace-sidebar .sidebar-toggle > button {
-    display: flex;
-  }
   .advanced-filter-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -839,33 +881,7 @@ main:has(.workspace) > nav {
 .audit-table tbody tr:hover {
   background: var(--surface);
 }
-.design-reference-link[aria-current="page"] {
-  color: var(--selected-text);
-  text-decoration-thickness: 2px;
-}
-
-/* Persistent left navigation and modal panels share the workspace foundation. */
-main:has(.workspace) {
-  max-width: none;
-  padding: 24px 32px 48px;
-}
-.workspace-sidebar {
-  max-height: calc(100dvh - 48px);
-  overflow-y: auto;
-}
-.workspace-nav svg,
-.sidebar-session svg {
-  flex-shrink: 0;
-}
-.sidebar-session .design-reference-link {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  min-height: 44px;
-}
-.sidebar-toggle > button {
-  display: none;
-}
+/* Modal panels share the workspace foundation. */
 .filter-toolbar {
   display: flex;
   flex-wrap: wrap;
@@ -976,20 +992,6 @@ main:has(.workspace) {
   }
 }
 @media (max-width: 760px) {
-  main:has(.workspace) {
-    padding: 20px 12px 32px;
-  }
-  main:has(.workspace) > nav {
-    margin-bottom: 24px;
-  }
-  .workspace-sidebar {
-    top: 12px;
-    max-height: calc(100dvh - 24px);
-  }
-  .workspace-sidebar > .sidebar-session button[data-kumo-component] {
-    width: 56px;
-    padding: 8px;
-  }
   .filter-toolbar {
     align-items: start;
   }

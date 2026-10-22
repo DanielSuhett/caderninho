@@ -82,9 +82,19 @@ Preserve fonte local, foco visível e navegação por teclado em desktop e celul
 Sincronizações e Conexões têm páginas próprias. A navegação permanece lateral em
 todas as larguras: 208 px com nomes no desktop e uma faixa de 56 px com ícones no
 compacto. “Abrir navegação” revela um drawer à esquerda com os mesmos destinos e
-nomes completos. Ícones Phosphor de 20 px, nomes acessíveis e alvos de 44 px; não
+nomes completos. Ícones Phosphor de 20 px; todos os alvos compactos medem exatamente
+44 × 44 px dentro de 6 px laterais. Menu, destinos, referência e saída compartilham
+o mesmo centro. A classe `sidebar-control` também inclui os botões Kumo; não
 misturar famílias para imitar outra biblioteca. O destino ativo usa fundo/texto de
 seleção, borda laranja e `aria-current`. O link de salto leva ao conteúdo.
+
+A grade tem 4 px entre destinos e entre ações de rodapé; 12 px após o menu. Após
+o último destino: 16 px até o separador de 1 px, depois 12 px até a referência.
+Referência e saída ficam adjacentes; metadados vêm depois. Seleção usa indicador
+interno sem borda que desloque conteúdo. No desktop, os alvos usam coluna de ícone
+de 20 px, intervalo de 12 px e texto; a lateral tem padding de 6 px. O layout muda
+em 760/761 px, sem um segundo salto em 1000 px. O guia define a verificação por
+retângulos DOM; ausência de overflow ou screenshot isolado não comprova alinhamento.
 
 Todas as oito páginas do workspace, incluindo a referência visual, usam
 `FilterDrawer`. O botão “Filtros” abre à direita; o recorte aplicado continua
