@@ -75,6 +75,9 @@ export function AuditView({
   const [confirm, setConfirm] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const [messageTone, setMessageTone] = useState<"success" | "error">(
+    "success",
+  );
   const mutation = useRef<AbortController | null>(null);
   useEffect(() => () => mutation.current?.abort(), []);
   const cancelRevoke = useCallback(() => setConfirm(null), []);
@@ -98,6 +101,7 @@ export function AuditView({
     }
     setBusy(false);
     setConfirm(null);
+    setMessageTone(error ? "error" : "success");
     setMessage(
       error
         ? "Não foi possível confirmar a revogação. Atualize a lista antes de tentar novamente."
@@ -137,6 +141,7 @@ export function AuditView({
       {!!message && (
         <p
           className="notice"
+          data-tone={messageTone}
           role="status"
         >
           {message}
@@ -241,6 +246,7 @@ export function AuditView({
                         <UiButton
                           disabled={busy}
                           onClick={revoke}
+                          tone="danger"
                           type="button"
                         >
                           Confirmar revogação
@@ -392,7 +398,14 @@ export function AuditView({
                           <td>{momentLabel(row.startedAt)}</td>
                           <td>{row.tool ?? "Protocolo MCP"}</td>
                           <td>
-                            {outcomes[row.outcome]} · HTTP {row.status}
+                            <span
+                              className="status-label"
+                              data-tone={
+                                row.outcome === "failed" ? "error" : "neutral"
+                              }
+                            >
+                              {outcomes[row.outcome]} · HTTP {row.status}
+                            </span>
                           </td>
                           <td>
                             {clientLabel(data, row.clientId)}

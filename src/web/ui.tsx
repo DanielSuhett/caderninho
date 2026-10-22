@@ -8,16 +8,20 @@ interface DataAttributes {
 
 export function UiButton({
   variant = "primary",
+  tone = "normal",
   className = "",
   ...props
-}: ComponentProps<typeof Button> & DataAttributes) {
+}: ComponentProps<typeof Button> &
+  DataAttributes & { tone?: "normal" | "danger" }) {
   return (
     <Button
       size="lg"
       type="submit"
       {...props}
-      className={`${variant === "primary" ? "caderninho-primary" : ""} ${className}`}
-      variant={variant === "primary" ? "secondary" : variant}
+      className={`${tone === "danger" ? "caderninho-danger" : ""} ${variant === "primary" && tone === "normal" ? "caderninho-primary" : ""} ${className}`}
+      variant={
+        variant === "primary" || variant === "secondary" ? "outline" : variant
+      }
     />
   );
 }
@@ -32,7 +36,9 @@ export function UiLink({
       size="lg"
       {...props}
       className={`${variant === "primary" ? "caderninho-primary" : ""} ${className}`}
-      variant={variant === "primary" ? "secondary" : variant}
+      variant={
+        variant === "primary" || variant === "secondary" ? "outline" : variant
+      }
     />
   );
 }

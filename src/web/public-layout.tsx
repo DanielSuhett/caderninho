@@ -23,7 +23,7 @@ export function PublicLayout({
             name="description"
           />
           <style>{`
-      .public-shell { --public-shadow: 0 16px 48px #0009, inset 0 1px 0 #ffffff0c; max-width: 1168px; margin: auto; padding: 0 24px; font-size: 16px; }
+      .public-shell { max-width: 1168px; margin: auto; padding: 0 24px; font-size: 16px; }
       .public-shell h1, .public-shell h2, .public-shell h3, .public-shell p { margin: 0; }
       .public-shell h1 { font-weight: 600; letter-spacing: -.045em; line-height: 1.08; }
       .public-shell h2 { font-size: 28px; font-weight: 550; letter-spacing: -.025em; line-height: 1.25; }
@@ -35,7 +35,7 @@ export function PublicLayout({
       .public-nav a { display: inline-flex; align-items: center; min-height: 44px; text-decoration: none; }
       .public-nav a:not([data-kumo-component]):hover { color: var(--accent); }
       .public-shell :is(button,a)[data-kumo-component] { min-height: 44px; padding: 10px 18px; font-size: 14px; transition: transform 150ms ease, box-shadow 150ms ease, background-color 150ms ease; }
-      .public-shell :is(button,a)[data-kumo-component]:hover { transform: translateY(-1px); box-shadow: 0 4px 12px #0006; }
+      .public-shell :is(button,a)[data-kumo-component]:not(:disabled):hover { transform: translateY(-1px); box-shadow: var(--shadow-low); }
       .public-shell :is(button,a)[data-kumo-component]:active { transform: translateY(0); }
       .public-skip { position: absolute; top: -100px; left: 16px; z-index: 3; padding: 12px; background: var(--surface); }
       .public-skip:focus { top: 8px; }
@@ -44,7 +44,7 @@ export function PublicLayout({
       .public-actions { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; margin-top: 28px; }
       .public-actions > a:not([data-kumo-component]) { display: inline-flex; align-items: center; min-height: 44px; font-size: 14px; }
       .public-shell .public-note { margin-top: 16px; font-size: 12px; color: var(--muted); }
-      .public-surface { min-width: 0; padding: 28px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--public-shadow); }
+      .public-surface { min-width: 0; padding: 28px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow-public); }
       .landing-hero { display: grid; grid-template-columns: 1.25fr 1fr; gap: 48px; align-items: center; padding: 64px 0 72px; }
       .landing-hero h1 { margin-block: 16px 24px; font-size: clamp(36px,5vw,64px); text-wrap: balance; }
       .landing-intro { color: var(--muted); font-size: 17px; line-height: 1.6; }
@@ -71,22 +71,23 @@ export function PublicLayout({
       .public-footer a { display: inline-flex; align-items: center; min-height: 44px; }
       .access-main { width: 100%; max-width: 440px; margin: 48px auto 72px; }
       .access-main .public-surface { animation: public-shadow-in 400ms ease both; }
-      @keyframes public-shadow-in { from { box-shadow: none; } to { box-shadow: var(--public-shadow); } }
+      @keyframes public-shadow-in { from { box-shadow: none; } to { box-shadow: var(--shadow-public); } }
       .access-main h1 { margin-block: 12px 16px; font-size: 32px; }
       .access-intro { color: var(--muted); font-size: 14px; }
       .access-origin { padding-block: 20px; margin-block: 20px; border-block: 1px solid var(--line); font-size: 12px; color: var(--muted); }
       .access-origin code { display: block; margin-top: 6px; font-size: 13px; color: var(--text); overflow-wrap: anywhere; }
       .access-form { display: grid; gap: 20px; }
       .access-form label { display: block; margin-bottom: 8px; font-size: 14px; font-weight: 550; }
-      .access-form input:not([type="hidden"]) { display: block; width: 100%; min-height: 48px; padding: 12px; font: inherit; background: var(--page); color: var(--text); border: 1px solid var(--muted); border-radius: 6px; }
+      .access-form input:not([type="hidden"]) { display: block; width: 100%; min-height: 48px; padding: 12px; font: inherit; background: var(--page); color: var(--text); border: 1px solid var(--control-border); border-radius: 6px; }
+      .access-form input[aria-invalid="true"] { border-color: var(--error-border); }
       .access-form button { width: 100%; justify-content: center; text-align: center; }
-      .access-error { padding: 12px 14px; margin-bottom: 20px; border-left: 3px solid var(--accent); background: var(--page); font-size: 14px; }
+      .access-error { padding: 12px 14px; margin-bottom: 20px; border: 1px solid var(--error-border); border-left-width: 3px; border-radius: 6px; color: var(--error-text); background: var(--error-bg); font-size: 14px; }
       .access-main details { margin-top: 24px; border-top: 1px solid var(--line); border-bottom: 0; }
       .access-main .access-help { margin-top: 20px; font-size: 12px; color: var(--muted); text-align: center; }
       .public-reveal { animation: public-enter 400ms cubic-bezier(.2,.7,.2,1) both; }
       .public-reveal-delayed { animation-delay: 80ms; }
       @keyframes public-enter { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-      @media (prefers-reduced-motion: reduce) { .public-reveal, .access-main .public-surface { animation: none; } .public-shell :is(button,a)[data-kumo-component] { transition: none; } .public-shell :is(button,a)[data-kumo-component]:hover { transform: none; } }
+      @media (prefers-reduced-motion: reduce) { .public-reveal, .access-main .public-surface { animation: none; } .public-shell :is(button,a)[data-kumo-component] { transition: none; } .public-shell :is(button,a)[data-kumo-component]:not(:disabled):hover { transform: none; } }
       @media (max-width: 760px) {
         .public-shell { padding-inline: 20px; }
         .public-header { min-height: 80px; gap: 12px; }

@@ -158,7 +158,10 @@ export function SyncHistoryView({
                     </div>
                   </dl>
                   {!!r.error && (
-                    <p className="notice">
+                    <p
+                      className="notice"
+                      data-tone="error"
+                    >
                       Interrompida: <code>{r.error}</code>. As páginas
                       confirmadas foram preservadas. Confira as credenciais e a
                       autorização na página Conexões.

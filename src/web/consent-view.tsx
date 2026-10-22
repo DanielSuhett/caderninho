@@ -11,7 +11,7 @@ export function Consent({
 }) {
   return (
     <>
-      <h1>Autorizar {details.clientName}?</h1>
+      <h1 className="consent-title">Autorizar {details.clientName}?</h1>
       <p>
         Cliente: {details.clientDomain ?? "nome não verificado"}. Destino:{" "}
         {details.redirectHost}.
@@ -20,9 +20,18 @@ export function Consent({
         <p>O destino é um aplicativo neste computador.</p>
       ) : null}
       <p>
-        O assistente poderá consultar seus dados financeiros, solicitar
-        importações. Os resultados consultados serão enviados ao serviço
-        autorizado.
+        O assistente terá acesso aos dados de toda esta instalação. Poderá
+        consultar suas finanças, solicitar importações e usar as ferramentas de
+        organização para criar, alterar ou excluir registros, conforme as
+        confirmações exigidas por cada ferramenta. Os resultados consultados
+        serão enviados ao serviço autorizado.
+      </p>
+      <p
+        className="notice"
+        data-tone="info"
+      >
+        Essa autorização não permite movimentar dinheiro nos bancos. Você pode
+        revogar o acesso pela Auditoria MCP.
       </p>
       <form method="post">
         <input

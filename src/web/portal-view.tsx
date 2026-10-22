@@ -22,7 +22,7 @@ export function Portal({ children }: { children: ReactNode }) {
             font: inherit;
             background: var(--surface);
             color: var(--text);
-            border: 1px solid var(--muted);
+            border: 1px solid var(--control-border);
             border-radius: 4px;
           }
           details {
@@ -34,10 +34,6 @@ export function Portal({ children }: { children: ReactNode }) {
             min-height: 44px;
             cursor: pointer;
             font-weight: 600;
-          }
-          button:disabled {
-            opacity: 0.65;
-            cursor: wait;
           }
           small {
             color: var(--muted);
@@ -83,6 +79,7 @@ export function Portal({ children }: { children: ReactNode }) {
             max-width: 720px;
             margin: 16px 0 24px;
           }
+          .consent-title { font-size: clamp(28px, 4vw, 36px); }
           h2 {
             font-size: 26px;
             font-weight: 550;
@@ -128,7 +125,7 @@ export function Portal({ children }: { children: ReactNode }) {
             min-height: 48px;
             background: var(--surface);
             color: var(--text);
-            border: 1px solid var(--line);
+            border: 1px solid var(--control-border);
             border-radius: 6px;
             box-shadow: none;
           }
@@ -163,11 +160,6 @@ export function Portal({ children }: { children: ReactNode }) {
           code {
             overflow-wrap: anywhere;
             font-size: 14px;
-          }
-          .notice {
-            background: var(--surface);
-            border-left: 3px solid var(--accent);
-            padding: 16px;
           }
           form + form {
             margin-top: 16px;

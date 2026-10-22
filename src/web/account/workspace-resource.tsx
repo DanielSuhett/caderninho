@@ -76,6 +76,7 @@ export function ResourceFeedback({
     return (
       <div
         className="notice"
+        data-tone="error"
         role="alert"
       >
         <p>

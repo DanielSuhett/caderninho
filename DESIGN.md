@@ -12,16 +12,26 @@ Nomeie componentes e ações concretamente: cliente MCP, Pluggy, D1, Workflows, 
 
 ## Tokens
 
-| Uso | Token CSS | Valor |
-| --- | --- | --- |
-| Fundo | `--page` | `#000000` |
-| Superfície de trabalho | `--surface` | `#171717` |
-| Texto principal | `--text` | `#edece8` |
-| Texto secundário | `--muted` | `#adadad` |
-| Ação principal e foco | `--accent` | `#f6821f` |
-| Separadores e bordas | `--line` | `#414141` |
+`src/web/design-tokens.ts` é a fonte única de `colorTokens` e `shadowTokens`.
+`DesignHead`, em `src/web/design.tsx`, publica cada chave como variável CSS. A
+galeria autenticada `/account/design-system` consome essa mesma fonte. Não criar
+cores ou sombras locais para uma página; o [guia](docs/design-system.md) registra
+os valores, os estados e os pares de contraste calculados.
 
-Feedback: sucesso usa `#c3d7bd` sobre `#263126`; pendência usa `#e4cc96` sobre `#2e291e`. Sempre acompanhar cor com texto explícito. Não usar verde como falsa indicação de conexão em tempo real.
+| Papel | Tokens principais | Regra |
+| --- | --- | --- |
+| Base e texto | `--page` `#000000`, `--surface` `#171717`, `--text` `#edece8`, `--muted` `#adadad` | Hanken sobre neutros; superfície agrupa trabalho. |
+| Superfície e limite | `--surface-raised` `#242424`, `--line` `#414141`, `--control-border` `#858585` | Linha separa conteúdo; borda de controle identifica o campo/ação. |
+| Ação e seleção | `--accent` `#f6821f`, `--on-accent` `#17100a`, `--selected-bg` `#332316`, `--selected-text` `#ffc291` | Laranja orienta ação/foco; seleção também usa estado semântico e marcador. |
+| Feedback | Famílias `--success-*`, `--warning-*`, `--error-*`, `--info-*` | Cada família tem texto, fundo e borda. Cor acompanha mensagem explícita. |
+| Gráficos e profundidade | `--chart-1` a `--chart-4`; `--shadow-flat`, `--shadow-low`, `--shadow-raised`, `--shadow-public` | Séries têm rótulos; elevação segue a função da superfície. |
+
+`notice`, `status-label` e `sync-state` aceitam `data-tone="success|warning|error|info|neutral"`;
+informação é o padrão. Sucesso indica resultado confirmado; atenção indica
+pendência/parcialidade; erro indica falha. Os aliases `run-succeeded`/`sync-succeeded`,
+`run-pending`/`sync-pending` e `run-failed`/`sync-failed` usam, respectivamente,
+sucesso, atenção e erro. Execução em andamento é informação. Regra ativa, registro
+contabilizado ou concessão vigente não são prova de sucesso recente nem conexão online.
 
 ## Tipografia
 
@@ -33,11 +43,13 @@ Títulos de uma cor. Sem palavra isolada em laranja, etiquetas em caixa alta ou 
 
 Telas operacionais: largura máxima 850 px; workspace com navegação até 1480 px, formulários alinhados à esquerda. Margens móveis entre 18 e 24 px. Espaçamento cria hierarquia antes de bordas e fundos.
 
-Superfícies só para agrupar trabalho relacionado. Raios: 10 px nos grupos; 6 px nos controles; 4 px nos badges. No workspace, sem brilhos, gradientes, sombras decorativas, texturas, avatares fictícios ou grids de cards para preencher espaço. Numeração apenas para sequências reais.
+Superfícies só para agrupar trabalho relacionado. Raios: 10 px nos grupos; 6 px nos controles; 4 px nos badges. Sem brilhos, gradientes, texturas, avatares fictícios ou grids de cards para preencher espaço. Numeração apenas para sequências reais.
+
+Elevação plana nas linhas e métricas; `--shadow-low` nos filtros, grupos de contas e editor de perfil aberto; `--shadow-raised` em tooltips; `--shadow-public` no grupo principal de landing/login. Sombras neutras não substituem borda, contraste nem hierarquia. Não elevar cada nível de uma composição.
 
 ## Componentes e implementação
 
-- `src/web/design.tsx`: tokens, fonte e estilos compartilhados; incluir `DesignHead` uma vez no head e `data-mode="dark"` no HTML.
+- `src/web/design-tokens.ts`: cores e elevação; `src/web/design.tsx`: publicação dos tokens, fonte e estilos compartilhados; incluir `DesignHead` uma vez no head e `data-mode="dark"` no HTML.
 - `src/web/ui.tsx`: adaptadores SSR dos componentes Kumo. Botão principal laranja com texto escuro; secundário sobre superfície escura. O adaptador usa a variante neutra Kumo para evitar o gradiente e o texto branco obrigatório da variante primary, mantendo suas semânticas e estados.
 - `src/web/portal-view.tsx`: shell operacional compartilhado. O painel em `src/web/account/account-view.tsx` usa React e Kumo; `src/web/consent-view.tsx` exporta o formulário React renderizado no servidor.
 - Fonte copiada para assets no build, CSP `font-src 'self'`; nenhum carregamento de fonte externa. Sem JavaScript para identidade visual.
@@ -68,8 +80,8 @@ Preserve fonte local, foco visível e navegação por teclado em desktop e celul
 
 `/account` apresenta a visão geral. Auditoria MCP, Transações, Regras, Grupos, Sincronizações e
 Conexões têm páginas próprias; a navegação permanece à esquerda no desktop e
-vira uma grade de três colunas no celular. A página ativa tem texto e borda
-laranja, além de `aria-current`. O link de salto permite ir direto ao conteúdo.
+vira uma grade de três colunas no celular. A página ativa tem fundo e texto de seleção, borda
+laranja e `aria-current`. O link de salto permite ir direto ao conteúdo.
 
 A leitura financeira fica separada da gestão de credenciais. Filtros principais
 permanecem visíveis; filtros avançados de transações usam disclosure e abrem quando
@@ -102,7 +114,10 @@ mudam ao navegar entre leitura financeira e gestão.
 mínima de 44 px, texto de 14 px e padding de 8 × 14 px. Há um destaque principal por
 tarefa; atualização/importação auxiliar usa secundário. Ícones são do Phosphor,
 compartilhado com o Kumo, com nome acessível e dica no foco/hover. Ações de impacto,
-como revogar acesso, mantêm texto explícito e confirmação.
+como revogar acesso, mantêm texto explícito e confirmação. `UiButton tone="danger"`
+aplica o tratamento destrutivo sem inventar uma variante Kumo. Hover, pressionado,
+desabilitado e inválido usam tokens centrais; seleção usa `aria-current` ou
+`aria-pressed`, conforme a função do controle.
 
 `WorkspaceSkeleton` aparece na carga inicial. Na atualização da mesma consulta, os
 dados existentes permanecem visíveis; um aviso indica atualização ou falha, sem
@@ -122,9 +137,9 @@ produto. `UiLink` é o equivalente semântico de `UiButton` para navegação. A 
 é HTML estático gerado pelo Vite; o login é renderizado pelo Worker com CSRF e
 retorno OAuth preservados. Nenhum dos dois precisa de JavaScript para funcionar.
 
-A pedido do usuário, estas duas superfícies têm uma exceção delimitada para
-profundidade: `--public-shadow` usa sombra neutra e luz interna de 1 px. Não é
-aplicada ao dashboard. A landing entra em 400 ms, com deslocamento de 8 px e atraso
+Estas superfícies usam `--shadow-public`, a elevação mais ampla do sistema, com
+sombra neutra e luz interna de 1 px. O workspace usa os níveis baixos definidos
+acima. A landing entra em 400 ms, com deslocamento de 8 px e atraso
 máximo de 80 ms; hover usa 150 ms e deslocamento de 1 px. No login, só a sombra
 aparece gradualmente: título, senha e erro permanecem disponíveis imediatamente.
 `prefers-reduced-motion` desativa animações/transições. Sem loops, parallax,

@@ -114,7 +114,10 @@ export function OrganizationView({
                     >
                       <div className="rule-top">
                         <h3>{r.name}</h3>
-                        <span className="status-label">
+                        <span
+                          className="status-label"
+                          data-tone="neutral"
+                        >
                           {r.enabled ? "Ativa" : "Pausada"} · prioridade{" "}
                           {r.priority}
                         </span>

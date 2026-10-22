@@ -197,7 +197,10 @@ export function TransactionsView({
             </details>
           </FilterBar>
           {!!data.result.partial && (
-            <p className="notice">
+            <p
+              className="notice"
+              data-tone="warning"
+            >
               Há dados parciais na instalação. Consulte as sincronizações antes
               de interpretar este recorte como um histórico completo.
             </p>

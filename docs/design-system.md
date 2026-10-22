@@ -15,8 +15,9 @@ com confiança?**
 
 | Responsabilidade | Arquivo existente | Regra de manutenção |
 | --- | --- | --- |
-| Fonte local, paleta e foco global | `src/web/design.tsx` | Usar `DesignHead` pelo documento compartilhado; não importar outra fonte ou tema. |
-| Botão e campo Kumo | `src/web/ui.tsx` | `UiButton` e `UiField` preservam semântica, labels e estados. Não duplicar os adaptadores. |
+| Cores e elevação | `src/web/design-tokens.ts` | Fonte única de `colorTokens` e `shadowTokens`, também usada pela galeria. |
+| Fonte local, publicação dos tokens e foco global | `src/web/design.tsx` | `DesignHead` publica as chaves como variáveis CSS; não importar outra fonte ou tema. |
+| Botão, link e campo Kumo | `src/web/ui.tsx` | `UiButton`, `UiLink` e `UiField` preservam semântica, labels e estados. Não duplicar os adaptadores. |
 | Estrutura da instalação | `src/web/portal-view.tsx` | `Portal` hospeda a aplicação. Não remontar o HTML/head em cada página. |
 | Navegação e área de conteúdo | `src/web/account/workspace-view.tsx` | `WorkspaceView` é o shell; páginas entregam apenas seu conteúdo. |
 | Cabeçalho, filtros, métricas, refresh e skeleton | `src/web/account/workspace-ui.tsx` | Compor os componentes existentes; não criar outro cabeçalho local com escala própria. |
@@ -33,21 +34,131 @@ framework de temas, registry de páginas ou variantes dinâmicas para reproduzi-
 
 ### Cor: semântica antes de decoração
 
-| Papel | Token existente / valor | Uso correto | Evitar |
-| --- | --- | --- | --- |
-| Fundo | `--page` · `#000000` | Base contínua do workspace. | Alternar fundos por seção sem motivo. |
-| Superfície | `--surface` · `#171717` | Filtro, formulário ou grupo de dados relacionado. | Card para toda linha ou frase. |
-| Texto | `--text` · `#edece8` | Título, dado e ação legível. | Branco absoluto adicionado localmente. |
-| Texto auxiliar | `--muted` · `#adadad` | Metadados, legenda, explicação secundária. | Tornar erro, moeda ou titular indispensável quase invisível. |
-| Ação e foco | `--accent` · `#f6821f` | Primário, foco e destino ativo. | Pintar cada subtítulo, número ou ícone de laranja. |
-| Linha | `--line` · `#414141` | Separação de registros e controles. | Sombras ou divisórias duplicadas em cada nível. |
-| Confirmação | `#c3d7bd` sobre `#263126` | Resultado confirmado, sempre com texto. | Tratar autorização como conexão online. |
-| Atenção | `#e4cc96` sobre `#2e291e` | Pendência, parcialidade ou falha acionável, com texto. | Alerta permanente para conteúdo informativo. |
+Todas as variáveis abaixo existem em `src/web/design-tokens.ts`. A camada CSS usa
+`var(--nome)`; a galeria importa os objetos para apresentar valores. Não duplicar
+hexadecimais nos componentes nem criar um framework de temas.
 
-Feedback usa classes já existentes, como `notice`, `status-label`, `run-succeeded`
-e `run-failed`. Não introduzir uma cor para cada provedor, pessoa ou modelo. A
-cor não substitui rótulos: “Falhou”, “Pendente” e “Modelo não informado” continuam
-legíveis em escala de cinza.
+| Papel | Tokens / valores | Uso correto |
+| --- | --- | --- |
+| Fundo | `--page` · `#000000` | Base contínua; não alternar fundos por seção sem motivo. |
+| Superfície | `--surface` · `#171717` | Filtro, formulário ou grupo de dados relacionado. |
+| Superfície elevada | `--surface-raised` · `#242424` | Conteúdo sobreposto, como tooltip; não é fundo de todo card. |
+| Texto principal | `--text` · `#edece8` | Título, dado e ação legível. |
+| Texto auxiliar | `--muted` · `#adadad` | Metadados e explicação secundária; informação decisiva continua explícita. |
+| Separador | `--line` · `#414141` | Organização visual entre registros; não é a borda essencial de um campo. |
+| Limite de controle | `--control-border` · `#858585` | Identificação dos controles sobre neutros, inclusive hover/pressionado. |
+
+### Ação, seleção e estados de controle
+
+| Papel | Tokens / valores | Contrato |
+| --- | --- | --- |
+| Primário / foco | `--accent` · `#f6821f`; `--on-accent` · `#17100a` | Texto escuro no botão laranja; foco com outline visível. |
+| Primário hover / pressionado | `--accent-hover` · `#ff9d4d`; `--accent-pressed` · `#de7016` | Preservar `--on-accent`; não usar opacidade no componente inteiro. |
+| Neutro hover / pressionado | `--surface-hover` · `#303030`; `--surface-pressed` · `#383838` | Texto principal e borda de controle permanecem legíveis. |
+| Seleção | `--selected-bg` · `#332316`; `--selected-text` · `#ffc291` | Destino ativo, pessoa selecionada e seleção de texto; não confundir com sucesso. |
+| Desabilitado | `--disabled-bg` · `#242424`; `--disabled-text` · `#969696` | Tamanho e texto preservados, sem sombra ou movimento; explicar bloqueios quando necessário. |
+| Destrutivo hover / pressionado | `--danger-hover` · `#46292b`; `--danger-pressed` · `#543133` | Texto e borda da família erro. Cor não substitui confirmação. |
+
+`UiButton` e `UiLink` usam os estados centrais. Ambos mapeiam as variantes públicas
+`primary` e `secondary` para `outline` do Kumo; as demais variantes são preservadas.
+As classes do Caderninho definem as cores, incluindo destrutivo e desabilitado,
+sem disputar com as cores obrigatórias das outras variantes da biblioteca. Isso
+mantém a semântica Kumo e evita seu gradiente. Hover não pode ser a única forma
+de descobrir uma ação. O foco permanece laranja, inclusive no destrutivo. Transições de controles
+são de 150 ms e são removidas com movimento reduzido.
+
+Seleção de navegação usa `aria-current="page"`; seleção de pessoa usa
+`aria-pressed="true"`. Fundo e texto de seleção acompanham a borda/marcador laranja.
+`::selection` usa o mesmo par, mas não altera a seleção lógica da aplicação.
+Campos inválidos recebem `aria-invalid="true"` e borda de erro, com mensagem
+associada; placeholder não substitui label nem mensagem de validação.
+
+### Feedback e estados do domínio
+
+| Tom | Texto / fundo / borda | Significado e aliases |
+| --- | --- | --- |
+| Sucesso | `--success-text` `#c3d7bd` / `--success-bg` `#263126` / `--success-border` `#7b9674` | Resultado confirmado; `run-succeeded`, `sync-succeeded`. |
+| Atenção | `--warning-text` `#e4cc96` / `--warning-bg` `#2e291e` / `--warning-border` `#a28b58` | Pendência ou parcialidade; `run-pending`, `sync-pending`. |
+| Erro | `--error-text` `#f1aaa4` / `--error-bg` `#331f20` / `--error-border` `#b57873` | Falha acionável; `run-failed`, `sync-failed`. |
+| Informação | `--info-text` `#b4cae8` / `--info-bg` `#1d2938` / `--info-border` `#7a94b5` | Atualização e execução em andamento; padrão das classes de feedback. |
+| Neutro | `--muted` / `--surface` / `--line` | Estado descritivo: regra ativa, registro contabilizado ou acesso vigente. |
+
+Use `data-tone="success|warning|error|info|neutral"` em `notice`, `status-label`
+ou `sync-state`. Essas classes consomem `--tone-text`, `--tone-bg` e
+`--tone-border`; os aliases de execução/sincronização mapeiam para a mesma paleta.
+Sem atributo, o padrão é informação. A aplicação deve escolher o tom pelo estado
+estruturado, nunca por busca de palavras dentro da mensagem. Não combinar um alias
+contraditório com `data-tone` para tentar corrigir o resultado por ordem do CSS.
+
+```tsx
+<p className="notice" data-tone="warning" role="status">
+  A importação está parcial. Os registros já confirmados continuam disponíveis.
+</p>
+<span className="status-label run-failed">Falhou</span>
+<span className="sync-state" data-tone="info">Em andamento</span>
+```
+
+A cor não substitui rótulos: “Falhou”, “Pendente” e “Modelo não informado” continuam
+legíveis em escala de cinza. Não introduzir uma cor por provedor, pessoa ou modelo.
+Autorização vigente não comprova conexão online; regra ativa não é resultado de
+sincronização; “Não informado” não é automaticamente falha. Mensagem de erro usa
+`role="alert"` quando precisa ser anunciada; espera/sucesso usam `role="status"`.
+
+### Contraste calculado dos pares
+
+Valores calculados pela luminância relativa sRGB dos tokens opacos, arredondados
+somente para exibição. Referências: [texto comum 4,5:1 e texto grande 3:1](https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html),
+[limites e gráficos essenciais 3:1](https://www.w3.org/WAI/WCAG22/Understanding/non-text-contrast.html)
+e [significado independente de cor](https://www.w3.org/WAI/WCAG22/Understanding/use-of-color.html).
+Um separador decorativo não tem o mesmo papel de um limite essencial de controle.
+
+| Par | Razão calculada |
+| --- | --- |
+| Texto / superfície; auxiliar / superfície | 15,17:1; 7,99:1 |
+| Texto do primário / normal, hover, pressionado | 7,29:1; 9,13:1; 5,77:1 |
+| Texto de seleção / fundo de seleção | 9,61:1 |
+| Texto desabilitado / fundo desabilitado | 5,25:1 |
+| Borda de controle / superfície, elevada, hover, pressionada | 4,86:1; 4,21:1; 3,58:1; 3,18:1 |
+| Sucesso, atenção, erro, informação: texto / próprio fundo | 8,89:1; 9,21:1; 8,12:1; 8,80:1 |
+| Sucesso, atenção, erro, informação: borda / próprio fundo | 4,17:1; 4,39:1; 4,35:1; 4,72:1 |
+| Texto de erro / destrutivo hover, pressionado | 6,84:1; 5,92:1 |
+
+Esses cálculos não comprovam conformidade de uma página inteira. Opacidade,
+sobreposição, fundo adjacente, foco e estados renderizados exigem revisão na UI.
+A linha `#414141` sobre `#171717` tem 1,76:1: adequada como separador decorativo,
+não como único indício de um campo. Sombra não corrige contraste.
+
+### Séries e gráficos
+
+| Série | Token / valor | Contraste sobre `--surface` |
+| --- | --- | --- |
+| 1 | `--chart-1` · `#a6bfdc` | 9,48:1 |
+| 2 | `--chart-2` · `#9ac8bd` | 9,71:1 |
+| 3 | `--chart-3` · `#c4b5da` | 9,36:1 |
+| 4 | `--chart-4` · `#d7bd91` | 9,88:1 |
+
+São cores categóricas, não estados de saúde. Não usar vermelho para toda saída
+financeira ou verde para toda entrada; sinal, moeda e rótulo carregam o significado.
+Uma série pode usar `--chart-1`; múltiplas séries precisam de legendas, rótulos,
+posições ou padrões distinguíveis. O contraste com o fundo acima **não** demonstra
+contraste entre séries. Evitar segmentos adjacentes dependentes apenas de cor.
+Sempre manter valores em texto, período e unidade; disponibilizar os dados sem
+hover e não atribuir precisão inexistente a volume, custo ou tokens de IA.
+
+### Superfície e elevação
+
+| Nível | Token / valor | Aplicação |
+| --- | --- | --- |
+| Plano | `--shadow-flat` · `none` | Linhas, tabelas, métricas e estrutura comum. |
+| Baixo | `--shadow-low` · `0 2px 6px #0005, inset 0 1px 0 #ffffff08` | Filtros, grupos/contas e editor de perfil aberto. |
+| Elevado | `--shadow-raised` · `0 8px 24px #0008, inset 0 1px 0 #ffffff0c` | Tooltip sobre a página, com `--surface-raised`. |
+| Público | `--shadow-public` · `0 16px 48px #0009, inset 0 1px 0 #ffffff0c` | Grupo principal de landing/login, com `--surface`. |
+
+A elevação sinaliza agrupamento ou sobreposição. Não adicionar sombra em toda
+célula nem empilhar níveis em um card dentro de outro. O fundo, a borda e o espaço
+continuam responsáveis pela leitura; sombras pretas no fundo preto não bastam para
+delimitar componentes. O painel pode usar profundidade baixa sem competir com seus
+dados. Não criar glow laranja, gradiente ou sombra colorida de estado.
 
 ### Tipografia: uma família, cinco níveis úteis
 
@@ -91,7 +202,7 @@ A escala está disponível em `--space-1`, `--space-2`, `--space-3`,
 Controles e summaries têm alvo de **44 × 44 px no mínimo**, mesmo quando o ícone
 tem 20 px. Uma linha de dados sem ação não precisa ter altura de botão. Raios:
 6 px nos controles, 10 px nos grupos, 4 px nos estados. Sem gradiente, glow,
-textura ou sombra decorativa. A linha deve separar; o espaço deve organizar.
+textura ou sombra fora dos níveis definidos acima. A linha deve separar; o espaço deve organizar.
 
 No desktop, título e filtros não devem consumir a maior parte da primeira tela.
 Em uma viewport de 1280 × 900, o primeiro dado ou a ação principal deve aparecer
@@ -105,13 +216,24 @@ Teste também 390 px e zoom 200%; não crie uma largura mínima no `body`.
 | Primária | `<UiButton>` ou `variant="primary"` | Verbo específico: “Conectar Meu Pluggy”, “Aplicar filtros”. Uma ação dominante por tarefa. | Atualização auxiliar, link de navegação, ação que ainda pede escolha. |
 | Secundária | `<UiButton variant="secondary">` | “Importar esta visão”, “Cancelar”, “Tentar novamente”. Superfície neutra. | Tornar uma ação necessária impossível de encontrar. |
 | Ícone | `RefreshButton` | Nome acessível, dica única no foco/hover, ícone Phosphor, alvo 44 px. | “Revogar”, “Conectar” ou qualquer ação cuja consequência não seja óbvia. |
-| Destrutiva | Ação secundária → confirmação explícita → `UiButton` com verbo completo | “Revogar acesso” → “Confirmar revogação”, nome do cliente e “Cancelar”. É um padrão de interação; não existe `variant="danger"` no adaptador. | Executar ao abrir disclosure, selecionar linha ou clicar num ícone sem texto. |
-| Navegação | `<a href>` | Destino explícito: “Ver transações”, “Mais autorizações”. Preserva comportamento de nova aba/voltar. | Trocar link por botão com `location` sem necessidade. |
+| Destrutiva | Ação secundária → confirmação explícita → `<UiButton tone="danger">` | “Revogar acesso” → “Confirmar revogação”, nome do cliente e “Cancelar”. `tone` muda a semântica visual sem criar `variant="danger"` no Kumo. | Executar ao abrir disclosure, selecionar linha ou clicar num ícone sem texto. |
+| Navegação | `<a href>` ou `UiLink` para CTA | Destino explícito: “Ver transações”, “Mais autorizações”. Preserva comportamento de nova aba/voltar. | Trocar link por botão com `location` sem necessidade. |
 
 Sempre declarar `type="button"` para ação que não submete um formulário.
 `UiButton` assume `submit`. Estado `disabled` preserva tamanho e texto; impedir
 envio duplicado não substitui idempotência no backend. Não chamar `disabled` de
 permissão negada: nesse caso explicar o motivo e a recuperação possível.
+
+```tsx
+<UiButton disabled={busy} onClick={revoke} tone="danger" type="button" variant="secondary">
+  Confirmar revogação
+</UiButton>
+```
+
+Esse botão pertence ao estado de confirmação que já identifica o cliente e oferece
+cancelamento. `tone="danger"` usa a família erro e seus estados próprios;
+`variant` continua aceitando as variantes reais da biblioteca. `UiLink` não tem
+prop `tone`: revogação é ação, não navegação.
 
 ## 4. Estados: contrato para toda consulta
 
@@ -123,7 +245,7 @@ permissão negada: nesse caso explicar o motivo e a recuperação possível.
 | Vazio válido | `EmptyView` | Título específico e uma saída útil: mudar filtro, conectar ou importar. Não parecer falha. |
 | Falha | `ResourceFeedback` | Mensagem com caminhos para tentar novamente, corrigir filtro, reabrir lista ou entrar. Sem stack trace. |
 | Dados antigos após falha | Dados preservados + alerta de possível desatualização | O usuário distingue “último resultado” de “atualização concluída”. |
-| Parcialidade financeira | `notice` próxima dos resultados | Explica a limitação antes de alguém interpretar o recorte como total. |
+| Parcialidade financeira | `notice` com `data-tone="warning"` próxima dos resultados | Explica a limitação antes de alguém interpretar o recorte como total. |
 | Movimento reduzido | CSS `prefers-reduced-motion: reduce` | Skeleton estático; nenhuma informação depende de animação. |
 
 Skeleton usa pulso discreto de opacidade. Não usar shimmer, contagem animada de
@@ -140,7 +262,7 @@ isso provoca novas consultas. Consumir o `AbortSignal`; não recuperar falhas co
 Paths de import abaixo assumem uma página dentro de `src/web/account/`.
 
 ```tsx
-import { UiButton, UiField } from "../ui";
+import { UiButton, UiField, UiLink } from "../ui";
 import { EmptyView, FilterActions, ScopeFields } from "./workspace-filters";
 import { ResourceFeedback, useResource } from "./workspace-resource";
 import {
@@ -159,7 +281,8 @@ import {
 | `WorkspaceHeading` | `title: string`, `description?: string`, `children?: ReactNode` | Título e descrição de uma frase; `children` recebe refresh ou uma ação de página. |
 | `RefreshButton` | `onClick: () => void`, `disabled?: boolean`, `label?: string` | Label padrão “Atualizar dados”; contextualizar como “Atualizar auditoria”. |
 | `WorkspaceSkeleton` | Nenhuma | Preferir acesso por `ResourceFeedback`; uso direto só em estado inicial equivalente. |
-| `UiButton` | Props de `Button` Kumo e atributos `data-*`; `variant` padrão `primary` | Padrão visual adaptado. Declarar `type`, `disabled` e ação/submit. |
+| `UiButton` | Props de `Button` Kumo, atributos `data-*`, `tone?: "normal" \| "danger"`; `variant` padrão `primary` | Tom padrão `normal`; declarar `type`, `disabled` e ação/submit. |
+| `UiLink` | Props de `LinkButton` Kumo; `variant` padrão `primary` | Navegação real com `href`, sem prop `tone`. |
 | `UiField` | Props de `Input` Kumo + `label: string` | ID associado ao label; IDs fornecidos pelo chamador são preservados. |
 | `ScopeFields` | `snapshot: PortalResponse`, `catalog: WorkspaceCatalog`, `params: URLSearchParams`, `person?: boolean` | Grupo e pessoa de consultas financeiras. Não usar na auditoria de clientes. |
 | `FilterActions` | Nenhuma | Aplicar e limpar filtros; depende de URL da página. Limpar mantém pessoa/grupo ativos. |
@@ -364,7 +487,7 @@ fictícios; não um HTML paralelo que possa divergir do produto. A receita corre
 é a que um desenvolvedor consegue reutilizar sem reimplementar sua aparência.
 
 
-## 8. Composição pública: landing e login
+## 10. Composição pública: landing e login
 
 `src/web/public-layout.tsx` fornece o shell das páginas públicas e de acesso.
 Ele consome `Document`/`DesignHead` e `UiLink` de `src/web/ui.tsx`; login reutiliza
@@ -375,10 +498,11 @@ respiros e sua hierarquia de aquisição são diferentes dos do workspace.
 | --- | --- |
 | `PublicLayout({ title, description, access?, children })` | Documento, marca, navegação, rodapé e estilos de apresentação. `access` reduz navegação durante o login. |
 | `UiLink` | Destino de navegação com as mesmas variantes visuais de `UiButton`; permanece um link real. |
-| `.public-surface` | Um grupo principal com padding 24–28 px, raio 10 px e sombra neutra delimitada ao shell público. |
+| `.public-surface` | Um grupo principal com padding 24–28 px, raio 10 px e `--shadow-public`; elevação baixa continua disponível no workspace. |
 | `.public-reveal` | Entrada única de 400 ms, até 8 px; apenas em conteúdo de apresentação. Nunca esconder erro/senha para animar. |
 | `.access-form` | Formulário nativo, senha com autocomplete, label, origem visível, erro associado e uma submissão principal. |
 
-A exceção de sombra e movimento foi autorizada pelo usuário para landing/login;
-a regra de sobriedade do dashboard permanece. Ver `DESIGN.md` e
+Landing/login usam a elevação pública e entrada única; o workspace usa os níveis
+planos/baixos e tooltip elevado. Todo movimento respeita `prefers-reduced-motion`.
+Ver `DESIGN.md` e
 [public-pages-qa.md](public-pages-qa.md) para jornadas e evidências.

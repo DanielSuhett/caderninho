@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 
 import { UiButton } from "../ui";
+import { DesignPalette } from "./design-palette";
 import { EmptyView, FilterActions } from "./workspace-filters";
 import { ResourceFeedback } from "./workspace-resource";
 import {
@@ -11,7 +12,6 @@ import {
   WorkspaceSkeleton,
 } from "./workspace-ui";
 
-const colors = ["page", "surface", "text", "muted", "accent", "line"];
 const spaces = [1, 2, 3, 4, 6, 8];
 
 export function DesignSystemView() {
@@ -59,17 +59,6 @@ export function DesignSystemView() {
           Hanken Grotesk, servida localmente. Fundo contínuo, superfícies
           discretas e laranja reservado para ação, foco e seleção.
         </p>
-        <div className="design-swatches">
-          {colors.map((color) => (
-            <div key={color}>
-              <span
-                aria-hidden="true"
-                style={{ background: `var(--${color})` }}
-              />
-              <code>--{color}</code>
-            </div>
-          ))}
-        </div>
         <dl className="design-type-scale">
           <div>
             <dt>Página</dt>
@@ -110,6 +99,7 @@ export function DesignSystemView() {
           controles. 24 e 32 px separam seções e estrutura.
         </p>
       </section>
+      <DesignPalette demonstrate={secondary} />
       <section aria-labelledby="design-actions">
         <h2 id="design-actions">Ações e foco</h2>
         <p>
@@ -284,6 +274,7 @@ export function DesignSystemView() {
               <p>Revogar o acesso do assistente de exemplo?</p>
               <UiButton
                 onClick={confirmed}
+                tone="danger"
                 type="button"
               >
                 Confirmar demonstração

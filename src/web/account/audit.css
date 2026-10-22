@@ -13,12 +13,12 @@
   font-size: 14px;
   font-weight: 550;
   letter-spacing: 0;
-  border: 1px solid var(--line);
+  border: 1px solid var(--control-border);
   border-radius: 6px;
 }
 .audit-period a[aria-current="page"] {
-  color: var(--text);
-  background: var(--surface);
+  color: var(--selected-text);
+  background: var(--selected-bg);
   border-color: var(--accent);
 }
 .grant-row {
@@ -104,10 +104,10 @@
   border: 0;
 }
 .audit-day meter::-webkit-meter-optimum-value {
-  background: var(--muted);
+  background: var(--chart-1);
 }
 .audit-day meter::-moz-meter-bar {
-  background: var(--muted);
+  background: var(--chart-1);
 }
 .audit-day small {
   color: var(--muted);
@@ -131,4 +131,18 @@
   .audit-table {
     min-width: 540px;
   }
+}
+
+.audit-period a:hover {
+  background: var(--surface-hover);
+}
+.audit-period a[aria-current="page"]:hover {
+  background: var(--selected-bg);
+}
+.audit-table .status-label {
+  display: inline-block;
+  white-space: normal;
+}
+.audit-table td:first-child {
+  overflow-wrap: anywhere;
 }

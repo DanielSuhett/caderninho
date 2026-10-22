@@ -235,7 +235,10 @@ export function DashboardView(props: {
               </UiButton>
             </div>
             {importable.length < visible.length && (
-              <p className="notice">
+              <p
+                className="notice"
+                data-tone="warning"
+              >
                 Perfis pausados ou sem credenciais ficam fora desta importação.
                 Seus dados continuam visíveis.
               </p>
@@ -274,7 +277,10 @@ export function DashboardView(props: {
               </div>
             </form>
             {!enabled.length && (
-              <p className="notice">
+              <p
+                className="notice"
+                data-tone="warning"
+              >
                 Adicione ou ative um perfil em “Pessoas e perfis Pluggy” para
                 conectar.
               </p>
@@ -312,7 +318,10 @@ export function DashboardView(props: {
                         : "Disponível agora"}
                     </p>
                     {!!c.importError && (
-                      <p className="notice">
+                      <p
+                        className="notice"
+                        data-tone="error"
+                      >
                         A importação foi interrompida ({c.importError}). Confira
                         o perfil e a autorização no Meu Pluggy. Os dados já
                         importados foram preservados.
@@ -394,6 +403,7 @@ export function DashboardView(props: {
               <UiButton
                 disabled={busy}
                 onClick={action}
+                tone="danger"
                 type="button"
                 value="disconnect-assistants"
                 variant="secondary"
