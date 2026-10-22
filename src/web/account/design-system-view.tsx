@@ -3,6 +3,7 @@ import { useCallback, useState } from "react";
 import { UiButton } from "../ui";
 import { BankMark, bankMarks } from "./bank-mark";
 import { DesignPalette } from "./design-palette";
+import { TransactionList } from "./transaction-list";
 import { EmptyView } from "./workspace-filters";
 import { ResourceFeedback } from "./workspace-resource";
 import {
@@ -230,41 +231,90 @@ export function DesignSystemView() {
             },
           ]}
         />
-        <div className="ledger-wrap">
-          <table className="ledger">
-            <caption className="sr-only">
-              Transação fictícia para demonstrar o layout
-            </caption>
-            <thead>
-              <tr>
-                <th>Data</th>
-                <th>Descrição</th>
-                <th>Titular / conta</th>
-                <th>Categoria</th>
-                <th className="money">Valor</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td data-label="Data">22/10/2026</td>
-                <td data-label="Descrição">
-                  <strong>Mercado · exemplo</strong>
-                  <small>Origem como metadado</small>
-                </td>
-                <td data-label="Titular / conta">
-                  Pessoa de exemplo<small>Conta de exemplo</small>
-                </td>
-                <td data-label="Categoria">Alimentação</td>
-                <td
-                  className="money"
-                  data-label="Valor"
-                >
-                  −R$ 123,45
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+        <TransactionList
+          accounts={[
+            { id: "demo-card", name: "Cartão da casa" },
+            { id: "demo-checking", name: "Conta corrente" },
+          ]}
+          categories={[]}
+          records={[
+            {
+              accountId: "demo-card",
+              amountMinor: "-12345",
+              category: "Alimentação",
+              currency: "BRL",
+              date: "2026-10-22",
+              description: "Mercado · exemplo",
+              direction: "DEBIT",
+              id: "demo-expense",
+              ignored: false,
+              manual: false,
+              personId: "demo-ana",
+              personName: "Ana (exemplo)",
+              status: "POSTED",
+            },
+            {
+              accountId: "demo-checking",
+              amountMinor: "850000",
+              category: "Salário",
+              currency: "BRL",
+              date: "2026-10-22",
+              description: "Salário · exemplo",
+              direction: "CREDIT",
+              id: "demo-income",
+              ignored: false,
+              manual: false,
+              personId: "demo-bruno",
+              personName: "Bruno (exemplo)",
+              status: "POSTED",
+            },
+            {
+              accountId: "demo-card",
+              amountMinor: "-26780",
+              category: "Casa",
+              currency: "BRL",
+              date: "2026-10-21",
+              description: "Materiais para manutenção do apartamento · exemplo",
+              direction: "DEBIT",
+              id: "demo-pending",
+              ignored: true,
+              manual: true,
+              personId: "demo-ana",
+              personName: "Ana (exemplo)",
+              status: "PENDING",
+            },
+            {
+              accountId: "demo-checking",
+              amountMinor: "9007199254740993",
+              category: null,
+              currency: "USD",
+              date: "2026-10-20",
+              description: "Valor elevado · teste de precisão e layout",
+              direction: "CREDIT",
+              id: "demo-large",
+              ignored: true,
+              manual: true,
+              personId: "demo-bruno",
+              personName: "Bruno (exemplo)",
+              status: "POSTED",
+            },
+            {
+              accountId: "demo-checking",
+              amountMinor: null,
+              category: null,
+              currency: "BRL",
+              date: "2026-10-20",
+              description: "Valor não informado · exemplo",
+              direction: "DEBIT",
+              id: "demo-missing",
+              ignored: false,
+              manual: false,
+              personId: "demo-bruno",
+              personName: "Bruno (exemplo)",
+              status: "POSTED",
+            },
+          ]}
+        />
       </section>
       <section aria-labelledby="design-states">
         <h2 id="design-states">Estados de consulta</h2>

@@ -8,7 +8,7 @@ import {
   type WorkspaceCatalog,
 } from "../../contracts";
 import type { createAccountApi } from "./account-api";
-import { formatBalance } from "./dashboard-view";
+import { TransactionList } from "./transaction-list";
 import { EmptyView, ScopeFields } from "./workspace-filters";
 import { dayLabel, ResourceFeedback, useResource } from "./workspace-resource";
 import { FilterDrawer, WorkspaceHeading } from "./workspace-ui";
@@ -207,68 +207,11 @@ export function TransactionsView({
             </span>
           </div>
           {data.result.data.records.length ? (
-            <div className="ledger-wrap">
-              <table className="ledger">
-                <caption className="sr-only">
-                  Transações do grupo e filtros selecionados
-                </caption>
-                <thead>
-                  <tr>
-                    <th>Data</th>
-                    <th>Descrição e conta</th>
-                    <th>Pessoa</th>
-                    <th>Categoria</th>
-                    <th>Valor</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.result.data.records.map((row) => (
-                    <tr key={row.id}>
-                      <td data-label="Data">
-                        {dayLabel(row.date)}
-                        <small>
-                          {row.status === "PENDING" ? "Pendente" : "Confirmada"}
-                        </small>
-                      </td>
-                      <td data-label="Descrição">
-                        <strong>{row.description || "Sem descrição"}</strong>
-                        <small>
-                          {data.accounts.find((a) => a.id === row.accountId)
-                            ?.name ?? row.accountId}
-                        </small>
-                        <details className="row-details">
-                          <summary>Detalhes</summary>
-                          <p>
-                            {row.manual
-                              ? "Lançamento manual"
-                              : "Importado da origem"}
-                            {row.ignored ? " · Ignorado nas análises" : ""}
-                          </p>
-                          <code>{row.id}</code>
-                        </details>
-                      </td>
-                      <td data-label="Pessoa">{row.personName}</td>
-                      <td data-label="Categoria">
-                        {data.catalog.categories.find(
-                          (c) => c.id === row.category,
-                        )?.name ??
-                          row.category ??
-                          "Sem categoria"}
-                      </td>
-                      <td
-                        className="money"
-                        data-label="Valor"
-                      >
-                        {formatBalance(row.amountMinor, row.currency)}
-                        <small>
-                          {row.direction === "DEBIT" ? "Saída" : "Entrada"}
-                        </small>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <TransactionList
+              accounts={data.accounts}
+              categories={data.catalog.categories}
+              records={data.result.data.records}
+            />
           ) : (
             <EmptyView title="Nenhuma transação neste recorte">
               Altere os filtros ou importe suas conexões na página Conexões.

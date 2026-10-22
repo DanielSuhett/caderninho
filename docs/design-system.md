@@ -366,13 +366,32 @@ reabrir e aplicar. O resumo externo deve continuar representando dados aplicados
 durante a edição. Ver [padrão modal WAI](https://www.w3.org/WAI/ARIA/apg/patterns/dialog-modal/)
 para foco e semântica; utilizar diálogo nativo não equivale a homologar a jornada.
 
-### Tabela financeira
+### Lista de transações
 
-Usar `.ledger-wrap` e `.ledger`, `caption` acessível, cabeçalhos `th` e `data-label`
-nas células que viram registros no mobile. Dinheiro alinhado à direita; datas e
-metadados podem quebrar sem alterar números. Origem/IDs ficam em `.row-details`.
+Usar `TransactionList` tanto na página quanto na galeria. Lista sem cards, borda
+apenas entre registros e `details/summary` nativos. Toda a linha é o alvo; o
+chevron é decorativo e gira quando aberto. Enter e Espaço alternam a expansão,
+com foco visível e sem controles interativos aninhados no summary.
+
+Descrição e valor usam 15 px / 550. Conta e titular ficam juntos em 12 px, separados
+por um traço vertical. Data e uma única etiqueta neutra de categoria ocupam a linha
+seguinte; em containers a partir de 720 px, ocupam uma coluna central própria.
+Estado confirmado fica nos detalhes; pendência e exclusão das análises
+permanecem visíveis porque mudam a interpretação. Não colorir categorias ou
+valores só para decorar. Padding vertical de 14–16 px, intervalos de 4 px dentro
+do registro e 8–16 px entre colunas; altura cresce com conteúdo, sem recortes.
+
+Dinheiro usa algarismos tabulares e formatação exata, preservando sinal e moeda.
+Valores extensos podem quebrar sem perder dígitos; ausência é “Valor indisponível”,
+nunca zero. Conta e titular podem quebrar juntos abaixo da descrição/valor em
+containers até 420 px. IDs e origem ficam na expansão, com rótulos explícitos.
+Hover usa superfície neutra; foco usa o token de destaque. Sem motion quando o
+usuário prefere movimento reduzido.
+
 Paginação em `.pagination`: recorte, próximo lote e retorno ao início. Nunca usar
-a soma dos registros da página como total financeiro do período.
+a soma dos registros da página como total financeiro do período. Filtros continuam
+no drawer. Validar descrição longa, contas e titulares diferentes, pendência,
+ignorada, moeda alternativa, valor elevado e ausente na galeria viva.
 
 ### Cards e listas
 

@@ -100,9 +100,11 @@ filtros” aninhado dentro do drawer. Entrada de 180 ms, sem animação com movi
 reduzido. Validar foco, Escape e retorno ao gatilho no navegador; o componente
 nativo não dispensa essa revisão.
 
-A leitura financeira fica separada da gestão de credenciais. Tabelas financeiras
-viram registros com rótulos no compacto. Regras explicam condições em linguagem
-legível; grupos exibem espaços, categorias e tags. Falhas e dados parciais ficam
+A leitura financeira fica separada da gestão de credenciais. Transações usam
+lista contínua: descrição e valor primeiro, conta e titular juntos, data e
+categoria abaixo no compacto ou em coluna própria no desktop. A linha inteira
+abre detalhes por clique, Enter ou Espaço; não converter cada célula em um campo
+rotulado no compacto. Regras explicam condições em linguagem legível; grupos exibem espaços, categorias e tags. Falhas e dados parciais ficam
 junto aos resultados, fora dos drawers.
 
 Confirmação de configuração, autorização OAuth e requisição autenticada são

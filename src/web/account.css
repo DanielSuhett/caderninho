@@ -389,46 +389,192 @@ main:has(.workspace) > nav {
   font-size: 14px;
   color: var(--muted);
 }
-.ledger-wrap {
-  margin-top: 16px;
-  border-block: 1px solid var(--line);
-}
-.ledger {
-  width: 100%;
-  font-size: 14px;
-  text-align: left;
-  border-collapse: collapse;
-}
-.ledger th {
-  padding: 12px 10px;
-  font-size: 12px;
-  font-weight: 550;
-  color: var(--muted);
-}
-.ledger td {
-  padding: 12px 10px;
-  vertical-align: top;
-  overflow-wrap: anywhere;
+/* One disclosure per transaction: the whole summary is the target. */
+.transaction-list {
+  padding: 0;
+  margin: 16px 0 0;
+  container-type: inline-size;
+  list-style: none;
   border-top: 1px solid var(--line);
 }
-.ledger td:nth-child(2) {
-  width: 32%;
+.transaction-list > li {
+  border-bottom: 1px solid var(--line);
 }
-.ledger strong,
-.ledger small {
+.transaction-item {
+  padding: 0;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+}
+.transaction-summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(100px, auto) 16px;
+  gap: 4px 16px;
+  align-items: start;
+  padding: 16px 12px;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.5;
+  cursor: pointer;
+  list-style: none;
+  transition: background 120ms ease;
+}
+.transaction-summary::-webkit-details-marker {
+  display: none;
+}
+.transaction-summary::marker {
+  content: "";
+}
+.transaction-summary:hover,
+.transaction-item[open] {
+  background: var(--surface);
+}
+.transaction-description {
+  grid-column: 1;
+  font-size: 15px;
+  font-weight: 550;
+  overflow-wrap: anywhere;
+}
+.transaction-amount {
+  grid-row: 1 / 3;
+  grid-column: 2;
+  text-align: right;
+}
+.transaction-amount strong {
   display: block;
+  font-size: 15px;
+  font-weight: 550;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
 }
-.ledger small {
+.transaction-account {
+  display: flex;
+  flex-wrap: wrap;
+  grid-column: 1;
+  gap: 2px 8px;
+  font-size: 12px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.transaction-owner {
+  padding-left: 8px;
+  border-left: 1px solid var(--line);
+}
+.transaction-meta {
+  display: flex;
+  flex-wrap: wrap;
+  grid-column: 1 / 3;
+  gap: 6px 12px;
+  align-items: center;
   margin-top: 4px;
   font-size: 12px;
   color: var(--muted);
 }
-.money {
-  font-variant-numeric: tabular-nums;
-  text-align: right;
+.transaction-category {
+  padding: 1px 8px;
+  color: var(--text);
+  overflow-wrap: anywhere;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 4px;
 }
-.ledger .money {
-  white-space: nowrap;
+.transaction-state[data-tone="warning"] {
+  color: var(--warning-text);
+}
+.transaction-chevron {
+  grid-row: 1 / 4;
+  grid-column: 3;
+  align-self: center;
+  color: var(--muted);
+  transition: transform 120ms ease;
+}
+.transaction-item[open] .transaction-chevron {
+  transform: rotate(180deg);
+}
+.transaction-detail {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px 24px;
+  padding: 16px 12px 20px;
+  margin: 0 12px;
+  border-top: 1px solid var(--line);
+}
+.transaction-detail dt {
+  font-size: 12px;
+  color: var(--muted);
+}
+.transaction-detail dd {
+  margin: 4px 0 0;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.transaction-identifier {
+  grid-column: 1 / -1;
+}
+.transaction-account-id {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+}
+.transaction-detail code {
+  font-size: 12px;
+}
+@container (min-width: 720px) {
+  .transaction-summary {
+    grid-template-columns: minmax(0, 1fr) 236px minmax(100px, auto) 16px;
+  }
+  .transaction-meta {
+    grid-row: 1 / 3;
+    grid-column: 2;
+    align-self: center;
+    margin-top: 0;
+  }
+  .transaction-amount {
+    grid-column: 3;
+    align-self: center;
+  }
+  .transaction-chevron {
+    grid-row: 1 / 3;
+    grid-column: 4;
+  }
+}
+@container (max-width: 420px) {
+  .transaction-summary {
+    grid-template-columns: minmax(0, 1fr) minmax(0, auto) 16px;
+    gap: 4px 8px;
+    padding: 14px 0;
+  }
+  .transaction-account {
+    grid-column: 1 / 3;
+    margin-top: 4px;
+  }
+  .transaction-amount {
+    grid-row: 1;
+    max-width: 160px;
+  }
+  .transaction-summary[data-wide-amount="true"] .transaction-description {
+    grid-column: 1 / 3;
+  }
+  .transaction-summary[data-wide-amount="true"] .transaction-amount {
+    grid-row: 2;
+    grid-column: 1 / 3;
+    max-width: none;
+    text-align: left;
+  }
+  .transaction-summary[data-wide-amount="true"] .transaction-chevron {
+    grid-row: 1 / 5;
+  }
+  .transaction-detail {
+    grid-template-columns: minmax(0, 1fr);
+    padding-inline: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .transaction-summary,
+  .transaction-chevron {
+    transition: none;
+  }
 }
 .row-details {
   padding: 0;
@@ -583,9 +729,6 @@ main:has(.workspace) > nav {
     grid-template-columns: 208px minmax(0, 1fr);
     gap: 24px;
   }
-  .ledger td {
-    padding-inline: 6px;
-  }
 }
 .advanced-filter-grid {
   display: grid;
@@ -639,40 +782,6 @@ main:has(.workspace) > nav {
     flex-direction: column;
     gap: 8px;
     align-items: start;
-  }
-  .ledger thead {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-  }
-  .ledger tr {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    padding: 16px 0;
-    border-top: 1px solid var(--line);
-  }
-  .ledger td {
-    display: block;
-    padding: 8px;
-    border: 0;
-  }
-  .ledger td::before {
-    display: block;
-    margin-bottom: 4px;
-    font-size: 12px;
-    color: var(--muted);
-    content: attr(data-label);
-  }
-  .ledger td:nth-child(2) {
-    grid-row: 1;
-    grid-column: 1 / -1;
-    width: auto;
-  }
-  .ledger .money {
-    text-align: left;
-    white-space: normal;
   }
   .category-list li {
     flex-direction: column;
@@ -817,7 +926,6 @@ main:has(.workspace) > nav {
 .status-label {
   border-color: var(--tone-border);
 }
-.ledger tbody tr:hover,
 .audit-table tbody tr:hover {
   background: var(--surface);
 }
