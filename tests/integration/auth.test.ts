@@ -15,6 +15,7 @@ import {
 import { setup } from "./fixture";
 import { reset } from "cloudflare:test";
 
+const loginCsrfPattern = /name="csrf" value="([^"]+)"/;
 const sessionPattern = /__Host-caderninho=/;
 beforeEach(setup);
 afterEach(() => vi.restoreAllMocks());
@@ -244,4 +245,45 @@ test("panel commands require exact CSRF/origin/content type and GET status has n
     ).connections,
     [],
   );
+});
+
+test("login keeps OAuth continuation through a rejected password without granting consent", async () => {
+  const app = fixture();
+  const target = "/authorize?state=synthetic-continuation";
+  const page = await app.request(
+    `/account/login?${new URLSearchParams({ returnTo: target })}`,
+  );
+  const html = await page.text();
+  const csrf = html.match(loginCsrfPattern)?.[1];
+  assert.ok(csrf);
+  assert.ok(html.includes('name="returnTo"'));
+  const submit = (supplied: string) =>
+    app.request("/account/login", {
+      body: new URLSearchParams({ csrf, password: supplied, returnTo: target }),
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        Cookie: cookies(page),
+        Origin: origin,
+      },
+      method: "POST",
+    });
+  const rejected = await submit("wrong-synthetic-password");
+  assert.equal(rejected.status, 401);
+  const rejectedHtml = await rejected.text();
+  assert.ok(rejectedHtml.includes(target));
+  assert.ok(rejectedHtml.includes('aria-invalid="true"'));
+  assert.equal(
+    rejectedHtml.includes('value="wrong-synthetic-password"'),
+    false,
+  );
+  const accepted = await submit(password);
+  assert.equal(accepted.status, 303);
+  assert.equal(accepted.headers.get("Location"), target);
+  assert.deepEqual((await app.config.OAUTH_KV.list()).keys, []);
+  const { ADMIN_PASSWORD: _password, ...missing } = settings();
+  const unavailable = await fixture(missing).request("/account/login");
+  const unavailableHtml = await unavailable.text();
+  assert.equal(unavailable.status, 503);
+  assert.equal(unavailableHtml.includes('name="password"'), false);
+  assert.equal(unavailableHtml.includes("Esqueci minha senha"), false);
 });

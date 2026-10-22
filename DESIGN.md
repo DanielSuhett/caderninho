@@ -1,6 +1,6 @@
 # Identidade visual do Caderninho
 
-Direção visual das telas próprias do produto: conexão Pluggy, gestão e consentimento OAuth.
+Direção visual das telas próprias do produto: landing, acesso privado, conexão Pluggy, gestão e consentimento OAuth.
 
 Para compor páginas desde a base, use a [referência de interface para desenvolvimento](docs/design-system.md): tokens, peças existentes, estados, layouts e três receitas de composição.
 
@@ -25,7 +25,7 @@ Feedback: sucesso usa `#c3d7bd` sobre `#263126`; pendência usa `#e4cc96` sobre 
 
 ## Tipografia
 
-Hanken Grotesk variável, servida localmente, com licença OFL em `src/web/assets/fonts/`. Fallback sans-serif. Apresentação pública: corpo 17 px e entrelinha 1,55; hero 44–88 px. Workspace operacional: corpo 15 px e entrelinha 1,5; página 28–32 px; seção 20 px; registro 17 px; tabela 14 px; metadado 12 px. Títulos com peso 550–600 e tracking negativo moderado. Linhas de texto até 65 caracteres. Valores financeiros usam algarismos tabulares; fonte monoespaçada não substitui a hierarquia. Monoespaçada somente em código, IDs, argumentos e valores técnicos.
+Hanken Grotesk variável, servida localmente, com licença OFL em `src/web/assets/fonts/`. Fallback sans-serif. Apresentação pública: corpo 16–17 px e entrelinha 1,55; hero 36–64 px; login 28–32 px. Workspace operacional: corpo 15 px e entrelinha 1,5; página 28–32 px; seção 20 px; registro 17 px; tabela 14 px; metadado 12 px. Títulos com peso 550–600 e tracking negativo moderado. Linhas de texto até 65 caracteres. Valores financeiros usam algarismos tabulares; fonte monoespaçada não substitui a hierarquia. Monoespaçada somente em código, IDs, argumentos e valores técnicos.
 
 Títulos de uma cor. Sem palavra isolada em laranja, etiquetas em caixa alta ou subtítulo decorativo acima de cada seção. O laranja identifica ação, foco e página ativa; não é decoração repetida. O wordmark é tipográfico: `caderninho.`
 
@@ -33,7 +33,7 @@ Títulos de uma cor. Sem palavra isolada em laranja, etiquetas em caixa alta ou 
 
 Telas operacionais: largura máxima 850 px; workspace com navegação até 1480 px, formulários alinhados à esquerda. Margens móveis entre 18 e 24 px. Espaçamento cria hierarquia antes de bordas e fundos.
 
-Superfícies só para agrupar trabalho relacionado. Raios: 10 px nos grupos; 6 px nos controles; 4 px nos badges. Sem brilhos, gradientes, sombras decorativas, texturas, avatares fictícios ou grids de cards para preencher espaço. Numeração apenas para sequências reais.
+Superfícies só para agrupar trabalho relacionado. Raios: 10 px nos grupos; 6 px nos controles; 4 px nos badges. No workspace, sem brilhos, gradientes, sombras decorativas, texturas, avatares fictícios ou grids de cards para preencher espaço. Numeração apenas para sequências reais.
 
 ## Componentes e implementação
 
@@ -41,7 +41,7 @@ Superfícies só para agrupar trabalho relacionado. Raios: 10 px nos grupos; 6 p
 - `src/web/ui.tsx`: adaptadores SSR dos componentes Kumo. Botão principal laranja com texto escuro; secundário sobre superfície escura. O adaptador usa a variante neutra Kumo para evitar o gradiente e o texto branco obrigatório da variante primary, mantendo suas semânticas e estados.
 - `src/web/portal-view.tsx`: shell operacional compartilhado. O painel em `src/web/account/account-view.tsx` usa React e Kumo; `src/web/consent-view.tsx` exporta o formulário React renderizado no servidor.
 - Fonte copiada para assets no build, CSP `font-src 'self'`; nenhum carregamento de fonte externa. Sem JavaScript para identidade visual.
-- Botões, inputs e summaries com alvos de pelo menos 44 px no workspace e 48 px nos fluxos de apresentação. Compactar conteúdo e espaços, nunca diminuir a área de toque. Foco visível, labels associados, estados disabled legíveis. Cor nunca é a única indicação.
+- Botões, inputs e summaries com alvos de pelo menos 44 px; o campo de senha mantém 48 px. Compactar conteúdo e espaços, nunca diminuir a área de toque. Foco visível, labels associados, estados disabled legíveis. Cor nunca é a única indicação.
 
 ## Conteúdo e interação
 
@@ -113,3 +113,25 @@ nem usar brilhos, shimmer ou spinners contínuos como decoração.
 A [crítica de produto](docs/design-critical-review.md) registra evidências e cinco
 prioridades, incluindo a distinção entre titular financeiro, perfil Pluggy,
 concessão OAuth, cliente declarado e modelo informado.
+
+
+## Landing e entrada
+
+`PublicLayout` compartilha estrutura, fonte, componentes Kumo e tokens com o
+produto. `UiLink` é o equivalente semântico de `UiButton` para navegação. A landing
+é HTML estático gerado pelo Vite; o login é renderizado pelo Worker com CSRF e
+retorno OAuth preservados. Nenhum dos dois precisa de JavaScript para funcionar.
+
+A pedido do usuário, estas duas superfícies têm uma exceção delimitada para
+profundidade: `--public-shadow` usa sombra neutra e luz interna de 1 px. Não é
+aplicada ao dashboard. A landing entra em 400 ms, com deslocamento de 8 px e atraso
+máximo de 80 ms; hover usa 150 ms e deslocamento de 1 px. No login, só a sombra
+aparece gradualmente: título, senha e erro permanecem disponíveis imediatamente.
+`prefers-reduced-motion` desativa animações/transições. Sem loops, parallax,
+animação de dinheiro ou indicadores fictícios de conexão.
+
+O visitante novo pode instalar; quem já usa a instância encontra “Entrar”. A
+explicação mostra instalar → conectar e importar → autorizar o assistente. O
+exemplo financeiro é identificado como fictício e não é executado. O login
+distingue acesso normal, continuação OAuth e configuração ausente. Entrar não é
+consentir; a autorização continua na próxima tela. Recuperação não simula e-mail.

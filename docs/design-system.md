@@ -362,3 +362,23 @@ botões, campos, título, filtros, linha financeira, métrica, estados e disclos
 A página `/account/design-system` usa essas peças reais, com dados explicitamente
 fictícios; não um HTML paralelo que possa divergir do produto. A receita correta
 é a que um desenvolvedor consegue reutilizar sem reimplementar sua aparência.
+
+
+## 8. Composição pública: landing e login
+
+`src/web/public-layout.tsx` fornece o shell das páginas públicas e de acesso.
+Ele consome `Document`/`DesignHead` e `UiLink` de `src/web/ui.tsx`; login reutiliza
+`UiField` e `UiButton`. Não levar seletores do `Portal` para estas páginas: seus
+respiros e sua hierarquia de aquisição são diferentes dos do workspace.
+
+| Peça | Uso |
+| --- | --- |
+| `PublicLayout({ title, description, access?, children })` | Documento, marca, navegação, rodapé e estilos de apresentação. `access` reduz navegação durante o login. |
+| `UiLink` | Destino de navegação com as mesmas variantes visuais de `UiButton`; permanece um link real. |
+| `.public-surface` | Um grupo principal com padding 24–28 px, raio 10 px e sombra neutra delimitada ao shell público. |
+| `.public-reveal` | Entrada única de 400 ms, até 8 px; apenas em conteúdo de apresentação. Nunca esconder erro/senha para animar. |
+| `.access-form` | Formulário nativo, senha com autocomplete, label, origem visível, erro associado e uma submissão principal. |
+
+A exceção de sombra e movimento foi autorizada pelo usuário para landing/login;
+a regra de sobriedade do dashboard permanece. Ver `DESIGN.md` e
+[public-pages-qa.md](public-pages-qa.md) para jornadas e evidências.

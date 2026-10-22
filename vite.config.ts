@@ -3,12 +3,16 @@ import { fileURLToPath } from "node:url";
 
 import { defineConfig, type Plugin } from "vite";
 
+import { renderPage } from "./src/web/document";
+import { landingPage } from "./src/web/landing-view";
+
 function copyPortalAssets(): Plugin {
   return {
     async closeBundle() {
       const root = new URL("./", import.meta.url);
       const output = new URL("dist/web/", root);
       await mkdir(output, { recursive: true });
+      await writeFile(new URL("index.html", output), renderPage(landingPage()));
       await copyFile(
         new URL("src/web/assets/fonts/hanken-grotesk.ttf", root),
         new URL("hanken-grotesk.ttf", output),
