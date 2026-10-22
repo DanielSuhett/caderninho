@@ -1,8 +1,15 @@
 # Usar o Caderninho
 
 Abra `/account`, entre com sua senha e escolha **Conectar Meu Pluggy**. Use a mesma
-aplicação Pluggy das suas conexões pessoais. Depois, escolha **Importar agora** e
+aplicação Pluggy das suas conexões pessoais. Depois, escolha **Importar esta visão** e
 acompanhe o estado das contas no painel.
+
+## Pessoas e perfis
+
+O dashboard reúne as contas de titulares distintos e permite alternar entre uma
+pessoa e “Todos”. Cadastre pessoas e credenciais em **Pessoas e perfis Pluggy**;
+selecione o perfil antes de conectar. O [guia de titularidade](household.md) explica
+migração, filtros MCP, correção de titular, pausa e limites da Pluggy.
 
 ## Importações
 
@@ -18,7 +25,7 @@ inclusive em falha. Pedido repetido reutiliza a execução ativa. A agenda diár
 roda às 09:00 UTC. **Próxima elegibilidade** informa quando uma nova importação
 pode ser admitida; não promete o horário exato da execução.
 
-Use **Reconectar** quando a origem exigir uma nova autorização. Consultar status
+Use **Reautorizar conexão** quando a origem exigir uma nova autorização. Consultar status
 não inicia trabalho. Despacho incerto recupera o mesmo ID de importação; falha ao
 consultar o Workflow mantém a importação ativa até confirmar seu estado.
 

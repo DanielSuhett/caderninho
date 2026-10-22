@@ -1,0 +1,14 @@
+CREATE TABLE people(id TEXT PRIMARY KEY NOT NULL,name TEXT NOT NULL);
+INSERT INTO people VALUES('self','Eu');
+CREATE TABLE pluggy_profiles(id TEXT PRIMARY KEY NOT NULL,name TEXT NOT NULL,person_id TEXT NOT NULL REFERENCES people(id),credential_ref TEXT,client_fingerprint TEXT UNIQUE,enabled INTEGER NOT NULL DEFAULT 1 CHECK(enabled IN (0,1)));
+INSERT INTO pluggy_profiles VALUES('default','Pluggy principal','self',NULL,NULL,1);
+CREATE TABLE connection_owners(connection_id TEXT PRIMARY KEY NOT NULL REFERENCES connections(id) ON DELETE CASCADE,profile_id TEXT NOT NULL REFERENCES pluggy_profiles(id),person_id TEXT NOT NULL REFERENCES people(id));
+INSERT INTO connection_owners SELECT id,'default','self' FROM connections;
+CREATE INDEX connection_owner_person ON connection_owners(person_id,connection_id);
+CREATE INDEX connection_owner_profile ON connection_owners(profile_id,connection_id);
+DROP TRIGGER connection_limit;
+CREATE TRIGGER connection_default_owner AFTER INSERT ON connections BEGIN INSERT INTO connection_owners VALUES(NEW.id,'default','self'); END;
+CREATE TRIGGER connection_owner_revision AFTER UPDATE ON connection_owners BEGIN UPDATE planning_revision SET revision=revision+1 WHERE id=1; END;
+CREATE TRIGGER people_revision AFTER UPDATE ON people BEGIN UPDATE planning_revision SET revision=revision+1 WHERE id=1; END;
+CREATE TRIGGER profile_revision AFTER UPDATE ON pluggy_profiles BEGIN UPDATE planning_revision SET revision=revision+1 WHERE id=1; END;
+CREATE TRIGGER profile_client_immutable BEFORE UPDATE OF client_fingerprint ON pluggy_profiles WHEN OLD.client_fingerprint IS NOT NULL AND NEW.client_fingerprint IS NOT OLD.client_fingerprint BEGIN SELECT RAISE(ABORT,'PROFILE_CLIENT_IMMUTABLE'); END;

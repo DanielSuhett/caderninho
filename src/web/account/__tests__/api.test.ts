@@ -11,7 +11,9 @@ await test("panel commands preserve CSRF and never retry after an uncertain writ
     return Promise.resolve(Response.json({ ok: true }));
   });
   const { signal } = new AbortController();
-  await api.command("items", "synthetic-csrf", signal, "synthetic-item");
+  await api.command("items", "synthetic-csrf", signal, {
+    itemId: "synthetic-item",
+  });
   assert.deepEqual(await requests[0]?.json(), {
     csrf: "synthetic-csrf",
     itemId: "synthetic-item",

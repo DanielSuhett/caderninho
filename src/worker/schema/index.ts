@@ -169,3 +169,29 @@ export const planningReceipts = sqliteTable("planning_receipts", {
   id: text("id").primaryKey(),
   result: text("result", { mode: "json" }).$type<unknown>().notNull(),
 });
+
+export const people = sqliteTable("people", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+});
+export const pluggyProfiles = sqliteTable("pluggy_profiles", {
+  clientFingerprint: text("client_fingerprint").unique(),
+  credentialRef: text("credential_ref"),
+  enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  personId: text("person_id")
+    .notNull()
+    .references(() => people.id),
+});
+export const connectionOwners = sqliteTable("connection_owners", {
+  connectionId: text("connection_id")
+    .primaryKey()
+    .references(() => connections.id, { onDelete: "cascade" }),
+  personId: text("person_id")
+    .notNull()
+    .references(() => people.id),
+  profileId: text("profile_id")
+    .notNull()
+    .references(() => pluggyProfiles.id),
+});

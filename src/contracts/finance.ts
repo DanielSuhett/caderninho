@@ -7,20 +7,22 @@ import type {
 } from "../domain";
 import { Metric } from "../domain";
 
-const identifier = z.string().min(1).max(128);
+const identifier = z.string().min(1).max(160);
 const day = z.iso.date();
 const amount = z.string().regex(/^-?(0|[1-9]\d{0,29})$/);
 const TransactionFilterSchema = z
   .object({
     accountIds: z.array(identifier).min(1).max(100).optional(),
     category: z.string().max(2048).optional(),
-    connectionIds: z.array(identifier).min(1).max(10).optional(),
+    connectionIds: z.array(identifier).min(1).max(200).optional(),
     currency: z.string().min(1).max(12).optional(),
     description: z.string().max(2048).optional(),
     direction: z.enum(["DEBIT", "CREDIT"]).optional(),
     from: day.optional(),
     maxAmountMinor: amount.optional(),
     minAmountMinor: amount.optional(),
+    personId: identifier.optional(),
+    profileId: identifier.optional(),
     status: z.enum(["PENDING", "POSTED"]).optional(),
     to: day.optional(),
   })
@@ -71,5 +73,5 @@ export const AggregateQuerySchema = z
   })
   .strict() satisfies z.ZodType<AggregateQuery>;
 export const ConnectionSelectionSchema = z
-  .object({ connectionIds: z.array(identifier).min(1).max(10).optional() })
+  .object({ connectionIds: z.array(identifier).min(1).max(200).optional() })
   .strict();

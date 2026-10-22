@@ -50,6 +50,11 @@ export function accounts(
         id: row.id,
         manual: true,
         name: row.name ?? "",
+        personId: row.personId ?? "self",
+        personName:
+          snapshot.people.find((p) => p.id === (row.personId ?? "self"))
+            ?.name ?? "Eu",
+        profileId: null,
         spaceId: row.spaceId,
         type: row.type ?? "BANK",
       })),
@@ -62,6 +67,8 @@ export interface Selection {
   direction?: string | undefined;
   from?: string | undefined;
   include_ignored?: boolean | undefined;
+  personId?: string | undefined;
+  profileId?: string | undefined;
   spaceId: string;
   status?: string | undefined;
   tagId?: string | undefined;
@@ -101,6 +108,9 @@ export function transactionStream(
       goalId: edit?.goalId ?? null,
       ignored: edit?.ignored ?? false,
       manual: edit?.manual ?? false,
+      personId: account?.personId ?? "self",
+      personName: account?.personName ?? "Eu",
+      profileId: account?.profileId ?? null,
       spaceId: edit?.spaceId ?? account?.spaceId ?? "personal",
       tagIds: edit?.tagIds ?? [],
     };
@@ -108,6 +118,8 @@ export function transactionStream(
   function matches(row: PlanningTransaction, selection: Selection) {
     return (
       row.spaceId === selection.spaceId &&
+      (!selection.personId || row.personId === selection.personId) &&
+      (!selection.profileId || row.profileId === selection.profileId) &&
       (!selection.from || row.date >= selection.from) &&
       (!selection.to || row.date <= selection.to) &&
       (!selection.accountId || row.accountId === selection.accountId) &&

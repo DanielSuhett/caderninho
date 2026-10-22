@@ -8,7 +8,11 @@ import type {
 import { connectionPartial, MetricDefinition } from "../../../domain";
 import { hash } from "../../../shared";
 import { database } from "../../database";
-import { connections as c, transactions as t } from "../../schema";
+import {
+  connections as c,
+  connectionOwners as owners,
+  transactions as t,
+} from "../../schema";
 import type { FinancialRepository } from "../entity";
 
 const transactionFields = {
@@ -22,9 +26,15 @@ const transactionFields = {
   id: t.id,
   status: t.status,
 };
+function ownerMembership(filter: TransactionFilter) {
+  return filter.personId || filter.profileId
+    ? sql`${c.id} IN (SELECT ${owners.connectionId} FROM ${owners} WHERE ${and(filter.personId ? eq(owners.personId, filter.personId) : undefined, filter.profileId ? eq(owners.profileId, filter.profileId) : undefined)})`
+    : undefined;
+}
 function accountMembership(filter: TransactionFilter = {}, bank = false) {
   const condition = and(
     filter.connectionIds && inArray(c.id, filter.connectionIds),
+    ownerMembership(filter),
     bank ? sql`json_extract(account.value,'$.type')='BANK'` : undefined,
   );
   return sql`${t.accountId} IN (SELECT account.key FROM ${c}, json_each(${c.accounts}) AS account ${condition ? sql`WHERE ${condition}` : sql``})`;
@@ -49,7 +59,9 @@ function amountComparison(bound: string, minimum: boolean) {
 }
 function filterWhere(filter: TransactionFilter = {}) {
   return and(
-    filter.connectionIds && accountMembership(filter),
+    filter.connectionIds || filter.personId || filter.profileId
+      ? accountMembership(filter)
+      : undefined,
     filter.accountIds &&
       sql`${t.accountId} IN (${selectedAccounts(filter.accountIds)})`,
     filter.from === undefined ? undefined : sql`${t.date}>=${filter.from}`,
@@ -119,11 +131,13 @@ export function createFinancialRepository(
         importSequence: c.importSequence,
         importStatus: c.importStatus,
         lastSuccessAt: c.lastSuccessAt,
+        owner: sql<string>`coalesce((SELECT ${owners.personId} FROM ${owners} WHERE ${owners.connectionId}=${c.id}),'self')`,
       })
       .from(c)
       .where(
         and(
           filter.connectionIds && inArray(c.id, filter.connectionIds),
+          ownerMembership(filter),
           filter.accountIds &&
             sql`EXISTS(SELECT 1 FROM json_each(${c.accounts}) AS account WHERE account.key IN (${selectedAccounts(filter.accountIds)}))`,
         ),

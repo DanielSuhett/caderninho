@@ -95,13 +95,47 @@ export async function planningQuery(
   const day = localDay(now);
   const space = found(state.spaces.find((s) => s.id === command.spaceId));
   const allAccounts = accounts(snapshot);
-  const stream = transactionStream(repository, snapshot);
+  const personId = "personId" in command ? command.personId : undefined;
+  if (personId && !snapshot.people.some((p) => p.id === personId)) {
+    throw new Error("NOT_FOUND");
+  }
+  const allTransactions = transactionStream(repository, snapshot);
+  const stream = (selection: import("./projection").Selection) =>
+    allTransactions({ ...selection, ...(personId && { personId }) });
   const metadata = new Map(
     snapshot.transactionDetails.map((row) => [row.id, row]),
   );
   const accountMap = new Map(allAccounts.map((row) => [row.id, row]));
   const scoped = <T extends { spaceId: string }>(rows: T[]) =>
     rows.filter((row) => row.spaceId === command.spaceId);
+  function owned<
+    T extends {
+      spaceId: string;
+      personId?: string;
+      accountId?: string | null;
+      connectionId?: string | null;
+    },
+  >(rows: T[]) {
+    return scoped(rows)
+      .map((row) => {
+        const account = row.accountId
+          ? accountMap.get(row.accountId)
+          : undefined;
+        const origin = row.connectionId
+          ? snapshot.owners.find((o) => o.connectionId === row.connectionId)
+          : undefined;
+        const ownerId =
+          account?.personId ?? origin?.personId ?? row.personId ?? "self";
+        return {
+          ...row,
+          personId: ownerId,
+          personName:
+            snapshot.people.find((p) => p.id === ownerId)?.name ?? "Eu",
+          profileId: account?.profileId ?? origin?.profileId ?? null,
+        };
+      })
+      .filter((row) => !personId || row.personId === personId);
+  }
   const billRows = [
     "get_bills",
     "get_upcoming_payments",
@@ -115,9 +149,9 @@ export async function planningQuery(
         ...("to" in command && command.to && { through: command.to }),
       })
     : [];
-  const bills = () => billRows.filter((b) => b.spaceId === command.spaceId);
+  const bills = () => owned(billRows);
   async function balances() {
-    const rows = scoped(allAccounts).map((a) => ({ ...a }));
+    const rows = owned(allAccounts).map((a) => ({ ...a }));
     const map = new Map(rows.map((a) => [a.id, a]));
     const matched = new Set<string>();
     for await (const row of stream({
@@ -313,7 +347,7 @@ export async function planningQuery(
       }
     }
     result.push(
-      ...scoped(state.recurrences)
+      ...owned(state.recurrences)
         .filter(
           (r) => r.active && accountMap.get(r.accountId)?.type !== "CREDIT",
         )
@@ -323,7 +357,7 @@ export async function planningQuery(
           ),
         ),
     );
-    for (const loan of scoped(state.loans)) {
+    for (const loan of owned(state.loans)) {
       for (const payment of state.schedules.filter(
         (p) =>
           p.loanId === loan.id &&
@@ -366,7 +400,7 @@ export async function planningQuery(
     input: Extract<PlanningCommand, { tool: "get_cards" }>,
   ) {
     return {
-      records: cardCatalog(snapshot, state).filter(
+      records: owned(cardCatalog(snapshot, state)).filter(
         (c) =>
           c.spaceId === input.spaceId &&
           !c.deleted &&
@@ -465,26 +499,26 @@ export async function planningQuery(
   function handleGetRecurrences(
     _input: Extract<PlanningCommand, { tool: "get_recurrences" }>,
   ) {
-    return { records: scoped(state.recurrences) };
+    return { records: owned(state.recurrences) };
   }
 
   function handleGetGoals(
     _input: Extract<PlanningCommand, { tool: "get_goals" }>,
   ) {
-    return { records: scoped(state.goals) };
+    return { records: owned(state.goals) };
   }
 
   function handleGetInvestments(
     _input: Extract<PlanningCommand, { tool: "get_investments" }>,
   ) {
-    return { records: scoped(state.investments) };
+    return { records: owned(state.investments) };
   }
 
   function handleGetLoans(
     input: Extract<PlanningCommand, { tool: "get_loans" }>,
   ) {
     return {
-      records: scoped(state.loans)
+      records: owned(state.loans)
         .filter((l) => input.include_hidden || !l.hidden)
         .map((loan) => {
           const schedule = state.schedules.filter((p) => p.loanId === loan.id);
@@ -502,7 +536,7 @@ export async function planningQuery(
   function handleGetLoanSchedule(
     input: Extract<PlanningCommand, { tool: "get_loan_schedule" }>,
   ) {
-    inSpace(state.loans, input.id, input.spaceId);
+    found(owned(state.loans).find((l) => l.id === input.id));
     return { records: state.schedules.filter((p) => p.loanId === input.id) };
   }
 
@@ -518,7 +552,7 @@ export async function planningQuery(
   async function handleGetGoalPlan(
     input: Extract<PlanningCommand, { tool: "get_goal_plan" }>,
   ) {
-    const goal = inSpace(state.goals, input.id, input.spaceId);
+    const goal = found(owned(state.goals).find((g) => g.id === input.id));
     let saved = state.contributions
       .filter((c) => c.goalId === goal.id)
       .reduce((sum, c) => sum + BigInt(c.amountMinor), 0n);
@@ -569,7 +603,7 @@ export async function planningQuery(
     input: Extract<PlanningCommand, { tool: "get_installments" }>,
   ) {
     return {
-      records: scoped(state.installments)
+      records: owned(state.installments)
         .filter(
           (p) =>
             (input.include_completed || !p.completed) &&
@@ -618,8 +652,8 @@ export async function planningQuery(
     return {
       ...(await summary(input.from, input.to)),
       accounts: await balances(),
-      investments: scoped(state.investments).filter((i) => i.included),
-      loans: scoped(state.loans).filter((l) => !l.hidden),
+      investments: owned(state.investments).filter((i) => i.included),
+      loans: owned(state.loans).filter((l) => !l.hidden),
     };
   }
 

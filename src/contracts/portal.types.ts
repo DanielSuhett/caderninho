@@ -8,6 +8,10 @@ export interface ConnectionInfo {
   lastSuccessAt: string | null;
   nextEligibleAt: string | null;
   partial: boolean;
+  personId?: string | undefined;
+  personName?: string | undefined;
+  profileId?: string | undefined;
+  profileName?: string | undefined;
 }
 export interface InstallationState {
   connections: ConnectionInfo[];
@@ -16,6 +20,15 @@ export interface PortalResponse extends InstallationState {
   configured: boolean;
   csrf: string;
   origin: string;
+  people: { id: string; name: string }[];
+  profiles: {
+    id: string;
+    name: string;
+    personId: string;
+    enabled: boolean;
+    configured: boolean;
+    connectionCount: number;
+  }[];
 }
 export interface AccountConnectToken {
   accessToken: string;

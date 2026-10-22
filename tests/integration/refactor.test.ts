@@ -3,13 +3,8 @@ import assert from "node:assert/strict";
 import { beforeEach, test } from "vitest";
 import { z } from "zod/v4";
 
-import { failureStatus } from "../../src/worker/http";
 import { createInstallationService } from "../../src/worker/installation";
 import { createInstallationRepository } from "../../src/worker/installation/repository";
-import {
-  classifyFailure,
-  failureOutcome,
-} from "../../src/worker/observability";
 import { runImport } from "../../src/worker/sync";
 import { createSyncRepository } from "../../src/worker/sync/repository";
 import { applyD1Migrations, reset } from "cloudflare:test";
@@ -98,7 +93,7 @@ test("a new installation registers only verified personal connections and keeps 
   assert.equal(state.connections[0]?.importStatus, null);
 });
 
-test("only Meu Pluggy is accepted, identity is checked and ten connections remain idempotent", async () => {
+test("only Meu Pluggy is accepted, identity is checked and more than ten connections remain idempotent", async () => {
   const repository = createInstallationRepository(env.DB);
   const service = createInstallationService({
     repository,
@@ -122,8 +117,8 @@ test("only Meu Pluggy is accepted, identity is checked and ten connections remai
     Promise.resolve(),
   );
   await service.connect("c-0");
-  await assert.rejects(service.connect("eleventh"), { message: "ITEM_LIMIT" });
-  assert.equal((await service.state()).connections.length, 10);
+  await service.connect("eleventh");
+  assert.equal((await service.state()).connections.length, 11);
   const mismatch = createInstallationService({
     repository,
     source: {
@@ -137,29 +132,12 @@ test("only Meu Pluggy is accepted, identity is checked and ten connections remai
   });
 });
 
-test("D1 enforces ten connections atomically and keeps reconnection idempotent", async () => {
+test("D1 registers concurrent connections beyond ten and keeps reconnection idempotent", async () => {
   const repository = createInstallationRepository(env.DB);
   await Promise.all(
-    Array.from({ length: 9 }, (_, index) => repository.register(`c-${index}`)),
+    Array.from({ length: 12 }, (_, index) => repository.register(`c-${index}`)),
   );
-  const results = await Promise.allSettled([
-    repository.register("tenth"),
-    repository.register("eleventh"),
-  ]);
-  assert.equal(
-    results.filter((result) => result.status === "fulfilled").length,
-    1,
-  );
-  for (const result of results) {
-    if (result.status === "rejected") {
-      assert.ok(result.reason instanceof Error);
-      assert.equal(result.reason.message, "ITEM_LIMIT");
-      assert.equal(failureStatus(result.reason), 409);
-      assert.equal(classifyFailure(result.reason), "INVALID_REQUEST");
-      assert.equal(failureOutcome(classifyFailure(result.reason)), "rejected");
-    }
-  }
-  assert.equal((await repository.state()).connections.length, 10);
+  assert.equal((await repository.state()).connections.length, 12);
   const before = await repository.state();
   await repository.register("c-0");
   const state = await repository.state();

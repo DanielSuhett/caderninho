@@ -6,7 +6,7 @@ Direção visual das telas próprias do produto: conexão Pluggy, gestão e cons
 
 Caderninho é um MCP financeiro pessoal para pessoas técnicas. O conteúdo deve explicar ferramentas, contratos, sincronização, autenticação e operação na própria Cloudflare. O painel facilita a conexão e a autorização do assistente; não transforma o produto em um chat financeiro para leigos.
 
-Nomeie componentes e ações concretamente: cliente MCP, Pluggy, D1, Workflows, OAuth, sincronizar, validar credenciais, consultar parcialidade. Não invente dashboards, funções de orçamento ou aconselhamento. Exemplos são identificados como fictícios e não executam operações.
+Nomeie componentes e ações concretamente: cliente MCP, Pluggy, D1, Workflows, OAuth, sincronizar, validar credenciais, consultar parcialidade. O dashboard de gestão mostra pessoas, perfis e contas autorizados pelo escopo do produto; não simula aconselhamento. Exemplos são identificados como fictícios e não executam operações.
 
 ## Tokens
 
@@ -29,7 +29,7 @@ Títulos de uma cor. Sem palavra isolada em laranja, etiquetas em caixa alta ou 
 
 ## Composição
 
-Telas operacionais: largura máxima 850 px, formulários alinhados à esquerda. Margens móveis entre 18 e 24 px. Espaçamento cria hierarquia antes de bordas e fundos.
+Telas operacionais: largura máxima 850 px; dashboard de múltiplas pessoas até 1200 px, formulários alinhados à esquerda. Margens móveis entre 18 e 24 px. Espaçamento cria hierarquia antes de bordas e fundos.
 
 Superfícies só para agrupar trabalho relacionado. Raios: 10 px nos grupos; 6 px nos controles; 4 px nos badges. Sem brilhos, gradientes, sombras decorativas, texturas, avatares fictícios ou grids de cards para preencher espaço. Numeração apenas para sequências reais.
 
@@ -69,3 +69,12 @@ Preserve fonte local, foco visível e navegação por teclado em desktop e celul
 Use Hanken, os tokens existentes e controles Kumo. A trilha fica à esquerda no desktop e permite rolagem horizontal no celular. A seleção usa laranja persistente; transição breve de posição respeita reduced-motion. Atualizações de status preservam os elementos e alteram apenas texto/valor. Não adicionar flashes, terminais fictícios, medalhas ou progresso baseado em tempo.
 
 Confirmação de configuração, autorização OAuth e requisição autenticada são evidências diferentes. A UI não atribui marca verificada a um nome declarado pelo cliente. Falhas de leitura preservam a evidência anterior e oferecem renovação de sessão ou nova verificação. Privacidade e manutenção ficam em disclosures, sem esconder falhas da missão ativa.
+
+## Gestão de múltiplas pessoas
+
+A marca e os tokens permanecem. O titular em cada conta é a identificação visual
+principal. Filtros “Todos” e por pessoa alteram a seleção; números de pessoas,
+conexões e contas resumem a seleção real. Contas usam grupos com saldo, moeda,
+origem e data; cartões deixam explícito que o saldo não é dinheiro disponível.
+Formulários de credenciais ficam recolhidos e nunca mostram valores persistidos.
+Em telas até 700 px, listas de contas e formulários ocupam uma coluna.

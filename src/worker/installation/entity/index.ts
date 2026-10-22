@@ -4,11 +4,11 @@ export interface StatusSelection {
   connectionIds?: string[] | undefined;
 }
 export interface InstallationRepository {
-  register: (id: string) => Promise<void>;
+  register: (id: string, profileId?: string) => Promise<void>;
   state: (selection?: StatusSelection) => Promise<InstallationState>;
 }
 export interface InstallationSource {
   configured: boolean;
   connection: (id: string) => Promise<ProviderConnection>;
-  token: (id?: string) => Promise<{ accessToken: string }>;
+  token: (id?: string, profileId?: string) => Promise<{ accessToken: string }>;
 }

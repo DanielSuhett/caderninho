@@ -1,27 +1,41 @@
-import { inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 
 import { connectionPartial, IMPORT_INTERVAL } from "../../../domain";
-import { tryCatch } from "../../../shared";
 import { database } from "../../database";
-import { connections } from "../../schema";
+import {
+  connectionOwners,
+  connections,
+  people,
+  pluggyProfiles,
+} from "../../schema";
 import type { InstallationRepository } from "../entity";
 export function createInstallationRepository(
   binding: D1Database,
 ): InstallationRepository {
   const db = database(binding);
   return {
-    async register(id) {
-      const { data: _data, error } = await tryCatch(() =>
-        db.insert(connections).values({ id }).onConflictDoNothing().run(),
-      );
-      if (!error) {
-        return;
+    async register(id, profileId = "default") {
+      const profile = await db
+        .select()
+        .from(pluggyProfiles)
+        .where(eq(pluggyProfiles.id, profileId))
+        .get();
+      if (!profile?.enabled) {
+        throw new Error("NOT_FOUND");
       }
-      const cause = error.cause instanceof Error ? error.cause : error;
-      if (cause.message.startsWith("D1_ERROR: ITEM_LIMIT: SQLITE_CONSTRAINT")) {
-        throw new Error("ITEM_LIMIT");
-      }
-      throw error;
+      await db.batch([
+        db.insert(connections).values({ id }).onConflictDoNothing(),
+        db
+          .update(connectionOwners)
+          .set({ personId: profile.personId, profileId })
+          .where(
+            and(
+              eq(connectionOwners.connectionId, id),
+              eq(connectionOwners.profileId, "default"),
+              sql`${profileId}<>'default'`,
+            ),
+          ),
+      ]);
     },
     async state(selection = {}) {
       const items = await db
@@ -32,6 +46,9 @@ export function createInstallationRepository(
             inArray(connections.id, selection.connectionIds),
         )
         .orderBy(connections.id);
+      const owners = await db.select().from(connectionOwners);
+      const profiles = await db.select().from(pluggyProfiles);
+      const persons = await db.select().from(people);
       return {
         connections: items.map((row) => ({
           accounts: row.accounts,
@@ -51,6 +68,23 @@ export function createInstallationRepository(
               ).toISOString()
             : null,
           partial: connectionPartial(row),
+          personId:
+            owners.find((o) => o.connectionId === row.id)?.personId ?? "self",
+          personName:
+            persons.find(
+              (p) =>
+                p.id ===
+                owners.find((o) => o.connectionId === row.id)?.personId,
+            )?.name ?? "Eu",
+          profileId:
+            owners.find((o) => o.connectionId === row.id)?.profileId ??
+            "default",
+          profileName:
+            profiles.find(
+              (p) =>
+                p.id ===
+                owners.find((o) => o.connectionId === row.id)?.profileId,
+            )?.name ?? "Pluggy principal",
         })),
       };
     },

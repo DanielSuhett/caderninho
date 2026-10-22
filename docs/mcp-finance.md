@@ -17,6 +17,12 @@ cobertura dependente da instituição/conexão. Planejamento e edição são loc
 As quatro tools `caderninho_*` continuam disponíveis com seus contratos originais.
 As 89 tools adicionais usam a visão efetiva, com sobreposições e dados manuais.
 
+## Pessoas e perfis Pluggy
+
+A extensão de [titularidade](household.md) acrescenta múltiplos perfis e filtros
+por `personId`, preservando as 93 ferramentas. `caderninho_status` fornece os IDs
+das pessoas e perfis. Espaço, pessoa e aplicação são conceitos independentes.
+
 ## Contrato comum
 
 Consultas aceitam `spaceId`, padrão `personal`. Toda escrita exige `spaceId`
@@ -64,7 +70,7 @@ coletas Pluggy nem alteram a admissão de uma importação a cada 24 horas.
 
 ## Limites explícitos
 
-Espaços organizam dados da mesma pessoa; não criam compartilhamento multiusuário
+Espaços organizam dados da instalação; não criam compartilhamento multiusuário
 nem mudam uma seleção de espaço no painel. As preferências de notificação são
 persistidas, mas não há serviço de envio: a resposta informa
 `deliveryConfigured: false`. Fotografias de metas não são parte do modelo.

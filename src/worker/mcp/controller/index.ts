@@ -57,7 +57,6 @@ async function invoke(env: Bindings, name: string, args: unknown) {
       const input = ConnectionSelectionSchema.parse(args);
       const installation = installationService(env);
       return {
-        configured: installation.configured,
         ...(await installation.state(input)),
       };
     }

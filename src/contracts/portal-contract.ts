@@ -1,8 +1,10 @@
 import { z } from "zod/v4";
 
 import { RunStatus } from "../domain";
+import { HouseholdCatalogSchema } from "./household";
 import type { AccountConnectToken, PortalResponse } from "./portal.types";
 export const PortalResponseSchema = z.object({
+  ...HouseholdCatalogSchema.shape,
   configured: z.boolean(),
   connections: z.array(
     z.object({
@@ -37,6 +39,10 @@ export const PortalResponseSchema = z.object({
       lastSuccessAt: z.string().nullable(),
       nextEligibleAt: z.string().nullable(),
       partial: z.boolean(),
+      personId: z.string().optional(),
+      personName: z.string().optional(),
+      profileId: z.string().optional(),
+      profileName: z.string().optional(),
     }),
   ),
   csrf: z.string(),
@@ -52,8 +58,14 @@ export const AccountConnectTokenSchema = z.object({
 }) satisfies z.ZodType<AccountConnectToken>;
 export const AccountActionSchema = z.object({ csrf: z.string() }).strict();
 export const ItemActionSchema = AccountActionSchema.extend({
-  itemId: z.string().min(1).max(128),
+  itemId: z.string().min(1).max(160),
+  profileId: z.string().min(1).max(128).default("default"),
 });
 export const ConnectTokenActionSchema = AccountActionSchema.extend({
-  itemId: z.string().min(1).max(128).optional(),
+  itemId: z.string().min(1).max(160).optional(),
+  profileId: z.string().min(1).max(128).default("default"),
+});
+
+export const SyncActionSchema = AccountActionSchema.extend({
+  connectionIds: z.array(z.string().min(1).max(160)).min(1).max(200).optional(),
 });

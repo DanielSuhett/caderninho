@@ -21,7 +21,7 @@ export interface Admission {
   connectionId: string;
   importId: string | null;
   nextEligibleAt: string | null;
-  status: "started" | "working" | "cooldown";
+  status: "started" | "working" | "cooldown" | "paused";
 }
 export interface Publication {
   accounts?: AccountProjection[];
@@ -65,6 +65,8 @@ const importErrors = new Set<string>([
   "STALE_COMMIT",
   "INVALID_CHECKPOINT",
   "NOT_CONFIGURED",
+  "PROFILE_DISABLED",
+  "APPLICATION_CHANGE_REQUIRES_NEW_PROFILE",
 ]);
 export function importFailure(error: Error) {
   if (error instanceof Fault) {

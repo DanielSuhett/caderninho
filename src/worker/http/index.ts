@@ -9,6 +9,12 @@ const invalidRequests = new Set([
   "DUPLICATE_FORM_FIELD",
   "SESSION_REQUIRED",
   "UNKNOWN_ACTION",
+  "PROFILE_OWNER_IMMUTABLE",
+  "APPLICATION_CHANGE_REQUIRES_NEW_PROFILE",
+  "PROFILE_EXISTS",
+  "CREDENTIALS_REQUIRED",
+  "PROFILE_DISABLED",
+  "SOURCE_IDENTITY_MISMATCH",
 ]);
 export function failureStatus(error: Error): 400 | 403 | 404 | 409 | 500 | 503 {
   if (error.message === "SESSION_REQUIRED") {

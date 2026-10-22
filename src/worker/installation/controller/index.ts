@@ -5,7 +5,9 @@ import type { z } from "zod/v4";
 import {
   AccountActionSchema,
   ConnectTokenActionSchema,
+  HouseholdCommandSchema,
   ItemActionSchema,
+  SyncActionSchema,
 } from "../../../contracts";
 import { accountPage, renderPage } from "../../../web";
 import { revokeAssistantGrants } from "../../auth/grants";
@@ -15,7 +17,11 @@ import {
   sessionCookie,
   sessionMiddleware,
 } from "../../auth/session";
-import { installationService, syncService } from "../../composition";
+import {
+  householdService,
+  installationService,
+  syncService,
+} from "../../composition";
 import { boundedJson, requestOrigin } from "../../http";
 
 export function installationRoutes(access: Hono<PortalEnv>) {
@@ -62,18 +68,27 @@ export function installationRoutes(access: Hono<PortalEnv>) {
   app.get("/api/account", async (c) =>
     c.json({
       ...(await installationService(c.env).state()),
-      configured: installationService(c.env).configured,
       csrf: c.get("session").csrf,
       origin: requestOrigin(c.req.raw),
     }),
   );
+  app.post("/api/account/manage", async (c) => {
+    const input = await command(
+      c.req.raw,
+      c.get("session").csrf,
+      HouseholdCommandSchema,
+    );
+    return c.json(await householdService(c.env).execute(input));
+  });
   app.post("/api/account/connect-token", async (c) => {
     const input = await command(
       c.req.raw,
       c.get("session").csrf,
       ConnectTokenActionSchema,
     );
-    return c.json(await installationService(c.env).token(input.itemId));
+    return c.json(
+      await installationService(c.env).token(input.itemId, input.profileId),
+    );
   });
   app.post("/api/account/items", async (c) => {
     const input = await command(
@@ -81,14 +96,18 @@ export function installationRoutes(access: Hono<PortalEnv>) {
       c.get("session").csrf,
       ItemActionSchema,
     );
-    await installationService(c.env).connect(input.itemId);
+    await installationService(c.env).connect(input.itemId, input.profileId);
     return c.json({ ok: true });
   });
   app.post("/api/account/sync", async (c) => {
-    await command(c.req.raw, c.get("session").csrf, AccountActionSchema);
+    const input = await command(
+      c.req.raw,
+      c.get("session").csrf,
+      SyncActionSchema,
+    );
     const sync = syncService(c.env);
     await sync.recover();
-    return c.json(await sync.request());
+    return c.json(await sync.request(input.connectionIds));
   });
   app.post("/api/account/disconnect-assistants", async (c) => {
     await command(c.req.raw, c.get("session").csrf, AccountActionSchema);

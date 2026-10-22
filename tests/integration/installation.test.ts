@@ -199,7 +199,9 @@ test("a fresh installation connects/reconnects the widget, imports cumulative pa
       onClose: () => undefined,
       onError: () => assert.fail("Widget failed"),
       onSuccess: (id) => {
-        registration = api.command("items", initial.csrf, signal, id);
+        registration = api.command("items", initial.csrf, signal, {
+          itemId: id,
+        });
       },
     });
     assert.equal(required(options).connectToken, connectToken);
@@ -333,7 +335,7 @@ test("a fresh installation connects/reconnects the widget, imports cumulative pa
 
 test("the source tables retain eighteen columns alongside additive planning storage", async () => {
   const tables = await env.DB.prepare(
-    "SELECT name FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' AND name!='d1_migrations' AND name NOT LIKE 'planning_%' ORDER BY name",
+    "SELECT name FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' AND name!='d1_migrations' AND name IN ('connections','transactions') ORDER BY name",
   ).all<{ name: string }>();
   assert.deepEqual(
     tables.results.map((row) => row.name),

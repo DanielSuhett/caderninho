@@ -30,6 +30,13 @@ export async function planningMutation(
   },
 ): Promise<unknown> {
   const { snapshot, state, repository, now } = context;
+  if (
+    "personId" in command &&
+    command.personId &&
+    !snapshot.people.some((p) => p.id === command.personId)
+  ) {
+    throw new Error("NOT_FOUND");
+  }
   const space = found(state.spaces.find((s) => s.id === command.spaceId));
   const accountList = accounts(snapshot, state);
   const account = (id: string) => inSpace(accountList, id, command.spaceId);
@@ -87,6 +94,7 @@ export async function planningMutation(
       manual: true,
       name: input.name,
       openingBalanceMinor: input.openingBalanceMinor,
+      personId: input.personId ?? "self",
       spaceId: input.spaceId,
       type: input.type,
       ...(input.closeDay !== undefined && { closeDay: input.closeDay }),
@@ -99,10 +107,20 @@ export async function planningMutation(
     return row;
   }
 
+  function assignManualOwner(row: AccountSettings, personId?: string) {
+    if (!personId) {
+      return;
+    }
+    if (!row.manual) {
+      throw new Error("SOURCE_READ_ONLY");
+    }
+    row.personId = personId;
+  }
   function handleUpdateAccountSettings(
     input: Extract<PlanningCommand, { tool: "update_account_settings" }>,
   ) {
     const row = settings(input.id);
+    assignManualOwner(row, input.personId);
     if (
       input.creditLimitMinor !== undefined ||
       input.closeDay !== undefined ||
@@ -697,6 +715,12 @@ export async function planningMutation(
       id: prior?.id ?? uuid(),
       investmentId: prior?.investmentId ?? null,
       name: input.name,
+      personId:
+        input.personId ??
+        ("id" in input
+          ? state.goals.find((r) => r.id === input.id)?.personId
+          : undefined) ??
+        "self",
       spaceId: input.spaceId,
       targetDate: input.targetDate,
       targetMinor: input.targetMinor,
@@ -852,6 +876,12 @@ export async function planningMutation(
       included: input.included,
       manual: true,
       name: input.name,
+      personId:
+        input.personId ??
+        ("id" in input
+          ? state.investments.find((r) => r.id === input.id)?.personId
+          : undefined) ??
+        "self",
       spaceId: input.spaceId,
       type: input.type,
     };
@@ -909,6 +939,12 @@ export async function planningMutation(
       manual: true,
       name: input.name,
       paid: input.paid,
+      personId:
+        input.personId ??
+        ("id" in input
+          ? state.loans.find((r) => r.id === input.id)?.personId
+          : undefined) ??
+        "self",
       spaceId: input.spaceId,
       total: input.total,
     };

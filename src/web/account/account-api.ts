@@ -2,6 +2,7 @@ import { z } from "zod/v4";
 
 import {
   AccountConnectTokenSchema,
+  type HouseholdCommand,
   PortalResponseSchema,
 } from "../../contracts";
 import { httpClient, requestJson } from "../../shared";
@@ -17,7 +18,14 @@ export function createAccountApi(
   const request = (
     path: string,
     signal: AbortSignal,
-    body?: { csrf: string; itemId?: string },
+    body?:
+      | {
+          csrf: string;
+          itemId?: string;
+          profileId?: string;
+          connectionIds?: string[];
+        }
+      | HouseholdCommand,
   ) =>
     requestJson({
       client,
@@ -35,22 +43,34 @@ export function createAccountApi(
       action: string,
       csrf: string,
       signal: AbortSignal,
-      itemId?: string,
+      selection: {
+        itemId?: string;
+        profileId?: string;
+        connectionIds?: string[];
+      } = {},
     ) => {
       z.json().parse(
         await request(`/${action}`, signal, {
           csrf,
-          ...(itemId && { itemId }),
+          ...selection,
         }),
       );
     },
+    manage: async (input: HouseholdCommand, signal: AbortSignal) =>
+      z.json().parse(await request("/manage", signal, input)),
     read: async (signal: AbortSignal) =>
       PortalResponseSchema.parse(await request("", signal)),
-    token: async (csrf: string, signal: AbortSignal, itemId?: string) =>
+    token: async (
+      csrf: string,
+      signal: AbortSignal,
+      itemId?: string,
+      profileId?: string,
+    ) =>
       AccountConnectTokenSchema.parse(
         await request("/connect-token", signal, {
           csrf,
           ...(itemId && { itemId }),
+          ...(profileId && { profileId }),
         }),
       ),
   };

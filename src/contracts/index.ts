@@ -3,6 +3,8 @@ export {
   ConnectionSelectionSchema,
   TransactionQuerySchema,
 } from "./finance";
+export type { HouseholdCommand } from "./household";
+export { HouseholdCatalogSchema, HouseholdCommandSchema } from "./household";
 export { PRODUCT_INSTRUCTIONS, ToolName, tools } from "./mcp-contract";
 export type { PlanningCommand } from "./planning";
 export {
@@ -22,4 +24,5 @@ export {
   ConnectTokenActionSchema,
   ItemActionSchema,
   PortalResponseSchema,
+  SyncActionSchema,
 } from "./portal-contract";

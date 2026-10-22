@@ -8,7 +8,7 @@ pelo Meu Pluggy e consulte o histórico no ChatGPT ou Claude.
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/DanielSuhett/caderninho)
 
 1. **Instale.** Clique no botão, confirme o nome do Worker e informe os três campos abaixo. Mantenha a raiz do repositório, build `npm run build` e deploy `npm run deploy`.
-2. **Conecte seus bancos.** Abra `/account`, entre com sua senha e use **Conectar Meu Pluggy**. Depois escolha **Importar agora**.
+2. **Conecte seus bancos.** Abra `/account`, entre com sua senha e use **Conectar Meu Pluggy**. Depois escolha **Importar esta visão**.
 3. **Conecte seu assistente.** No painel, copie o endereço `/mcp`, adicione-o ao ChatGPT ou Claude com OAuth e confirme a autorização.
 
 | Campo do deploy | O que informar |
@@ -19,10 +19,10 @@ pelo Meu Pluggy e consulte o histórico no ChatGPT ou Claude.
 
 Conecte os bancos em [Meu Pluggy](https://meu.pluggy.ai/) antes de importá-los.
 Os três valores ficam nos secrets da sua Cloudflare. Nenhuma chave técnica precisa
-ser gerada manualmente. Uma pessoa e uma aplicação Pluggy usam cada instalação.
+ser gerada manualmente. O painel permite cadastrar várias pessoas e perfis Pluggy autorizados. Consulte [pessoas e perfis](docs/household.md).
 
 Instalações anteriores ao modelo mínimo exigem **banco novo**. A extensão de
-planejamento aceita uma base que já usa `0001_initial.sql`, pela migração aditiva 0002.
+planejamento aceita uma base que já usa `0001_initial.sql`, pelas migrações aditivas 0002 e 0003.
 O botão usa o código publicado no GitHub; alterações locais não aparecem nele.
 O provisionamento completo numa conta Cloudflare nova ainda exige validação real.
 O software é gratuito; Cloudflare e Pluggy têm seus próprios limites e custos.

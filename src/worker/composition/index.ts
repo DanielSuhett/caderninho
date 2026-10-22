@@ -1,6 +1,10 @@
+import { DEFAULT_PROFILE } from "../../domain";
 import type { Bindings } from "../bindings";
 import { createFinancialService } from "../finance";
 import { createFinancialRepository } from "../finance/repository";
+import { createHouseholdService } from "../household";
+import { createHouseholdRepository } from "../household/repository";
+import { createCredentialVault } from "../household/vault.adapter";
 import { createInstallationService } from "../installation";
 import { createInstallationRepository } from "../installation/repository";
 import {
@@ -14,28 +18,42 @@ import {
 } from "../observability";
 import { createPlanningService } from "../planning";
 import { createPlanningRepository } from "../planning/repository";
-import { createPluggyAdapter } from "../pluggy";
+import { createPluggyAdapter, createProfileSource } from "../pluggy";
 import { createSyncService } from "../sync";
 import { createSyncRepository } from "../sync/repository";
 
+export function householdService(env: Bindings) {
+  return createHouseholdService({
+    defaultClientId:
+      env.PLUGGY_CLIENT_ID && env.PLUGGY_CLIENT_SECRET
+        ? env.PLUGGY_CLIENT_ID
+        : undefined,
+    repository: createHouseholdRepository(env.DB),
+    validate: (credentials) => createPluggyAdapter(credentials).token(),
+    vault: createCredentialVault(env.OAUTH_KV),
+  });
+}
 function source(env: Bindings) {
-  const adapter = createPluggyAdapter({
-    clientId: env.PLUGGY_CLIENT_ID,
-    clientSecret: env.PLUGGY_CLIENT_SECRET,
+  const adapter = createProfileSource({
+    defaults: {
+      clientId: env.PLUGGY_CLIENT_ID,
+      clientSecret: env.PLUGGY_CLIENT_SECRET,
+    },
+    repository: createHouseholdRepository(env.DB),
+    vault: createCredentialVault(env.OAUTH_KV),
   });
   return {
+    ...adapter,
     accounts: (id: string) =>
       observeSpan(SpanName.providerRead, () => adapter.accounts(id), {
         resource: "accounts",
       }),
-    configured: adapter.configured,
     connection: (id: string) =>
       observeSpan(SpanName.providerRead, () => adapter.connection(id), {
         resource: "connections",
       }),
-    products: adapter.products,
-    token: (id?: string) =>
-      observeSpan(SpanName.accountAction, () => adapter.token(id), {
+    token: (id?: string, profileId?: string) =>
+      observeSpan(SpanName.accountAction, () => adapter.token(id, profileId), {
         action: "token",
       }),
     transactions: (id: string, cursor: string | null) =>
@@ -47,10 +65,24 @@ function source(env: Bindings) {
   };
 }
 export function installationService(env: Bindings) {
-  return createInstallationService({
+  const service = createInstallationService({
     repository: createInstallationRepository(env.DB),
     source: source(env),
   });
+  return {
+    ...service,
+    async state(selection?: Parameters<typeof service.state>[0]) {
+      const [state, catalog] = await Promise.all([
+        service.state(selection),
+        householdService(env).catalog(),
+      ]);
+      return {
+        ...state,
+        ...catalog,
+        configured: catalog.profiles.some((p) => p.enabled && p.configured),
+      };
+    },
+  };
 }
 export function financialService(env: Bindings) {
   const service = createFinancialService(createFinancialRepository(env.DB));
@@ -113,9 +145,24 @@ export function syncService(env: Bindings, now: () => Date = () => new Date()) {
   return {
     recover: () => observeSpan(SpanName.recovery, () => service.recover()),
     request: (ids?: string[]) =>
-      observeSpan(SpanName.dispatch, () => {
-        if (!source(env).configured) {
-          throw new Error("NOT_CONFIGURED");
+      observeSpan(SpanName.dispatch, async () => {
+        const state = await createHouseholdRepository(env.DB).read();
+        const selected = state.owners.filter(
+          (owner) => !ids || ids.includes(owner.connectionId),
+        );
+        for (const owner of selected) {
+          const profile = state.profiles.find((p) => p.id === owner.profileId);
+          if (
+            profile?.enabled &&
+            !profile.credentialRef &&
+            !(
+              profile.id === DEFAULT_PROFILE &&
+              env.PLUGGY_CLIENT_ID &&
+              env.PLUGGY_CLIENT_SECRET
+            )
+          ) {
+            throw new Error("NOT_CONFIGURED");
+          }
         }
         return service.request(ids);
       }),

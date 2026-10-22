@@ -1,7 +1,8 @@
 import {
-  assertConnectionCapacity,
   assertPersonalConnector,
+  DEFAULT_PROFILE,
   PERSONAL_CONNECTOR_ID,
+  scopedSourceId,
 } from "../../domain";
 import type { InstallationRepository, InstallationSource } from "./entity";
 export function createInstallationService({
@@ -13,21 +14,17 @@ export function createInstallationService({
 }) {
   return {
     configured: source.configured,
-    async connect(id: string) {
+    async connect(upstreamId: string, profileId = DEFAULT_PROFILE) {
+      const id = scopedSourceId(profileId, upstreamId);
       const connection = await source.connection(id);
       if (connection.id !== id) {
         throw new Error("SOURCE_IDENTITY_MISMATCH");
       }
       assertPersonalConnector(connection.connector?.id);
-      const state = await repository.state();
-      assertConnectionCapacity({
-        count: state.connections.length,
-        exists: state.connections.some((row) => row.id === id),
-      });
-      await repository.register(id);
+      await repository.register(id, profileId);
     },
     state: repository.state,
-    async token(id?: string) {
+    async token(id?: string, profileId = DEFAULT_PROFILE) {
       if (
         id &&
         !(await repository.state()).connections.some((c) => c.id === id)
@@ -35,7 +32,7 @@ export function createInstallationService({
         throw new Error("NOT_FOUND");
       }
       return {
-        ...(await source.token(id)),
+        ...(await source.token(id, profileId)),
         configuration: {
           connectorIds: [PERSONAL_CONNECTOR_ID],
           includeSandbox: false,

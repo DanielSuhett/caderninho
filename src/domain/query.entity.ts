@@ -8,6 +8,8 @@ export interface TransactionFilter {
   from?: string | undefined;
   maxAmountMinor?: string | undefined;
   minAmountMinor?: string | undefined;
+  personId?: string | undefined;
+  profileId?: string | undefined;
   status?: "PENDING" | "POSTED" | undefined;
   to?: string | undefined;
 }

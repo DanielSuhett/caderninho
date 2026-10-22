@@ -4,7 +4,9 @@ import type { BatchItem } from "drizzle-orm/batch";
 import { connectionPartial } from "../../../domain";
 import { database, required } from "../../database";
 import {
+  connectionOwners,
   connections,
+  people,
   planningAccountDetails,
   planningAccounts,
   planningBillPayments,
@@ -415,6 +417,8 @@ export function createPlanningRepository(
         bills,
         accountDetails,
         transactionDetails,
+        persons,
+        owners,
       ] = await db.batch([
         db.select().from(planningRevision),
         db.select().from(connections),
@@ -437,6 +441,8 @@ export function createPlanningRepository(
         db.select().from(planningBills),
         db.select().from(planningAccountDetails),
         db.select().from(planningTransactionDetails),
+        db.select().from(people),
+        db.select().from(connectionOwners),
       ]);
       return {
         accountDetails: accountDetails.map((r) => r.data),
@@ -447,11 +453,25 @@ export function createPlanningRepository(
             hidden: false,
             id,
             manual: false,
+            personId:
+              owners.find((o) => o.connectionId === c.id)?.personId ?? "self",
+            personName:
+              persons.find(
+                (p) =>
+                  p.id ===
+                  (owners.find((o) => o.connectionId === c.id)?.personId ??
+                    "self"),
+              )?.name ?? "Eu",
+            profileId:
+              owners.find((o) => o.connectionId === c.id)?.profileId ??
+              "default",
             spaceId: "personal",
           })),
         ),
         bills: bills.map((r) => r.data),
+        owners,
         partial: !origins.length || origins.some(connectionPartial),
+        people: persons,
         revision: required(version[0]).revision,
         state: {
           accounts: accounts.map((r) => r.data),

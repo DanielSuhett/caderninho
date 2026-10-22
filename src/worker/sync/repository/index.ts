@@ -3,10 +3,12 @@ import { and, eq, exists, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import { IMPORT_INTERVAL } from "../../../domain";
 import { tryCatch } from "../../../shared";
 import { database, required } from "../../database";
-import { connections } from "../../schema";
+import { connectionOwners, connections, pluggyProfiles } from "../../schema";
 import type { Admission, SyncRepository, SyncRun } from "../entity";
 import { publicationData } from "./publication.repository";
 
+const profileEnabled = (connectionId: string) =>
+  sql<number>`EXISTS(SELECT 1 FROM ${connectionOwners} JOIN ${pluggyProfiles} ON ${pluggyProfiles.id}=${connectionOwners.profileId} WHERE ${connectionOwners.connectionId}=${connectionId} AND ${pluggyProfiles.enabled}=1)`;
 const active = () => inArray(connections.importStatus, ["pending", "running"]);
 function current(row: typeof connections.$inferSelect | undefined): SyncRun {
   if (
@@ -77,7 +79,7 @@ export function createSyncRepository(binding: D1Database): SyncRepository {
       return Promise.all(
         selected.map(async ({ id: connectionId }): Promise<Admission> => {
           const id = crypto.randomUUID();
-          const [, rows] = await db.batch([
+          const [, rows, profiles] = await db.batch([
             db
               .update(connections)
               .set({
@@ -95,6 +97,7 @@ export function createSyncRepository(binding: D1Database): SyncRepository {
               .where(
                 and(
                   eq(connections.id, connectionId),
+                  profileEnabled(connectionId),
                   or(
                     isNull(connections.importStatus),
                     inArray(connections.importStatus, ["failed", "succeeded"]),
@@ -109,10 +112,16 @@ export function createSyncRepository(binding: D1Database): SyncRepository {
               .select()
               .from(connections)
               .where(eq(connections.id, connectionId)),
+            db
+              .select({ enabled: profileEnabled(connectionId) })
+              .from(connections)
+              .where(eq(connections.id, connectionId)),
           ]);
           const row = required(rows[0]);
           let status: Admission["status"] = "cooldown";
-          if (row.importId === id) {
+          if (!required(profiles[0]).enabled) {
+            status = "paused";
+          } else if (row.importId === id) {
             status = "started";
           } else if (
             row.importStatus === "pending" ||

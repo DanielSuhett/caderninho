@@ -1,6 +1,8 @@
 import type {
   AccountDetails,
   Bill,
+  ConnectionOwner,
+  Person,
   PlanningAccount,
   PlanningState,
   TransactionDetails,
@@ -11,7 +13,9 @@ export interface PlanningSnapshot {
   accountDetails: AccountDetails[];
   accounts: PlanningAccount[];
   bills: Bill[];
+  owners: ConnectionOwner[];
   partial: boolean;
+  people: Person[];
   revision: number;
   state: PlanningState;
   transactionDetails: TransactionDetails[];

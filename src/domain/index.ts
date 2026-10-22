@@ -1,6 +1,5 @@
 export { financialCharts } from "./chart.entity";
 export {
-  assertConnectionCapacity,
   assertPersonalConnector,
   connectionPartial,
   PERSONAL_CONNECTOR_ID,
@@ -26,6 +25,17 @@ export {
   normalizeMoney,
   normalizeTransaction,
 } from "./finance-model";
+export type {
+  ConnectionOwner,
+  Person,
+  PluggyProfile,
+} from "./ownership.entity";
+export {
+  DEFAULT_PERSON,
+  DEFAULT_PROFILE,
+  scopedSourceId,
+  sourceIdentity,
+} from "./ownership.entity";
 export type {
   AccountDetails,
   AccountSettings,

@@ -21,6 +21,7 @@ export interface AccountSettings {
   manual: boolean;
   name?: string;
   openingBalanceMinor?: string;
+  personId?: string;
   primaryCard?: string;
   spaceId: string;
   type?: "BANK" | "CREDIT";
@@ -113,6 +114,7 @@ export interface Goal {
   id: string;
   investmentId: string | null;
   name: string;
+  personId?: string;
   spaceId: string;
   targetDate: string | null;
   targetMinor: string;
@@ -133,6 +135,7 @@ export interface Investment {
   included: boolean;
   manual: boolean;
   name: string;
+  personId?: string;
   spaceId: string;
   type: string;
 }
@@ -149,6 +152,7 @@ export interface Loan {
   name: string;
   observedAt?: string;
   paid: number | null;
+  personId?: string;
   spaceId: string;
   total: number | null;
 }
@@ -227,12 +231,18 @@ export interface PlanningAccount extends AccountMetadata {
   hidden: boolean;
   id: string;
   manual: boolean;
+  personId: string;
+  personName: string;
+  profileId: string | null;
   spaceId: string;
 }
 export interface PlanningTransaction extends TransactionProjection {
   goalId: string | null;
   ignored: boolean;
   manual: boolean;
+  personId: string;
+  personName: string;
+  profileId: string | null;
   recurrenceId?: string;
   spaceId: string;
   tagIds: string[];

@@ -19,7 +19,7 @@ const currency = z.enum([
 ]);
 const day = z.iso.date();
 const direction = z.enum(["DEBIT", "CREDIT"]);
-const scope = { spaceId: id.default("personal") };
+const scope = { personId: id.optional(), spaceId: id.default("personal") };
 const mutation = {
   confirmed: z.literal(true),
   idempotency_key: z.string().trim().min(1).max(160),
@@ -49,6 +49,7 @@ const accountFields = {
   dueDay: z.number().int().min(1).max(31).optional(),
   hidden: z.boolean().optional(),
   name: text.optional(),
+  personId: id.optional(),
 };
 const transactionFields = {
   amountMinor: amount.optional(),
@@ -77,6 +78,7 @@ const loanFields = {
   installmentMinor: amount,
   name: text,
   paid: z.number().int().min(0).max(600),
+  personId: id.optional(),
   total: z.number().int().min(1).max(600),
 };
 const investmentFields = {
@@ -85,11 +87,13 @@ const investmentFields = {
   date: day,
   included: z.boolean().default(true),
   name: text,
+  personId: id.optional(),
   type: text,
 };
 const goalFields = {
   currency,
   name: text,
+  personId: id.optional(),
   targetDate: day.nullable().default(null),
   targetMinor: amount,
 };
@@ -318,6 +322,7 @@ export const planningDefinitions = [
         dueDay: z.number().int().min(1).max(31).optional(),
         name: text,
         openingBalanceMinor: amount.default("0"),
+        personId: id.optional(),
         type: z.enum(["BANK", "CREDIT"]),
       })
       .strict(),

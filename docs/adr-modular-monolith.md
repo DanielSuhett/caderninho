@@ -1,8 +1,9 @@
 # Arquitetura do Caderninho
 
 Um pacote npm e um deploy Cloudflare atendem painel, OAuth, MCP e importação.
-O produto é pessoal: uma instalação pertence a uma pessoa e pode ter até dez
-conexões Meu Pluggy. A importação cobre contas BANK/CREDIT, transações, faturas, investimentos e
+A instalação tem um administrador e pode reunir várias pessoas e perfis Pluggy,
+sem um limite local de dez conexões. Titularidade organiza dados e não cria contas
+de login ou permissões por pessoa. A importação cobre contas BANK/CREDIT, transações, faturas, investimentos e
 empréstimos disponibilizados pela Pluggy. As consultas e a importação estão descritas no [guia de uso](usage.md).
 
 ## Código
@@ -18,6 +19,7 @@ empréstimos disponibilizados pela Pluggy. As consultas e a importação estão 
 | Módulo Worker | Responsabilidade |
 | --- | --- |
 | `installation` | Conexões e dados do painel |
+| `household` | Pessoas, perfis, titularidade e referências de credenciais |
 | `auth` | Senha, cookies assinados, OAuth oficial e revogação de assistentes |
 | `finance` | Contas, transações, consultas e totais objetivos |
 | `sync` | Admissão diária, despacho, páginas e commits duráveis |
@@ -154,3 +156,11 @@ Esta refatoração começa com um D1 vazio e um schema inicial. Não inclui atua
 de bancos antigos nem reset a cada deploy. O estado financeiro persiste após a
 instalação. Deploy, migração remota e validação com provedor/host reais são etapas
 separadas da validação local.
+
+## Titularidade e múltiplas aplicações
+
+`0003_household.sql` acrescenta `people`, `pluggy_profiles` e `connection_owners`.
+O adapter seleciona exatamente um perfil, valida a origem e aplica namespace aos
+IDs novos. A origem legada mantém os IDs. Credenciais adicionais ficam no KV;
+metadados e hash da aplicação ficam no D1. Painel e consultas financeiras usam
+a mesma atribuição de pessoa. Veja [decisões e operação](household.md).

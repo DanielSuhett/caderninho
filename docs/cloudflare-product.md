@@ -166,3 +166,10 @@ o SDK MCP já incorpora o validador. Os scripts npm `check`/`fix`, duplicados se
 consumidores, também saíram; as tasks mise e dependências restantes atendem o
 produto e os checks. Relatórios obsoletos com migrações/overrides/recibos removidos
 foram retirados junto dos links ativos.
+
+## Perfis e titulares
+
+A migração `0003_household.sql` adiciona três tabelas de titularidade e remove o
+limite local antigo. O perfil legado usa os secrets existentes; perfis adicionais
+são configurados no painel e armazenados no KV, sem novos bindings ou deploys.
+Leia [o modelo e os limites](household.md) antes da migração real.

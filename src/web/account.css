@@ -1,3 +1,278 @@
-button {
-  margin: 6px 8px 6px 0;
+/* Keep the established Hanken / orange identity; ownership is the visual anchor. */
+main:has(.finance-dashboard) {
+  max-width: 1200px;
+}
+.finance-dashboard {
+  --positive: #c3d7bd;
+  --attention: #e4cc96;
+}
+.dashboard-header,
+.section-heading,
+.inline-fields,
+.connection-row {
+  display: flex;
+  gap: 20px;
+  align-items: start;
+  justify-content: space-between;
+}
+.dashboard-header h1 {
+  font-size: clamp(36px, 5vw, 56px);
+}
+.dashboard-header p {
+  margin-block: 8px;
+}
+.dashboard-header > button {
+  flex-shrink: 0;
+}
+.finance-dashboard .muted {
+  font-size: 14px;
+  color: var(--muted);
+}
+.person-switch {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 32px;
+}
+.person-switch button {
+  padding: 10px 20px;
+  font: inherit;
+  color: var(--text);
+  cursor: pointer;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 24px;
+}
+.person-switch button[aria-pressed="true"] {
+  color: var(--page);
+  background: var(--text);
+  border-color: var(--text);
+}
+.dashboard-message {
+  min-height: 52px;
+  color: var(--muted);
+}
+.dashboard-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+  padding: 20px 0;
+  border-block: 1px solid var(--line);
+}
+.dashboard-metrics dt {
+  font-size: 14px;
+  color: var(--muted);
+}
+.dashboard-metrics dd {
+  margin: 4px 0 0;
+  font-size: 36px;
+  font-weight: 550;
+  font-variant-numeric: tabular-nums;
+}
+.section-heading {
+  align-items: center;
+  margin-bottom: 16px;
+}
+.section-heading h2 {
+  margin-block: 0;
+}
+.account-grid,
+.profile-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.bank-account {
+  min-width: 0;
+  padding: 24px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+.account-owner {
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  font-size: 14px;
+}
+.account-owner strong {
+  color: var(--accent);
+}
+.account-owner span {
+  color: var(--muted);
+}
+.bank-account h3 {
+  margin: 20px 0 8px;
+  font-size: 20px;
+  font-weight: 550;
+}
+.bank-account .account-balance {
+  margin: 8px 0;
+  font-size: clamp(20px, 3vw, 30px);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.025em;
+  overflow-wrap: anywhere;
+}
+.bank-account footer {
+  padding-top: 16px;
+  margin-top: 20px;
+  font-size: 13px;
+}
+.empty-state {
+  padding: 24px;
+  background: var(--surface);
+  border: 1px dashed var(--line);
+  border-radius: 12px;
+}
+.finance-dashboard input,
+.finance-dashboard select {
+  width: 100%;
+  min-height: 46px;
+  padding: 10px 12px;
+  font: inherit;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+.finance-dashboard label {
+  margin-top: 14px;
+  margin-bottom: 6px;
+  font-size: 14px;
+}
+.finance-dashboard :is(select, input, button):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+.inline-fields {
+  gap: 12px;
+  align-items: center;
+}
+.inline-fields button {
+  flex-shrink: 0;
+  margin: 0;
+}
+.connection-list {
+  margin-top: 24px;
+}
+.connection-row {
+  padding-block: 24px;
+  border-top: 1px solid var(--line);
+}
+.connection-row h3 {
+  margin: 10px 0 0;
+}
+.connection-actions {
+  min-width: 220px;
+  max-width: 300px;
+}
+.connection-row p {
+  margin-block: 8px;
+}
+.connection-row details {
+  padding-top: 12px;
+  margin-top: 12px;
+}
+.sync-state {
+  display: inline-block;
+  padding: 2px 12px;
+  font-size: 13px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+}
+.sync-succeeded {
+  color: var(--positive);
+}
+.sync-failed {
+  color: var(--attention);
+}
+.people-editor {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 24px;
+  margin-bottom: 24px;
+}
+.people-editor form + form {
+  margin: 0;
+}
+.profile-editor {
+  padding: 18px;
+  margin: 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.profile-editor summary {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.profile-editor summary::before {
+  float: right;
+  color: var(--accent);
+  content: "+";
+}
+.profile-editor[open] summary::before {
+  content: "−";
+}
+.profile-editor .checkbox-label {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.profile-editor input[type="checkbox"] {
+  width: 20px;
+  min-height: 20px;
+}
+.profile-grid .profile-editor form {
+  margin-top: 16px;
+}
+.add-profile {
+  border-style: dashed;
+}
+.mcp-address {
+  display: block;
+  padding: 16px;
+  background: var(--surface);
+  border-radius: 8px;
+}
+@media (max-width: 700px) {
+  .account-grid,
+  .profile-grid,
+  .people-editor {
+    grid-template-columns: 1fr;
+  }
+  .dashboard-metrics {
+    gap: 12px;
+  }
+  .dashboard-metrics dd {
+    font-size: 28px;
+  }
+  .connection-row,
+  .section-heading {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .connection-actions {
+    max-width: none;
+  }
+  .inline-fields {
+    flex-wrap: wrap;
+  }
+  .inline-fields input,
+  .inline-fields select {
+    flex: 1 1 180px;
+  }
+  .dashboard-header {
+    gap: 10px;
+  }
+}
+
+.person-switch {
+  padding: 0;
+  border: 0;
+}
+.person-switch legend {
+  margin-bottom: 8px;
+  font-size: 14px;
+  color: var(--muted);
 }
