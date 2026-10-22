@@ -5,12 +5,13 @@ import {
   PortalQuerySchema,
   type PortalResponse,
   TransactionListSchema,
+  type WorkspaceCatalog,
 } from "../../contracts";
 import type { createAccountApi } from "./account-api";
 import { formatBalance } from "./dashboard-view";
-import { EmptyView, FilterActions, ScopeFields } from "./workspace-filters";
+import { EmptyView, ScopeFields } from "./workspace-filters";
 import { dayLabel, ResourceFeedback, useResource } from "./workspace-resource";
-import { FilterBar, WorkspaceHeading } from "./workspace-ui";
+import { FilterDrawer, WorkspaceHeading } from "./workspace-ui";
 
 export function TransactionsView({
   api,
@@ -82,7 +83,15 @@ export function TransactionsView({
       <ResourceFeedback {...resource} />
       {!!data && (
         <>
-          <FilterBar action="/account/transactions">
+          <FilterDrawer
+            action="/account/transactions"
+            summary={transactionFilterSummary(
+              params,
+              snapshot,
+              data.catalog,
+              data.accounts,
+            )}
+          >
             <ScopeFields
               catalog={data.catalog}
               params={params}
@@ -98,104 +107,89 @@ export function TransactionsView({
                 type="search"
               />
             </label>
-            <FilterActions />
-            <details
-              className="advanced-filters"
-              open={[
-                "from",
-                "to",
-                "direction",
-                "accountId",
-                "categoryId",
-                "status",
-                "ignored",
-              ].some((key) => !!params.get(key))}
-            >
-              <summary>Mais filtros</summary>
-              <div className="advanced-filter-grid">
-                <label>
-                  De
-                  <input
-                    defaultValue={params.get("from") ?? ""}
-                    name="from"
-                    type="date"
-                  />
-                </label>
-                <label>
-                  Até
-                  <input
-                    defaultValue={params.get("to") ?? ""}
-                    name="to"
-                    type="date"
-                  />
-                </label>
-                <label>
-                  Movimento
-                  <select
-                    defaultValue={params.get("direction") ?? ""}
-                    name="direction"
-                  >
-                    <option value="">Entradas e saídas</option>
-                    <option value="DEBIT">Saídas</option>
-                    <option value="CREDIT">Entradas</option>
-                  </select>
-                </label>
-                <label>
-                  Conta
-                  <select
-                    defaultValue={params.get("accountId") ?? ""}
-                    name="accountId"
-                  >
-                    <option value="">Todas as contas</option>
-                    {data.accounts.map((a) => (
-                      <option
-                        key={a.id}
-                        value={a.id}
-                      >
-                        {a.name} · {a.personName}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Categoria
-                  <select
-                    defaultValue={params.get("categoryId") ?? ""}
-                    name="categoryId"
-                  >
-                    <option value="">Todas as categorias</option>
-                    {data.catalog.categories.map((c) => (
-                      <option
-                        key={c.id}
-                        value={c.id}
-                      >
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Estado
-                  <select
-                    defaultValue={params.get("status") ?? ""}
-                    name="status"
-                  >
-                    <option value="">Todos</option>
-                    <option value="POSTED">Confirmadas</option>
-                    <option value="PENDING">Pendentes</option>
-                  </select>
-                </label>
-                <label className="checkbox-label">
-                  <input
-                    defaultChecked={params.get("ignored") === "on"}
-                    name="ignored"
-                    type="checkbox"
-                  />
-                  Incluir ignoradas
-                </label>
-              </div>
-            </details>
-          </FilterBar>
+            <div className="advanced-filter-grid">
+              <label>
+                De
+                <input
+                  defaultValue={params.get("from") ?? ""}
+                  name="from"
+                  type="date"
+                />
+              </label>
+              <label>
+                Até
+                <input
+                  defaultValue={params.get("to") ?? ""}
+                  name="to"
+                  type="date"
+                />
+              </label>
+              <label>
+                Movimento
+                <select
+                  defaultValue={params.get("direction") ?? ""}
+                  name="direction"
+                >
+                  <option value="">Entradas e saídas</option>
+                  <option value="DEBIT">Saídas</option>
+                  <option value="CREDIT">Entradas</option>
+                </select>
+              </label>
+              <label>
+                Conta
+                <select
+                  defaultValue={params.get("accountId") ?? ""}
+                  name="accountId"
+                >
+                  <option value="">Todas as contas</option>
+                  {data.accounts.map((a) => (
+                    <option
+                      key={a.id}
+                      value={a.id}
+                    >
+                      {a.name} · {a.personName}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Categoria
+                <select
+                  defaultValue={params.get("categoryId") ?? ""}
+                  name="categoryId"
+                >
+                  <option value="">Todas as categorias</option>
+                  {data.catalog.categories.map((c) => (
+                    <option
+                      key={c.id}
+                      value={c.id}
+                    >
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Estado
+                <select
+                  defaultValue={params.get("status") ?? ""}
+                  name="status"
+                >
+                  <option value="">Todos</option>
+                  <option value="POSTED">Confirmadas</option>
+                  <option value="PENDING">Pendentes</option>
+                </select>
+              </label>
+              <label className="checkbox-label">
+                <input
+                  defaultChecked={params.get("ignored") === "on"}
+                  name="ignored"
+                  type="checkbox"
+                />
+                Incluir ignoradas
+              </label>
+            </div>
+          </FilterDrawer>
           {!!data.result.partial && (
             <p
               className="notice"
@@ -298,4 +292,38 @@ export function TransactionsView({
       )}
     </>
   );
+}
+
+function transactionFilterSummary(
+  params: URLSearchParams,
+  snapshot: PortalResponse,
+  catalog: WorkspaceCatalog,
+  accounts: Array<{ id: string; name: string }>,
+) {
+  return [
+    `Grupo: ${catalog.spaces.find((s) => s.id === (params.get("space") || "personal"))?.name ?? (params.get("space") || "personal")}`,
+    `Pessoa: ${snapshot.people.find((p) => p.id === params.get("person"))?.name ?? "Todas"}`,
+    ...(params.get("text") ? [`Descrição: ${params.get("text")}`] : []),
+    ...(params.get("from")
+      ? [`De: ${dayLabel(params.get("from") ?? "")}`]
+      : []),
+    ...(params.get("to") ? [`Até: ${dayLabel(params.get("to") ?? "")}`] : []),
+    ...(params.get("direction")
+      ? [params.get("direction") === "DEBIT" ? "Saídas" : "Entradas"]
+      : []),
+    ...(params.get("accountId")
+      ? [
+          `Conta: ${accounts.find((a) => a.id === params.get("accountId"))?.name ?? params.get("accountId")}`,
+        ]
+      : []),
+    ...(params.get("categoryId")
+      ? [
+          `Categoria: ${catalog.categories.find((c) => c.id === params.get("categoryId"))?.name ?? params.get("categoryId")}`,
+        ]
+      : []),
+    ...(params.get("status")
+      ? [params.get("status") === "PENDING" ? "Pendentes" : "Confirmadas"]
+      : []),
+    ...(params.get("ignored") === "on" ? ["Inclui ignoradas"] : []),
+  ];
 }

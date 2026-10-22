@@ -2,8 +2,13 @@ import { type FormEvent, type MouseEvent, useCallback } from "react";
 
 import type { HouseholdCommand, PortalResponse } from "../../contracts";
 import { UiButton } from "../ui";
+import { BankMark } from "./bank-mark";
 import { HouseholdPanel } from "./household-view";
-import { WorkspaceHeading, WorkspaceMetrics } from "./workspace-ui";
+import {
+  FilterDrawer,
+  WorkspaceHeading,
+  WorkspaceMetrics,
+} from "./workspace-ui";
 
 const importLabels = {
   failed: "Precisa de atenção",
@@ -37,7 +42,6 @@ export function DashboardView(props: {
   busy: boolean;
   message: string;
   personId: string;
-  filter: (id: string) => void;
   connect: (profileId: string, id?: string) => void;
   command: (action: string, ids?: string[]) => void;
   manage: (input: HouseholdCommand) => void;
@@ -47,7 +51,6 @@ export function DashboardView(props: {
     busy,
     personId,
     command,
-    filter,
     manage,
     connect: openConnection,
   } = props;
@@ -98,10 +101,6 @@ export function DashboardView(props: {
     [manage, snapshot.csrf],
   );
 
-  const changeFilter = useCallback(
-    (event: MouseEvent<HTMLButtonElement>) => filter(event.currentTarget.value),
-    [filter],
-  );
   const action = useCallback(
     (event: MouseEvent<HTMLButtonElement>) => {
       const { value } = event.currentTarget;
@@ -130,28 +129,39 @@ export function DashboardView(props: {
         }
         title={props.section === "overview" ? "Visão geral" : "Conexões"}
       />
-      <fieldset className="person-switch">
-        <legend>Filtrar por pessoa</legend>
-        <button
-          aria-pressed={!personId}
-          onClick={changeFilter}
-          type="button"
-          value=""
-        >
-          Todos
-        </button>
-        {snapshot.people.map((p) => (
-          <button
-            aria-pressed={personId === p.id}
-            key={p.id}
-            onClick={changeFilter}
-            type="button"
-            value={p.id}
+      <FilterDrawer
+        action={
+          props.section === "overview" ? "/account" : "/account/connections"
+        }
+        summary={[
+          `Pessoa: ${snapshot.people.find((p) => p.id === personId)?.name ?? "Todas"}`,
+        ]}
+      >
+        <label>
+          Pessoa
+          <select
+            defaultValue={personId}
+            name="person"
           >
-            {p.name}
-          </button>
-        ))}
-      </fieldset>
+            <option value="">Todas as pessoas</option>
+            {snapshot.people.map((p) => (
+              <option
+                key={p.id}
+                value={p.id}
+              >
+                {p.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <input
+          name="space"
+          type="hidden"
+          value={
+            new URLSearchParams(location.search).get("space") ?? "personal"
+          }
+        />
+      </FilterDrawer>
       <p
         aria-live="polite"
         className="dashboard-message"
@@ -199,7 +209,10 @@ export function DashboardView(props: {
                     <strong>{a.personName}</strong>
                     <span>{a.type === "CREDIT" ? "Cartão" : "Conta"}</span>
                   </div>
-                  <h3>{a.name}</h3>
+                  <h3 className="bank-heading">
+                    <BankMark />
+                    {a.name}
+                  </h3>
                   <p className="account-balance">
                     {formatBalance(a.balanceMinor, a.currency)}
                   </p>

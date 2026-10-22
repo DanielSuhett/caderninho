@@ -1,26 +1,3 @@
-.audit-period {
-  display: flex;
-  gap: 8px;
-  justify-content: flex-start;
-  margin: 16px 0;
-  font-size: 14px;
-}
-.audit-period a {
-  display: inline-flex;
-  align-items: center;
-  min-height: 44px;
-  padding: 8px 14px;
-  font-size: 14px;
-  font-weight: 550;
-  letter-spacing: 0;
-  border: 1px solid var(--control-border);
-  border-radius: 6px;
-}
-.audit-period a[aria-current="page"] {
-  color: var(--selected-text);
-  background: var(--selected-bg);
-  border-color: var(--accent);
-}
 .grant-row {
   display: flex;
   gap: 20px;

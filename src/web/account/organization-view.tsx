@@ -3,13 +3,13 @@ import { useCallback, useState } from "react";
 import type { PortalResponse } from "../../contracts";
 import type { createAccountApi } from "./account-api";
 import { formatBalance } from "./dashboard-view";
-import { EmptyView, FilterActions, ScopeFields } from "./workspace-filters";
+import { EmptyView, ScopeFields } from "./workspace-filters";
 import {
   ResourceFeedback,
   scopedHref,
   useResource,
 } from "./workspace-resource";
-import { FilterBar, WorkspaceHeading } from "./workspace-ui";
+import { FilterDrawer, WorkspaceHeading } from "./workspace-ui";
 
 const groupTypes = {
   business: "Profissional",
@@ -60,7 +60,14 @@ export function OrganizationView({
       <ResourceFeedback {...resource} />
       {!!data && (
         <>
-          <FilterBar action={`/account/${page}`}>
+          <FilterDrawer
+            action={`/account/${page}`}
+            summary={organizationFilterSummary(
+              params,
+              current?.name ?? spaceId,
+              page,
+            )}
+          >
             <ScopeFields
               catalog={data}
               params={params}
@@ -91,8 +98,7 @@ export function OrganizationView({
                 </label>
               </>
             )}
-            <FilterActions />
-          </FilterBar>
+          </FilterDrawer>
           {page === "rules" ? (
             <>
               <div className="results-heading">
@@ -260,4 +266,24 @@ function movementLabel(direction: "DEBIT" | "CREDIT" | null) {
     return "Entradas e saídas";
   }
   return direction === "DEBIT" ? "Saídas" : "Entradas";
+}
+
+function organizationFilterSummary(
+  params: URLSearchParams,
+  group: string,
+  page: "rules" | "groups",
+) {
+  const summary = [`Grupo: ${group}`];
+  if (page === "groups") {
+    return summary;
+  }
+  const search = params.get("q");
+  if (search) {
+    summary.push(`Busca: ${search}`);
+  }
+  const enabled = params.get("enabled");
+  if (enabled) {
+    summary.push(enabled === "true" ? "Ativas" : "Pausadas");
+  }
+  return summary;
 }

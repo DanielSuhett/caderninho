@@ -22,27 +22,6 @@ main:has(.finance-dashboard) {
   font-size: 14px;
   color: var(--muted);
 }
-.person-switch {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 16px;
-}
-.person-switch button {
-  min-height: var(--control-height, 44px);
-  padding: 8px 14px;
-  font: inherit;
-  color: var(--text);
-  cursor: pointer;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: 6px;
-}
-.person-switch button[aria-pressed="true"] {
-  color: var(--selected-text);
-  background: var(--selected-bg);
-  border-color: var(--accent);
-}
 .dashboard-message {
   color: var(--muted);
 }
@@ -256,16 +235,6 @@ main:has(.finance-dashboard) {
   }
 }
 
-.person-switch {
-  padding: 0;
-  border: 0;
-}
-.person-switch legend {
-  margin-bottom: 8px;
-  font-size: 14px;
-  color: var(--muted);
-}
-
 /* App workspace: the existing identity with a persistent operational navigation. */
 main:has(.workspace) {
   max-width: 1480px;
@@ -288,7 +257,7 @@ main:has(.workspace) > nav {
   --text-title: 32px;
   --control-height: 44px;
   display: grid;
-  grid-template-columns: 184px minmax(0, 1fr);
+  grid-template-columns: 208px minmax(0, 1fr);
   gap: var(--space-8);
   font-size: var(--text-body);
   line-height: 1.5;
@@ -305,7 +274,9 @@ main:has(.workspace) > nav {
   margin: 0;
 }
 .workspace-nav a {
-  display: block;
+  display: flex;
+  gap: 10px;
+  align-items: center;
   min-height: var(--control-height, 44px);
   padding: 10px 12px;
   font-size: 15px;
@@ -372,14 +343,9 @@ main:has(.workspace) > nav {
 }
 .workspace-filters {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
-  gap: 12px;
-  align-items: end;
-  padding: 16px;
-  margin-block: 20px;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: 10px;
+  grid-template-columns: 1fr;
+  gap: 20px;
+  margin-block: 24px;
 }
 .workspace-filters label {
   font-size: 14px;
@@ -411,13 +377,6 @@ main:has(.workspace) > nav {
   width: 20px;
   height: 20px;
   min-height: 20px;
-}
-.filter-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  align-items: center;
-  font-size: 14px;
 }
 .results-heading {
   display: flex;
@@ -621,24 +580,12 @@ main:has(.workspace) > nav {
 }
 @media (max-width: 1000px) {
   .workspace {
-    grid-template-columns: 175px minmax(0, 1fr);
+    grid-template-columns: 208px minmax(0, 1fr);
     gap: 24px;
-  }
-  .workspace-filters {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  .filter-actions {
-    grid-column: 1 / -1;
   }
   .ledger td {
     padding-inline: 6px;
   }
-}
-.advanced-filters {
-  grid-column: 1 / -1;
-  padding: 0;
-  margin: 0;
-  border: 0;
 }
 .advanced-filter-grid {
   display: grid;
@@ -648,41 +595,34 @@ main:has(.workspace) > nav {
 }
 @media (max-width: 760px) {
   .workspace {
-    display: block;
+    grid-template-columns: 56px minmax(0, 1fr);
+    gap: 16px;
   }
-  .workspace-sidebar {
-    position: static;
-    margin-bottom: 20px;
+  .workspace-sidebar > .workspace-nav .nav-label,
+  .workspace-sidebar > .sidebar-session .nav-label,
+  .workspace-sidebar > .sidebar-session p {
+    display: none;
   }
-  .workspace-nav {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 4px;
-  }
-  .workspace-nav a {
+  .workspace-sidebar > .workspace-nav a {
+    justify-content: center;
     padding: 10px 8px;
-    font-size: 14px;
-    text-align: center;
-    border-bottom: 3px solid transparent;
-    border-left: 0;
   }
-  .workspace-nav a[aria-current="page"] {
-    border-bottom-color: var(--accent);
+  .workspace-sidebar > .sidebar-session {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+    padding: 12px 0;
   }
-  .sidebar-session {
+  .workspace-sidebar > .sidebar-session a {
+    justify-content: center;
+    min-width: 0;
+  }
+  .workspace-sidebar .sidebar-toggle {
+    display: block;
+    margin-bottom: 12px;
+  }
+  .workspace-sidebar .sidebar-toggle > button {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 4px 0;
-    margin-top: 12px;
-  }
-  .sidebar-session p {
-    margin: 0;
-    font-size: 12px;
-  }
-  .workspace-filters {
-    gap: 12px;
-    padding: 16px;
   }
   .advanced-filter-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -844,7 +784,6 @@ main:has(.workspace) > nav {
 }
 
 /* Decorative separators stay quiet; actionable boundaries have their own contrast. */
-.person-switch button,
 .page-next,
 .finance-dashboard input,
 .finance-dashboard select,
@@ -852,11 +791,9 @@ main:has(.workspace) > nav {
 .workspace select {
   border-color: var(--control-border);
 }
-.person-switch button:not([aria-pressed="true"]):hover,
 .page-next:hover {
   background: var(--surface-hover);
 }
-.person-switch button:active,
 .page-next:active {
   background: var(--surface-pressed);
 }
@@ -869,8 +806,7 @@ main:has(.workspace) > nav {
   background: var(--disabled-bg);
 }
 .bank-account,
-.group-card,
-.workspace-filters {
+.group-card {
   box-shadow: var(--shadow-low);
 }
 .profile-editor[open] {
@@ -888,4 +824,205 @@ main:has(.workspace) > nav {
 .design-reference-link[aria-current="page"] {
   color: var(--selected-text);
   text-decoration-thickness: 2px;
+}
+
+/* Persistent left navigation and modal panels share the workspace foundation. */
+main:has(.workspace) {
+  max-width: none;
+  padding: 24px 32px 48px;
+}
+.workspace-sidebar {
+  max-height: calc(100dvh - 48px);
+  overflow-y: auto;
+}
+.workspace-nav svg,
+.sidebar-session svg {
+  flex-shrink: 0;
+}
+.sidebar-session .design-reference-link {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  min-height: 44px;
+}
+.sidebar-toggle > button {
+  display: none;
+}
+.filter-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  margin-block: 20px;
+}
+.applied-filters {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+.applied-filters li {
+  padding: 4px 8px;
+  font-size: 12px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+  background: var(--surface);
+  border-radius: 4px;
+}
+.filter-clear {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  font-size: 14px;
+}
+.workspace-drawer {
+  position: fixed;
+  inset: 0 0 0 auto;
+  width: min(440px, 100vw);
+  max-width: 100vw;
+  height: 100dvh;
+  max-height: 100dvh;
+  padding: 0;
+  margin: 0;
+  color: var(--text);
+  background: var(--surface);
+  border: 0;
+  border-left: 1px solid var(--line);
+  box-shadow: var(--shadow-public);
+}
+.workspace-drawer[open] {
+  display: flex;
+  flex-direction: column;
+  animation: drawer-enter 180ms ease-out;
+}
+.workspace-drawer::backdrop {
+  background: #0009;
+}
+.workspace-drawer.drawer-left {
+  inset: 0 auto 0 0;
+  width: min(300px, 100vw);
+  border-right: 1px solid var(--line);
+  border-left: 0;
+}
+.drawer-heading {
+  display: flex;
+  flex-shrink: 0;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--line);
+}
+.drawer-heading h2 {
+  margin: 0;
+  font-size: 20px;
+}
+.drawer-body {
+  flex: 1;
+  min-height: 0;
+  padding: 0 24px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.drawer-footer {
+  display: flex;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 16px 24px;
+  background: var(--surface);
+  border-top: 1px solid var(--line);
+}
+.workspace-drawer .advanced-filter-grid {
+  grid-template-columns: 1fr;
+  gap: 20px;
+  padding: 0;
+}
+.workspace-drawer .workspace-nav {
+  padding-top: 16px;
+}
+.workspace-drawer .workspace-filters {
+  box-shadow: none;
+}
+@keyframes drawer-enter {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+@media (max-width: 760px) {
+  main:has(.workspace) {
+    padding: 20px 12px 32px;
+  }
+  main:has(.workspace) > nav {
+    margin-bottom: 24px;
+  }
+  .workspace-sidebar {
+    top: 12px;
+    max-height: calc(100dvh - 24px);
+  }
+  .workspace-sidebar > .sidebar-session button[data-kumo-component] {
+    width: 56px;
+    padding: 8px;
+  }
+  .filter-toolbar {
+    align-items: start;
+  }
+  .applied-filters {
+    flex-basis: 100%;
+    order: 2;
+  }
+}
+@media (max-width: 480px) {
+  .workspace-drawer:not(.drawer-left) {
+    width: 100vw;
+  }
+  .drawer-heading,
+  .drawer-footer {
+    padding: 16px;
+  }
+  .drawer-body {
+    padding-inline: 16px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .workspace-drawer[open] {
+    animation: none;
+  }
+}
+
+.bank-mark {
+  display: inline-flex;
+  flex: 0 0 28px;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  color: #fff;
+  background: var(--surface-raised);
+  border-radius: 6px;
+}
+.bank-heading {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.bank-examples {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  margin-block: 20px;
+}
+.bank-examples > div {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 14px;
 }

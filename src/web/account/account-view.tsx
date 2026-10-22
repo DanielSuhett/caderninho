@@ -12,23 +12,7 @@ export function AccountView() {
   const [snapshot, setSnapshot] = useState<PortalResponse>();
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
-  const [personId, setPersonId] = useState(
-    () => new URLSearchParams(location.search).get("person") ?? "",
-  );
-  const filterPerson = useCallback((id: string) => {
-    const params = new URLSearchParams(location.search);
-    if (id) {
-      params.set("person", id);
-    } else {
-      params.delete("person");
-    }
-    history.replaceState(
-      null,
-      "",
-      `${location.pathname}${params.size ? `?${params}` : ""}`,
-    );
-    setPersonId(id);
-  }, []);
+  const personId = new URLSearchParams(location.search).get("person") ?? "";
   const lifetime = useRef<AbortController | null>(null);
   const locked = useRef(false);
   const [api] = useState(() => createAccountApi(location.origin));
@@ -235,7 +219,6 @@ export function AccountView() {
         busy={busy}
         command={onCommand}
         connect={onConnect}
-        filter={filterPerson}
         manage={onManage}
         message={message}
         personId={personId}

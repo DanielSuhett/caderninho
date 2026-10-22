@@ -21,7 +21,9 @@ com confiança?**
 | Estrutura da instalação | `src/web/portal-view.tsx` | `Portal` hospeda a aplicação. Não remontar o HTML/head em cada página. |
 | Navegação e área de conteúdo | `src/web/account/workspace-view.tsx` | `WorkspaceView` é o shell; páginas entregam apenas seu conteúdo. |
 | Cabeçalho, filtros, métricas, refresh e skeleton | `src/web/account/workspace-ui.tsx` | Compor os componentes existentes; não criar outro cabeçalho local com escala própria. |
-| Filtros e estado vazio | `src/web/account/workspace-filters.tsx` | `ScopeFields`, `FilterActions`, `EmptyView`. |
+| Campos de escopo e estado vazio | `src/web/account/workspace-filters.tsx` | `ScopeFields` e `EmptyView`; aplicação/limpeza pertencem a `FilterDrawer`. |
+| Drawer modal compartilhado | `src/web/account/workspace-drawer.tsx` | `WorkspaceDrawer`: diálogo nativo, cabeçalho, corpo rolável e ações Kumo. |
+| Identificação visual de banco | `src/web/account/bank-mark.tsx` | `BankMark` e catálogo `bankMarks`; fallback neutro sem identidade confirmada. |
 | Consulta e feedback | `src/web/account/workspace-resource.tsx` | `useResource`, `ResourceFeedback`, datas e links com escopo. |
 | Escala e densidade do painel | `src/web/account.css` | Alterar a regra responsável, sem acumular overrides no fim do arquivo. |
 | Apresentação específica da auditoria | `src/web/account/audit.css` | Layout de concessões, eventos e medidas; consumir a mesma paleta. |
@@ -67,8 +69,9 @@ mantém a semântica Kumo e evita seu gradiente. Hover não pode ser a única fo
 de descobrir uma ação. O foco permanece laranja, inclusive no destrutivo. Transições de controles
 são de 150 ms e são removidas com movimento reduzido.
 
-Seleção de navegação usa `aria-current="page"`; seleção de pessoa usa
-`aria-pressed="true"`. Fundo e texto de seleção acompanham a borda/marcador laranja.
+Seleção de navegação usa `aria-current="page"`; pessoa é selecionada no campo
+nativo do drawer e aparece no resumo aplicado. Fundo e texto de seleção acompanham
+a borda/marcador laranja nos destinos ativos.
 `::selection` usa o mesmo par, mas não altera a seleção lógica da aplicação.
 Campos inválidos recebem `aria-invalid="true"` e borda de erro, com mensagem
 associada; placeholder não substitui label nem mensagem de validação.
@@ -150,9 +153,9 @@ hover e não atribuir precisão inexistente a volume, custo ou tokens de IA.
 | Nível | Token / valor | Aplicação |
 | --- | --- | --- |
 | Plano | `--shadow-flat` · `none` | Linhas, tabelas, métricas e estrutura comum. |
-| Baixo | `--shadow-low` · `0 2px 6px #0005, inset 0 1px 0 #ffffff08` | Filtros, grupos/contas e editor de perfil aberto. |
+| Baixo | `--shadow-low` · `0 2px 6px #0005, inset 0 1px 0 #ffffff08` | Grupos/contas e editor de perfil aberto; formulário dentro de drawer é plano. |
 | Elevado | `--shadow-raised` · `0 8px 24px #0008, inset 0 1px 0 #ffffff0c` | Tooltip sobre a página, com `--surface-raised`. |
-| Público | `--shadow-public` · `0 16px 48px #0009, inset 0 1px 0 #ffffff0c` | Grupo principal de landing/login, com `--surface`. |
+| Profundidade ampla | `--shadow-public` · `0 16px 48px #0009, inset 0 1px 0 #ffffff0c` | Grupo principal de landing/login e drawers modais, com `--surface`. |
 
 A elevação sinaliza agrupamento ou sobreposição. Não adicionar sombra em toda
 célula nem empilhar níveis em um card dentro de outro. O fundo, a borda e o espaço
@@ -263,20 +266,24 @@ Paths de import abaixo assumem uma página dentro de `src/web/account/`.
 
 ```tsx
 import { UiButton, UiField, UiLink } from "../ui";
-import { EmptyView, FilterActions, ScopeFields } from "./workspace-filters";
+import { EmptyView, ScopeFields } from "./workspace-filters";
 import { ResourceFeedback, useResource } from "./workspace-resource";
 import {
-  FilterBar,
+  FilterDrawer,
   RefreshButton,
   WorkspaceHeading,
   WorkspaceMetrics,
   WorkspaceSkeleton,
 } from "./workspace-ui";
+import { WorkspaceDrawer } from "./workspace-drawer";
+import { BankMark } from "./bank-mark";
 ```
 
 | Peça | Props atuais | Uso |
 | --- | --- | --- |
-| `FilterBar` | `action: string`, `children: ReactNode` | Formulário GET, layout e alinhamento; recebe campos e `FilterActions`. |
+| `FilterDrawer` | `action: string`, `children: ReactNode`, `summary: string[]` | Gatilho, recorte aplicado, formulário GET em drawer e limpeza completa pelo caminho sem query. |
+| `WorkspaceDrawer` | `title: string`, `trigger: ReactNode`, `children: ReactNode`, `footer?: ReactNode`, `side?: "left" \| "right"`, `className?: string` | Lado padrão direito; `footer` acrescenta a ação primária ao fechamento nativo do componente. |
+| `BankMark` | `institution?: string` | Chave estável do catálogo local; ausente/desconhecida gera BankIcon neutro. |
 | `WorkspaceMetrics` | `items: Array<{ label: string; value: ReactNode; hint?: string }>` | Métricas sem regras financeiras; cada label deve ser único no conjunto. |
 | `WorkspaceHeading` | `title: string`, `description?: string`, `children?: ReactNode` | Título e descrição de uma frase; `children` recebe refresh ou uma ação de página. |
 | `RefreshButton` | `onClick: () => void`, `disabled?: boolean`, `label?: string` | Label padrão “Atualizar dados”; contextualizar como “Atualizar auditoria”. |
@@ -285,7 +292,6 @@ import {
 | `UiLink` | Props de `LinkButton` Kumo; `variant` padrão `primary` | Navegação real com `href`, sem prop `tone`. |
 | `UiField` | Props de `Input` Kumo + `label: string` | ID associado ao label; IDs fornecidos pelo chamador são preservados. |
 | `ScopeFields` | `snapshot: PortalResponse`, `catalog: WorkspaceCatalog`, `params: URLSearchParams`, `person?: boolean` | Grupo e pessoa de consultas financeiras. Não usar na auditoria de clientes. |
-| `FilterActions` | Nenhuma | Aplicar e limpar filtros; depende de URL da página. Limpar mantém pessoa/grupo ativos. |
 | `EmptyView` | `title: string`, `children: ReactNode` | Frase explicativa dentro de `p`; não passar outro bloco de formulário como filho. |
 | `useResource<T>` | `load: (signal: AbortSignal) => Promise<T>` | Retorna `data`, `error`, `loading`, `request`, `retry`. |
 | `ResourceFeedback` | `error`, `loading`, `retry`, `data?` | Pode receber `{...resource}`; renderizar antes dos resultados. |
@@ -299,19 +305,66 @@ no controller; um link de menu sozinho não cria uma página autenticada.
 
 ### Shell e cabeçalho
 
-Desktop: navegação à esquerda, conteúdo flexível, largura máxima 1480 px.
-Mobile: navegação compacta antes do conteúdo. O destino ativo usa
-`aria-current="page"`, texto e borda. Link de salto aponta ao conteúdo.
-`WorkspaceHeading` mantém título à esquerda e ação à direita quando houver largura.
+Navegação sempre lateral. Desktop: coluna de 208 px com ícone e nome; compacto,
+até 760 px: faixa de 56 px com ícones e conteúdo flexível ao lado. O rail não pode
+rolar horizontalmente; filhos e coluna de conteúdo precisam poder encolher.
+`WorkspaceHeading` mantém título e ação próximos sem reservar altura de hero.
 Não repetir título em eyebrow, descrição da navegação e outra legenda.
 
-### Filtros
+Cada destino é um link real com `aria-label`, ícone Phosphor de 20 px oculto da
+leitura assistiva, e `aria-current="page"` quando ativo. `title` pode complementar,
+mas não é a única forma de descobrir o nome por toque: “Abrir navegação” abre um
+`WorkspaceDrawer side="left"` com nomes completos. Preserve o link de salto e
+alvos mínimos de 44 px. Não usar `role="menu"` para navegação comum nem trocar a
+lateral por grade superior, abas ou barra inferior nas telas estreitas.
 
-Usar `FilterBar`, que renderiza `<form method="get">` e `.workspace-filters`. O URL conserva o recorte para
-atualizar, compartilhar localmente e voltar. Grupo/pessoa + busca são principais;
-datas, conta, categoria e estado podem ficar em `.advanced-filters`. Se um filtro
-avançado estiver ativo, abrir o disclosure. Labels são permanentes; placeholder é
-exemplo, não instrução obrigatória. Aplicar aparece perto dos campos.
+### Filtros e recorte aplicado
+
+`FilterDrawer` substitui a barra de formulário na página. Todas as oito páginas do
+workspace usam a mesma composição, inclusive a galeria fictícia. O conteúdo da
+página mantém apenas gatilho “Filtros”, lista `summary` do recorte aplicado e link
+“Limpar filtros”. O resumo deve identificar pessoa/grupo/período relevantes e
+condições extras; não mostrar somente uma contagem que esconda de quem são os dados.
+Os rótulos são descritivos, não chips removíveis, e derivam da URL aplicada.
+
+O drawer recebe os campos existentes (`ScopeFields`, busca, datas e estados).
+Não passar `FilterActions`: aplicação e limpeza já são responsabilidade do
+`FilterDrawer`. Os controles ficam em uma coluna, com labels permanentes. Não
+reintroduzir “Mais filtros” como disclosure aninhado. Campos de busca mantêm nomes
+do contrato: transações usam `text`; regras usam `q`.
+
+O formulário GET conserva a URL como fonte da consulta. Mudanças são rascunho até
+“Aplicar filtros”; não disparar consultas a cada tecla. X, Escape e “Cancelar”
+fecham sem aplicar. O corpo é desmontado ao fechar e reaberto com valores da URL.
+Não incluir o cursor antigo no formulário: uma mudança de recorte recomeça a
+paginação. Voltar no navegador deve recuperar a consulta anterior.
+
+“Limpar filtros” navega para `action` sem query e remove **todos** os parâmetros,
+inclusive pessoa, grupo e cursor; cada página retoma seus padrões (por exemplo,
+grupo pessoal e todas as pessoas). Isso é diferente dos links de navegação
+`scopedHref`, que conservam pessoa/grupo ao mudar de página. Se a semântica mudar,
+atualizar texto, componente e documentação juntos.
+
+### Contrato do drawer
+
+`WorkspaceDrawer` usa `<dialog>` nativo e `showModal()`, sem adicionar outra
+biblioteca de componentes. O navegador fornece modalidade, fundo inerte e
+contenção de foco; validar esses comportamentos e retorno ao gatilho na jornada.
+Título visível associado por `aria-labelledby`; botão X com nome acessível,
+Escape e ação de fechamento no rodapé. Navegação usa “Fechar menu”; filtros usam
+“Cancelar” e recebem “Aplicar filtros” em `footer`.
+
+À direita, largura `min(440px, 100vw)`; até 480 px ocupa a largura inteira.
+À esquerda, navegação com `min(300px, 100vw)`. Altura `100dvh`, cabeçalho e rodapé
+fixos na composição flex; só o corpo rola. Teclado virtual não deve ocultar os
+campos ou impedir acesso às ações. Backdrop escuro e superfície neutra separam o
+painel; não empilhar drawers. Entrada única de 180 ms, removida com
+`prefers-reduced-motion`. Nenhuma informação depende da animação.
+
+Ao testar, abrir por teclado/toque, percorrer campos, rolar até o final, cancelar,
+reabrir e aplicar. O resumo externo deve continuar representando dados aplicados
+durante a edição. Ver [padrão modal WAI](https://www.w3.org/WAI/ARIA/apg/patterns/dialog-modal/)
+para foco e semântica; utilizar diálogo nativo não equivale a homologar a jornada.
 
 ### Tabela financeira
 
@@ -329,6 +382,21 @@ como regras e sincronizações usam `.rule-list` / `.run-list` e linhas separada
 não precisam de um card decorativo por item. Uma lista de dez identidades não vira
 um mosaico de dez indicadores. Preserve componentes de domínio em vez de um
 `UniversalCard` com dezenas de flags.
+
+### Identidade bancária
+
+`BankMark` renderiza um selo auxiliar de 28 × 28 px; o SVG local tem 24 px e o
+fallback Phosphor, 20 px. O catálogo `bankMarks` contém Nubank, Itaú, Bradesco,
+Banco do Brasil, Caixa, Santander, Inter e C6 Bank. Os assets derivados de
+bancos-brasil têm revisão fixada no arquivo e [licença local](third-party/bancos-brasil-LICENSE.txt).
+Não há consulta a CDN em runtime.
+
+As contas atuais não expõem uma chave confiável de instituição no contrato, então
+usam `<BankMark />` neutro. Passar `institution` apenas quando uma fonte autoritativa
+fornecer a chave correspondente; não deduzir pelo nome livre da conta, pessoa ou
+perfil Pluggy. A galeria demonstra marcas sem alegar conexões reais. O componente
+é decorativo (`aria-hidden`): a identificação necessária permanece em texto.
+Cores das marcas se limitam ao selo e não substituem a paleta semântica do produto.
 
 ### Métricas e auditoria
 
@@ -353,7 +421,9 @@ framework nem um modelo de domínio alternativo.
 ### Receita A — leitura com filtros e resultados
 
 Base completa: `transactions-view.tsx`. `resource` vem do `useResource(load)`;
-`data.catalog` é o catálogo já validado na fronteira.
+`data.catalog` é o catálogo já validado na fronteira. `appliedSummary` vem do
+recorte validado da URL e dos nomes do catálogo, como na função existente
+`transactionFilterSummary`; não é construído a partir do rascunho aberto.
 
 ```tsx
 <>
@@ -364,14 +434,16 @@ Base completa: `transactions-view.tsx`. `resource` vem do `useResource(load)`;
   <ResourceFeedback {...resource} />
   {!!data && (
     <>
-      <FilterBar action="/account/transactions">
+      <FilterDrawer
+        action="/account/transactions"
+        summary={appliedSummary}
+      >
         <ScopeFields catalog={data.catalog} params={params} snapshot={snapshot} />
         <label>
           Buscar descrição
-          <input defaultValue={params.get("q") ?? ""} name="q" type="search" />
+          <input defaultValue={params.get("text") ?? ""} name="text" type="search" />
         </label>
-        <FilterActions />
-      </FilterBar>
+      </FilterDrawer>
       {/* Tabela do domínio, estado vazio e paginação existentes. */}
     </>
   )}
@@ -434,7 +506,20 @@ explica a janela e mantém limites de medição junto às tabelas.
         { label: "Requisições autenticadas", value: data.totals.requests },
         { label: "Falhas", value: data.totals.errors, hint: "No período selecionado" },
       ]} />
-      {/* Recorte temporal e concessões do contrato AuditReport. */}
+      <FilterDrawer
+        action="/account/audit"
+        summary={[params.get("days") === "1" ? "Período: 24 horas" : `Período: ${params.get("days") || "7"} dias`]}
+      >
+        <label>
+          Período
+          <select defaultValue={params.get("days") || "7"} name="days">
+            <option value="1">24 horas</option>
+            <option value="7">7 dias</option>
+            <option value="30">30 dias</option>
+          </select>
+        </label>
+      </FilterDrawer>
+      {/* Concessões do contrato AuditReport. */}
       <section aria-labelledby="models-heading">
         <h2 id="models-heading">Modelos informados pelos clientes</h2>
         <p className="muted">Nome declarado pelo cliente; não verificado pelo servidor.</p>
@@ -451,8 +536,8 @@ apresentar interrupção como sucesso, nem HTTP 200 como prova de ferramenta con
 ## 8. Critérios de acessibilidade e revisão
 
 1. **Estrutura e teclado:** um `h1`, seções identificadas, ordem de foco coerente,
-   skip link funcional, foco visível e nenhuma armadilha. Abrir/fechar disclosures
-   e confirmar/cancelar sem mouse. Foco não fica em conteúdo removido após revogação.
+   skip link funcional, foco visível e nenhuma armadilha. Abrir/fechar drawers e
+   disclosures, aplicar/descartar rascunhos e confirmar/cancelar sem mouse. Foco não fica em conteúdo removido após revogação.
 2. **Nome e alvo:** controles com label acessível, ícones decorativos ocultos para
    leitura, alvos 44 px, dicas acessíveis no foco. Placeholder não substitui label;
    cor não substitui resultado. Links dizem destino ou consequência.
@@ -503,6 +588,6 @@ respiros e sua hierarquia de aquisição são diferentes dos do workspace.
 | `.access-form` | Formulário nativo, senha com autocomplete, label, origem visível, erro associado e uma submissão principal. |
 
 Landing/login usam a elevação pública e entrada única; o workspace usa os níveis
-planos/baixos e tooltip elevado. Todo movimento respeita `prefers-reduced-motion`.
+planos/baixos, tooltip elevado e profundidade ampla nos drawers. Todo movimento respeita `prefers-reduced-motion`.
 Ver `DESIGN.md` e
 [public-pages-qa.md](public-pages-qa.md) para jornadas e evidências.

@@ -41,11 +41,11 @@ Títulos de uma cor. Sem palavra isolada em laranja, etiquetas em caixa alta ou 
 
 ## Composição
 
-Telas operacionais: largura máxima 850 px; workspace com navegação até 1480 px, formulários alinhados à esquerda. Margens móveis entre 18 e 24 px. Espaçamento cria hierarquia antes de bordas e fundos.
+Telas operacionais: largura máxima 850 px; workspace com navegação lateral e conteúdo flexível, formulários alinhados à esquerda. Margens móveis entre 18 e 24 px; o workspace usa 12 px para acomodar a navegação lateral. Espaçamento cria hierarquia antes de bordas e fundos.
 
 Superfícies só para agrupar trabalho relacionado. Raios: 10 px nos grupos; 6 px nos controles; 4 px nos badges. Sem brilhos, gradientes, texturas, avatares fictícios ou grids de cards para preencher espaço. Numeração apenas para sequências reais.
 
-Elevação plana nas linhas e métricas; `--shadow-low` nos filtros, grupos de contas e editor de perfil aberto; `--shadow-raised` em tooltips; `--shadow-public` no grupo principal de landing/login. Sombras neutras não substituem borda, contraste nem hierarquia. Não elevar cada nível de uma composição.
+Elevação plana nas linhas e métricas; `--shadow-low` nos grupos de contas e editor de perfil aberto; `--shadow-raised` em tooltips; `--shadow-public` no grupo principal de landing/login e nos drawers modais. Formulários dentro do drawer são planos. Sombras neutras não substituem borda, contraste nem hierarquia. Não elevar cada nível de uma composição.
 
 ## Componentes e implementação
 
@@ -78,16 +78,32 @@ Preserve fonte local, foco visível e navegação por teclado em desktop e celul
 
 ## Navegação da instalação
 
-`/account` apresenta a visão geral. Auditoria MCP, Transações, Regras, Grupos, Sincronizações e
-Conexões têm páginas próprias; a navegação permanece à esquerda no desktop e
-vira uma grade de três colunas no celular. A página ativa tem fundo e texto de seleção, borda
-laranja e `aria-current`. O link de salto permite ir direto ao conteúdo.
+`/account` apresenta a visão geral. Auditoria MCP, Transações, Regras, Grupos,
+Sincronizações e Conexões têm páginas próprias. A navegação permanece lateral em
+todas as larguras: 208 px com nomes no desktop e uma faixa de 56 px com ícones no
+compacto. “Abrir navegação” revela um drawer à esquerda com os mesmos destinos e
+nomes completos. Ícones Phosphor de 20 px, nomes acessíveis e alvos de 44 px; não
+misturar famílias para imitar outra biblioteca. O destino ativo usa fundo/texto de
+seleção, borda laranja e `aria-current`. O link de salto leva ao conteúdo.
 
-A leitura financeira fica separada da gestão de credenciais. Filtros principais
-permanecem visíveis; filtros avançados de transações usam disclosure e abrem quando
-ativos. Tabelas viram registros com rótulos no celular. Regras explicam condições
-em linguagem legível; grupos exibem espaços, categorias e tags. Falhas e dados
-parciais aparecem com texto e ações de recuperação.
+Todas as oito páginas do workspace, incluindo a referência visual, usam
+`FilterDrawer`. O botão “Filtros” abre à direita; o recorte aplicado continua
+visível fora do drawer, com pessoa, grupo, período e condições pertinentes à página.
+Editar campos é rascunho; “Aplicar filtros” submete GET. X, Escape e “Cancelar”
+fecham sem aplicar; reabrir recupera o recorte da URL. “Limpar filtros” volta ao
+caminho sem query: remove também pessoa, grupo e paginação, restaurando os padrões.
+
+`WorkspaceDrawer` usa `<dialog>` nativo, `showModal()` e botões Kumo. Cabeçalho e
+rodapé permanecem visíveis; somente o corpo rola. Filtros: até 440 px à direita,
+largura inteira até 480 px; navegação: até 300 px à esquerda. Não manter “Mais
+filtros” aninhado dentro do drawer. Entrada de 180 ms, sem animação com movimento
+reduzido. Validar foco, Escape e retorno ao gatilho no navegador; o componente
+nativo não dispensa essa revisão.
+
+A leitura financeira fica separada da gestão de credenciais. Tabelas financeiras
+viram registros com rótulos no compacto. Regras explicam condições em linguagem
+legível; grupos exibem espaços, categorias e tags. Falhas e dados parciais ficam
+junto aos resultados, fora dos drawers.
 
 Confirmação de configuração, autorização OAuth e requisição autenticada são
 evidências diferentes. A UI não atribui marca verificada a um nome declarado pelo
@@ -97,11 +113,18 @@ O [guia das páginas](docs/frontend-workspace.md) documenta os recortes e limite
 ## Gestão de múltiplas pessoas
 
 A marca e os tokens permanecem. O titular em cada conta é a identificação visual
-principal. Filtros “Todos” e por pessoa alteram a seleção; números de pessoas,
+principal. O filtro de pessoa no drawer altera a seleção; números de pessoas,
 conexões e contas resumem a seleção real. Contas usam grupos com saldo, moeda,
 origem e data; cartões deixam explícito que o saldo não é dinheiro disponível.
 Formulários de credenciais ficam recolhidos e nunca mostram valores persistidos.
 Em telas até 700 px, listas de contas e formulários ocupam uma coluna.
+
+`BankMark` mantém um catálogo local de oito marcas, derivado de bancos-brasil com
+licença e revisão registradas. Marcas são sinais auxiliares de 28 px; não substituem
+o titular nem o nome da instituição em texto. O contrato atual das contas não
+fornece uma chave confiável de instituição: elas usam o ícone bancário neutro.
+Nunca inferir banco pelo nome da conta, perfil Pluggy, pessoa ou saldo. Cores de
+marca ficam restritas ao selo; não viram cor da página ou estado de sucesso.
 
 ## Densidade e estados operacionais
 

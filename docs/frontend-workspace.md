@@ -2,7 +2,8 @@
 
 O painel mantém a identidade do Caderninho: Hanken local, fundo preto, superfícies
 escuras, laranja para ação e foco. A navegação permanece disponível em todas as
-páginas; no celular vira uma grade de destinos acima do conteúdo.
+páginas, sempre à esquerda: barra de 208 px no desktop e faixa de 56 px no
+compacto, com expansão por “Abrir navegação”.
 
 | Página | Conteúdo |
 | --- | --- |
@@ -31,7 +32,9 @@ aplicável; o histórico informa que uma sincronização abrange a conexão inte
 Transações aparecem da data mais recente para a mais antiga, com ID como desempate,
 em páginas de até 50 registros. Os valores mantêm moeda e unidades mínimas exatas;
 não há soma enganosa apenas da página nem conversão cambial implícita. Campos
-avançados ficam em “Mais filtros” e abrem automaticamente quando estão ativos.
+ficam no drawer “Filtros”; grupo, pessoa e critérios aplicados permanecem visíveis
+junto aos resultados. Editar é rascunho: Aplicar submete GET e reinicia a paginação;
+Cancelar, X e Escape descartam. Limpar filtros remove também grupo e pessoa.
 Filtros e cursor ficam na URL, permitindo recarregar, voltar e guardar o recorte.
 
 O Worker reutiliza a visão financeira efetiva das ferramentas MCP, incluindo
@@ -70,7 +73,7 @@ somente `get_accounts` e `get_transactions`. Nenhuma credencial é devolvida.
 `tests/integration/workspace.test.ts` cobre histórico, replay, falha, migração,
 titularidade, autenticação, CSRF, bloqueio de mutações e paginação cronológica
 com valores acima do limite inteiro seguro de JavaScript. A revisão de navegador
-usa apenas dados fictícios locais; evidências visuais ficam em `design-qa.md`.
+usa apenas dados fictícios locais; evidências da navegação e filtros ficam em [navigation-review.md](navigation-review.md).
 Publicação, migração remota e validação com Pluggy/OAuth reais não foram executadas.
 
 O [guia de componentes](design-system.md) define a composição das páginas. Cabeçalhos, filtros, métricas, atualização e skeleton são compartilhados. A [auditoria](mcp-audit.md) explica identidade, volume, retenção e limites.

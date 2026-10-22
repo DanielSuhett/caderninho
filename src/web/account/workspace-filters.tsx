@@ -1,6 +1,4 @@
 import type { PortalResponse, WorkspaceCatalog } from "../../contracts";
-import { UiButton } from "../ui";
-import { scopedHref } from "./workspace-resource";
 
 export function ScopeFields({
   snapshot,
@@ -57,21 +55,6 @@ export function ScopeFields({
         />
       )}
     </>
-  );
-}
-export function FilterActions() {
-  return (
-    <div className="filter-actions">
-      <UiButton type="submit">Aplicar filtros</UiButton>
-      <a
-        href={scopedHref(
-          location.pathname,
-          new URLSearchParams(location.search),
-        )}
-      >
-        Limpar filtros
-      </a>
-    </div>
   );
 }
 export function EmptyView({

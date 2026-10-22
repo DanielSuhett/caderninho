@@ -2,13 +2,13 @@ import { useCallback, useState } from "react";
 
 import type { PortalResponse } from "../../contracts";
 import type { createAccountApi } from "./account-api";
-import { EmptyView, FilterActions } from "./workspace-filters";
+import { EmptyView } from "./workspace-filters";
 import {
   momentLabel,
   ResourceFeedback,
   useResource,
 } from "./workspace-resource";
-import { FilterBar, RefreshButton, WorkspaceHeading } from "./workspace-ui";
+import { FilterDrawer, RefreshButton, WorkspaceHeading } from "./workspace-ui";
 
 const statuses = {
   failed: "Falhou",
@@ -62,7 +62,15 @@ export function SyncHistoryView({
         description="Rodadas, etapas confirmadas e falhas. O titular é o registrado no início."
         title="Sincronizações"
       />
-      <FilterBar action="/account/sync">
+      <FilterDrawer
+        action="/account/sync"
+        summary={[
+          `Pessoa: ${snapshot.people.find((p) => p.id === params.get("person"))?.name ?? "Todas"}`,
+          Object.entries(statuses).find(
+            ([id]) => id === params.get("status"),
+          )?.[1] ?? "Todas as rodadas",
+        ]}
+      >
         <label>
           Pessoa
           <select
@@ -102,8 +110,7 @@ export function SyncHistoryView({
             ))}
           </select>
         </label>
-        <FilterActions />
-      </FilterBar>
+      </FilterDrawer>
       <div className="results-heading">
         <h2>Rodadas registradas</h2>
         <RefreshButton

@@ -1,7 +1,11 @@
-import { ArrowClockwiseIcon } from "@phosphor-icons/react";
-import type { ReactNode } from "react";
+import {
+  ArrowClockwiseIcon,
+  SlidersHorizontalIcon,
+} from "@phosphor-icons/react";
+import { type ReactNode, useId } from "react";
 
 import { UiButton } from "../ui";
+import { WorkspaceDrawer } from "./workspace-drawer";
 
 export function WorkspaceHeading({
   title,
@@ -84,21 +88,63 @@ export function WorkspaceSkeleton() {
   );
 }
 
-export function FilterBar({
+export function FilterDrawer({
   action,
   children,
+  summary,
 }: {
   action: string;
   children: ReactNode;
+  summary: string[];
 }) {
+  const formId = useId();
   return (
-    <form
-      action={action}
-      className="workspace-filters"
-      method="get"
-    >
-      {children}
-    </form>
+    <div className="filter-toolbar">
+      <WorkspaceDrawer
+        footer={
+          <UiButton
+            form={formId}
+            type="submit"
+          >
+            Aplicar filtros
+          </UiButton>
+        }
+        title="Filtros"
+        trigger={
+          <>
+            <SlidersHorizontalIcon
+              aria-hidden="true"
+              size={20}
+            />
+            Filtros
+          </>
+        }
+      >
+        <p className="muted">As alterações só valem depois de aplicar.</p>
+        <form
+          action={action}
+          className="workspace-filters"
+          id={formId}
+          method="get"
+        >
+          {children}
+        </form>
+      </WorkspaceDrawer>
+      <ul
+        aria-label="Recorte aplicado"
+        className="applied-filters"
+      >
+        {summary.map((value) => (
+          <li key={value}>{value}</li>
+        ))}
+      </ul>
+      <a
+        className="filter-clear"
+        href={action}
+      >
+        Limpar filtros
+      </a>
+    </div>
   );
 }
 export function WorkspaceMetrics({

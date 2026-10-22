@@ -1,11 +1,12 @@
 import { useCallback, useState } from "react";
 
 import { UiButton } from "../ui";
+import { BankMark, bankMarks } from "./bank-mark";
 import { DesignPalette } from "./design-palette";
-import { EmptyView, FilterActions } from "./workspace-filters";
+import { EmptyView } from "./workspace-filters";
 import { ResourceFeedback } from "./workspace-resource";
 import {
-  FilterBar,
+  FilterDrawer,
   RefreshButton,
   WorkspaceHeading,
   WorkspaceMetrics,
@@ -100,6 +101,30 @@ export function DesignSystemView() {
         </p>
       </section>
       <DesignPalette demonstrate={secondary} />
+      <section aria-labelledby="design-banks">
+        <h2 id="design-banks">Identidade dos bancos</h2>
+        <p>
+          Marcas locais de 24 px, sempre acompanhadas do nome. Exemplos de
+          catálogo; não representam bancos conectados.
+        </p>
+        <div className="bank-examples">
+          {bankMarks.map((bank) => (
+            <div key={bank.id}>
+              <BankMark institution={bank.id} />
+              <span>{bank.name}</span>
+            </div>
+          ))}
+          <div>
+            <BankMark />
+            <span>Instituição não identificada</span>
+          </div>
+        </div>
+        <p className="muted">
+          O painel atual não recebe um identificador de instituição por conta.
+          Por isso, as contas usam o símbolo neutro; não inferimos a marca pelo
+          nome da conta ou do perfil.
+        </p>
+      </section>
       <section aria-labelledby="design-actions">
         <h2 id="design-actions">Ações e foco</h2>
         <p>
@@ -143,7 +168,20 @@ export function DesignSystemView() {
           Cabeçalho → filtros → feedback → resumo → registros. Filtrar esta
           demonstração apenas recarrega a galeria.
         </p>
-        <FilterBar action="/account/design-system">
+        <FilterDrawer
+          action="/account/design-system"
+          summary={[
+            params.get("demoSpace") === "family"
+              ? "Grupo: Casa · exemplo"
+              : "Grupo: Pessoal · exemplo",
+            params.get("demoPerson")
+              ? "Pessoa de exemplo"
+              : "Todas as pessoas · exemplo",
+            ...(params.get("demoSearch")
+              ? [`Busca: ${params.get("demoSearch")}`]
+              : []),
+          ]}
+        >
           <label>
             Grupo
             <select
@@ -172,8 +210,7 @@ export function DesignSystemView() {
               placeholder="Buscar no exemplo"
             />
           </label>
-          <FilterActions />
-        </FilterBar>
+        </FilterDrawer>
         <WorkspaceMetrics
           items={[
             {
@@ -305,7 +342,7 @@ export function DesignSystemView() {
       <section aria-labelledby="design-compose">
         <h2 id="design-compose">Composição para desenvolvimento</h2>
         <p>
-          Importe <code>WorkspaceHeading</code>, <code>FilterBar</code>,{" "}
+          Importe <code>WorkspaceHeading</code>, <code>FilterDrawer</code>,{" "}
           <code>WorkspaceMetrics</code>, <code>RefreshButton</code> e{" "}
           <code>WorkspaceSkeleton</code> de{" "}
           <code>src/web/account/workspace-ui.tsx</code>.

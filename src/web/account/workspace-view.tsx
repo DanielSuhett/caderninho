@@ -1,3 +1,15 @@
+import {
+  ArrowsClockwiseIcon,
+  BankIcon,
+  FoldersIcon,
+  HouseIcon,
+  ListChecksIcon,
+  ListIcon,
+  PaletteIcon,
+  ReceiptIcon,
+  ShieldCheckIcon,
+  SignOutIcon,
+} from "@phosphor-icons/react";
 import { type ReactNode, useCallback } from "react";
 
 import type { PortalResponse } from "../../contracts";
@@ -8,33 +20,42 @@ import { DesignSystemView } from "./design-system-view";
 import { OrganizationView } from "./organization-view";
 import { SyncHistoryView } from "./sync-history-view";
 import { TransactionsView } from "./transactions-view";
+import { WorkspaceDrawer } from "./workspace-drawer";
 import { scopedHref } from "./workspace-resource";
 
 const pages = [
   {
-    caption: "Acesso e uso do assistente",
+    icon: ShieldCheckIcon,
     name: "Auditoria MCP",
     path: "/account/audit",
   },
-  { caption: "Contas e titulares", name: "Visão geral", path: "/account" },
   {
-    caption: "Seu histórico financeiro",
+    icon: HouseIcon,
+    name: "Visão geral",
+    path: "/account",
+  },
+  {
+    icon: ReceiptIcon,
     name: "Transações",
     path: "/account/transactions",
   },
   {
-    caption: "Condições de classificação",
+    icon: ListChecksIcon,
     name: "Regras",
     path: "/account/rules",
   },
-  { caption: "Espaços e categorias", name: "Grupos", path: "/account/groups" },
   {
-    caption: "Rodadas e falhas",
+    icon: FoldersIcon,
+    name: "Grupos",
+    path: "/account/groups",
+  },
+  {
+    icon: ArrowsClockwiseIcon,
     name: "Sincronizações",
     path: "/account/sync",
   },
   {
-    caption: "Pessoas, perfis e acesso",
+    icon: BankIcon,
     name: "Conexões",
     path: "/account/connections",
   },
@@ -92,6 +113,65 @@ export function WorkspaceView({
   if (path === "/account/design-system") {
     content = <DesignSystemView />;
   }
+  const navigation = (
+    <>
+      <nav
+        aria-label="Páginas do Caderninho"
+        className="workspace-nav"
+      >
+        {pages.map((p) => (
+          <a
+            aria-current={path === p.path ? "page" : undefined}
+            aria-label={p.name}
+            href={scopedHref(p.path, params)}
+            key={p.path}
+            title={p.name}
+          >
+            <p.icon
+              aria-hidden="true"
+              size={20}
+            />
+            <span className="nav-label">{p.name}</span>
+          </a>
+        ))}
+      </nav>
+      <div className="sidebar-session">
+        <a
+          aria-current={path === "/account/design-system" ? "page" : undefined}
+          aria-label="Referência visual"
+          className="design-reference-link"
+          href="/account/design-system"
+        >
+          <PaletteIcon
+            aria-hidden="true"
+            size={20}
+          />
+          <span className="nav-label">Referência visual</span>
+        </a>
+        <p>
+          Instalação privada
+          <br />
+          <small>
+            {snapshot.people.length} pessoas · {snapshot.connections.length}{" "}
+            conexões
+          </small>
+        </p>
+        <UiButton
+          aria-label="Sair"
+          disabled={busy}
+          onClick={logout}
+          type="button"
+          variant="secondary"
+        >
+          <SignOutIcon
+            aria-hidden="true"
+            size={20}
+          />
+          <span className="nav-label">Sair</span>
+        </UiButton>
+      </div>
+    </>
+  );
   return (
     <div className="workspace">
       <a
@@ -101,48 +181,23 @@ export function WorkspaceView({
         Ir para o conteúdo
       </a>
       <aside className="workspace-sidebar">
-        <nav
-          aria-label="Páginas do Caderninho"
-          className="workspace-nav"
+        <WorkspaceDrawer
+          className="sidebar-toggle"
+          side="left"
+          title="Navegação"
+          trigger={
+            <>
+              <ListIcon
+                aria-hidden="true"
+                size={20}
+              />
+              <span className="sr-only">Abrir navegação</span>
+            </>
+          }
         >
-          {pages.map((p) => (
-            <a
-              aria-current={path === p.path ? "page" : undefined}
-              href={scopedHref(p.path, params)}
-              key={p.path}
-              title={p.caption}
-            >
-              <span>{p.name}</span>
-            </a>
-          ))}
-        </nav>
-        <div className="sidebar-session">
-          <a
-            aria-current={
-              path === "/account/design-system" ? "page" : undefined
-            }
-            className="design-reference-link"
-            href="/account/design-system"
-          >
-            Referência visual
-          </a>
-          <p>
-            Instalação privada
-            <br />
-            <small>
-              {snapshot.people.length} pessoas · {snapshot.connections.length}{" "}
-              conexões
-            </small>
-          </p>
-          <UiButton
-            disabled={busy}
-            onClick={logout}
-            type="button"
-            variant="secondary"
-          >
-            Sair
-          </UiButton>
-        </div>
+          {navigation}
+        </WorkspaceDrawer>
+        {navigation}
       </aside>
       <div
         className="workspace-content"

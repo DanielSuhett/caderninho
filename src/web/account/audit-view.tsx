@@ -17,6 +17,7 @@ import {
   useResource,
 } from "./workspace-resource";
 import {
+  FilterDrawer,
   RefreshButton,
   WorkspaceHeading,
   WorkspaceMetrics,
@@ -121,22 +122,24 @@ export function AuditView({
           onClick={resource.retry}
         />
       </WorkspaceHeading>
-      <nav
-        aria-label="Período da auditoria"
-        className="audit-period"
+      <FilterDrawer
+        action="/account/audit"
+        summary={[
+          `Período: ${params.get("days") === "1" ? "24 horas" : `${params.get("days") || "7"} dias`}`,
+        ]}
       >
-        {[1, 7, 30].map((days) => (
-          <a
-            aria-current={
-              (params.get("days") || "7") === String(days) ? "page" : undefined
-            }
-            href={`/account/audit?days=${days}`}
-            key={days}
+        <label>
+          Período
+          <select
+            defaultValue={params.get("days") || "7"}
+            name="days"
           >
-            {days === 1 ? "24 horas" : `${days} dias`}
-          </a>
-        ))}
-      </nav>
+            <option value="1">24 horas</option>
+            <option value="7">7 dias</option>
+            <option value="30">30 dias</option>
+          </select>
+        </label>
+      </FilterDrawer>
       <ResourceFeedback {...resource} />
       {!!message && (
         <p
