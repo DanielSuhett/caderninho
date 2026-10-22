@@ -34,7 +34,7 @@ export function SyncHistoryView({
 }) {
   const [params] = useState(() => new URLSearchParams(location.search));
   const load = useCallback(
-    (signal: AbortSignal) => {
+    (signal: AbortSignal, fresh = false) => {
       const query = new URLSearchParams({ limit: "25" });
       for (const key of ["cursor", "status"]) {
         const value = params.get(key);
@@ -45,7 +45,7 @@ export function SyncHistoryView({
       if (params.get("person")) {
         query.set("personId", params.get("person") ?? "");
       }
-      return api.history(query, signal);
+      return api.history(query, signal, fresh);
     },
     [api, params],
   );

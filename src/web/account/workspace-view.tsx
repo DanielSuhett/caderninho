@@ -66,7 +66,9 @@ export function WorkspaceView({
   snapshot,
   command,
   busy,
+  route,
 }: {
+  route: string;
   children: ReactNode;
   api: ReturnType<typeof createAccountApi>;
   snapshot: PortalResponse;
@@ -81,6 +83,7 @@ export function WorkspaceView({
     content = (
       <TransactionsView
         api={api}
+        key={route}
         snapshot={snapshot}
       />
     );
@@ -89,6 +92,7 @@ export function WorkspaceView({
     content = (
       <OrganizationView
         api={api}
+        key={route}
         page={path.endsWith("rules") ? "rules" : "groups"}
         snapshot={snapshot}
       />
@@ -98,6 +102,7 @@ export function WorkspaceView({
     content = (
       <SyncHistoryView
         api={api}
+        key={route}
         snapshot={snapshot}
       />
     );
@@ -106,12 +111,13 @@ export function WorkspaceView({
     content = (
       <AuditView
         api={api}
+        key={route}
         snapshot={snapshot}
       />
     );
   }
   if (path === "/account/design-system") {
-    content = <DesignSystemView />;
+    content = <DesignSystemView key={route} />;
   }
   const navigation = (
     <>

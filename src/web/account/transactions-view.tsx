@@ -23,7 +23,7 @@ export function TransactionsView({
   const [params] = useState(() => new URLSearchParams(location.search));
   const spaceId = params.get("space") || "personal";
   const load = useCallback(
-    async (signal: AbortSignal) => {
+    async (signal: AbortSignal, fresh = false) => {
       const { query } = PortalQuerySchema.parse({
         csrf: snapshot.csrf,
         query: {
@@ -50,13 +50,14 @@ export function TransactionsView({
         },
       });
       const [catalog, accounts, result] = await Promise.all([
-        api.catalog(spaceId, signal),
+        api.catalog(spaceId, signal, fresh),
         api.query(
           { include_hidden: true, spaceId, tool: "get_accounts" },
           snapshot.csrf,
           signal,
+          fresh,
         ),
-        api.query(query, snapshot.csrf, signal),
+        api.query(query, snapshot.csrf, signal, fresh),
       ]);
       return {
         accounts: AccountListSchema.parse(accounts).data.records,

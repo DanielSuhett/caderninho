@@ -59,7 +59,7 @@ export function AuditView({
 }) {
   const [params] = useState(() => new URLSearchParams(location.search));
   const load = useCallback(
-    (signal: AbortSignal) =>
+    (signal: AbortSignal, fresh = false) =>
       api.audit(
         new URLSearchParams({
           days: params.get("days") || "7",
@@ -68,6 +68,7 @@ export function AuditView({
           }),
         }),
         signal,
+        fresh,
       ),
     [api, params],
   );

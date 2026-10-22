@@ -4,7 +4,9 @@ import { tryCatch } from "../../shared";
 import { UiButton } from "../ui";
 import { WorkspaceSkeleton } from "./workspace-ui";
 
-export function useResource<T>(load: (signal: AbortSignal) => Promise<T>) {
+export function useResource<T>(
+  load: (signal: AbortSignal, fresh: boolean) => Promise<T>,
+) {
   const [version, setVersion] = useState(0);
   const previousLoad = useRef(load);
   const [state, setState] = useState<{
@@ -24,7 +26,7 @@ export function useResource<T>(load: (signal: AbortSignal) => Promise<T>) {
       loading: true,
       request: version,
     }));
-    tryCatch(() => load(controller.signal)).then(
+    tryCatch(() => load(controller.signal, version > 0)).then(
       ({ data, error }) => {
         if (controller.signal.aborted) {
           return;
@@ -57,12 +59,21 @@ export function ResourceFeedback({
   retry: () => void;
   data?: unknown;
 }) {
+  const [showLoading, setShowLoading] = useState(false);
+  useEffect(() => {
+    if (!loading) {
+      setShowLoading(false);
+      return;
+    }
+    const timer = setTimeout(() => setShowLoading(true), 150);
+    return () => clearTimeout(timer);
+  }, [loading]);
   const first = new URLSearchParams(location.search);
   first.delete("cursor");
   if (loading && !data) {
-    return <WorkspaceSkeleton />;
+    return showLoading ? <WorkspaceSkeleton /> : null;
   }
-  if (loading) {
+  if (loading && showLoading) {
     return (
       <p
         className="workspace-feedback"

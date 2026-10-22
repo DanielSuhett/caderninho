@@ -4,11 +4,13 @@ import type { HouseholdCommand, PortalResponse } from "../../contracts";
 import { sourceIdentity } from "../../domain";
 import { tryCatch } from "../../shared";
 import { createAccountApi } from "./account-api";
+import { useAccountNavigation } from "./account-navigation";
 import { createConnectWidget } from "./connect-widget";
 import { DashboardView } from "./dashboard-view";
 import { WorkspaceView } from "./workspace-view";
 
 export function AccountView() {
+  const route = useAccountNavigation();
   const [snapshot, setSnapshot] = useState<PortalResponse>();
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
@@ -213,12 +215,14 @@ export function AccountView() {
       api={api}
       busy={busy}
       command={onCommand}
+      route={route}
       snapshot={snapshot}
     >
       <DashboardView
         busy={busy}
         command={onCommand}
         connect={onConnect}
+        key={route}
         manage={onManage}
         message={message}
         personId={personId}

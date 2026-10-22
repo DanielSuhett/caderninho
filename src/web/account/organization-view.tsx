@@ -34,7 +34,7 @@ export function OrganizationView({
   const [params] = useState(() => new URLSearchParams(location.search));
   const spaceId = params.get("space") || "personal";
   const load = useCallback(
-    (signal: AbortSignal) => api.catalog(spaceId, signal),
+    (signal: AbortSignal, fresh = false) => api.catalog(spaceId, signal, fresh),
     [api, spaceId],
   );
   const resource = useResource(load);

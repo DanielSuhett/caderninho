@@ -1,89 +1,22 @@
-# Navegação lateral, filtros e ícones
+# Navegação sem recarregar o painel — 22/10/2026
 
-Revisão local em 22/10/2026, branch `codex/sidebar-filter-drawers`.
+## Causa e implementação
 
-## Decisões implementadas
+Os links internos eram navegações completas de documento. Cada troca desmontava o React, carregava novamente o shell e aguardava `/api/account` antes de exibir a página.
 
-- Uma família de ícones: Phosphor regular de 20 px, já dependência do Kumo e do
-  painel. A referência [Feather](https://www.shadcn.io/icons/feather) foi avaliada;
-  não foi adicionada uma segunda família nem outra biblioteca de componentes.
-- Navegação sempre à esquerda: 208 px no desktop; 56 px no compacto com destinos
-  identificados por nomes acessíveis, tooltip nativa e drawer de expansão por
-  toque. Sidebar e conteúdo mantêm rolagem vertical quando necessário.
-- `FilterDrawer` substitui campos inline em todas as oito páginas do workspace.
-  Resumos de grupo, pessoa, período e condições aplicadas continuam fora do drawer.
-  Limpar filtros retorna à rota sem query, incluindo reset de grupo/pessoa/cursor.
-- `WorkspaceDrawer` compartilha `<dialog>` nativo, controles Kumo, cabeçalho e
-  rodapé persistentes, corpo rolável, Escape, X e Cancelar. Filtros abrem à direita;
-  navegação abre à esquerda. Campos desmontam ao fechar para descartar rascunhos.
-- Oito marcas bancárias locais derivadas de
-  [bancos-brasil](https://github.com/eduardolecdt/bancos-brasil), revisão
-  `f9ce11cd2944eda03030defb478193cd569bb138`. SVGs viraram JSX estático sem HTML
-  injetado, dependência adicional, CDN ou requisição remota de imagem. A licença
-  MIT está preservada em `third-party/bancos-brasil-LICENSE.txt`.
+A navegação agora usa History API e uma assinatura React da URL. O shell, a sessão, o cliente API e o polling da instalação permanecem montados; somente a visão correspondente à rota/filtros é substituída. Links continuam sendo anchors reais. Login, destinos externos, fragmentos, downloads, cliques modificados e submissões POST continuam com seu comportamento nativo. Formulários GET de filtros participam da navegação interna. Popstate trata Voltar/Avançar. A mudança fecha drawers, restaura a rolagem e posiciona o foco no conteúdo.
 
-As marcas são exemplos na galeria. O contrato financeiro atual não entrega a
-instituição da conta; por isso, contas reais usam `BankMark` neutro. Não há
-inferência por nome livre de conta/perfil, nem marca bancária atribuída à pessoa.
-Uma futura chave de instituição validada pode alimentar o mesmo componente.
+Consultas de leitura têm cache por chave completa, limitado a 20 entradas e 10 segundos, na memória da instância do cliente. Não há localStorage, IndexedDB ou service worker. Atualização manual ignora cache. Operações de escrita invalidam antes e depois da requisição; leituras anteriores à invalidação não repovoam o cache. Falhas de transporte não são armazenadas. Schemas existentes continuam validando respostas.
 
-## Jornadas verificadas no navegador
+O skeleton aparece apenas após 150 ms para evitar flashes em consultas rápidas. A primeira visita e consultas após expiração ainda dependem da rede: esta mudança não promete latência zero nem dados previamente carregados para todas as telas.
 
-| Jornada | Resultado observado |
-| --- | --- |
-| Abrir filtros, editar busca e Cancelar | URL e resultados preservados; reabrir mostra busca original, sem rascunho |
-| Fechar por Escape | Modal fecha, foco retorna a Filtros e bloqueio de rolagem é removido |
-| Teclado no limite do diálogo | Browser pode levar Tab ao chrome; próximo Tab retorna ao modal. Nenhum controle do fundo recebeu foco no teste |
-| Transações: Ana + Mercado | Seis registros de Ana, todos com descrição Mercado da semana; critérios visíveis |
-| Regras: Pausadas → Limpar | Uma regra pausada; limpar retorna às quatro regras e remove toda a query |
-| Sincronizações: Falhou | Cinco rodadas, todas com estado Falhou |
-| Auditoria: 30 dias | URL `?days=30` e resumo Período: 30 dias |
-| Visão geral: Ana | Duas contas, ambas identificadas como Ana |
-| Grupos: Casa em comum | URL aponta para family; título de categorias e resumo mostram Casa em comum |
-| Página seguinte → aplicar busca Mercado | Cursor presente antes; ausente após aplicar, com 13 resultados |
-| Expandir navegação → Regras | Destinos legíveis por toque; navegação mantém pessoa/grupo na URL |
-| Menu aberto no compacto → redimensionar para desktop | Painel continua visível (300 px) e Fechar menu remove o modal e o bloqueio de rolagem |
+## Verificação local
 
-A aplicação usa GET apenas para navegar; consultas financeiras continuam nos
-endpoints autenticados existentes. Abrir/aplicar filtros não modifica dados.
-Nenhuma sincronização ou revogação foi disparada nesta revisão.
+- Sequência Regras → Grupos → Regras → Transações → Sincronizações → Visão geral: seis títulos/URLs corretos, foco no conteúdo e nenhuma tela de carregamento da instalação. Logs do Worker: zero novos documentos, scripts ou fontes; um catálogo compartilhado pelas três visões que o consomem. As duas requisições de transações e uma de histórico foram consultas novas esperadas. Polling da instalação continua independente a cada cinco segundos.
+- Filtro de regras “Mercado” resultou em uma regra e URL correspondente; Voltar restaurou quatro regras; Avançar restaurou uma. Drawer fechou e liberou body overflow. Navegação pelo drawer móvel para Transações também restaurou foco/rolagem.
+- Auditoria e Conexões abertas pela navegação interna. Atualização manual do histórico verificada separadamente após o build final.
+- Testes Node cobrem destinos permitidos, separação de consultas, expiração, atualização explícita, limite de entradas, falhas e corrida de invalidação. Artefatos sintéticos e logs em `work/navigation-review/`, ignorados pelo Git.
 
-## Inspeção visual
+Nenhuma publicação, migração real, alteração de dados financeiros ou mudança de contrato público. Evidência local não homologa rede de produção, Pluggy, OAuth ou hosts MCP.
 
-A designer revisou os recortes de todas as oito páginas móveis e os estados de
-sidebar desktop, navegação expandida, filtros abertos/aplicados e catálogo de
-bancos. Não encontrou bloqueios nos estados finais apresentados. Um overflow
-horizontal de 4 px no rodapé da sidebar foi corrigido com a coluna de grid
-`minmax(0, 1fr)`; a largura interna e rolável passaram a ser iguais.
-Também foi corrigido o diálogo invisível ao ampliar a janela com o menu aberto:
-a regra responsiva agora esconde somente o gatilho, preservando o painel modal.
-
-| Viewport observado | Documento | Sidebar | Evidência |
-| --- | --- | --- | --- |
-| 1280 px | 1265 px; sem overflow horizontal | 208 px | Desktop íntegro |
-| 564 px | 551 px; sem overflow horizontal | 56 px, scrollWidth 56 | Layout compacto |
-| Pedido 390 px, DOM arredondado a 391 px | 376 px; scrollWidth 376 em todas as oito páginas | 56 px, scrollWidth 56 | Capturas móveis íntegras |
-
-Capturas em `work/navigation-review/`, ignoradas pelo Git. `report.html` reúne as
-imagens aceitas. Antes: `01-before.jpg`. Finais: `06-sidebar-final.jpg`,
-`07-sidebar-desktop.jpg`, `08-filter-desktop.jpg`, `10-filter-mobile.jpg`,
-`11-bank-catalog-mobile.jpg` e `12`–`19` para as oito páginas. A captura inicial
-`02` conserva o defeito da sidebar e não é evidência do resultado final.
-
-A inspeção móvel cobre os recortes visíveis, não cada registro abaixo da dobra.
-Não foi executada uma auditoria completa com leitor de tela nem teclado virtual.
-O CSS respeita movimento reduzido; screenshots não comprovam animação. A limitação
-de captura móvel registrada na revisão anterior foi superada nesta rodada, sem
-alterar retroativamente aquela evidência.
-
-## Verificação técnica
-
-`mise run check` passou: 19 testes Node, 75 testes de integração e a suíte nativa
-Workflow/D1 de 10 mil e 100 mil registros. O cenário de 100 mil terminou em
-39.270 ms, pico workerd 423.756 KiB. Após o ajuste de CSS da sidebar, o build do
-portal foi repetido. `check:quick` e `git diff --check` passaram após os ajustes
-finais. Não foram adicionadas dependências ou migrações.
-
-Preview com dados sintéticos em `http://127.0.0.1:8793`. O servidor original de
-8787 e o checkout principal foram preservados. Nenhum push, deploy, merge ou
-migração remota. Não há nova comprovação de Pluggy real ou host MCP externo.
+`mise run check` passou: tipos, lint, formatação, 23 testes Node (quatro novos), 75 testes de integração, build dry-run e runtime Workflow/D1 com 10 mil e 100 mil transações. A atualização manual do histórico produziu duas respostas 200 distintas: abertura e refresh. O rebuild local reiniciou a sessão de preview durante a verificação; após novo login, a captura final foi conferida sem mensagem de erro.
