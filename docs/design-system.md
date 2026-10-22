@@ -23,6 +23,8 @@ com confiança?**
 | Cabeçalho, filtros, métricas, refresh e skeleton | `src/web/account/workspace-ui.tsx` | Compor os componentes existentes; não criar outro cabeçalho local com escala própria. |
 | Campos de escopo e estado vazio | `src/web/account/workspace-filters.tsx` | `ScopeFields` e `EmptyView`; aplicação/limpeza pertencem a `FilterDrawer`. |
 | Drawer modal compartilhado | `src/web/account/workspace-drawer.tsx` | `WorkspaceDrawer`: diálogo nativo, cabeçalho, corpo rolável e ações Kumo. |
+| Item expansível compartilhado | `src/web/account/disclosure-item.tsx` | `DisclosureItem` fornece interação nativa; os domínios montam resumo e detalhe. |
+| Lista financeira | `src/web/account/transaction-list.tsx` | `TransactionList` compõe a peça comum com dados financeiros e a mesma apresentação na galeria. |
 | Identificação visual de banco | `src/web/account/bank-mark.tsx` | `BankMark` e catálogo `bankMarks`; fallback neutro sem identidade confirmada. |
 | Consulta e feedback | `src/web/account/workspace-resource.tsx` | `useResource`, `ResourceFeedback`, datas e links com escopo. |
 | Escala e densidade do painel | `src/web/account.css` | Alterar a regra responsável, sem acumular overrides no fim do arquivo. |
@@ -153,7 +155,7 @@ hover e não atribuir precisão inexistente a volume, custo ou tokens de IA.
 | Nível | Token / valor | Aplicação |
 | --- | --- | --- |
 | Plano | `--shadow-flat` · `none` | Linhas, tabelas, métricas e estrutura comum. |
-| Baixo | `--shadow-low` · `0 2px 6px #0005, inset 0 1px 0 #ffffff08` | Grupos/contas e editor de perfil aberto; formulário dentro de drawer é plano. |
+| Baixo | `--shadow-low` · `0 2px 6px #0005, inset 0 1px 0 #ffffff08` | Editor de perfil aberto; listas de registros e formulário dentro de drawer são planos. |
 | Elevado | `--shadow-raised` · `0 8px 24px #0008, inset 0 1px 0 #ffffff0c` | Tooltip sobre a página, com `--surface-raised`. |
 | Profundidade ampla | `--shadow-public` · `0 16px 48px #0009, inset 0 1px 0 #ffffff0c` | Grupo principal de landing/login e drawers modais, com `--surface`. |
 
@@ -277,12 +279,16 @@ import {
 } from "./workspace-ui";
 import { WorkspaceDrawer } from "./workspace-drawer";
 import { BankMark } from "./bank-mark";
+import { DisclosureItem } from "./disclosure-item";
+import { TransactionList } from "./transaction-list";
 ```
 
 | Peça | Props atuais | Uso |
 | --- | --- | --- |
 | `FilterDrawer` | `action: string`, `children: ReactNode`, `summary: string[]` | Gatilho, recorte aplicado, formulário GET em drawer e limpeza completa pelo caminho sem query. |
 | `WorkspaceDrawer` | `title: string`, `trigger: ReactNode`, `children: ReactNode`, `footer?: ReactNode`, `side?: "left" \| "right"`, `className?: string` | Lado padrão direito; `footer` acrescenta a ação primária ao fechamento nativo do componente. |
+| `DisclosureItem` | `summary: ReactNode`, `children: ReactNode`, `className?: string` | `details/summary` nativos; chevron decorativo e aparência compartilhada. Não recebe esquema de colunas, seleção ou fetch. |
+| `TransactionList` | `records: Transaction[]`, `accounts: Array<{ id: string; name: string }>`, `categories: Array<{ id: string; name: string }>` | `Transaction` deriva dos registros de `TransactionListSchema`; formata valores e compõe `DisclosureItem`. |
 | `BankMark` | `institution?: string` | Chave estável do catálogo local; ausente/desconhecida gera BankIcon neutro. |
 | `WorkspaceMetrics` | `items: Array<{ label: string; value: ReactNode; hint?: string }>` | Métricas sem regras financeiras; cada label deve ser único no conjunto. |
 | `WorkspaceHeading` | `title: string`, `description?: string`, `children?: ReactNode` | Título e descrição de uma frase; `children` recebe refresh ou uma ação de página. |
@@ -369,7 +375,7 @@ para foco e semântica; utilizar diálogo nativo não equivale a homologar a jor
 ### Lista de transações
 
 Usar `TransactionList` tanto na página quanto na galeria. Lista sem cards, borda
-apenas entre registros e `details/summary` nativos. Toda a linha é o alvo; o
+apenas entre registros e `DisclosureItem` compartilhado. Toda a linha é o alvo; o
 chevron é decorativo e gira quando aberto. Enter e Espaço alternam a expansão,
 com foco visível e sem controles interativos aninhados no summary.
 
@@ -393,19 +399,82 @@ a soma dos registros da página como total financeiro do período. Filtros conti
 no drawer. Validar descrição longa, contas e titulares diferentes, pendência,
 ignorada, moeda alternativa, valor elevado e ausente na galeria viva.
 
-### Cards e listas
+### Listas operacionais e item compartilhado
 
-`.account-grid` + `.bank-account` agrupam saldo, titular e origem de uma conta.
-`.group-grid` + `.group-card` agrupam um espaço e suas relações. Registros repetidos
-como regras e sincronizações usam `.rule-list` / `.run-list` e linhas separadas;
-não precisam de um card decorativo por item. Uma lista de dez identidades não vira
-um mosaico de dez indicadores. Preserve componentes de domínio em vez de um
-`UniversalCard` com dezenas de flags.
+Contas, regras, grupos e sincronizações usam `.record-list`, com cada `li` contendo
+um `DisclosureItem className="record-item"`. Transações usam `.transaction-list`
+e o mesmo componente com `className="transaction-item"`. Lista ordenada para
+histórico de rodadas; listas comuns para os demais conjuntos. Não restaurar grids
+de cards nem ocultar detalhes atrás de um ícone pequeno separado da linha.
+
+`DisclosureItem` fornece `details`, `summary`, chevron de 16 px e classes
+`.disclosure-item`, `.disclosure-summary`, `.disclosure-chevron`. O domínio passa
+conteúdo a `summary` e `children`; a peça não conhece moeda, estado financeiro,
+filtragem ou API. Não criar um `UniversalCard`, registry de campos ou dezenas de
+flags para essa composição. Conservar classes separadas com espaços ao combinar
+layout e estados, como `transaction-item wide-amount` ou `record-item wide-value`.
+
+Resumo inteiro clicável, Enter/Espaço nativos e foco visível. O chevron é
+`aria-hidden`, sem botão próprio; abrir gira o mesmo indicador. Hover e estado
+aberto usam `--surface`, sem sombra ou animação de altura. Transição de 120 ms
+apenas no fundo/chevron, removida com movimento reduzido. Links, botões, inputs e
+outras ações ficam **fora do summary**, dentro do painel expandido; não criar
+handlers que disputem com o comportamento nativo ou disclosures aninhados para IDs.
+
+| Domínio | Sempre visível no resumo | Dentro da expansão |
+| --- | --- | --- |
+| Transações | Descrição, valor exato/moeda/sinal, conta e titular, data, categoria, entrada/saída; Pendente e Ignorada quando aplicáveis. | Conta e ID, titular, estado confirmado/pendente, origem manual/importada e ID do lançamento. |
+| Contas e cartões | Nome, titular, saldo/moeda, tipo, data observada e Dados parciais quando aplicável. Cartão mantém “não é dinheiro disponível”. | Perfil Pluggy, data/hora observada completa, ID da conta e link para suas transações. |
+| Regras | Nome, Ativa/Pausada, condição e categoria, prioridade, movimento e restrição de conta. | Explicação completa da regra, campos de alcance, ID e link para lançamentos com a condição. |
+| Grupos | Nome, tipo, moeda, orçamento ou desativado/valor não definido e início do mês. | Configuração do período/orçamento, ID e link para transações do grupo. |
+| Sincronizações | Perfil, titular registrado, início e estado. Fase atual durante espera/execução; falha e registro recuperado quando aplicáveis. | Última etapa, etapas confirmadas, encerramento, erro completo, orientação de recuperação e IDs de rodada/conexão. |
+
+Esses resumos são contratos de informação, não ordem fixa de colunas. Falha,
+parcialidade, pendência, exclusão e natureza do saldo nunca exigem expansão para
+serem percebidas. Não apresentar saldo ausente como zero, orçamento sem valor como
+gratuito ou regra ativa como execução concluída. O resumo de sincronização mantém
+o titular registrado no início; não reatribuir a rodada ao titular atual.
+
+A composição comum usa `.record-title`, `.record-value`, `.record-context` e
+`.record-meta`; detalhes em `.record-detail`. Nome e valor: 15 px / 550; contexto e
+metadados: 12 px. Padding vertical de 14–16 px. É uma linha compacta que pode crescer
+com descrição, nome ou alerta; não usar altura fixa nem truncar dinheiro. Valores
+longos/ausentes de conta recebem `wide-value` e usam outra linha em espaço estreito.
+O detalhe usa `dl` com labels, quebra de IDs e links com alvo mínimo de 44 px.
+
+```tsx
+<ul className="record-list" aria-label="Grupos">
+  <li>
+    <DisclosureItem
+      className="record-item"
+      summary={
+        <>
+          <span className="record-title">{group.name}</span>
+          <span className="record-value">{groupTypeLabel}</span>
+          <span className="record-context">{budgetLabel}</span>
+          <span className="record-meta">
+            {group.currency} · Mês começa no dia {group.monthStartDay}
+          </span>
+        </>
+      }
+    >
+      <div className="record-detail">
+        {/* Configuração e identificadores reais do domínio. */}
+        <a href={transactionsHref}>Ver transações deste grupo</a>
+      </div>
+    </DisclosureItem>
+  </li>
+</ul>
+```
+
+O exemplo ilustra slots; labels e URL vêm do contrato da página. Categorias
+continuam em linhas simples com tipo, limite e estado oculto. Etiquetas permanecem
+uma lista curta de nomes: não adicionar interação sem conteúdo/ação real.
 
 ### Identidade bancária
 
-`BankMark` renderiza um selo auxiliar de 28 × 28 px; o SVG local tem 24 px e o
-fallback Phosphor, 20 px. O catálogo `bankMarks` contém Nubank, Itaú, Bradesco,
+`BankMark` renderiza um selo auxiliar de 28 × 28 px na galeria e 24 × 24 px no
+título das linhas de contas; o SVG local tem 24 px e o fallback Phosphor, 20 px. O catálogo `bankMarks` contém Nubank, Itaú, Bradesco,
 Banco do Brasil, Caixa, Santander, Inter e C6 Bank. Os assets derivados de
 bancos-brasil têm revisão fixada no arquivo e [licença local](third-party/bancos-brasil-LICENSE.txt).
 Não há consulta a CDN em runtime.
@@ -557,7 +626,7 @@ apresentar interrupção como sucesso, nem HTTP 200 como prova de ferramenta con
 1. **Estrutura e teclado:** um `h1`, seções identificadas, ordem de foco coerente,
    skip link funcional, foco visível e nenhuma armadilha. Abrir/fechar drawers e
    disclosures, aplicar/descartar rascunhos e confirmar/cancelar sem mouse. Foco não fica em conteúdo removido após revogação.
-2. **Nome e alvo:** controles com label acessível, ícones decorativos ocultos para
+2. **Nome e alvo:** controles com label acessível, summary inteiro acionável sem links aninhados, ícones decorativos ocultos para
    leitura, alvos 44 px, dicas acessíveis no foco. Placeholder não substitui label;
    cor não substitui resultado. Links dizem destino ou consequência.
 3. **Leitura e zoom:** contraste mínimo de referência 4,5:1 para texto comum e 3:1

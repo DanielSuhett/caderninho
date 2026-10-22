@@ -3,6 +3,7 @@ import { useCallback, useState } from "react";
 import type { PortalResponse } from "../../contracts";
 import type { createAccountApi } from "./account-api";
 import { formatBalance } from "./dashboard-view";
+import { DisclosureItem } from "./disclosure-item";
 import { EmptyView, ScopeFields } from "./workspace-filters";
 import {
   ResourceFeedback,
@@ -112,58 +113,83 @@ export function OrganizationView({
                 aplicação depende de uma ação explícita pelo assistente.
               </p>
               {rules?.length ? (
-                <div className="rule-list">
-                  {rules.map((r) => (
-                    <article
-                      className="rule-row"
-                      key={r.id}
-                    >
-                      <div className="rule-top">
-                        <h3>{r.name}</h3>
-                        <span
-                          className="status-label"
-                          data-tone="neutral"
+                <ul
+                  aria-label="Regras de classificação"
+                  className="record-list"
+                >
+                  {rules.map((r) => {
+                    const category =
+                      data.categories.find((c) => c.id === r.categoryId)
+                        ?.name ?? "Categoria não identificada";
+                    const account = r.accountId
+                      ? (snapshot.connections
+                          .flatMap((c) => Object.entries(c.accounts))
+                          .find(([id]) => id === r.accountId)?.[1].name ??
+                        "Conta não identificada")
+                      : "Todas as contas do grupo";
+                    return (
+                      <li key={r.id}>
+                        <DisclosureItem
+                          className="record-item"
+                          summary={
+                            <>
+                              <span className="record-title">{r.name}</span>
+                              <span className="record-value">
+                                <span
+                                  className="status-label"
+                                  data-tone="neutral"
+                                >
+                                  {r.enabled ? "Ativa" : "Pausada"}
+                                </span>
+                              </span>
+                              <span className="record-context">
+                                Contém “{r.text}” · {category}
+                              </span>
+                              <span className="record-meta">
+                                <span>Prioridade {r.priority}</span>
+                                <span>{movementLabel(r.direction)}</span>
+                                <span>{account}</span>
+                              </span>
+                            </>
+                          }
                         >
-                          {r.enabled ? "Ativa" : "Pausada"} · prioridade{" "}
-                          {r.priority}
-                        </span>
-                      </div>
-                      <p>
-                        Quando a descrição contém <strong>“{r.text}”</strong>,
-                        classificar como{" "}
-                        <strong>
-                          {data.categories.find((c) => c.id === r.categoryId)
-                            ?.name ?? r.categoryId}
-                        </strong>
-                        .
-                      </p>
-                      <dl className="detail-list">
-                        <div>
-                          <dt>Movimento</dt>
-                          <dd>{movementLabel(r.direction)}</dd>
-                        </div>
-                        <div>
-                          <dt>Conta</dt>
-                          <dd>
-                            {r.accountId
-                              ? (Object.values(
-                                  snapshot.connections.flatMap((c) =>
-                                    Object.entries(c.accounts),
-                                  ),
-                                ).find(([id]) => id === r.accountId)?.[1]
-                                  ?.name ?? r.accountId)
-                              : "Todas as contas do grupo"}
-                          </dd>
-                        </div>
-                      </dl>
-                      <a
-                        href={`/account/transactions?${new URLSearchParams({ space: spaceId, text: r.text, ...(r.accountId && { accountId: r.accountId }), ...(r.direction && { direction: r.direction }) })}`}
-                      >
-                        Ver lançamentos com esta condição
-                      </a>
-                    </article>
-                  ))}
-                </div>
+                          <div className="record-detail">
+                            <p>
+                              Quando a descrição contém{" "}
+                              <strong>“{r.text}”</strong>, classificar como{" "}
+                              <strong>{category}</strong>.
+                            </p>
+                            <dl className="detail-list">
+                              <div>
+                                <dt>Movimento</dt>
+                                <dd>{movementLabel(r.direction)}</dd>
+                              </div>
+                              <div>
+                                <dt>Conta</dt>
+                                <dd>{account}</dd>
+                              </div>
+                              <div>
+                                <dt>Categoria</dt>
+                                <dd>{category}</dd>
+                              </div>
+                              <div>
+                                <dt>Identificador da regra</dt>
+                                <dd>
+                                  <code>{r.id}</code>
+                                </dd>
+                              </div>
+                            </dl>
+                            <a
+                              href={`/account/transactions?${new URLSearchParams({ space: spaceId, text: r.text, ...(r.accountId && { accountId: r.accountId }), ...(r.direction && { direction: r.direction }) })}`}
+                            >
+                              Ver lançamentos com esta condição
+                            </a>
+                          </div>
+                        </DisclosureItem>
+                      </li>
+                    );
+                  })}
+                </ul>
               ) : (
                 <EmptyView title="Nenhuma regra encontrada">
                   Você pode pedir ao assistente para criar uma regra neste
@@ -177,33 +203,73 @@ export function OrganizationView({
                 <h2>Seus grupos</h2>
                 <span>{data.spaces.length} espaços de planejamento</span>
               </div>
-              <div className="group-grid">
+              <ul
+                aria-label="Grupos"
+                className="record-list"
+              >
                 {data.spaces.map((s) => (
-                  <article
-                    className="group-card"
-                    key={s.id}
-                  >
-                    <span className="muted">{groupTypes[s.type]}</span>
-                    <h3>{s.name}</h3>
-                    <p>
-                      {s.currency} · mês começa no dia {s.monthStartDay}
-                    </p>
-                    <p>
-                      {s.budgetEnabled
-                        ? `Orçamento: ${formatBalance(s.monthlyBudgetMinor, s.currency)}`
-                        : "Orçamento desativado"}
-                    </p>
-                    <a
-                      href={scopedHref(
-                        "/account/transactions",
-                        new URLSearchParams({ space: s.id }),
-                      )}
+                  <li key={s.id}>
+                    <DisclosureItem
+                      className="record-item"
+                      summary={
+                        <>
+                          <span className="record-title">{s.name}</span>
+                          <span className="record-value">
+                            <span
+                              className="status-label"
+                              data-tone="neutral"
+                            >
+                              {groupTypes[s.type]}
+                            </span>
+                          </span>
+                          <span className="record-context">
+                            {s.budgetEnabled
+                              ? `Orçamento: ${s.monthlyBudgetMinor === null ? "valor não definido" : formatBalance(s.monthlyBudgetMinor, s.currency)}`
+                              : "Orçamento desativado"}
+                          </span>
+                          <span className="record-meta">
+                            <span>{s.currency}</span>
+                            <span>Mês começa no dia {s.monthStartDay}</span>
+                          </span>
+                        </>
+                      }
                     >
-                      Ver transações de {s.name}
-                    </a>
-                  </article>
+                      <div className="record-detail">
+                        <dl className="detail-list">
+                          <div>
+                            <dt>Moeda do grupo</dt>
+                            <dd>{s.currency}</dd>
+                          </div>
+                          <div>
+                            <dt>Início do mês</dt>
+                            <dd>Dia {s.monthStartDay}</dd>
+                          </div>
+                          <div>
+                            <dt>Orçamento</dt>
+                            <dd>
+                              {s.budgetEnabled ? "Ativado" : "Desativado"}
+                            </dd>
+                          </div>
+                          <div>
+                            <dt>Identificador do grupo</dt>
+                            <dd>
+                              <code>{s.id}</code>
+                            </dd>
+                          </div>
+                        </dl>
+                        <a
+                          href={scopedHref(
+                            "/account/transactions",
+                            new URLSearchParams({ space: s.id }),
+                          )}
+                        >
+                          Ver transações de {s.name}
+                        </a>
+                      </div>
+                    </DisclosureItem>
+                  </li>
                 ))}
-              </div>
+              </ul>
               <section aria-labelledby="categories-title">
                 <div className="results-heading">
                   <h2 id="categories-title">Categorias de {current?.name}</h2>

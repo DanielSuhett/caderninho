@@ -2,6 +2,7 @@ import { useCallback, useState } from "react";
 
 import type { PortalResponse } from "../../contracts";
 import type { createAccountApi } from "./account-api";
+import { DisclosureItem } from "./disclosure-item";
 import { EmptyView } from "./workspace-filters";
 import {
   momentLabel,
@@ -129,66 +130,97 @@ export function SyncHistoryView({
       {!!data && (
         <>
           {data.records.length ? (
-            <ol className="run-list">
+            <ol
+              aria-label="Rodadas de sincronização"
+              className="record-list"
+            >
               {data.records.map((r) => (
-                <li
-                  className="run-row"
-                  key={r.id}
-                >
-                  <div className="run-top">
-                    <div>
-                      <h3>{r.profileName}</h3>
-                      <p>
-                        {r.personName} · início {momentLabel(r.admittedAt)}
-                      </p>
+                <li key={r.id}>
+                  <DisclosureItem
+                    className="record-item"
+                    summary={
+                      <>
+                        <span className="record-title">{r.profileName}</span>
+                        <span className="record-value">
+                          <span className={`status-label run-${r.status}`}>
+                            {statuses[r.status]}
+                          </span>
+                        </span>
+                        <span className="record-context">{r.personName}</span>
+                        <span className="record-meta">
+                          <time dateTime={r.admittedAt}>
+                            Início {momentLabel(r.admittedAt)}
+                          </time>
+                          {(r.status === "running" ||
+                            r.status === "pending") && (
+                            <span>
+                              {r.phase
+                                ? (phases[r.phase] ?? r.phase)
+                                : "Aguardando início"}
+                            </span>
+                          )}
+                          {!!r.error && (
+                            <span data-tone="error">
+                              Interrompida · páginas confirmadas preservadas
+                            </span>
+                          )}
+                          {!!r.legacy && <span>Registro recuperado</span>}
+                        </span>
+                      </>
+                    }
+                  >
+                    <div className="record-detail">
+                      <dl className="detail-list">
+                        <div>
+                          <dt>Última etapa</dt>
+                          <dd>
+                            {r.phase
+                              ? (phases[r.phase] ?? r.phase)
+                              : "Não registrada"}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt>Etapas confirmadas</dt>
+                          <dd>{r.sequence}</dd>
+                        </div>
+                        <div>
+                          <dt>Encerramento</dt>
+                          <dd>{finishLabel(r.finishedAt, r.status)}</dd>
+                        </div>
+                        <div>
+                          <dt>Rodada</dt>
+                          <dd>
+                            <code>{r.id}</code>
+                          </dd>
+                        </div>
+                        <div>
+                          <dt>Conexão</dt>
+                          <dd>
+                            <code>{r.connectionId}</code>
+                          </dd>
+                        </div>
+                      </dl>
+                      {!!r.error && (
+                        <p
+                          className="notice"
+                          data-tone="error"
+                        >
+                          Interrompida: <code>{r.error}</code>. As páginas
+                          confirmadas foram preservadas. Consulte o estado da
+                          conexão antes de tentar uma nova importação.
+                        </p>
+                      )}
+                      {!!r.legacy && (
+                        <p className="muted">
+                          Registro recuperado da versão anterior; algumas
+                          informações podem não estar disponíveis.
+                        </p>
+                      )}
+                      <a href="/account/connections">
+                        Ver conexões e atualização
+                      </a>
                     </div>
-                    <span className={`status-label run-${r.status}`}>
-                      {statuses[r.status]}
-                    </span>
-                  </div>
-                  <dl className="detail-list">
-                    <div>
-                      <dt>Última etapa</dt>
-                      <dd>
-                        {r.phase
-                          ? (phases[r.phase] ?? r.phase)
-                          : "Não registrada"}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt>Etapas confirmadas</dt>
-                      <dd>{r.sequence}</dd>
-                    </div>
-                    <div>
-                      <dt>Encerramento</dt>
-                      <dd>{finishLabel(r.finishedAt, r.status)}</dd>
-                    </div>
-                  </dl>
-                  {!!r.error && (
-                    <p
-                      className="notice"
-                      data-tone="error"
-                    >
-                      Interrompida: <code>{r.error}</code>. As páginas
-                      confirmadas foram preservadas. Confira as credenciais e a
-                      autorização na página Conexões.
-                    </p>
-                  )}
-                  {!!r.legacy && (
-                    <p className="muted">
-                      Registro recuperado da versão anterior; algumas
-                      informações podem não estar disponíveis.
-                    </p>
-                  )}
-                  <details className="row-details">
-                    <summary>Identificadores da rodada</summary>
-                    <p>
-                      Rodada: <code>{r.id}</code>
-                    </p>
-                    <p>
-                      Conexão: <code>{r.connectionId}</code>
-                    </p>
-                  </details>
+                  </DisclosureItem>
                 </li>
               ))}
             </ol>

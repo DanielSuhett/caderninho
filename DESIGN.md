@@ -45,7 +45,7 @@ Telas operacionais: largura máxima 850 px; workspace com navegação lateral e 
 
 Superfícies só para agrupar trabalho relacionado. Raios: 10 px nos grupos; 6 px nos controles; 4 px nos badges. Sem brilhos, gradientes, texturas, avatares fictícios ou grids de cards para preencher espaço. Numeração apenas para sequências reais.
 
-Elevação plana nas linhas e métricas; `--shadow-low` nos grupos de contas e editor de perfil aberto; `--shadow-raised` em tooltips; `--shadow-public` no grupo principal de landing/login e nos drawers modais. Formulários dentro do drawer são planos. Sombras neutras não substituem borda, contraste nem hierarquia. Não elevar cada nível de uma composição.
+Elevação plana nas linhas, listas e métricas; `--shadow-low` no editor de perfil aberto; `--shadow-raised` em tooltips; `--shadow-public` no grupo principal de landing/login e nos drawers modais. Formulários dentro do drawer são planos. Sombras neutras não substituem borda, contraste nem hierarquia. Não elevar cada nível de uma composição.
 
 ## Componentes e implementação
 
@@ -116,13 +116,16 @@ O [guia das páginas](docs/frontend-workspace.md) documenta os recortes e limite
 
 A marca e os tokens permanecem. O titular em cada conta é a identificação visual
 principal. O filtro de pessoa no drawer altera a seleção; números de pessoas,
-conexões e contas resumem a seleção real. Contas usam grupos com saldo, moeda,
-origem e data; cartões deixam explícito que o saldo não é dinheiro disponível.
+conexões e contas resumem a seleção real. Contas usam linhas expansíveis com saldo,
+moeda, titular e data observada no resumo; origem e identificadores ficam nos
+detalhes. Cartões deixam explícito que o saldo não é dinheiro disponível.
 Formulários de credenciais ficam recolhidos e nunca mostram valores persistidos.
-Em telas até 700 px, listas de contas e formulários ocupam uma coluna.
+As listas mantêm uma sequência vertical em todas as larguras; o conteúdo de cada
+resumo se rearranja conforme o espaço, sem altura fixa.
 
 `BankMark` mantém um catálogo local de oito marcas, derivado de bancos-brasil com
-licença e revisão registradas. Marcas são sinais auxiliares de 28 px; não substituem
+licença e revisão registradas. Marcas são sinais auxiliares de 28 px na galeria e
+24 px nas linhas de conta; não substituem
 o titular nem o nome da instituição em texto. O contrato atual das contas não
 fornece uma chave confiável de instituição: elas usam o ícone bancário neutro.
 Nunca inferir banco pelo nome da conta, perfil Pluggy, pessoa ou saldo. Cores de
@@ -143,6 +146,19 @@ como revogar acesso, mantêm texto explícito e confirmação. `UiButton tone="d
 aplica o tratamento destrutivo sem inventar uma variante Kumo. Hover, pressionado,
 desabilitado e inválido usam tokens centrais; seleção usa `aria-current` ou
 `aria-pressed`, conforme a função do controle.
+
+`DisclosureItem` é a peça comum das listas de transações, contas, regras, grupos e
+sincronizações. Fornece apenas `details/summary`, chevron Phosphor de 16 px e estados
+compartilhados. Cada domínio compõe seu resumo e detalhe. Toda a linha abre/fecha;
+links e botões pertencem ao detalhe, nunca ao `summary`. Usar divisórias e espaço,
+sem cards individuais, alturas fixas ou um controle minúsculo exclusivo para abrir.
+
+O resumo conserva o que muda a interpretação: titular, sinal/moeda e pendência ou
+exclusão nas transações; natureza do saldo e parcialidade nas contas; estado,
+prioridade e alcance das regras; moeda e orçamento dos grupos; estado, titular,
+início, falha e recuperação histórica nas sincronizações. IDs e explicações longas
+ficam na expansão. Categorias e etiquetas sem informação adicional permanecem
+listas simples; não adicionar expansão vazia só para uniformizar aparência.
 
 `WorkspaceSkeleton` aparece na carga inicial. Na atualização da mesma consulta, os
 dados existentes permanecem visíveis; um aviso indica atualização ou falha, sem

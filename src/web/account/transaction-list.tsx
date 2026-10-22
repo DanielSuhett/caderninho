@@ -1,8 +1,8 @@
-import { CaretDownIcon } from "@phosphor-icons/react";
 import type { z } from "zod/v4";
 
 import type { TransactionListSchema } from "../../contracts";
 import { formatBalance } from "./dashboard-view";
+import { DisclosureItem } from "./disclosure-item";
 import { dayLabel } from "./workspace-resource";
 
 type Transaction = z.infer<
@@ -37,47 +37,43 @@ export function TransactionList({
             : formatBalance(row.amountMinor, row.currency);
         return (
           <li key={row.id}>
-            <details className="transaction-item">
-              <summary
-                className="transaction-summary"
-                data-wide-amount={
-                  amount.length > 18 || row.amountMinor === null
-                }
-              >
-                <span className="transaction-description">
-                  {row.description || "Sem descrição"}
-                </span>
-                <span className="transaction-amount">
-                  <strong>{amount}</strong>
-                </span>
-                <span className="transaction-account">
-                  <span>{account}</span>
-                  <span className="transaction-owner">{row.personName}</span>
-                </span>
-                <span className="transaction-meta">
-                  <time dateTime={row.date}>{dayLabel(row.date)}</time>
-                  <span className="transaction-category">{category}</span>
-                  <span>{row.direction === "DEBIT" ? "Saída" : "Entrada"}</span>
-                  {row.status === "PENDING" && (
-                    <span
-                      className="transaction-state"
-                      data-tone="warning"
-                    >
-                      Pendente
+            <DisclosureItem
+              className={`transaction-item ${amount.length > 18 || row.amountMinor === null ? "wide-amount" : ""}`}
+              summary={
+                <>
+                  <span className="transaction-description">
+                    {row.description || "Sem descrição"}
+                  </span>
+                  <span className="transaction-amount">
+                    <strong>{amount}</strong>
+                  </span>
+                  <span className="transaction-account">
+                    <span>{account}</span>
+                    <span className="transaction-owner">{row.personName}</span>
+                  </span>
+                  <span className="transaction-meta">
+                    <time dateTime={row.date}>{dayLabel(row.date)}</time>
+                    <span className="transaction-category">{category}</span>
+                    <span>
+                      {row.direction === "DEBIT" ? "Saída" : "Entrada"}
                     </span>
-                  )}
-                  {!!row.ignored && (
-                    <span className="transaction-state">
-                      Ignorada nas análises
-                    </span>
-                  )}
-                </span>
-                <CaretDownIcon
-                  aria-hidden
-                  className="transaction-chevron"
-                  size={16}
-                />
-              </summary>
+                    {row.status === "PENDING" && (
+                      <span
+                        className="transaction-state"
+                        data-tone="warning"
+                      >
+                        Pendente
+                      </span>
+                    )}
+                    {!!row.ignored && (
+                      <span className="transaction-state">
+                        Ignorada nas análises
+                      </span>
+                    )}
+                  </span>
+                </>
+              }
+            >
               <dl className="transaction-detail">
                 <div>
                   <dt>Conta</dt>
@@ -111,7 +107,7 @@ export function TransactionList({
                   </dd>
                 </div>
               </dl>
-            </details>
+            </DisclosureItem>
           </li>
         );
       })}

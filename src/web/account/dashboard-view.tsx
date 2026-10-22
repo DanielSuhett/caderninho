@@ -3,7 +3,9 @@ import { type FormEvent, type MouseEvent, useCallback } from "react";
 import type { HouseholdCommand, PortalResponse } from "../../contracts";
 import { UiButton } from "../ui";
 import { BankMark } from "./bank-mark";
+import { DisclosureItem } from "./disclosure-item";
 import { HouseholdPanel } from "./household-view";
+import { dayLabel } from "./workspace-resource";
 import {
   FilterDrawer,
   WorkspaceHeading,
@@ -61,6 +63,7 @@ export function DashboardView(props: {
     Object.entries(c.accounts).map(([id, a]) => ({
       ...a,
       id,
+      partial: c.partial,
       personName: c.personName ?? "Eu",
       profileName: c.profileName ?? "Pluggy principal",
     })),
@@ -199,36 +202,78 @@ export function DashboardView(props: {
                 </p>
               </div>
             )}
-            <div className="account-grid">
+            <ul
+              aria-label="Contas e cartões"
+              className="record-list"
+            >
               {accounts.map((a) => (
-                <article
-                  className="bank-account"
-                  key={a.id}
-                >
-                  <div className="account-owner">
-                    <strong>{a.personName}</strong>
-                    <span>{a.type === "CREDIT" ? "Cartão" : "Conta"}</span>
-                  </div>
-                  <h3 className="bank-heading">
-                    <BankMark />
-                    {a.name}
-                  </h3>
-                  <p className="account-balance">
-                    {formatBalance(a.balanceMinor, a.currency)}
-                  </p>
-                  <p className="muted">
-                    {a.type === "CREDIT"
-                      ? "Saldo do cartão · não é dinheiro disponível"
-                      : "Saldo informado pela instituição"}
-                  </p>
-                  <footer>
-                    {a.profileName}
-                    <br />
-                    <time>{timestamp(a.balanceObservedAt)}</time>
-                  </footer>
-                </article>
+                <li key={a.id}>
+                  <DisclosureItem
+                    className={
+                      formatBalance(a.balanceMinor, a.currency).length > 18 ||
+                      a.balanceMinor === null
+                        ? "record-item wide-value"
+                        : "record-item"
+                    }
+                    summary={
+                      <>
+                        <span className="record-title bank-heading">
+                          <BankMark />
+                          {a.name}
+                        </span>
+                        <span className="record-value">
+                          {formatBalance(a.balanceMinor, a.currency)}
+                        </span>
+                        <span className="record-context">{a.personName}</span>
+                        <span className="record-meta">
+                          <span>
+                            {a.type === "CREDIT"
+                              ? "Cartão · não é dinheiro disponível"
+                              : "Conta · saldo informado"}
+                          </span>
+                          <span>
+                            {a.balanceObservedAt
+                              ? `Saldo em ${dayLabel(a.balanceObservedAt)}`
+                              : "Saldo ainda não observado"}
+                          </span>
+                          {!!a.partial && (
+                            <span data-tone="warning">Dados parciais</span>
+                          )}
+                        </span>
+                      </>
+                    }
+                  >
+                    <div className="record-detail">
+                      <dl className="detail-list">
+                        <div>
+                          <dt>Titular</dt>
+                          <dd>{a.personName}</dd>
+                        </div>
+                        <div>
+                          <dt>Perfil Pluggy</dt>
+                          <dd>{a.profileName}</dd>
+                        </div>
+                        <div>
+                          <dt>Saldo observado em</dt>
+                          <dd>{timestamp(a.balanceObservedAt)}</dd>
+                        </div>
+                        <div>
+                          <dt>Identificador da conta</dt>
+                          <dd>
+                            <code>{a.id}</code>
+                          </dd>
+                        </div>
+                      </dl>
+                      <a
+                        href={`/account/transactions?${new URLSearchParams({ accountId: a.id, ...(personId && { person: personId }), space: new URLSearchParams(location.search).get("space") ?? "personal" })}`}
+                      >
+                        Ver transações desta conta
+                      </a>
+                    </div>
+                  </DisclosureItem>
+                </li>
               ))}
-            </div>
+            </ul>
           </section>
         </>
       )}

@@ -3,6 +3,7 @@ import { useCallback, useState } from "react";
 import { UiButton } from "../ui";
 import { BankMark, bankMarks } from "./bank-mark";
 import { DesignPalette } from "./design-palette";
+import { DisclosureItem } from "./disclosure-item";
 import { TransactionList } from "./transaction-list";
 import { EmptyView } from "./workspace-filters";
 import { ResourceFeedback } from "./workspace-resource";
@@ -315,6 +316,63 @@ export function DesignSystemView() {
             },
           ]}
         />
+      </section>
+      <section aria-labelledby="design-disclosures">
+        <h2 id="design-disclosures">Listas que abrem pelo item inteiro</h2>
+        <p>
+          Contas, regras, grupos e sincronizações compartilham o mesmo
+          disclosure de Transações. Estados importantes ficam visíveis; ações e
+          identificadores ficam nos detalhes. Use clique, Enter ou Espaço.
+        </p>
+        <ul
+          aria-label="Exemplo de disclosure"
+          className="record-list"
+        >
+          <li>
+            <DisclosureItem
+              className="record-item"
+              summary={
+                <>
+                  <span className="record-title">
+                    Compras da casa · exemplo
+                  </span>
+                  <span className="record-value">
+                    <span
+                      className="status-label"
+                      data-tone="neutral"
+                    >
+                      Ativa
+                    </span>
+                  </span>
+                  <span className="record-context">
+                    Contém “Mercado” · Alimentação
+                  </span>
+                  <span className="record-meta">
+                    <span>Prioridade 10</span>
+                    <span>Saídas</span>
+                    <span>Todas as contas do grupo</span>
+                  </span>
+                </>
+              }
+            >
+              <div className="record-detail">
+                <dl className="detail-list">
+                  <div>
+                    <dt>Categoria</dt>
+                    <dd>Alimentação</dd>
+                  </div>
+                  <div>
+                    <dt>Identificador fictício</dt>
+                    <dd>
+                      <code>demo-rule</code>
+                    </dd>
+                  </div>
+                </dl>
+                <a href="/account/rules">Ver regras da instalação</a>
+              </div>
+            </DisclosureItem>
+          </li>
+        </ul>
       </section>
       <section aria-labelledby="design-states">
         <h2 id="design-states">Estados de consulta</h2>
