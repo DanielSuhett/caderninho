@@ -8,7 +8,19 @@ import type { Admission, SyncRepository, SyncRun } from "../entity";
 import { publicationData } from "./publication.repository";
 
 const active = () => inArray(connections.importStatus, ["pending", "running"]);
-function current(row: typeof connections.$inferSelect | undefined): SyncRun {
+const runFields = {
+  id: connections.id,
+  importAdmittedAt: connections.importAdmittedAt,
+  importCheckpoint: connections.importCheckpoint,
+  importId: connections.importId,
+  importSequence: connections.importSequence,
+  importStatus: connections.importStatus,
+};
+function current(
+  row:
+    | Pick<typeof connections.$inferSelect, keyof typeof runFields>
+    | undefined,
+): SyncRun {
   if (
     !(
       row?.importId &&
@@ -46,19 +58,26 @@ function replay(saved: SyncRun, expected: SyncRun) {
 }
 export function createSyncRepository(binding: D1Database): SyncRepository {
   const db = database(binding);
-  const read = async (id: string) =>
+  const read = async (id: string, connectionId?: string) =>
     current(
       await db
-        .select()
+        .select(runFields)
         .from(connections)
-        .where(eq(connections.importId, id))
+        .where(
+          and(
+            eq(connections.importId, id),
+            connectionId === undefined
+              ? undefined
+              : eq(connections.id, connectionId),
+          ),
+        )
         .get(),
     );
   return {
     async active() {
       return (
         await db
-          .select()
+          .select(runFields)
           .from(connections)
           .where(active())
           .orderBy(connections.id)
@@ -106,7 +125,11 @@ export function createSyncRepository(binding: D1Database): SyncRepository {
                 ),
               ),
             db
-              .select()
+              .select({
+                importAdmittedAt: connections.importAdmittedAt,
+                importId: connections.importId,
+                importStatus: connections.importStatus,
+              })
               .from(connections)
               .where(eq(connections.id, connectionId)),
           ]);
@@ -150,7 +173,7 @@ export function createSyncRepository(binding: D1Database): SyncRepository {
     },
     async publish(input) {
       const { run, now, next, done } = input;
-      const saved = replay(await read(run.id), run);
+      const saved = replay(await read(run.id, run.connectionId), run);
       if (saved) {
         return saved;
       }
@@ -195,7 +218,7 @@ export function createSyncRepository(binding: D1Database): SyncRepository {
         ]),
       );
       if (error) {
-        const committed = replay(await read(run.id), run);
+        const committed = replay(await read(run.id, run.connectionId), run);
         if (committed) {
           return committed;
         }

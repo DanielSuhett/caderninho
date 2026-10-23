@@ -32,6 +32,13 @@ export function createInstallationRepository(
             inArray(connections.id, selection.connectionIds),
         )
         .orderBy(connections.id);
+      if (
+        selection.connectionIds?.some(
+          (id) => !items.some((row) => row.id === id),
+        )
+      ) {
+        throw new Error("NOT_FOUND");
+      }
       return {
         connections: items.map((row) => ({
           accounts: row.accounts,

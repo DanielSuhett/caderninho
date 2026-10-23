@@ -4,5 +4,6 @@ CREATE TRIGGER connection_limit BEFORE INSERT ON connections WHEN (SELECT count(
 CREATE TABLE transactions(id TEXT PRIMARY KEY NOT NULL,account_id TEXT NOT NULL,date TEXT NOT NULL,status TEXT NOT NULL CHECK(status IN ('PENDING','POSTED')),direction TEXT NOT NULL CHECK(direction IN ('DEBIT','CREDIT')),currency TEXT NOT NULL,amount_minor TEXT,description TEXT NOT NULL,category TEXT);
 CREATE INDEX transaction_date ON transactions(date,account_id,id);
 CREATE INDEX transaction_account ON transactions(account_id,date,id);
-CREATE INDEX transaction_status ON transactions(status,date);
-CREATE INDEX transaction_category ON transactions(category);
+CREATE INDEX transaction_status ON transactions(status,date,account_id,id);
+CREATE INDEX transaction_category ON transactions(category,date,account_id,id);
+CREATE INDEX transaction_posted_totals ON transactions(direction,currency,date,account_id,amount_minor,category) WHERE status='POSTED';

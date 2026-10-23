@@ -98,8 +98,8 @@ invalida o cursor. Totais
 consideram toda a seleção SQL, não uma página. Moedas permanecem separadas.
 
 Valores monetários são inteiros em strings, com até 30 dígitos por registro. A
-soma SQL usa parcelas inteiras de três dígitos, reconstruídas com BigInt. Não usa
-REAL nem converte valores financeiros para Number. Precisão/moeda não suportada
+soma SQL usa cinco parcelas inteiras de seis dígitos, reconstruídas com BigInt.
+Não usa REAL nem converte valores financeiros para Number. Precisão/moeda não suportada
 fica desconhecida, sem arredondar para zero.
 
 Dia financeiro da origem é preservado. Elegibilidade usa o dia corrente em

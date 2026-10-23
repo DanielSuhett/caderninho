@@ -50,7 +50,17 @@ export const transactions = sqliteTable(
   (t) => [
     index("transaction_date").on(t.date, t.accountId, t.id),
     index("transaction_account").on(t.accountId, t.date, t.id),
-    index("transaction_status").on(t.status, t.date),
-    index("transaction_category").on(t.category),
+    index("transaction_status").on(t.status, t.date, t.accountId, t.id),
+    index("transaction_category").on(t.category, t.date, t.accountId, t.id),
+    index("transaction_posted_totals")
+      .on(
+        t.direction,
+        t.currency,
+        t.date,
+        t.accountId,
+        t.amountMinor,
+        t.category,
+      )
+      .where(sql`${t.status}='POSTED'`),
   ],
 );

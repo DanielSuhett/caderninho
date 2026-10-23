@@ -103,7 +103,7 @@ export async function fetchMcp(request: Request, env: Bindings) {
               event: DiagnosticEvent.mcp,
               ...(!error && { outcome: Outcome.success }),
             });
-            const payload = error ? { error: publicError(error) } : data;
+            const payload = error ? publicError(error) : data;
             return {
               content: [{ text: JSON.stringify(payload), type: "text" }],
               isError: !!error,
@@ -142,13 +142,20 @@ export async function fetchMcp(request: Request, env: Bindings) {
 
 function publicError(error: Error) {
   if (safeErrors.has(error.message)) {
-    return error.message;
+    return { error: error.message };
   }
   if (error instanceof z.ZodError) {
-    return "INVALID_FILTER";
+    return {
+      error: "INVALID_FILTER",
+      issues: error.issues.map((issue) => ({
+        message:
+          issue.code === "unrecognized_keys" ? "Unknown field" : issue.message,
+        path: issue.path.join("."),
+      })),
+    };
   }
   if (error instanceof Fault && error.code.startsWith("UPSTREAM_")) {
-    return "UPSTREAM_UNAVAILABLE";
+    return { error: "UPSTREAM_UNAVAILABLE" };
   }
-  return "IMPORT_FAILED";
+  return { error: "IMPORT_FAILED" };
 }

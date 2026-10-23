@@ -1,13 +1,27 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { assertMinor, decimal, minor } from "..";
+import { assertMinor, decimal, exactJSON, minor } from "..";
 
 const canonicalMinorErrorPattern = /canonical integer, at most 30 digits/;
 const invalidDecimalPattern = /INVALID_DECIMAL/;
 const decimalRangePattern = /DECIMAL_RANGE/;
 const currencyScaleUnsupportedPattern = /CURRENCY_SCALE_UNSUPPORTED/;
 const moneyPrecisionUnsupportedPattern = /MONEY_PRECISION_UNSUPPORTED/;
+
+await test("provider JSON retains numeric lexemes and rejects malformed syntax before shape validation", () => {
+  assert.deepEqual(
+    exactJSON(
+      '{"amount":9007199254740993.29,"values":[1e3,null,true],"name":"Synthetic"}',
+    ),
+    {
+      amount: "9007199254740993.29",
+      name: "Synthetic",
+      values: ["1e3", null, true],
+    },
+  );
+  assert.throws(() => exactJSON('{"amount":'), SyntaxError);
+});
 
 await test("stored minor units preserve the shared integer and 30-digit precision boundary", () => {
   for (const value of [

@@ -1,4 +1,4 @@
-import { Button } from "@cloudflare/kumo/components/button";
+import { Button, LinkButton } from "@cloudflare/kumo/components/button";
 import { Input } from "@cloudflare/kumo/components/input";
 import { type ComponentProps, useId } from "react";
 
@@ -15,6 +15,21 @@ export function UiButton({
     <Button
       size="lg"
       type="submit"
+      {...props}
+      className={`${variant === "primary" ? "caderninho-primary" : ""} ${className}`}
+      variant={variant === "primary" ? "secondary" : variant}
+    />
+  );
+}
+
+export function UiLink({
+  variant = "primary",
+  className = "",
+  ...props
+}: ComponentProps<typeof LinkButton>) {
+  return (
+    <LinkButton
+      size="lg"
       {...props}
       className={`${variant === "primary" ? "caderninho-primary" : ""} ${className}`}
       variant={variant === "primary" ? "secondary" : variant}

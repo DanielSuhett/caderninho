@@ -5,12 +5,18 @@ import type { SafeFields } from "../observability";
 
 const invalidRequests = new Set([
   "EMPTY_FORM",
+  "BODY_REQUIRED",
   "FORM_TOO_LARGE",
   "DUPLICATE_FORM_FIELD",
   "SESSION_REQUIRED",
   "UNKNOWN_ACTION",
 ]);
-export function failureStatus(error: Error): 400 | 403 | 404 | 409 | 500 | 503 {
+export function failureStatus(
+  error: Error,
+): 400 | 403 | 404 | 409 | 413 | 500 | 503 {
+  if (error.message === "BODY_LIMIT") {
+    return 413;
+  }
   if (error.message === "SESSION_REQUIRED") {
     return 403;
   }

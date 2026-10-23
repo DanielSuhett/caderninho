@@ -4,6 +4,7 @@ import type {
   AggregateQuery,
   Metric,
   TransactionFilter,
+  TransactionQuery,
 } from "../../../domain";
 import { connectionPartial, MetricDefinition } from "../../../domain";
 import { hash } from "../../../shared";
@@ -30,7 +31,49 @@ function accountMembership(filter: TransactionFilter = {}, bank = false) {
   return sql`${t.accountId} IN (SELECT account.key FROM ${c}, json_each(${c.accounts}) AS account ${condition ? sql`WHERE ${condition}` : sql``})`;
 }
 function selectedAccounts(ids: string[]) {
-  return sql`SELECT value FROM json_each(${JSON.stringify(ids)})`;
+  const [id] = ids;
+  if (ids.length === 1 && id !== undefined) {
+    return eq(t.accountId, id);
+  }
+  return sql`${t.accountId} IN (SELECT value FROM json_each(${JSON.stringify(ids)}))`;
+}
+function descriptionContains(value: string) {
+  const letters = new Map<string, string>();
+  const characters = Array.from(value, (character) => {
+    const lower = character.toLowerCase();
+    const upper = character.toUpperCase();
+    if (lower !== upper && lower.length === 1 && upper.length === 1) {
+      if (upper.charCodeAt(0) > 127) {
+        letters.set(upper, lower);
+      }
+      return lower;
+    }
+    return character;
+  });
+  const needle = characters.join("");
+  if (!letters.size) {
+    return sql`instr(lower(${t.description}),${needle})>0`;
+  }
+  // D1 limits LIKE/GLOB patterns to 50 bytes. Fold the query's Unicode pairs
+  // in SQL, then search literally; neither text length nor wildcards grow a pattern.
+  if (letters.size <= 32) {
+    let folded: SQL = sql`lower(${t.description})`;
+    for (const [upper, lower] of letters) {
+      folded = sql`replace(${folded},${upper},${lower})`;
+    }
+    return sql`instr(${folded},${needle})>0`;
+  }
+  // Unusual inputs with many alphabets use two parameters instead of exceeding
+  // D1's 100 bound parameters or nesting one expression per Unicode pair.
+  return sql`EXISTS (
+    WITH RECURSIVE folded(value,position) AS (
+      SELECT lower(${t.description}),0
+      UNION ALL
+      SELECT replace(folded.value,json_extract(letter.value,'$[0]'),json_extract(letter.value,'$[1]')),folded.position+1
+      FROM folded JOIN json_each(${JSON.stringify([...letters])}) AS letter ON letter.key=folded.position
+    )
+    SELECT 1 FROM folded WHERE position=${letters.size} AND instr(value,${needle})>0
+  )`;
 }
 function amountComparison(bound: string, minimum: boolean) {
   const value = BigInt(bound).toString();
@@ -50,8 +93,7 @@ function amountComparison(bound: string, minimum: boolean) {
 function filterWhere(filter: TransactionFilter = {}) {
   return and(
     filter.connectionIds && accountMembership(filter),
-    filter.accountIds &&
-      sql`${t.accountId} IN (${selectedAccounts(filter.accountIds)})`,
+    filter.accountIds && selectedAccounts(filter.accountIds),
     filter.from === undefined ? undefined : sql`${t.date}>=${filter.from}`,
     filter.to === undefined ? undefined : sql`${t.date}<=${filter.to}`,
     filter.currency === undefined ? undefined : eq(t.currency, filter.currency),
@@ -62,7 +104,7 @@ function filterWhere(filter: TransactionFilter = {}) {
     filter.category === undefined ? undefined : eq(t.category, filter.category),
     filter.description === undefined
       ? undefined
-      : sql`instr(lower(${t.description}),lower(${filter.description}))>0`,
+      : descriptionContains(filter.description),
     filter.minAmountMinor === undefined
       ? undefined
       : amountComparison(filter.minAmountMinor, true),
@@ -71,45 +113,45 @@ function filterWhere(filter: TransactionFilter = {}) {
       : amountComparison(filter.maxAmountMinor, false),
   );
 }
+function cursorWhere({ cursor, filter }: TransactionQuery) {
+  if (!cursor) {
+    return;
+  }
+  if (
+    filter?.accountIds?.length === 1 &&
+    filter.accountIds[0] === cursor.accountId
+  ) {
+    // The account is constant. Match the remaining (date,id) index suffix
+    // so pages with the same date do not rescan earlier transaction IDs.
+    return sql`(${t.date},${t.id})<(${cursor.date},${cursor.id})`;
+  }
+  return sql`(${t.date},${t.accountId},${t.id})<(${cursor.date},${cursor.accountId},${cursor.id})`;
+}
 const moneyTotal = (value: SQL<string | null>) => {
+  // Five limbs preserve 30 digits. Each term is at most 999999; even one row
+  // per byte of D1's 10 GB limit cannot overflow SQLite's signed 64-bit SUM.
   const limb = (offset: number) =>
-    sql<string>`CAST(coalesce(sum(CASE WHEN ${value} LIKE '-%' THEN -1 ELSE 1 END * CAST(substr(substr('000000000000000000000000000000'||replace(${value},'-',''),-30),${offset + 1},3) AS INTEGER)),0) AS TEXT)`.as(
+    sql<string>`CAST(coalesce(sum(CASE WHEN ${value} LIKE '-%' THEN -1 ELSE 1 END * CAST(substr(substr('000000000000000000000000000000'||replace(${value},'-',''),-30),${offset + 1},6) AS INTEGER)),0) AS TEXT)`.as(
       `amount_${offset}`,
     );
   return {
     a: limb(0),
-    b: limb(3),
-    c: limb(6),
-    d: limb(9),
-    e: limb(12),
-    f: limb(15),
-    g: limb(18),
-    h: limb(21),
-    i: limb(24),
-    j: limb(27),
+    b: limb(6),
+    c: limb(12),
+    d: limb(18),
+    e: limb(24),
   };
 };
 function total(value: Record<keyof ReturnType<typeof moneyTotal>, string>) {
-  return [
-    value.a,
-    value.b,
-    value.c,
-    value.d,
-    value.e,
-    value.f,
-    value.g,
-    value.h,
-    value.i,
-    value.j,
-  ]
-    .reduce((sum, part) => sum * 1000n + BigInt(part), 0n)
+  return [value.a, value.b, value.c, value.d, value.e]
+    .reduce((sum, part) => sum * 1_000_000n + BigInt(part), 0n)
     .toString();
 }
 export function createFinancialRepository(
   binding: D1Database,
 ): FinancialRepository {
   const db = database(binding);
-  const qualityConnections = (filter: TransactionFilter = {}) =>
+  const qualityConnections = () =>
     db
       .select({
         accounts: c.accounts,
@@ -121,16 +163,40 @@ export function createFinancialRepository(
         lastSuccessAt: c.lastSuccessAt,
       })
       .from(c)
-      .where(
-        and(
-          filter.connectionIds && inArray(c.id, filter.connectionIds),
-          filter.accountIds &&
-            sql`EXISTS(SELECT 1 FROM json_each(${c.accounts}) AS account WHERE account.key IN (${selectedAccounts(filter.accountIds)}))`,
-        ),
-      )
       .orderBy(c.id);
+  function selectedQuality(
+    rows: Awaited<ReturnType<typeof qualityConnections>>,
+    filter: TransactionFilter = {},
+  ) {
+    if (
+      filter.connectionIds?.some((id) => !rows.some((row) => row.id === id)) ||
+      filter.accountIds?.some(
+        (id) => !rows.some((row) => Object.hasOwn(row.accounts, id)),
+      )
+    ) {
+      throw new Error("NOT_FOUND");
+    }
+    return rows.filter(
+      (row) =>
+        (!filter.connectionIds || filter.connectionIds.includes(row.id)) &&
+        (!filter.accountIds ||
+          filter.accountIds.some((id) => Object.hasOwn(row.accounts, id))),
+    );
+  }
   function partial(rows: Awaited<ReturnType<typeof qualityConnections>>) {
     return !rows.length || rows.some(connectionPartial);
+  }
+  function oldestSuccess(rows: Awaited<ReturnType<typeof qualityConnections>>) {
+    let oldest: string | null = null;
+    for (const row of rows) {
+      if (!row.lastSuccessAt) {
+        return null;
+      }
+      if (!oldest || row.lastSuccessAt < oldest) {
+        oldest = row.lastSuccessAt;
+      }
+    }
+    return oldest;
   }
   return {
     async aggregate(input, referenceDay) {
@@ -163,10 +229,10 @@ export function createFinancialRepository(
       const group = input.groupBy
         ? groupings[input.groupBy]
         : sql<string | null>`NULL`;
-      const [groups, connectionQuality] = await db.batch([
+      const [groups, catalog] = await db.batch([
         db
           .select({
-            amount: moneyTotal(amount),
+            ...(input.metric !== "count" && { amount: moneyTotal(amount) }),
             amountCount: sql<string>`CAST(count(${t.amountMinor}) AS TEXT)`.as(
               "amount_count",
             ),
@@ -180,10 +246,11 @@ export function createFinancialRepository(
           })
           .from(t)
           .where(and(filterWhere(input.filter), eligible, metricFilter))
-          .groupBy(t.currency, group)
-          .orderBy(t.currency, group),
-        qualityConnections(input.filter),
+          .groupBy(t.currency, ...(input.groupBy ? [group] : []))
+          .orderBy(t.currency, ...(input.groupBy ? [group] : [])),
+        qualityConnections(),
       ]);
+      const connectionQuality = selectedQuality(catalog, input.filter);
       return {
         definition: MetricDefinition[input.metric],
         groups: groups.map((row) => ({
@@ -191,12 +258,13 @@ export function createFinancialRepository(
           currency: row.currency,
           group: row.group,
           totalMinor:
-            input.metric !== "count" && BigInt(row.amountCount) > 0n
+            row.amount && BigInt(row.amountCount) > 0n
               ? total(row.amount)
               : null,
           unknownAmountCount: row.unknownAmountCount,
         })),
         metric: input.metric,
+        oldestLastSuccessAt: oldestSuccess(connectionQuality),
         partial:
           partial(connectionQuality) ||
           groups.some((row) => BigInt(row.unknownAmountCount) > 0n),
@@ -208,22 +276,35 @@ export function createFinancialRepository(
         throw new Error("CURSOR_SCOPE_MISMATCH");
       }
       const { cursor } = input;
-      const after = cursor
-        ? sql`(${t.date},${t.accountId},${t.id})<(${cursor.date},${cursor.accountId},${cursor.id})`
-        : undefined;
-      const [rows, connectionQuality] = await db.batch([
+      const { to, ...withoutTo } = input.filter ?? {};
+      // The cursor already enforces this upper bound. Keeping both can make
+      // SQLite seek only by date and rescan earlier pages with the same date.
+      const filter =
+        cursor && to !== undefined && cursor.date <= to
+          ? withoutTo
+          : input.filter;
+      const [rows, catalog] = await db.batch([
         db
           .select(transactionFields)
           .from(t)
-          .where(and(filterWhere(input.filter), after))
+          .where(and(filterWhere(filter), cursorWhere(input)))
           .orderBy(desc(t.date), desc(t.accountId), desc(t.id))
           .limit(input.limit + 1),
-        qualityConnections(input.filter),
+        qualityConnections(),
       ]);
-      const state = await hash({
-        connections: connectionQuality,
-        referenceDay,
-      });
+      const connectionQuality = selectedQuality(catalog, input.filter);
+      const hasMore = rows.length > input.limit;
+      // Account changes commit with importSequence in the same batch. Hash the
+      // revision rather than the catalog, and only when pagination needs it.
+      const state =
+        cursor || hasMore
+          ? await hash({
+              connections: connectionQuality.map(
+                ({ accounts: _accounts, ...revision }) => revision,
+              ),
+              referenceDay,
+            })
+          : undefined;
       if (cursor && cursor.state !== state) {
         throw new Error("RESTART_REQUIRED");
       }
@@ -231,7 +312,7 @@ export function createFinancialRepository(
       const last = records.at(-1);
       return {
         cursor:
-          rows.length > input.limit && last
+          hasMore && last && state
             ? {
                 accountId: last.accountId,
                 date: last.date,
@@ -240,6 +321,7 @@ export function createFinancialRepository(
                 state,
               }
             : null,
+        oldestLastSuccessAt: oldestSuccess(connectionQuality),
         partial: partial(connectionQuality),
         records,
         referenceDay,

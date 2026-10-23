@@ -32,6 +32,7 @@ const wire = z.object({
     })
     .optional(),
 });
+const errorPayload = z.object({ error: z.string() });
 const requestMeta = {
   "io.modelcontextprotocol/clientCapabilities": {},
   "io.modelcontextprotocol/clientInfo": {
@@ -148,9 +149,10 @@ test("official OAuth, four standard tools/defaults, protocol errors and grant re
     ).json(),
   );
   assert.equal(invalid.result?.isError, true);
-  assert.deepEqual(JSON.parse(invalid.result?.content?.[0]?.text ?? "{}"), {
-    error: "INVALID_FILTER",
-  });
+  assert.deepEqual(
+    errorPayload.parse(JSON.parse(invalid.result?.content?.[0]?.text ?? "{}")),
+    { error: "INVALID_FILTER" },
+  );
   const tasks = wire.parse(
     await (await call(second, "tasks/get", { taskId: "obsolete" })).json(),
   );
@@ -240,7 +242,9 @@ test("HTTP 200 tool failures remain visible and private arguments never enter di
   assert.equal(response.status, 200, JSON.stringify(body));
   assert.equal(wire.parse(body).result?.isError, true);
   assert.deepEqual(
-    JSON.parse(wire.parse(body).result?.content?.[0]?.text ?? "{}"),
+    errorPayload.parse(
+      JSON.parse(wire.parse(body).result?.content?.[0]?.text ?? "{}"),
+    ),
     {
       error: "INVALID_FILTER",
     },
@@ -433,13 +437,16 @@ test("MCP accumulates imported history and updates only matching source IDs", as
       { filter: { ignored: true } },
       { filter: { presence: "not_observed" } },
     ].map(async (args) => {
-      assert.deepEqual(await call("caderninho_transactions", args, true), {
-        error: "INVALID_FILTER",
-      });
+      assert.deepEqual(
+        errorPayload.parse(await call("caderninho_transactions", args, true)),
+        { error: "INVALID_FILTER" },
+      );
     }),
   );
   assert.deepEqual(
-    await call("caderninho_aggregate", { metric: "known_spending" }, true),
+    errorPayload.parse(
+      await call("caderninho_aggregate", { metric: "known_spending" }, true),
+    ),
     { error: "INVALID_FILTER" },
   );
   await collect(updated, "2026-10-03T00:00:00.000Z");
