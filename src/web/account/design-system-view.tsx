@@ -16,6 +16,47 @@ import {
 } from "./workspace-ui";
 
 const spaces = [1, 2, 3, 4, 6, 8];
+const sampleInstallment = {
+  accountId: "demo-card",
+  amountMinor: "-39066",
+  cardNumber: "1234",
+  category: "Viagem",
+  currency: "BRL",
+  date: "2026-10-01",
+  description: "Hospedagem · exemplo",
+  direction: "DEBIT" as const,
+  id: "demo-installment-1",
+  ignored: false,
+  installmentNumber: 1,
+  manual: false,
+  personId: "demo-ana",
+  personName: "Ana (exemplo)",
+  purchaseDate: "2026-10-01",
+  status: "POSTED" as const,
+  totalInstallments: 3,
+};
+const samplePurchase = {
+  ...sampleInstallment,
+  anchorDate: "2026-10-01",
+  anchorKind: "purchase" as const,
+  installments: [
+    sampleInstallment,
+    {
+      ...sampleInstallment,
+      date: "2026-11-01",
+      id: "demo-installment-2",
+      installmentNumber: 2,
+      status: "PENDING" as const,
+    },
+    {
+      ...sampleInstallment,
+      date: "2026-12-01",
+      id: "demo-installment-3",
+      installmentNumber: 3,
+      status: "PENDING" as const,
+    },
+  ],
+};
 
 export function DesignSystemView() {
   const params = new URLSearchParams(location.search);
@@ -239,6 +280,7 @@ export function DesignSystemView() {
           ]}
           categories={[]}
           records={[
+            samplePurchase,
             {
               accountId: "demo-card",
               amountMinor: "-12345",
@@ -315,6 +357,7 @@ export function DesignSystemView() {
               status: "POSTED",
             },
           ]}
+          referenceDay="2026-10-23"
         />
       </section>
       <section aria-labelledby="design-disclosures">

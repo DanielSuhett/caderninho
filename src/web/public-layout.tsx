@@ -81,7 +81,7 @@ export function PublicLayout({
       .access-form input:not([type="hidden"]) { display: block; width: 100%; min-height: 48px; padding: 12px; font: inherit; background: var(--page); color: var(--text); border: 1px solid var(--control-border); border-radius: 6px; }
       .access-form input[aria-invalid="true"] { border-color: var(--error-border); }
       .access-form button { width: 100%; justify-content: center; text-align: center; }
-      .access-error { padding: 12px 14px; margin-bottom: 20px; border: 1px solid var(--error-border); border-left-width: 3px; border-radius: 6px; color: var(--error-text); background: var(--error-bg); font-size: 14px; }
+      .access-error { padding: 12px 14px; margin-bottom: 20px; border: 1px solid var(--error-border); border-radius: 6px; color: var(--error-text); background: var(--error-bg); font-size: 14px; }
       .access-main details { margin-top: 24px; border-top: 1px solid var(--line); border-bottom: 0; }
       .access-main .access-help { margin-top: 20px; font-size: 12px; color: var(--muted); text-align: center; }
       .public-reveal { animation: public-enter 400ms cubic-bezier(.2,.7,.2,1) both; }

@@ -138,7 +138,7 @@ export function DesignHead() {
     [data-tone="neutral"] {
       --tone-text: var(--muted); --tone-bg: var(--surface); --tone-border: var(--line);
     }
-    .notice { padding: 16px; border: 1px solid var(--tone-border); border-left-width: 3px; border-radius: 6px; }
+    .notice { padding: 16px; border: 1px solid var(--tone-border); border-radius: 6px; }
     .notice a:not([data-kumo-component]) { color: inherit; }
     .notice p { color: inherit; }
     @media (prefers-reduced-motion: reduce) { :is(button, a)[data-kumo-component] { transition: none; } }

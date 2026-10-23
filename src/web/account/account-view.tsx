@@ -17,12 +17,15 @@ export function AccountView() {
   const personId = new URLSearchParams(location.search).get("person") ?? "";
   const lifetime = useRef<AbortController | null>(null);
   const locked = useRef(false);
+  const snapshotFingerprint = useRef("");
   const [api] = useState(() => createAccountApi(location.origin));
   const [widget] = useState(createConnectWidget);
   const refresh = useCallback(
     async (signal: AbortSignal) => {
       const state = await api.read(signal);
-      if (!signal.aborted) {
+      const fingerprint = JSON.stringify(state);
+      if (!signal.aborted && fingerprint !== snapshotFingerprint.current) {
+        snapshotFingerprint.current = fingerprint;
         setSnapshot(state);
       }
     },

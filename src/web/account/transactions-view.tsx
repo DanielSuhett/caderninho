@@ -4,7 +4,7 @@ import {
   AccountListSchema,
   PortalQuerySchema,
   type PortalResponse,
-  TransactionListSchema,
+  PortalTransactionListSchema,
   type WorkspaceCatalog,
 } from "../../contracts";
 import type { createAccountApi } from "./account-api";
@@ -27,10 +27,11 @@ export function TransactionsView({
       const { query } = PortalQuerySchema.parse({
         csrf: snapshot.csrf,
         query: {
+          future: params.get("future") === "on",
           limit: 50,
           order: "date_desc",
           spaceId,
-          tool: "get_transactions",
+          tool: "get_portal_transactions",
           ...Object.fromEntries(
             [
               "cursor",
@@ -62,7 +63,7 @@ export function TransactionsView({
       return {
         accounts: AccountListSchema.parse(accounts).data.records,
         catalog,
-        result: TransactionListSchema.parse(result),
+        result: PortalTransactionListSchema.parse(result),
       };
     },
     [api, snapshot.csrf, spaceId, params],
@@ -75,6 +76,13 @@ export function TransactionsView({
   }
   const first = new URLSearchParams(params);
   first.delete("cursor");
+  const future = params.get("future") === "on";
+  const switched = new URLSearchParams(first);
+  if (future) {
+    switched.delete("future");
+  } else {
+    switched.set("future", "on");
+  }
   return (
     <>
       <WorkspaceHeading
@@ -177,8 +185,8 @@ export function TransactionsView({
                   name="status"
                 >
                   <option value="">Todos</option>
-                  <option value="POSTED">Confirmadas</option>
-                  <option value="PENDING">Pendentes</option>
+                  <option value="POSTED">Registradas na origem</option>
+                  <option value="PENDING">Pendentes na origem</option>
                 </select>
               </label>
               <label className="checkbox-label">
@@ -201,21 +209,29 @@ export function TransactionsView({
             </p>
           )}
           <div className="results-heading">
-            <h2>Lançamentos</h2>
+            <h2>{future ? "Lançamentos futuros" : "Compras e lançamentos"}</h2>
             <span>
-              {data.result.data.records.length} nesta página · mais recentes
-              primeiro
+              {data.result.data.records.length} nesta página · por primeira data
             </span>
           </div>
+          <a
+            className="transaction-period-link"
+            href={`/account/transactions?${switched}`}
+          >
+            {future ? "Voltar ao histórico" : "Ver lançamentos futuros"}
+          </a>
           {data.result.data.records.length ? (
             <TransactionList
               accounts={data.accounts}
               categories={data.catalog.categories}
               records={data.result.data.records}
+              referenceDay={data.result.data.referenceDay}
             />
           ) : (
             <EmptyView title="Nenhuma transação neste recorte">
-              Altere os filtros ou importe suas conexões na página Conexões.
+              {future
+                ? "Nenhum lançamento futuro encontrado. Volte ao histórico ou altere os filtros."
+                : "Altere os filtros ou importe suas conexões na página Conexões."}
             </EmptyView>
           )}
           <div className="pagination">
@@ -228,7 +244,7 @@ export function TransactionsView({
                 className="page-next"
                 href={`/account/transactions?${next}`}
               >
-                Próximas 50 transações
+                Próximos 50 itens
               </a>
             )}
           </div>
@@ -245,6 +261,7 @@ function transactionFilterSummary(
   accounts: Array<{ id: string; name: string }>,
 ) {
   return [
+    ...(params.get("future") === "on" ? ["Lançamentos futuros"] : []),
     `Grupo: ${catalog.spaces.find((s) => s.id === (params.get("space") || "personal"))?.name ?? (params.get("space") || "personal")}`,
     `Pessoa: ${snapshot.people.find((p) => p.id === params.get("person"))?.name ?? "Todas"}`,
     ...(params.get("text") ? [`Descrição: ${params.get("text")}`] : []),
@@ -266,7 +283,11 @@ function transactionFilterSummary(
         ]
       : []),
     ...(params.get("status")
-      ? [params.get("status") === "PENDING" ? "Pendentes" : "Confirmadas"]
+      ? [
+          params.get("status") === "PENDING"
+            ? "Pendentes na origem"
+            : "Registradas na origem",
+        ]
       : []),
     ...(params.get("ignored") === "on" ? ["Inclui ignoradas"] : []),
   ];

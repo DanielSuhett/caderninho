@@ -1,14 +1,26 @@
-import { Document } from "./document";
+import { PublicLayout } from "./public-layout";
 import { UiLink } from "./ui";
 
 export function notFoundPage() {
   return (
-    <Document title="Página não encontrada · Caderninho">
-      <main style={{ margin: "80px auto", maxWidth: 640, padding: "0 24px" }}>
+    <PublicLayout
+      access
+      description="A página solicitada não foi encontrada nesta instalação do Caderninho."
+      title="Página não encontrada · Caderninho"
+    >
+      <main
+        className="access-main"
+        id="conteudo"
+        tabIndex={-1}
+      >
         <h1>Página não encontrada.</h1>
-        <p>Conheça o Caderninho e instale sua própria cópia na Cloudflare.</p>
-        <UiLink href="/">Voltar ao Caderninho</UiLink>
+        <p className="access-intro">
+          Conheça o Caderninho e instale sua própria cópia na Cloudflare.
+        </p>
+        <div className="public-actions">
+          <UiLink href="/">Voltar ao Caderninho</UiLink>
+        </div>
       </main>
-    </Document>
+    </PublicLayout>
   );
 }

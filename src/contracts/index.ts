@@ -44,6 +44,7 @@ export {
 export type {
   PortalMutation,
   PortalQuery,
+  PortalTransactionQuery,
   SyncHistoryResult,
   SyncHistorySelection,
   WorkspaceCatalog,
@@ -53,6 +54,7 @@ export {
   CatalogSelectionSchema,
   PortalMutationSchema,
   PortalQuerySchema,
+  PortalTransactionListSchema,
   SyncHistoryCursorSchema,
   SyncHistoryResultSchema,
   SyncHistorySelectionSchema,

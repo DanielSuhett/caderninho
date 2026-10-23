@@ -22,7 +22,7 @@ os valores, os estados e os pares de contraste calculados.
 | --- | --- | --- |
 | Base e texto | `--page` `#000000`, `--surface` `#171717`, `--text` `#edece8`, `--muted` `#adadad` | Hanken sobre neutros; superfície agrupa trabalho. |
 | Superfície e limite | `--surface-raised` `#242424`, `--line` `#414141`, `--control-border` `#858585` | Linha separa conteúdo; borda de controle identifica o campo/ação. |
-| Ação e seleção | `--accent` `#f6821f`, `--on-accent` `#17100a`, `--selected-bg` `#332316`, `--selected-text` `#ffc291` | Laranja orienta ação/foco; seleção também usa estado semântico e marcador. |
+| Ação e seleção | `--accent` `#f6821f`, `--on-accent` `#17100a`, `--selected-bg` `#332316`, `--selected-text` `#ffc291` | Laranja orienta ação/foco; seleção usa fundo, texto e `aria-current`, sem faixa lateral. |
 | Feedback | Famílias `--success-*`, `--warning-*`, `--error-*`, `--info-*` | Cada família tem texto, fundo e borda. Cor acompanha mensagem explícita. |
 | Gráficos e profundidade | `--chart-1` a `--chart-4`; `--shadow-flat`, `--shadow-low`, `--shadow-raised`, `--shadow-public` | Séries têm rótulos; elevação segue a função da superfície. |
 
@@ -46,6 +46,43 @@ Telas operacionais: largura máxima 850 px; workspace com navegação lateral e 
 Superfícies só para agrupar trabalho relacionado. Raios: 10 px nos grupos; 6 px nos controles; 4 px nos badges. Sem brilhos, gradientes, texturas, avatares fictícios ou grids de cards para preencher espaço. Numeração apenas para sequências reais.
 
 Elevação plana nas linhas, listas e métricas; `--shadow-low` no editor de perfil aberto; `--shadow-raised` em tooltips; `--shadow-public` no grupo principal de landing/login e nos drawers modais. Formulários dentro do drawer são planos. Sombras neutras não substituem borda, contraste nem hierarquia. Não elevar cada nível de uma composição.
+
+### Bordas e superfícies
+
+A auditoria de 23/10/2026 fixou três papéis. `--line` é um separador fino entre
+registros ou partes de um mesmo bloco, desenhado **uma vez por encontro**; listas
+contínuas não ganham moldura ou linha superior só por começarem. `--control-border`
+é o contorno de campos, botões e outros controles que precisam de limite visível.
+Avisos usam a borda de seu estado, com 1 px uniforme nos quatro lados; a cor e o
+texto continuam a explicar o estado. O foco de teclado usa outline laranja e
+permanece independente da seleção.
+
+Linhas expansíveis, métricas e etiquetas informativas são planas. Hover e expansão
+podem usar `--surface`, sem transformar cada registro em card. Grupos de trabalho
+que realmente precisam de superfície usam raio de 10 px; controles usam 6 px e
+etiquetas 4 px. Bordas laterais coloridas e molduras tracejadas decorativas não
+fazem parte da linguagem. A navegação ativa usa `--selected-bg`,
+`--selected-text` e `aria-current="page"`, sem faixa laranja à esquerda. A
+borda vertical do drawer separa uma sobreposição da página; a do campo mantém o
+controle reconhecível. Não remover essas fronteiras funcionais para simplificar.
+
+### Auditoria de bordas — 23/10/2026
+
+| Área inspecionada | Ruído encontrado | Padrão aplicado |
+| --- | --- | --- |
+| Navegação e visão geral | Faixa laranja na seleção; métrica com linha superior e inferior; vazio tracejado | Seleção por fundo e texto; um separador após as métricas; vazio pela superfície. |
+| Contas, transações, auditoria e regras | Molduras repetidas em registros, categorias, parcelas e prévias | Listas contínuas com uma linha por encontro; etiquetas por fundo; campos preservam contorno de controle. |
+| Drawers e detalhes | Estilos globais de `section` e `footer` invadiam conteúdo aninhado; parcela somava separadores no primeiro item | Seletores restritos aos filhos de `main`; entrada do detalhe única e divisórias apenas entre parcelas. |
+| Landing, acesso, 404 do site e avisos | Notas com barra lateral colorida, estados com borda assimétrica e 404 sem layout público | Separador neutro nas notas, avisos com contorno uniforme e 404 no shell público. |
+| Galeria visual e componentes compartilhados | Faltavam exemplos de parcelas e seus estados; amostras precisavam refletir a nova gramática | Exemplos de parcelas na galeria e mesmos tokens e raios por função em todas as páginas. |
+
+A revisão de código cobriu os estilos do workspace, auditoria, galeria, landing,
+acesso, consentimento, 404 do site e shell. As oito páginas autenticadas foram
+inspecionadas em desktop e largura compacta com dados sintéticos; landing e acesso
+também foram vistos no compacto. O consentimento foi renderizado com um cliente
+fictício e o `404.html` do site foi revisado em largura compacta. Dados reais,
+widget externo, fluxo OAuth real, outros navegadores e teclado completo exigem
+verificação própria antes de um deploy; não são resultados desta auditoria.
 
 ## Componentes e implementação
 
@@ -86,12 +123,13 @@ nomes completos. Ícones Phosphor de 20 px; todos os alvos compactos medem exata
 44 × 44 px dentro de 6 px laterais. Menu, destinos, referência e saída compartilham
 o mesmo centro. A classe `sidebar-control` também inclui os botões Kumo; não
 misturar famílias para imitar outra biblioteca. O destino ativo usa fundo/texto de
-seleção, borda laranja e `aria-current`. O link de salto leva ao conteúdo.
+seleção e `aria-current`; o foco de teclado mantém outline laranja. O link de salto
+leva ao conteúdo.
 
 A grade tem 4 px entre destinos e entre ações de rodapé; 12 px após o menu. Após
 o último destino: 16 px até o separador de 1 px, depois 12 px até a referência.
-Referência e saída ficam adjacentes; metadados vêm depois. Seleção usa indicador
-interno sem borda que desloque conteúdo. No desktop, os alvos usam coluna de ícone
+Referência e saída ficam adjacentes; metadados vêm depois. A seleção não acrescenta
+borda, sombra ou indicador lateral. No desktop, os alvos usam coluna de ícone
 de 20 px, intervalo de 12 px e texto; a lateral tem padding de 6 px. O layout muda
 em 760/761 px, sem um segundo salto em 1000 px. O guia define a verificação por
 retângulos DOM; ausência de overflow ou screenshot isolado não comprova alinhamento.

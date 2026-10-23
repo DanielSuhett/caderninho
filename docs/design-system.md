@@ -73,8 +73,8 @@ de descobrir uma ação. O foco permanece laranja, inclusive no destrutivo. Tran
 são de 150 ms e são removidas com movimento reduzido.
 
 Seleção de navegação usa `aria-current="page"`; pessoa é selecionada no campo
-nativo do drawer e aparece no resumo aplicado. Fundo e texto de seleção acompanham
-a borda/marcador laranja nos destinos ativos.
+nativo do drawer e aparece no resumo aplicado. Fundo e texto de seleção distinguem
+os destinos ativos, sem faixa ou borda lateral colorida.
 `::selection` usa o mesmo par, mas não altera a seleção lógica da aplicação.
 Campos inválidos recebem `aria-invalid="true"` e borda de erro, com mensagem
 associada; placeholder não substitui label nem mensagem de validação.
@@ -133,6 +133,21 @@ Esses cálculos não comprovam conformidade de uma página inteira. Opacidade,
 sobreposição, fundo adjacente, foco e estados renderizados exigem revisão na UI.
 A linha `#414141` sobre `#171717` tem 1,76:1: adequada como separador decorativo,
 não como único indício de um campo. Sombra não corrige contraste.
+
+### Gramática das bordas
+
+| Peça | Limite | Regra |
+| --- | --- | --- |
+| Lista, métrica e detalhe | `--line` | Um traço horizontal entre partes; sem moldura por registro nem linha duplicada na entrada. |
+| Campo, botão e ação paginada | `--control-border` | Contorno uniforme do controle, com foco por outline independente. |
+| Aviso e estado | `--*-border` | Contorno semântico de 1 px em todos os lados; texto e fundo nomeiam o estado. |
+| Superfície de grupo e drawer | `--line` quando necessário | Fundo e espaço agrupam primeiro; borda completa só quando separa uma superfície real. |
+
+Etiquetas informativas usam `--surface` e raio de 4 px, sem um contorno para cada
+palavra. A rota ativa usa fundo, texto e `aria-current`, sem faixa laranja lateral.
+O drawer mantém sua linha vertical de entrada por ser uma sobreposição. Não usar
+bordas laterais coloridas em notas, gráficos, navegação ou mensagens. Esta regra
+vale para painel, landing, login, consentimento e 404 do site.
 
 ### Séries e gráficos
 
@@ -355,8 +370,8 @@ instalação aparecem depois das ações e ficam ocultos no rail.
 Padding vertical de 6 px e margem vertical de -6 px na sidebar reservam espaço
 para foco sem deslocar o primeiro alvo em relação ao topo de `WorkspaceHeading`.
 Outline de 2 px com offset de 3 px precisa permanecer visível, sem corte pelo
-contêiner rolável. A seleção usa marcador interno de 3 px; não adicionar borda
-estrutural em somente um lado do alvo, pois isso altera o centro de seu conteúdo.
+contêiner rolável. A seleção não usa marcador interno, borda unilateral ou sombra.
+Fundo e texto indicam a rota atual; outline laranja aparece no foco de teclado.
 
 O drawer conserva os nomes e a grade de ícone + texto, com itens de 44 px de altura
 ocupando a largura interna disponível. Seu padding externo vem de `.drawer-body`;
@@ -477,7 +492,7 @@ handlers que disputem com o comportamento nativo ou disclosures aninhados para I
 
 | Domínio | Sempre visível no resumo | Dentro da expansão |
 | --- | --- | --- |
-| Transações | Descrição, valor exato/moeda/sinal, conta e titular, data, categoria, entrada/saída; Pendente e Ignorada quando aplicáveis. | Conta e ID, titular, estado confirmado/pendente, origem manual/importada e ID do lançamento. |
+| Transações | Descrição, valor exato/moeda/sinal, conta e titular, data, categoria, entrada/saída; Pendente, Futura e Ignorada quando aplicáveis. | Parcelas conhecidas com data, valor e estado da origem; conta, titular, origem manual/importada e ID do lançamento. |
 | Contas e cartões | Nome, titular, saldo/moeda, tipo, data observada e Dados parciais quando aplicável. Cartão mantém “não é dinheiro disponível”. | Perfil Pluggy, data/hora observada completa, ID da conta e link para suas transações. |
 | Regras | Nome, Ativa/Pausada, condição e categoria, prioridade, movimento e restrição de conta. | Explicação completa da regra, campos de alcance, ID e link para lançamentos com a condição. |
 | Grupos | Nome, tipo, moeda, orçamento ou desativado/valor não definido e início do mês. | Configuração do período/orçamento, ID e link para transações do grupo. |

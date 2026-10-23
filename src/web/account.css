@@ -33,7 +33,7 @@ main:has(.finance-dashboard) {
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: 20px;
   padding: 14px 0;
-  border-block: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
 }
 .workspace-metrics dt,
 .workspace-metrics small {
@@ -61,8 +61,7 @@ main:has(.finance-dashboard) {
 .empty-state {
   padding: 16px;
   background: var(--surface);
-  border: 1px dashed var(--line);
-  border-radius: 12px;
+  border-radius: 10px;
 }
 .finance-dashboard input,
 .finance-dashboard select {
@@ -115,10 +114,10 @@ main:has(.finance-dashboard) {
 }
 .sync-state {
   display: inline-block;
-  padding: 2px 12px;
+  padding: 2px 8px;
   font-size: 13px;
   border: 1px solid var(--line);
-  border-radius: 20px;
+  border-radius: 4px;
 }
 .people-editor {
   display: grid;
@@ -160,14 +159,11 @@ main:has(.finance-dashboard) {
 .profile-grid .profile-editor form {
   margin-top: 16px;
 }
-.add-profile {
-  border-style: dashed;
-}
 .mcp-address {
   display: block;
   padding: 16px;
   background: var(--surface);
-  border-radius: 8px;
+  border-radius: 10px;
 }
 @media (max-width: 700px) {
   .profile-grid,
@@ -287,7 +283,6 @@ main:has(.workspace) > nav {
 .workspace .sidebar-control[aria-current="page"] {
   color: var(--selected-text);
   background: var(--selected-bg);
-  box-shadow: inset 3px 0 var(--accent);
 }
 .workspace .sidebar-control:focus-visible,
 .workspace .sidebar-toggle > button:focus-visible {
@@ -429,13 +424,19 @@ main:has(.workspace) > nav {
   font-size: 14px;
   color: var(--muted);
 }
+.transaction-period-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  margin-top: 4px;
+  font-size: 14px;
+}
 /* Lists share one native disclosure target per item. */
 .transaction-list {
   padding: 0;
   margin: 16px 0 0;
   container-type: inline-size;
   list-style: none;
-  border-top: 1px solid var(--line);
 }
 .transaction-list > li {
   border-bottom: 1px solid var(--line);
@@ -493,6 +494,12 @@ main:has(.workspace) > nav {
   font-variant-numeric: tabular-nums;
   overflow-wrap: anywhere;
 }
+.transaction-amount > span {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--muted);
+}
 .transaction-account {
   display: flex;
   flex-wrap: wrap;
@@ -521,11 +528,57 @@ main:has(.workspace) > nav {
   color: var(--text);
   overflow-wrap: anywhere;
   background: var(--surface);
-  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+.transaction-installment-label {
+  padding: 1px 8px;
+  color: var(--text);
+  background: var(--surface);
   border-radius: 4px;
 }
 .transaction-state[data-tone="warning"] {
   color: var(--warning-text);
+}
+.workspace .transaction-installments {
+  padding: 16px 12px 0;
+  margin: 0 12px;
+  border-top: 1px solid var(--line);
+}
+.transaction-installments h3 {
+  margin: 0 0 12px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.transaction-installments ol {
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+.transaction-installments li {
+  display: grid;
+  grid-template-columns: 64px 104px minmax(100px, 1fr) minmax(120px, 1fr);
+  gap: 8px 16px;
+  align-items: start;
+  padding: 10px 0;
+  font-size: 13px;
+}
+.transaction-installments :where(li + li) {
+  border-top: 1px solid var(--line);
+}
+.transaction-installments li strong {
+  font-weight: 550;
+  font-variant-numeric: tabular-nums;
+}
+.installment-number {
+  font-weight: 600;
+  color: var(--text);
+}
+.installment-states {
+  color: var(--muted);
+}
+.transaction-installments p {
+  margin: 12px 0 0;
+  font-size: 12px;
 }
 .disclosure-chevron {
   grid-row: 1 / 4;
@@ -544,6 +597,10 @@ main:has(.workspace) > nav {
   padding: 16px 12px 20px;
   margin: 0 12px;
   border-top: 1px solid var(--line);
+}
+.transaction-installments + .transaction-detail {
+  padding-top: 20px;
+  border-top: 0;
 }
 .transaction-detail dt {
   font-size: 12px;
@@ -613,6 +670,16 @@ main:has(.workspace) > nav {
   .transaction-detail {
     grid-template-columns: minmax(0, 1fr);
     padding-inline: 0;
+  }
+  .transaction-installments {
+    padding-inline: 0;
+  }
+  .transaction-installments li {
+    grid-template-columns: 64px minmax(0, 1fr);
+  }
+  .transaction-installments li strong,
+  .installment-states {
+    grid-column: 2;
   }
 }
 .row-details {
@@ -696,8 +763,8 @@ main:has(.workspace) > nav {
 .tag-list li {
   padding: 6px 12px;
   font-size: 14px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
+  background: var(--surface);
+  border-radius: 4px;
 }
 .sr-only,
 .skip-link:not(:focus) {
@@ -1053,7 +1120,6 @@ main:has(.workspace) > nav {
   margin: 16px 0 0;
   container-type: inline-size;
   list-style: none;
-  border-top: 1px solid var(--line);
 }
 .record-list > li {
   padding: 0;
@@ -1278,7 +1344,7 @@ main:has(.workspace) > nav {
   margin: 0;
   font-size: 12px;
   font-weight: 600;
-  border-top: 1px solid var(--control-border);
+  border-top: 1px solid var(--line);
 }
 .condition-row {
   display: grid;
@@ -1305,7 +1371,7 @@ main:has(.workspace) > nav {
   min-height: 150px;
   padding-block: 20px;
   margin-top: 24px;
-  border-top: 1px solid var(--control-border);
+  border-top: 1px solid var(--line);
 }
 .preview-samples {
   padding: 0;
@@ -1318,7 +1384,7 @@ main:has(.workspace) > nav {
   justify-content: space-between;
   padding-block: 10px;
   font-size: 13px;
-  border-bottom: 1px solid var(--control-border);
+  border-bottom: 1px solid var(--line);
 }
 .preview-samples li > span {
   min-width: 0;

@@ -13,10 +13,21 @@ export const PortalQuerySchema = z
       planningDefinitions[2].schema.extend({
         tool: z.literal("get_transactions"),
       }),
+      planningDefinitions[2].schema
+        .omit({ cardNumber: true, tagId: true })
+        .extend({
+          future: z.boolean().default(false),
+          order: z.literal("date_desc").default("date_desc"),
+          tool: z.literal("get_portal_transactions"),
+        }),
     ]),
   })
   .strict();
 export type PortalQuery = z.input<typeof PortalQuerySchema>["query"];
+export type PortalTransactionQuery = Extract<
+  z.infer<typeof PortalQuerySchema>["query"],
+  { tool: "get_portal_transactions" }
+>;
 const id = z.string().min(1).max(160);
 const minor = z
   .string()
@@ -70,26 +81,45 @@ export const AccountListSchema = z.object({
     records: z.array(named.extend({ personId: id, personName: z.string() })),
   }),
 });
+const TransactionRecordSchema = z.object({
+  accountId: id,
+  amountMinor: minor,
+  category: z.string().nullable(),
+  currency: z.string(),
+  date: z.string(),
+  description: z.string(),
+  direction: z.enum(["DEBIT", "CREDIT"]),
+  id,
+  ignored: z.boolean(),
+  manual: z.boolean(),
+  personId: id,
+  personName: z.string(),
+  status: z.enum(["POSTED", "PENDING"]),
+});
 export const TransactionListSchema = z.object({
   data: z.object({
     cursor: z.string().nullable(),
+    records: z.array(TransactionRecordSchema),
+  }),
+  partial: z.boolean(),
+});
+const PortalInstallmentSchema = TransactionRecordSchema.extend({
+  cardNumber: z.string().nullable(),
+  installmentNumber: z.number().int().nullable(),
+  purchaseDate: z.string().nullable(),
+  totalInstallments: z.number().int().nullable(),
+});
+export const PortalTransactionListSchema = z.object({
+  data: z.object({
+    cursor: z.string().nullable(),
     records: z.array(
-      z.object({
-        accountId: id,
-        amountMinor: minor,
-        category: z.string().nullable(),
-        currency: z.string(),
-        date: z.string(),
-        description: z.string(),
-        direction: z.enum(["DEBIT", "CREDIT"]),
-        id,
-        ignored: z.boolean(),
-        manual: z.boolean(),
-        personId: id,
-        personName: z.string(),
-        status: z.enum(["POSTED", "PENDING"]),
+      PortalInstallmentSchema.extend({
+        anchorDate: z.string(),
+        anchorKind: z.enum(["transaction", "purchase", "first_seen"]),
+        installments: z.array(PortalInstallmentSchema),
       }),
     ),
+    referenceDay: z.string(),
   }),
   partial: z.boolean(),
 });

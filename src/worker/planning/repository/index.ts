@@ -520,7 +520,7 @@ export function createPlanningRepository(
           .from(transactions)
           .where(after === undefined ? undefined : gt(transactions.id, after))
           .orderBy(transactions.id)
-          .limit(500);
+          .limit(5000);
         if (!rows.length) {
           return;
         }

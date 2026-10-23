@@ -250,7 +250,7 @@ export function landingPage({
             margin: 0;
             padding: 24px;
             border: 1px solid var(--line);
-            border-radius: 6px;
+            border-radius: 10px;
             background: var(--surface);
           }
           .response-comparison figcaption {
@@ -315,8 +315,8 @@ export function landingPage({
           .response-method {
             grid-column: 1 / -1;
             max-width: none;
-            padding-left: 16px;
-            border-left: 2px solid var(--accent);
+            padding-top: 16px;
+            border-top: 1px solid var(--line);
             font-size: 14px;
             color: var(--muted);
           }
@@ -338,7 +338,7 @@ export function landingPage({
             margin: 0;
             padding: 24px;
             border: 1px solid var(--line);
-            border-radius: 6px;
+            border-radius: 10px;
             background: var(--surface);
           }
           .cpu-chart figcaption {
@@ -407,8 +407,8 @@ export function landingPage({
           .cpu-method {
             grid-column: 1 / -1;
             margin: 0;
-            padding-left: 16px;
-            border-left: 2px solid var(--accent);
+            padding-top: 16px;
+            border-top: 1px solid var(--line);
             font-size: 14px;
             color: var(--muted);
           }

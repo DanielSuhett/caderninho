@@ -1,8 +1,9 @@
-import type { PlanningCommand } from "../../contracts";
+import type { PlanningCommand, PortalTransactionQuery } from "../../contracts";
 import { planningDefinitions } from "../../contracts";
 import { hash, tryCatch } from "../../shared";
 import type { PlanningRepository } from "./entity";
 import { planningMutation } from "./mutations.service";
+import { portalTransactions } from "./portal-transactions.service";
 import { planningQuery } from "./queries.service";
 
 const reads = new Set<string>(
@@ -84,6 +85,23 @@ export function createPlanningService(
         });
       }
       return result;
+    },
+    async portalTransactions(input: PortalTransactionQuery) {
+      const snapshot = await repository.read();
+      const result = await portalTransactions(
+        input,
+        snapshot,
+        repository,
+        now(),
+      );
+      if ((await repository.revision()) !== snapshot.revision) {
+        throw new Error("RESTART_REQUIRED");
+      }
+      return {
+        data: result,
+        partial: snapshot.partial,
+        revision: snapshot.revision,
+      };
     },
   };
 }

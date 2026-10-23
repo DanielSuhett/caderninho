@@ -150,8 +150,8 @@ export function DesignPalette({ demonstrate }: { demonstrate: () => void }) {
           ))}
         </div>
         <p className="muted">
-          Base: tabelas e listas. Baixa: filtros e grupos. Elevada: dicas sobre
-          o conteúdo. Pública: landing e login.
+          Base: tabelas, listas e métricas. Baixa: editor de perfil aberto.
+          Elevada: dicas sobre o conteúdo. Pública: landing, login e drawers.
         </p>
       </section>
       <section aria-labelledby="design-controls">

@@ -25,7 +25,7 @@ export function Portal({ children }: { children: ReactNode }) {
             border: 1px solid var(--control-border);
             border-radius: 4px;
           }
-          details {
+          main > details {
             border-top: 1px solid var(--line);
             padding: 20px 0;
             margin-top: 20px;
@@ -93,7 +93,7 @@ export function Portal({ children }: { children: ReactNode }) {
             font-weight: 650;
             font-size: 14px;
           }
-          section {
+          main > section {
             border-top: 1px solid var(--line);
             margin-top: 36px;
             padding-top: 20px;
@@ -173,7 +173,7 @@ export function Portal({ children }: { children: ReactNode }) {
             outline: 3px solid var(--accent);
             outline-offset: 4px;
           }
-          footer {
+          main > footer {
             border-top: 1px solid var(--line);
             padding-top: 24px;
             margin-top: 56px;

@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { beforeEach, test } from "vitest";
 
 import {
+  PortalTransactionListSchema,
   SyncHistoryResultSchema,
   TransactionListSchema,
   WorkspaceCatalogSchema,
@@ -182,4 +183,225 @@ test("transaction page reads exact effective amounts, person filters and date or
       .sort()
       .reverse(),
   );
+});
+
+test("portal groups card installments before pagination and keeps future and pending distinct", async () => {
+  const purchaseDate = "2024-01-12";
+  await collect(
+    source(
+      [
+        transaction({
+          accountId: "a",
+          creditCardMetadata: {
+            cardNumber: "1234",
+            installmentNumber: 1,
+            purchaseDate,
+            totalInstallments: 3,
+          },
+          date: "2024-01-12",
+          description: "Villas De Paraty",
+          id: "card-1",
+        }),
+        transaction({
+          accountId: "a",
+          creditCardMetadata: {
+            cardNumber: "1234",
+            installmentNumber: 2,
+            purchaseDate,
+            totalInstallments: 3,
+          },
+          date: "2024-02-23",
+          description: "Villas De Paraty",
+          id: "card-2",
+          status: "PENDING",
+        }),
+        transaction({
+          accountId: "a",
+          creditCardMetadata: {
+            cardNumber: "1234",
+            installmentNumber: 3,
+            purchaseDate,
+            totalInstallments: 3,
+          },
+          date: "2099-03-26",
+          description: "Villas De Paraty",
+          id: "card-3",
+          status: "PENDING",
+        }),
+        transaction({
+          accountId: "b",
+          date: "2099-04-01",
+          description: "Scheduled bank payment",
+          id: "future-bank",
+          status: "PENDING",
+        }),
+        transaction({
+          accountId: "b",
+          date: "2024-01-01",
+          description: "Past bank payment",
+          id: "past-bank",
+        }),
+      ],
+      [
+        account({ name: "Card", type: "CREDIT" }),
+        account({ id: "b", name: "Bank", type: "BANK" }),
+      ],
+    ),
+  );
+  const app = fixture();
+  const cookie = cookies(await login(app));
+  const query = {
+    future: false,
+    limit: 1,
+    order: "date_desc",
+    spaceId: "personal",
+    tool: "get_portal_transactions",
+  };
+  const first = PortalTransactionListSchema.parse(
+    await (await command(app, cookie, "query", { query })).json(),
+  );
+  assert.equal(first.data.records.length, 1);
+  assert.equal(first.data.records[0]?.anchorDate, purchaseDate);
+  assert.equal(first.data.records[0]?.anchorKind, "purchase");
+  assert.deepEqual(
+    first.data.records[0]?.installments.map((row) => [
+      row.id,
+      row.installmentNumber,
+      row.status,
+    ]),
+    [
+      ["card-1", 1, "POSTED"],
+      ["card-2", 2, "PENDING"],
+      ["card-3", 3, "PENDING"],
+    ],
+  );
+  assert.ok(first.data.cursor);
+  const second = PortalTransactionListSchema.parse(
+    await (
+      await command(app, cookie, "query", {
+        query: { ...query, cursor: first.data.cursor },
+      })
+    ).json(),
+  );
+  assert.deepEqual(
+    second.data.records.map((row) => row.id),
+    ["past-bank"],
+  );
+  const upcoming = PortalTransactionListSchema.parse(
+    await (
+      await command(app, cookie, "query", {
+        query: { ...query, future: true, limit: 50 },
+      })
+    ).json(),
+  );
+  assert.deepEqual(
+    upcoming.data.records.map((row) => row.id),
+    ["future-bank"],
+  );
+  const pending = PortalTransactionListSchema.parse(
+    await (
+      await command(app, cookie, "query", {
+        query: {
+          ...query,
+          from: "2024-01-12",
+          limit: 50,
+          status: "PENDING",
+          to: "2024-01-12",
+        },
+      })
+    ).json(),
+  );
+  assert.deepEqual(
+    pending.data.records[0]?.installments.map((row) => row.id),
+    ["card-1", "card-2", "card-3"],
+  );
+  assert.equal(pending.data.records.length, 1);
+  assert.equal(
+    (
+      await command(app, cookie, "query", {
+        query: { ...query, cursor: first.data.cursor, status: "PENDING" },
+      })
+    ).status,
+    409,
+  );
+});
+
+test("ambiguous card purchases stay separate instead of merging equal merchants", async () => {
+  await collect(
+    source(
+      [1, 2, 3, 4].map((number) =>
+        transaction({
+          creditCardMetadata: {
+            installmentNumber: number % 2 ? 1 : 2,
+            purchaseDate: "2024-05-12",
+            totalInstallments: 2,
+          },
+          date: number % 2 ? "2024-05-12" : "2024-06-12",
+          description: "Same merchant",
+          id: `ambiguous-${number}`,
+        }),
+      ),
+      [account({ type: "CREDIT" })],
+    ),
+  );
+  const app = fixture();
+  const cookie = cookies(await login(app));
+  const page = PortalTransactionListSchema.parse(
+    await (
+      await command(app, cookie, "query", {
+        query: {
+          future: false,
+          limit: 50,
+          order: "date_desc",
+          spaceId: "personal",
+          tool: "get_portal_transactions",
+        },
+      })
+    ).json(),
+  );
+  assert.equal(page.data.records.length, 4);
+  assert.ok(page.data.records.every((row) => row.installments.length === 0));
+});
+
+test("card installments without purchase date use the first observed installment month", async () => {
+  await collect(
+    source(
+      [
+        ["first", 1, "2024-12-26"],
+        ["second", 2, "2025-01-26"],
+        ["third", 3, "2025-02-23"],
+      ].map(([id, installmentNumber, date]) =>
+        transaction({
+          amount: "-390.66",
+          creditCardMetadata: {
+            installmentNumber: Number(installmentNumber),
+            totalInstallments: 3,
+          },
+          date: String(date),
+          description: "Villas De Paraty",
+          id: String(id),
+        }),
+      ),
+      [account({ type: "CREDIT" })],
+    ),
+  );
+  const app = fixture();
+  const cookie = cookies(await login(app));
+  const page = PortalTransactionListSchema.parse(
+    await (
+      await command(app, cookie, "query", {
+        query: {
+          future: false,
+          limit: 50,
+          order: "date_desc",
+          spaceId: "personal",
+          tool: "get_portal_transactions",
+        },
+      })
+    ).json(),
+  );
+  assert.equal(page.data.records.length, 1);
+  assert.equal(page.data.records[0]?.anchorDate, "2024-12-26");
+  assert.equal(page.data.records[0]?.anchorKind, "first_seen");
+  assert.equal(page.data.records[0]?.installments.length, 3);
 });

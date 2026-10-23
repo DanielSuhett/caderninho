@@ -120,7 +120,11 @@ export function installationRoutes(access: Hono<PortalEnv>) {
       c.get("session").csrf,
       PortalQuerySchema,
     );
-    return c.json(await planningService(c.env).execute(input.query));
+    const service = planningService(c.env);
+    if (input.query.tool === "get_portal_transactions") {
+      return c.json(await service.portalTransactions(input.query));
+    }
+    return c.json(await service.execute(input.query));
   });
   app.post("/api/account/planning", async (c) => {
     const input = await command(
