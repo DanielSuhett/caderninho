@@ -81,5 +81,12 @@ Nos ensaios Node 24 de 50 execuções, a página de 500 registros variou de 6,3 
 10,3 ms de CPU, e a de 347 chegou a 7,9 ms. A landing usa o maior resultado
 observado; a página cheia ultrapassou a referência Free de 10 ms em um ensaio.
 Esses resultados excluem execução D1 e rede e não certificam CPU faturada na
-Cloudflare. Os testes de Pi/Codex anteriores à integração não certificam as
-94 ferramentas atuais nem substituem validação do onboarding implantado.
+Cloudflare. Os testes locais não substituem validação do onboarding implantado.
+
+A revalidação de 23/10 executou quatro cenários reais em cada cliente, Pi e
+Codex, contra o servidor MCP local com o catálogo integrado de 94 ferramentas.
+Os oito casos passaram: total exato e parcialidade (uma chamada), métricas por
+mês (três), busca com acentos e paginação (sete) e status/sync com cooldown
+(duas). Isso valida esses cenários nos dois hosts, sem afirmar cobertura
+end-to-end de cada ferramenta ou OAuth com bancos reais. A autenticação do Pi
+foi isolada durante o teste e a cópia temporária das credenciais foi removida.

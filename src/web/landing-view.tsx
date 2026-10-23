@@ -724,7 +724,7 @@ export function landingPage({
             >
               <figcaption>
                 CPU time · benchmark local ·{" "}
-                <time dateTime="2026-10-22">22 out 2026</time>
+                <time dateTime="2026-10-23">23 out 2026</time>
               </figcaption>
               <div className="cpu-sample">
                 <div className="cpu-label">
