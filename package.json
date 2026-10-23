@@ -8,6 +8,7 @@
     "build": "npm run build:portal && wrangler deploy --dry-run --outdir dist/worker",
     "build:portal": "vite build",
     "deploy": "npm run build:portal && wrangler d1 migrations apply DB --remote && wrangler deploy",
+    "deploy:site": "npm run build:portal && wrangler pages deploy --cwd site --branch main",
     "dev": "npm run build:portal && wrangler dev",
     "format": "biome format --write .",
     "format:check": "biome format .",

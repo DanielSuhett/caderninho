@@ -56,6 +56,19 @@ Antes de iniciar o servidor, preencha `.dev.vars` com valores sintéticos e uma
 senha de 16 a 256 caracteres. Os testes usam fixtures e não precisam de contas bancárias.
 `npm run build` prepara os assets e o dry-run do Worker; não publica o serviço.
 
+## Site público
+
+A divulgação fica em [usecaderninho.com](https://usecaderninho.com), em um
+projeto Cloudflare Pages separado da instalação financeira. O build
+`npm run build:portal` também gera `dist/site` com HTML, estilos e fonte, sem
+painel, links de entrada, MCP, Functions ou bindings de dados. As referências
+das medições ficam em blocos expansíveis.
+
+Para republicar somente o site, use `npm run deploy:site` com acesso de escrita
+ao Pages. A configuração está em `site/wrangler.jsonc`. Esse comando não
+publica o Worker financeiro nem aplica migrações. As cotas mensais mostradas
+são equivalentes de 30 dias; os limites Free de D1/KV continuam diários.
+
 [Contribuição e checks](CONTRIBUTING.md) · [Arquitetura](docs/adr-modular-monolith.md) ·
 [Referência técnica](docs/cloudflare-product.md) · [Identidade visual](DESIGN.md) · [Componentes e layouts](docs/design-system.md)
 

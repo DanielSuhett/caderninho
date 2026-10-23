@@ -17,6 +17,30 @@ import {
 import type { Publication } from "../entity";
 
 type Database = ReturnType<typeof database>;
+const sourceValues = {
+  accountId: sql`excluded.account_id`,
+  amountMinor: sql`excluded.amount_minor`,
+  category: sql`excluded.category`,
+  currency: sql`excluded.currency`,
+  date: sql`excluded.date`,
+  description: sql`excluded.description`,
+  direction: sql`excluded.direction`,
+  status: sql`excluded.status`,
+};
+const sourceChanged = sql`
+  ${transactions.accountId} IS NOT excluded.account_id OR
+  ${transactions.amountMinor} IS NOT excluded.amount_minor OR
+  ${transactions.category} IS NOT excluded.category OR
+  ${transactions.currency} IS NOT excluded.currency OR
+  ${transactions.date} IS NOT excluded.date OR
+  ${transactions.description} IS NOT excluded.description OR
+  ${transactions.direction} IS NOT excluded.direction OR
+  ${transactions.status} IS NOT excluded.status`;
+const sourceUpdate = {
+  set: sourceValues,
+  setWhere: sourceChanged,
+  target: transactions.id,
+};
 export async function publicationData(db: Database, input: Publication) {
   const { run, now } = input;
   const edits: BatchItem<"sqlite">[] = [];
@@ -61,14 +85,162 @@ export async function publicationData(db: Database, input: Publication) {
         .where(eq(connections.id, run.connectionId)),
     );
   }
-  for (const transaction of input.transactions ?? []) {
-    edits.push(...transactionMetadata(db, transaction));
+  const records = input.transactions ?? [];
+  if (!records.length) {
+    return edits;
+  }
+  const json = JSON.stringify(records);
+  // At most three UTF-8 bytes per UTF-16 code unit: keep the JSON parameter
+  // below D1's 2 MB string limit. Very large descriptions keep scalar bindings.
+  if (json.length > 500_000) {
+    for (const record of records) {
+      edits.push(...transactionMetadata(db, record));
+      edits.push(
+        db.insert(transactions).values(record).onConflictDoUpdate(sourceUpdate),
+      );
+    }
+    return edits;
+  }
+  edits.push(...transactionMetadataPage(db, records, json));
+  edits.push(
+    db
+      .insert(transactions)
+      .select(
+        db
+          .select({
+            accountId: sql<string>`json_extract(value,'$.accountId')`.as(
+              "account_id",
+            ),
+            amountMinor: sql<
+              string | null
+            >`json_extract(value,'$.amountMinor')`.as("amount_minor"),
+            category: sql<string | null>`json_extract(value,'$.category')`.as(
+              "category",
+            ),
+            currency: sql<string>`json_extract(value,'$.currency')`.as(
+              "currency",
+            ),
+            date: sql<string>`json_extract(value,'$.date')`.as("date"),
+            description: sql<string>`json_extract(value,'$.description')`.as(
+              "description",
+            ),
+            direction: sql<string>`json_extract(value,'$.direction')`.as(
+              "direction",
+            ),
+            id: sql<string>`json_extract(value,'$.id')`.as("id"),
+            status: sql<string>`json_extract(value,'$.status')`.as("status"),
+          })
+          .from(sql`json_each(${json})`)
+          .where(sql`true`),
+      )
+      .onConflictDoUpdate(sourceUpdate),
+  );
+  return edits;
+}
 
-    edits.push(
-      db.insert(transactions).values(transaction).onConflictDoUpdate({
-        set: transaction,
-        target: transactions.id,
+function transactionMetadataPage(
+  db: Database,
+  records: NonNullable<Publication["transactions"]>,
+  json: string,
+) {
+  const edits: BatchItem<"sqlite">[] = [];
+  if (!records.some((row) => row.details)) {
+    return edits;
+  }
+  edits.push(
+    db
+      .insert(planningTransactionDetails)
+      .select(
+        db
+          .select({
+            data: sql<
+              typeof planningTransactionDetails.$inferInsert.data
+            >`json_extract(value,'$.details')`.as("data"),
+            id: sql<string>`json_extract(value,'$.id')`.as("id"),
+          })
+          .from(sql`json_each(${json})`)
+          .where(sql`json_type(value,'$.details')='object'`),
+      )
+      .onConflictDoUpdate({
+        set: { data: sql`excluded.data` },
+        setWhere: sql`${planningTransactionDetails.data} IS NOT excluded.data`,
+        target: planningTransactionDetails.id,
       }),
+  );
+  if (records.some((row) => row.details?.cardNumber)) {
+    const id = sql`json_extract(value,'$.accountId')||':'||json_extract(value,'$.details.cardNumber')`;
+    edits.push(
+      db
+        .insert(planningCards)
+        .select(
+          db
+            .select({
+              data: sql<typeof planningCards.$inferInsert.data>`json_object(
+                'accountId',json_extract(value,'$.accountId'),
+                'deleted',json('false'),'hidden',json('false'),
+                'id',${id},'name',json_extract(value,'$.details.cardNumber'),
+                'number',json_extract(value,'$.details.cardNumber'))`.as(
+                "data",
+              ),
+              id: sql<string>`${id}`.as("id"),
+            })
+            .from(sql`json_each(${json})`)
+            .where(
+              sql`coalesce(json_extract(value,'$.details.cardNumber'),'')<>''`,
+            ),
+        )
+        .onConflictDoNothing(),
+    );
+  }
+  if (
+    records.some(
+      (row) =>
+        row.details?.installmentNumber &&
+        row.details.totalInstallments &&
+        row.details.installmentNumber <= row.details.totalInstallments &&
+        row.amountMinor !== null,
+    )
+  ) {
+    const id = sql`'detected:'||json_extract(value,'$.id')`;
+    const merged = sql`json_set(excluded.data,
+      '$.name',json_extract(${planningInstallments.data},'$.name'),
+      '$.categoryId',json_extract(${planningInstallments.data},'$.categoryId'),
+      '$.completed',json(CASE WHEN json_extract(${planningInstallments.data},'$.completed') THEN 'true' ELSE 'false' END),
+      '$.spaceId',json_extract(${planningInstallments.data},'$.spaceId'))`;
+    edits.push(
+      db
+        .insert(planningInstallments)
+        .select(
+          db
+            .select({
+              data: sql<
+                typeof planningInstallments.$inferInsert.data
+              >`json_object(
+                'accountId',json_extract(value,'$.accountId'),
+                'amountMinor',replace(json_extract(value,'$.amountMinor'),'-',''),
+                'categoryId',NULL,'completed',json('false'),
+                'currency',json_extract(value,'$.currency'),
+                'current',json_extract(value,'$.details.installmentNumber'),
+                'id',${id},'manual',json('false'),
+                'name',json_extract(value,'$.description'),'spaceId','personal',
+                'startDate',json_extract(value,'$.date'),
+                'total',json_extract(value,'$.details.totalInstallments'),
+                'transactionIds',json_array(json_extract(value,'$.id')))`.as(
+                "data",
+              ),
+              id: sql<string>`${id}`.as("id"),
+            })
+            .from(sql`json_each(${json})`)
+            .where(sql`json_extract(value,'$.details.installmentNumber')<>0
+              AND json_extract(value,'$.details.totalInstallments')<>0
+              AND json_extract(value,'$.details.installmentNumber')<=json_extract(value,'$.details.totalInstallments')
+              AND json_extract(value,'$.amountMinor') IS NOT NULL`),
+        )
+        .onConflictDoUpdate({
+          set: { data: merged },
+          setWhere: sql`${planningInstallments.data} IS NOT ${merged}`,
+          target: planningInstallments.id,
+        }),
     );
   }
   return edits;

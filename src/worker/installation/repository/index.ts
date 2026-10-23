@@ -46,6 +46,13 @@ export function createInstallationRepository(
             inArray(connections.id, selection.connectionIds),
         )
         .orderBy(connections.id);
+      if (
+        selection.connectionIds?.some(
+          (id) => !items.some((row) => row.id === id),
+        )
+      ) {
+        throw new Error("NOT_FOUND");
+      }
       const owners = await db.select().from(connectionOwners);
       const profiles = await db.select().from(pluggyProfiles);
       const persons = await db.select().from(people);

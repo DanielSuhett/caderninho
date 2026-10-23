@@ -1,12 +1,10 @@
 import Big from "big.js";
 import { parse } from "lossless-json";
-import { z } from "zod/v4";
 
 import { FaultCode } from "./enums";
 import { fail } from "./fault.entity";
 import type { MoneyInput } from "./provider.entity";
 
-const json = z.json();
 const canonicalMinorPattern = /^-?(0|[1-9]\d{0,29})$/;
 const decimalPattern = /^[-+]?\d+(?:\.\d+)?(?:e[-+]?\d+)?$/i;
 const dayPattern = /^\d{4}-\d{2}-\d{2}$/;
@@ -21,7 +19,8 @@ export function assertMinor(value: string) {
 
 // Preserve JSON numeric lexemes before JavaScript can round amounts, quantities or rates.
 export function exactJSON(text: string) {
-  return json.parse(parse(text, null, (lexeme) => lexeme));
+  // The JSON parser checks syntax; provider schemas validate each response shape.
+  return parse(text, null, (lexeme) => lexeme);
 }
 
 export function decimal(value: MoneyInput) {
@@ -100,11 +99,13 @@ function day(value: unknown) {
 export const accountingDay = (value: string | null | undefined) =>
   value === null || value === undefined ? null : day(value.slice(0, 10));
 
+const localDate = new Intl.DateTimeFormat("en-CA", {
+  day: "2-digit",
+  month: "2-digit",
+  timeZone: "America/Sao_Paulo",
+  year: "numeric",
+});
+
 export function localDay(value: Date) {
-  return new Intl.DateTimeFormat("en-CA", {
-    day: "2-digit",
-    month: "2-digit",
-    timeZone: "America/Sao_Paulo",
-    year: "numeric",
-  }).format(value);
+  return localDate.format(value);
 }

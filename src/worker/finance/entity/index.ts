@@ -7,6 +7,7 @@ import type {
 
 export interface QueryResult {
   cursor: Cursor | null;
+  oldestLastSuccessAt: string | null;
   partial: boolean;
   records: TransactionProjection[];
   referenceDay: string;
@@ -22,6 +23,7 @@ export interface AggregateResult {
   definition: string;
   groups: AggregateGroup[];
   metric: AggregateQuery["metric"];
+  oldestLastSuccessAt: string | null;
   partial: boolean;
   referenceDay: string;
 }

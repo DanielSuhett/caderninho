@@ -42,11 +42,158 @@ operações por conta própria. Não há lock durante rede nem expiração de ex
 
 Uma releitura integral por admissão substitui caminhos incrementais, webhooks e
 reconciliações separados. Importações atualizam o mesmo ID e acrescentam novos IDs.
+Registros idênticos não executam UPDATE. A publicação usa um parâmetro JSON
+transitório por página e `json_each` para inserir somente os nove campos, mantendo
+o batch atômico com o checkpoint. Páginas cuja serialização excede 500 mil unidades
+UTF-16 usam parâmetros escalares por registro para respeitar o limite de 2 MB
+por string do D1. Não há nova coluna ou payload persistido.
+A deduplicação compara hashes somente quando um ID se repete
+na mesma página; correções da origem e duplicatas conflitantes continuam verificadas.
 Ausência na origem preserva o histórico e sua elegibilidade nos totais objetivos.
 Consultas e totais informam parcialidade por conexão e valores desconhecidos.
 Contas ausentes e saldos não relidos preservam o valor e a referência antigos.
 Conta conhecida ausente na releitura entre contas encerra a tentativa com erro
 seguro e parcialidade, mesmo que reapareça depois, sem avançar o último sucesso.
+
+## Scans e índices
+
+Cada instalação cria um banco novo a partir de `0001_initial.sql`, que já define
+os índices `(status,date,account_id,id)` e `(category,date,account_id,id)`.
+Há cinco índices explícitos de transações. Não há migração incremental ou
+reconstrução de índices na instalação. A criação inicial é aplicada uma vez;
+não há reset dos dados durante a execução nem a cada deploy.
+
+Os índices atendem ao filtro e à ordenação da paginação. Quando o cursor já impõe
+um limite de data igual ou menor que `to`, a consulta omite apenas esse predicado
+redundante: mantê-lo pode fazer o SQLite reler empates das páginas anteriores.
+O filtro original continua no escopo do cursor e na seleção de qualidade.
+Uma seleção de conta única usa igualdade, dispensando `json_each` e ordenação
+temporária. Nesse caso, o cursor compara `(date,id)` quando a conta do cursor
+coincide com a selecionada, aproveitando o sufixo do índice de conta. A ordem
+pública `(date,account_id,id)` e o formato do cursor permanecem iguais.
+
+O índice parcial `transaction_posted_totals` contém
+`(direction,currency,date,account_id,amount_minor,category) WHERE status='POSTED'`.
+Débitos/créditos usam igualdade na direção e percorrem moedas já ordenadas. Todos
+os campos da agregação estão no índice, sem carregar descrições. A consulta omite
+o `NULL` constante de `GROUP BY`/`ORDER BY` quando não há agrupamento opcional;
+mantém `group: null` na resposta. Intervalos de data sem moeda ainda podem preferir
+o índice de status/data. O índice parcial também permite selecionar direção,
+moeda e intervalo de datas nessa ordem, sem pôr dinheiro em REAL.
+
+A escolha segue as regras de [prefixo e intervalo do SQLite](https://sqlite.org/optoverview.html#where_clause_analysis),
+[índices de cobertura e ordenação](https://sqlite.org/queryplanner.html) e
+[índices do D1](https://developers.cloudflare.com/d1/best-practices/use-indexes/).
+Igualdades precedem o intervalo; as colunas seguintes atendem ordenação/cobertura,
+mas não tornam qualquer combinação de filtros uma busca direta. Não se deve criar
+um índice para cada coluna nem retirar os índices de paginação porque outro atende
+à agregação.
+
+Comparação sintética local em workerd/D1 com 100 mil transações, 20 contas,
+UUIDs, três moedas e descrições de 80 bytes; resultados públicos idênticos. As
+leituras abaixo são da consulta financeira, sem as dez linhas do catálogo.
+Tempo SQL é a média de duas execuções aquecidas, sem estatísticas prévias:
+
+| Consulta | Leituras antes | Leituras depois | SQL antes → depois |
+| --- | --- | --- | --- |
+| Total de débitos | 161.290 | 64.516 | 202,5 → 154 ms |
+| Total de créditos | 129.032 | 32.259 | 118 → 84 ms |
+| Débitos BRL num intervalo mensal | 4.232 | 1.677 | 8 → 7,5 ms |
+| Primeira página de 50 registros de uma conta | 106 | 51 | < 1 ms |
+
+O arquivo passou de 66,7 para 75,7 MiB nesse conjunto. A carga inicial passou de
+600.000 para 696.774 escritas: um novo registro POSTED custa sete escritas,
+incluindo tabela, chave primária e índices, em vez de seis. Reimportação idêntica
+continua sem escrever transações. Esses valores excluem atualizações do controle
+de importação. Uma carga inicial de 100 mil registros excede as cem mil escritas
+diárias do Free mesmo sem o novo índice; os testes não comprovam enquadramento
+automático na cota.
+
+Foram comparados índices de cobertura para status/conta/moeda, diferentes índices
+parciais e tabelas `WITHOUT ROWID`. Ampliar o índice de status fez o planner ignorar
+o melhor caminho para totais em banco sem estatísticas. `WITHOUT ROWID` reduziu
+escritas, mas piorou agregações e não foi adotado; o SQLite também
+[recomenda cautela com linhas largas](https://sqlite.org/withoutrowid.html#when_to_use_without_rowid).
+Um índice adicional de moeda ajudou contagens e moeda rara, mas acrescentou outra
+escrita por transação e não melhorou os totais principais. Não foi incluído.
+
+Os planos e resultados também foram comparados após `ANALYZE`, sem depender dele
+para os ganhos principais. Ele leu mais de um milhão de linhas no cenário de
+100 mil registros. O D1 recomenda `PRAGMA optimize` após criar índices; não há
+`ANALYZE` nem manutenção automática nas requisições ou em cada página de importação.
+Estatísticas e consumo devem ser reavaliados com a distribuição real antes de
+introduzir uma rotina de manutenção.
+
+Leituras de controle da sincronização projetam somente os campos usados. A
+publicação busca o par conexão/importação pela chave primária da conexão, sem
+novo índice. Reduzir a projeção evita transferir e decodificar o catálogo de contas;
+isso, isoladamente, não reduz as linhas contabilizadas pelo D1.
+
+`tests/integration/hotpaths.test.ts` verifica scans e respostas de controle,
+preservando cursores e replay. Os testes financeiros e de instalação cobrem
+histórico, valores de 30 dígitos, moedas e parcialidade. Com 10 mil
+transações sintéticas e empates de data/conta/ID, páginas de 25 registros nos
+filtros cobertos leem no máximo 27 linhas de transações, além do catálogo. O teste
+também limita o tamanho das respostas de controle com um catálogo grande e os
+scans de totais por direção; verifica correções de status, direção, moeda e
+categoria, mantendo exatidão e desconhecidos explícitos.
+
+O orçamento do [D1 Free](https://developers.cloudflare.com/d1/platform/pricing/)
+inclui cinco milhões de leituras e cem mil escritas por dia, compartilhadas pelas
+bases da conta. Índices também consomem escritas e armazenamento. Uma página curta
+não limita o scan de filtros residuais por descrição ou valor; agregações integrais
+continuam percorrendo a seleção. Valide o consumo real por `meta.rows_read`,
+`meta.rows_written` e Row Metrics antes de afirmar que a instalação cabe na cota.
+
+## MCP, CPU e contexto
+
+O catálogo tem quatro tools, geradas e validadas uma vez por isolate em ordem
+estável. As chamadas continuam sem sessão implícita e sem cache global de dados
+financeiros. O SDK/server por requisição preserva o isolamento da autenticação.
+Resultados continuam no bloco de texto JSON existente, sem uma segunda cópia
+integral em `structuredContent`. A
+[especificação MCP](https://modelcontextprotocol.io/specification/2026-07-28/server/tools)
+define a saída estruturada e sua compatibilidade; adicioná-la não demonstra
+economia de contexto no host.
+
+O cursor usa ID/revisão/estado das conexões selecionadas e o dia de referência.
+Mudanças de contas e transações publicam a revisão no mesmo batch D1; não é
+necessário ordenar, serializar e hashear nomes e saldos para invalidar o cursor.
+Consultas sem continuação nem cursor de entrada dispensam esse hash. Mudanças
+somente nos metadados das contas continuam exigindo `RESTART_REQUIRED`.
+
+Totais exatos usam cinco parcelas de seis dígitos, mantendo os 30 dígitos por
+registro e reconstruindo a soma com BigInt. Cada termo SQL tem magnitude máxima
+999999. Mesmo uma linha por byte no limite máximo de
+[10 GB por banco D1](https://developers.cloudflare.com/d1/platform/limits/)
+fica abaixo do limite de soma inteira de 64 bits. Não há conversão de dinheiro
+para REAL ou Number. A mudança reduz o trabalho por linha, não os scans.
+
+Uma comparação sintética local com 100 mil registros, moedas, valores de 30
+dígitos, negativos e desconhecidos manteve os resultados idênticos: medianas SQL
+de débitos passaram de 309 para 211 ms e de fluxo de 393 para 234 ms. Num catálogo
+grande sintético, o material do hash caiu de 1.920.705 para 1.675 bytes; a mediana
+Node passou de 10,06 para 0,19 ms. Esses números não medem CPU nem latência de um
+Worker publicado.
+
+Tempo SQL e CPU do Worker são métricas distintas: a espera pela consulta não
+consome CPU do chamador. Parse, hashing e serialização executados no Worker
+consomem esse orçamento. Consulte a
+[definição de CPU time](https://developers.cloudflare.com/workers/platform/limits/#cpu-time)
+e meça as invocações publicadas antes de afirmar que cabem no limite Free.
+
+Para contexto do modelo, a principal diferença está no resultado, não nas quatro
+descrições das tools. A amostra local retornou 2.690 bytes com 10 transações,
+12.028 com 50 e 47.114 com 200. O schema sugere 5–20 registros para exemplos e
+`aggregate` para totais; os defaults e o formato de resposta permanecem iguais.
+
+Há dois limites ainda abertos no contrato atual: uma descrição individual grande
+pode exceder o orçamento de contexto mesmo com `limit:1`, e `groupBy` pode produzir
+muitos grupos sem paginação. O teste existente aceita uma descrição cujo JSON de
+uma transação chega a 2,2 MB. Uma evolução explícita do contrato pode oferecer
+projeção compacta/detalhes e paginação dos grupos ou resumo com restante exato.
+Não se truncam descrições nem se descartam grupos silenciosamente. Totais sem
+período continuam lendo o histórico solicitado; não há cache com frescor incerto.
 
 ## Segurança e diagnóstico
 
@@ -160,7 +307,7 @@ Desde o baseline, são 1.369 linhas a menos (20,70%).
 A auditoria retirou nome/status de Item sem consumidor, validadores/serializadores
 JSON e comparadores sem uso, detalhes de erro genéricos, opções HTTP sustentadas
 apenas pelos seus testes, aliases/exports e o botão de link sem consumidor. Índices
-restantes atendem data/conta/status/categoria; não há índice composto por conexão
+restantes atendem data/conta/status/categoria e totais confirmados; não há índice composto por conexão
 nem join para tabelas removidas. A dependência direta `@cfworker/json-schema` saiu:
 o SDK MCP já incorpora o validador. Os scripts npm `check`/`fix`, duplicados sem
 consumidores, também saíram; as tasks mise e dependências restantes atendem o

@@ -13,20 +13,26 @@ import type {
 import { importFailure } from "./entity";
 
 async function unique<T extends { id: string }>(records: T[]) {
-  const hashes = await Promise.all(records.map((row) => hash(row)));
-  const seen = new Map<string, string>();
-  return records.filter((row, index) => {
-    const digest = hashes[index];
-    if (!digest) {
-      throw new Error("INVALID_RESPONSE");
-    }
+  const seen = new Map<string, T>();
+  const result: T[] = [];
+  const comparisons: Promise<boolean>[] = [];
+  for (const row of records) {
     const prior = seen.get(row.id);
-    if (prior && prior !== digest) {
-      throw new Error("DUPLICATE_CHANGED");
+    if (prior) {
+      comparisons.push(
+        Promise.all([hash(prior), hash(row)]).then(
+          ([before, after]) => before === after,
+        ),
+      );
+      continue;
     }
-    seen.set(row.id, digest);
-    return !prior;
-  });
+    seen.set(row.id, row);
+    result.push(row);
+  }
+  if ((await Promise.all(comparisons)).includes(false)) {
+    throw new Error("DUPLICATE_CHANGED");
+  }
+  return result;
 }
 async function catalog(
   source: ImportDependencies["source"],

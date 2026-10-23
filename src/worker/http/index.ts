@@ -9,6 +9,7 @@ const invalidRequests = new Set([
   "SPACE_NOT_EMPTY",
   "SPACE_MISMATCH",
   "EMPTY_FORM",
+  "BODY_REQUIRED",
   "FORM_TOO_LARGE",
   "DUPLICATE_FORM_FIELD",
   "SESSION_REQUIRED",
@@ -20,7 +21,12 @@ const invalidRequests = new Set([
   "PROFILE_DISABLED",
   "SOURCE_IDENTITY_MISMATCH",
 ]);
-export function failureStatus(error: Error): 400 | 403 | 404 | 409 | 500 | 503 {
+export function failureStatus(
+  error: Error,
+): 400 | 403 | 404 | 409 | 413 | 500 | 503 {
+  if (error.message === "BODY_LIMIT") {
+    return 413;
+  }
   if (error.message === "SESSION_REQUIRED") {
     return 403;
   }

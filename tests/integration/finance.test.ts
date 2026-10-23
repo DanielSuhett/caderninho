@@ -6,7 +6,7 @@ import {
   AggregateQuerySchema,
   TransactionQuerySchema,
 } from "../../src/contracts";
-import { normalizeTransaction } from "../../src/domain";
+import { normalizeAccount, normalizeTransaction } from "../../src/domain";
 import { createFinancialService } from "../../src/worker/finance";
 import { createFinancialRepository } from "../../src/worker/finance/repository";
 import { createInstallationRepository } from "../../src/worker/installation/repository";
@@ -20,6 +20,101 @@ const finance = () =>
     () => new Date("2026-10-02T02:00:00.000Z"),
   );
 beforeEach(setup);
+test("exact sums carry and cancel across six-digit boundaries without losing unknowns or currencies", async () => {
+  const rows = Array.from({ length: 200 }, (_, index) => {
+    const magnitude =
+      index % 7 === 0 ? 10n ** 30n - 1n : 10n ** BigInt(index % 30) - 1n;
+    const signed = index % 2 === 0 ? magnitude : -magnitude;
+    const amount = `${signed < 0n ? "-" : ""}${magnitude / 100n}.${String(magnitude % 100n).padStart(2, "0")}`;
+    const minor = index % 11 === 0 ? null : signed;
+    return {
+      minor,
+      provider: transaction({
+        accountId: index % 3 === 0 ? "card" : "a",
+        amount: minor === null ? null : amount,
+        currencyCode: index % 5 === 0 ? "USD" : "BRL",
+        id: `boundary-${index}`,
+        type: index % 4 === 0 ? "CREDIT" : "DEBIT",
+      }),
+    };
+  });
+  await collect(
+    source(
+      rows.map((row) => row.provider),
+      [account(), account({ id: "card", type: "CREDIT" })],
+    ),
+  );
+  const metrics = ["debits", "credits", "cash_flow"] as const;
+  await Promise.all(
+    metrics.map(async (metric) => {
+      const selected = rows.filter(({ provider }) => {
+        if (metric === "cash_flow") {
+          return provider.accountId === "a";
+        }
+        return provider.type === (metric === "debits" ? "DEBIT" : "CREDIT");
+      });
+      const result = await finance().aggregate({ metric });
+      for (const currency of ["BRL", "USD"]) {
+        const records = selected.filter(
+          (row) => row.provider.currencyCode === currency,
+        );
+        const expected = records.reduce((sum, { minor, provider }) => {
+          if (minor === null) {
+            return sum;
+          }
+          const absolute = minor < 0n ? -minor : minor;
+          const value =
+            metric === "cash_flow" && provider.type === "DEBIT"
+              ? -absolute
+              : absolute;
+          return sum + value;
+        }, 0n);
+        const group = result.groups.find((row) => row.currency === currency);
+        assert.ok(group);
+        assert.equal(group.totalMinor, expected.toString());
+        assert.equal(group.count, String(records.length));
+        assert.equal(
+          group.unknownAmountCount,
+          String(records.filter((row) => row.minor === null).length),
+        );
+      }
+    }),
+  );
+});
+
+test("account-only publications invalidate selected cursors through the atomic revision", async () => {
+  await collect(source([transaction({ id: "1" }), transaction({ id: "2" })]));
+  const repository = createSyncRepository(env.DB);
+  const now = "2026-10-02T00:00:00.000Z";
+  const id = await admit(now);
+  await repository.start(id);
+  const firstRun = await repository.read(id);
+  await repository.publish({
+    accounts: [normalizeAccount(account(), "c")],
+    done: false,
+    next: { accountId: "a", cursor: null, phase: "transactions" },
+    now,
+    run: firstRun,
+  });
+  const service = finance();
+  const input = { filter: { connectionIds: ["c"] }, limit: 1 };
+  const before = await service.query(input);
+  assert.ok(before.cursor);
+  const current = await repository.read(id);
+  await repository.publish({
+    accounts: [
+      normalizeAccount(account({ balance: "0", name: "Renamed" }), "c"),
+    ],
+    done: false,
+    next: current.checkpoint,
+    now,
+    run: current,
+  });
+  await assert.rejects(service.query({ ...input, cursor: before.cursor }), {
+    message: "RESTART_REQUIRED",
+  });
+});
+
 test("SQL totals keep 30 digits, currencies, BANK/CREDIT semantics and eligibility across the full selection", async () => {
   await collect(
     source(
@@ -191,9 +286,14 @@ test("strict filters, scoped cursors and signed magnitude filters preserve unkno
 });
 
 test("100 account references remain a valid bounded query within D1 parameter limits", async () => {
-  await collect(source([transaction()]));
   const accountIds = Array.from({ length: 100 }, (_, index) =>
-    index === 0 ? "a" : `missing-${index}`,
+    index === 0 ? "a" : `account-${index}`,
+  );
+  await collect(
+    source(
+      [transaction()],
+      accountIds.map((id) => account({ id })),
+    ),
   );
   assert.equal(
     (await finance().query({ filter: { accountIds }, limit: 10 })).records

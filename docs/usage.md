@@ -67,6 +67,14 @@ Valor desconhecido é `null`; `unknownAmountCount` informa quantos valores são
 desconhecidos no agregado. Um subtotal sem valores conhecidos é `null`, não zero.
 A resposta informa o dia de referência e a parcialidade da coleta.
 
+Consultas e agregados incluem `oldestLastSuccessAt`: o sucesso completo mais antigo
+das conexões selecionadas, ou `null` se alguma nunca concluiu. Para perguntas sobre
+hoje ou movimentação recente, considere essa data; `caderninho_status` detalha cada
+conexão. `referenceDay` é o dia
+usado para excluir valores futuros, não a data da última coleta. `partial:false`
+não garante atualização nem todo o histórico bancário. Sem nova importação,
+um resultado vazio para hoje não comprova movimento zero no banco.
+
 O histórico é cumulativo. Importar A/B e depois B atualizado/C resulta em
 A/B atualizado/C. Uma janela menor ou vazia não remove registros nem os exclui
 dos totais elegíveis. IDs diferentes são registros diferentes, mesmo que os dados
@@ -104,6 +112,18 @@ Filtros aceitos: `connectionIds`, `accountIds` (IDs de recurso Pluggy), período
 categoria/descrição da origem e faixa de valor em unidades menores. Uma faixa
 monetária exige moeda. Agrupamentos são conta, categoria ou mês. Campos desconhecidos
 são recusados. A página tem até 200 registros; o padrão é 50.
+
+Seleções explícitas de contas ou conexões inexistentes retornam `NOT_FOUND`,
+inclusive quando misturadas com IDs válidos. Consulte status para redescobrir os
+IDs antes de repetir. Erros `INVALID_FILTER` mantêm esse código e incluem `issues`
+com campo e motivo seguros; os argumentos privados não são repetidos no erro.
+
+Categoria e moeda usam correspondência exata. Descrição procura um trecho literal
+e ignora caixa, inclusive nos acentos portugueses; não remove acentos e não aceita
+curingas. Limites monetários comparam o valor assinado armazenado, não a magnitude
+da direção: em BRL, `maxAmountMinor: "-10000"` seleciona valores de -R$100,00 para
+baixo. Isso não classifica gasto. Dentro do mesmo dia, a ordem usa conta/ID,
+sem uma ordem cronológica por horário.
 
 Use o cursor retornado com os mesmos filtros. Se uma conexão selecionada publicar
 uma página ou mudar seu estado/metadados, reinicie a paginação. Importações de

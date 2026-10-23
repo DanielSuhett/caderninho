@@ -1,4 +1,4 @@
-import { and, desc, eq, lt, or, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 
 import {
   SyncHistoryCursorSchema,
@@ -40,13 +40,7 @@ export function createSyncHistoryRepository(binding: D1Database) {
               : undefined,
             input.status ? eq(syncHistory.status, input.status) : undefined,
             before
-              ? or(
-                  lt(syncHistory.admittedAt, before.admittedAt),
-                  and(
-                    eq(syncHistory.admittedAt, before.admittedAt),
-                    lt(syncHistory.id, before.id),
-                  ),
-                )
+              ? sql`(${syncHistory.admittedAt},${syncHistory.id})<(${before.admittedAt},${before.id})`
               : undefined,
           ),
         )

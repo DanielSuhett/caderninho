@@ -1,4 +1,4 @@
-import { sql } from "drizzle-orm";
+import { desc, sql } from "drizzle-orm";
 import {
   check,
   index,
@@ -73,8 +73,18 @@ export const transactions = sqliteTable(
   (t) => [
     index("transaction_date").on(t.date, t.accountId, t.id),
     index("transaction_account").on(t.accountId, t.date, t.id),
-    index("transaction_status").on(t.status, t.date),
-    index("transaction_category").on(t.category),
+    index("transaction_status").on(t.status, t.date, t.accountId, t.id),
+    index("transaction_category").on(t.category, t.date, t.accountId, t.id),
+    index("transaction_posted_totals")
+      .on(
+        t.direction,
+        t.currency,
+        t.date,
+        t.accountId,
+        t.amountMinor,
+        t.category,
+      )
+      .where(sql`${t.status}='POSTED'`),
   ],
 );
 
@@ -196,31 +206,46 @@ export const connectionOwners = sqliteTable("connection_owners", {
     .references(() => pluggyProfiles.id),
 });
 
-export const syncHistory = sqliteTable("sync_history", {
-  admittedAt: text("admitted_at").notNull(),
-  connectionId: text("connection_id").notNull(),
-  error: text("error"),
-  finishedAt: text("finished_at"),
-  id: text("id").primaryKey(),
-  legacy: integer("legacy", { mode: "boolean" }).notNull().default(false),
-  personId: text("person_id").notNull(),
-  phase: text("phase"),
-  profileId: text("profile_id").notNull(),
-  sequence: integer("sequence").notNull(),
-  status: text("status").$type<RunStatus>().notNull(),
-});
+export const syncHistory = sqliteTable(
+  "sync_history",
+  {
+    admittedAt: text("admitted_at").notNull(),
+    connectionId: text("connection_id").notNull(),
+    error: text("error"),
+    finishedAt: text("finished_at"),
+    id: text("id").primaryKey(),
+    legacy: integer("legacy", { mode: "boolean" }).notNull().default(false),
+    personId: text("person_id").notNull(),
+    phase: text("phase"),
+    profileId: text("profile_id").notNull(),
+    sequence: integer("sequence").notNull(),
+    status: text("status").$type<RunStatus>().notNull(),
+  },
+  (t) => [
+    index("sync_history_order").on(desc(t.admittedAt), desc(t.id)),
+    index("sync_history_person").on(t.personId, desc(t.admittedAt), desc(t.id)),
+    index("sync_history_status").on(t.status, desc(t.admittedAt), desc(t.id)),
+  ],
+);
 
-export const mcpAudit = sqliteTable("mcp_audit", {
-  clientId: text("client_id"),
-  durationMs: integer("duration_ms").notNull(),
-  id: text("id").primaryKey(),
-  inputBytes: integer("input_bytes").notNull(),
-  model: text("model"),
-  outcome: text("outcome")
-    .$type<"success" | "failed" | "cancelled">()
-    .notNull(),
-  outputBytes: integer("output_bytes").notNull(),
-  startedAt: text("started_at").notNull(),
-  status: integer("status").notNull(),
-  tool: text("tool"),
-});
+export const mcpAudit = sqliteTable(
+  "mcp_audit",
+  {
+    clientId: text("client_id"),
+    durationMs: integer("duration_ms").notNull(),
+    id: text("id").primaryKey(),
+    inputBytes: integer("input_bytes").notNull(),
+    model: text("model"),
+    outcome: text("outcome")
+      .$type<"success" | "failed" | "cancelled">()
+      .notNull(),
+    outputBytes: integer("output_bytes").notNull(),
+    startedAt: text("started_at").notNull(),
+    status: integer("status").notNull(),
+    tool: text("tool"),
+  },
+  (t) => [
+    index("mcp_audit_time").on(desc(t.startedAt), desc(t.id)),
+    index("mcp_audit_client").on(t.clientId, desc(t.startedAt)),
+  ],
+);
