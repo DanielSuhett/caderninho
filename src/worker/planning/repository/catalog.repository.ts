@@ -1,5 +1,6 @@
 import { eq, sql } from "drizzle-orm";
 
+import { compareRules } from "../../../domain";
 import { database } from "../../database";
 import {
   planningCategories,
@@ -41,9 +42,7 @@ export function createCatalogRepository(binding: D1Database) {
       }
       return {
         categories: categories.map((s) => s.data),
-        rules: rules
-          .map((s) => s.data)
-          .sort((a, b) => a.priority - b.priority || a.id.localeCompare(b.id)),
+        rules: rules.map((s) => s.data).sort(compareRules),
         spaces: spaces.map((s) => s.data),
         tags: tags.map((s) => s.data),
       };

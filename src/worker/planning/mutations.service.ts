@@ -1,4 +1,5 @@
 import type { PlanningCommand } from "../../contracts";
+import { brasilRulePack } from "../../contracts";
 import type {
   AccountSettings,
   PlanningState,
@@ -11,6 +12,7 @@ import {
   ruleMatches,
   sacSchedule,
 } from "../../domain";
+import { hash } from "../../shared";
 import { effectiveBills } from "./bills.service";
 import type { PlanningRepository, PlanningSnapshot } from "./entity";
 import {
@@ -413,7 +415,7 @@ export async function planningMutation(
           break;
         case "apply_rules": {
           const rule = rules.find((r) => ruleMatches(row, r));
-          if (rule) {
+          if (rule && (!rule.pack || patch.category === undefined)) {
             patch.category = rule.categoryId;
           }
           break;
@@ -701,6 +703,78 @@ export async function planningMutation(
     inSpace(state.rules, input.id, input.spaceId);
     state.rules = state.rules.filter((r) => r.id !== input.id);
     return { deleted: true, id: input.id };
+  }
+
+  async function handleInstallRulePack(
+    input: Extract<PlanningCommand, { tool: "install_rule_pack" }>,
+  ) {
+    const pack = brasilRulePack;
+    const prefix = `pack:${await hash([input.spaceId, pack.id])}:`;
+    const categoryIds: Record<string, string> = {};
+    let categoriesCreated = 0;
+    let rulesCreated = 0;
+    // Explicit mappings must be valid even when a repeat has no missing rules.
+    for (const id of Object.values(input.categoryIds)) {
+      const row = inSpace(state.categories, id, input.spaceId);
+      if (row.kind !== "expense" || row.hidden) {
+        throw new Error("INVALID_RULE_PACK_CATEGORY");
+      }
+    }
+    function resolveCategory(target: (typeof pack.categories)[number]) {
+      let categoryId = categoryIds[target.key] ?? input.categoryIds[target.key];
+      if (!categoryId) {
+        const matches = state.categories.filter(
+          (c) =>
+            c.spaceId === input.spaceId &&
+            c.kind === target.kind &&
+            c.name.trim().toLocaleLowerCase("pt-BR") ===
+              target.name.toLocaleLowerCase("pt-BR"),
+        );
+        if (matches.length > 1 || matches.some((c) => c.hidden)) {
+          throw new Error("INVALID_RULE_PACK_CATEGORY");
+        }
+        categoryId = matches[0]?.id;
+        if (!categoryId) {
+          categoryId = handleCreateCategory({
+            ...input,
+            kind: target.kind,
+            name: target.name,
+            tool: "create_category",
+          }).id;
+          categoriesCreated += 1;
+        }
+      }
+      categoryIds[target.key] = categoryId;
+      return categoryId;
+    }
+    for (const definition of pack.rules) {
+      const id = prefix + definition.key;
+      // A user-edited or disabled installed rule keeps its stable identity.
+      if (state.rules.some((row) => row.id === id)) {
+        continue;
+      }
+      const target = found(
+        pack.categories.find((c) => c.key === definition.categoryKey),
+      );
+      const categoryId = resolveCategory(target);
+      const { key, categoryKey: _categoryKey, ...native } = definition;
+      state.rules.push({
+        ...native,
+        categoryId,
+        id,
+        pack: { id: pack.id, key, version: pack.version },
+        spaceId: input.spaceId,
+      });
+      rulesCreated += 1;
+    }
+    return {
+      categoriesCreated,
+      categoryIds,
+      packId: pack.id,
+      rulesCreated,
+      rulesExisting: pack.rules.length - rulesCreated,
+      version: pack.version,
+    };
   }
 
   function handleCreateGoal(
@@ -1378,6 +1452,8 @@ export async function planningMutation(
       return handleCreateRule(command);
     case "delete_rule":
       return handleDeleteRule(command);
+    case "install_rule_pack":
+      return await handleInstallRulePack(command);
     case "create_goal":
     case "update_goal":
       return handleCreateGoal(command);

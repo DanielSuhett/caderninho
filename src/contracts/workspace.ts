@@ -2,6 +2,7 @@ import { z } from "zod/v4";
 
 import { RunStatus } from "../domain";
 import { planningDefinitions } from "./planning";
+import { RulePackOriginSchema } from "./rule-packs";
 import { RuleFilterSchema } from "./rules";
 
 // Deliberate read-only allowlist; the portal cannot forward arbitrary MCP mutations.
@@ -75,6 +76,7 @@ const RuleListSchema = z.object({
         direction: z.enum(["DEBIT", "CREDIT"]).nullable(),
         enabled: z.boolean(),
         filter: RuleFilterSchema.nullable().optional(),
+        pack: RulePackOriginSchema.optional(),
         priority: z.number(),
         text: z.string(),
       }),

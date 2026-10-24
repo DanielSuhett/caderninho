@@ -253,7 +253,10 @@ export function OrganizationView({
                                 {context} → {category}
                               </span>
                               <span className="record-meta">
-                                <span>Prioridade {r.priority}</span>
+                                <span>
+                                  {r.pack ? "Pacote Brasil · " : "Pessoal · "}
+                                  Prioridade {r.priority}
+                                </span>
                               </span>
                             </>
                           }
@@ -302,7 +305,8 @@ export function OrganizationView({
               )}
               <WorkspaceDetails title="Como as regras são aplicadas">
                 <p>
-                  A primeira regra ativa correspondente vence: menor prioridade,
+                  Regras pessoais vêm antes dos pacotes. Dentro de cada grupo, a
+                  primeira regra ativa correspondente vence: menor prioridade,
                   com desempate pelo identificador. Salvar vale para as próximas
                   importações e não reclassifica o histórico.
                 </p>

@@ -32,6 +32,7 @@ ferramentas de planejamento e organização, documentadas no
 [catálogo financeiro](docs/mcp-finance.md). A importação lê contas, transações,
 faturas, investimentos e empréstimos disponíveis na Pluggy. Categorias, tags,
 regras, orçamento, metas, recorrências e lançamentos manuais ficam no D1.
+O [Pacote Brasil](docs/rule-packs.md) instala regras compostas nativas por MCP, com categorias locais e sem duplicação.
 Edições locais preservam os registros bancários. Escritas exigem confirmação e
 chave de idempotência; o MCP não realiza pagamentos bancários.
 

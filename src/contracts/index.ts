@@ -43,6 +43,7 @@ export {
   PortalResponseSchema,
   SyncActionSchema,
 } from "./portal-contract";
+export { brasilRulePack } from "./rule-packs";
 export type { RulePreviewInput, RulePreviewResult } from "./rules";
 export {
   RuleConditionSchema,

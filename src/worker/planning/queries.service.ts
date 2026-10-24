@@ -1,7 +1,12 @@
 import type { PlanningCommand } from "../../contracts";
 import { PlanningCursorSchema } from "../../contracts";
 import type { PlanningState, PlanningTransaction } from "../../domain";
-import { financialCharts, localDay, monthDate } from "../../domain";
+import {
+  compareRules,
+  financialCharts,
+  localDay,
+  monthDate,
+} from "../../domain";
 import { hash } from "../../shared";
 import { type ProjectedPayment, recurrencePayments } from "./billing";
 import { effectiveBills } from "./bills.service";
@@ -503,9 +508,7 @@ export async function planningQuery(
     _input: Extract<PlanningCommand, { tool: "get_rules" }>,
   ) {
     return {
-      records: scoped(state.rules).sort(
-        (a, b) => a.priority - b.priority || a.id.localeCompare(b.id),
-      ),
+      records: scoped(state.rules).sort(compareRules),
     };
   }
 

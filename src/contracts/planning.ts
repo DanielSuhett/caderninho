@@ -1,5 +1,6 @@
 import { z } from "zod/v4";
 
+import { RulePackCategoryKeySchema } from "./rule-packs";
 import { RuleFilterSchema } from "./rules";
 
 const id = z.string().min(1).max(160);
@@ -630,7 +631,8 @@ export const planningDefinitions = [
     schema: z.object({ ...mutation, ...ruleFields }).strict(),
   },
   {
-    description: "Atualizar regra; prioridade menor vence.",
+    description:
+      "Atualizar regra pessoal; pessoais precedem pacotes, depois menor prioridade vence.",
     name: "update_rule",
     readOnly: false,
     schema: z.object({ ...mutation, id, ...ruleFields }).strict(),
@@ -918,6 +920,19 @@ export const planningDefinitions = [
     readOnly: false,
     schema: z.object({ ...mutation, id }).strict(),
   },
+  {
+    description:
+      "Instalar o pacote Brasil no espaço: cria categorias ausentes e regras compostas sem duplicar nem sobrescrever regras pessoais. Não reaplica o histórico; novas importações usam as regras. categoryIds resolve nomes locais ambíguos.",
+    name: "install_rule_pack",
+    readOnly: false,
+    schema: z
+      .object({
+        ...mutation,
+        categoryIds: z.partialRecord(RulePackCategoryKeySchema, id).default({}),
+        packId: z.literal("brasil"),
+      })
+      .strict(),
+  },
 ] as const;
 export const PlanningCommandSchema = z.discriminatedUnion("tool", [
   planningDefinitions[0].schema.extend({ tool: z.literal("get_accounts") }),
@@ -1108,6 +1123,9 @@ export const PlanningCommandSchema = z.discriminatedUnion("tool", [
     tool: z.literal("set_notification_preference"),
   }),
   planningDefinitions[89].schema.extend({ tool: z.literal("delete_space") }),
+  planningDefinitions[90].schema.extend({
+    tool: z.literal("install_rule_pack"),
+  }),
 ]);
 export type PlanningCommand = z.infer<typeof PlanningCommandSchema>;
 

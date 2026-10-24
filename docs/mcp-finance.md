@@ -18,7 +18,7 @@ As quatro tools `caderninho_*` continuam disponíveis com seus contratos origina
 As 90 tools adicionais usam a visão efetiva, com sobreposições e dados manuais.
 
 A extensão de [backoffice](backoffice.md) acrescenta `delete_space` e condições
-compostas em regras, chegando a 94 tools.
+compostas em regras, chegando a 95 tools.
 
 ## Pessoas e perfis Pluggy
 
@@ -48,7 +48,7 @@ coletas Pluggy nem alteram a admissão de uma importação a cada 24 horas.
 ## Decisões financeiras
 
 - **Origem preservada:** exclusões de transações são tombstones locais. Reimportar
-  não desfaz edições. Regras novas afetam novas transações; `apply_rules` reaplica
+  não desfaz edições. Regras pessoais precedem defaults de pacotes; defaults preservam categorias editadas. Regras novas afetam novas transações; `apply_rules` reaplica
   explicitamente um período. Excluir regra não desfaz suas classificações.
   Regras ignoram caixa em A–Z; caracteres acentuados são literais. Importação e
   reaplicação seguem a mesma comparação e desempate por ID.
@@ -189,8 +189,9 @@ espaço não chegam ao commit.
 | `update_category` | Renomear, ocultar ou restaurar categoria personalizada. |
 | `delete_category` | Excluir categoria personalizada e reatribuir referências à categoria de sistema do mesmo tipo. |
 | `create_rule` | Criar regra textual determinística de categorização. |
-| `update_rule` | Atualizar regra; prioridade menor vence. |
+| `update_rule` | Atualizar regra; pessoais precedem pacotes, depois menor prioridade vence. |
 | `delete_rule` | Excluir regra sem reverter classificações já aplicadas. |
+| `install_rule_pack` | [Instalar o Pacote Brasil](rule-packs.md) no espaço, com idempotência e categorias locais; não reclassifica histórico. |
 | `apply_rules` | Aplicar regras sincronicamente a até 500 transações; operação atômica. |
 | `create_goal` | Criar meta financeira. |
 | `update_goal` | Atualizar meta financeira. |

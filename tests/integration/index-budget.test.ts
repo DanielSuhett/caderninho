@@ -17,7 +17,11 @@ const migrations = z
 
 test("query indexes upgrade populated databases and bound history/status and tied audit scans", async () => {
   await reset();
-  await applyD1Migrations(env.DB, migrations.slice(0, -1));
+  const indexMigration = migrations.findIndex(
+    (migration) => migration.name === "0007_query_budgets.sql",
+  );
+  assert.ok(indexMigration > 0);
+  await applyD1Migrations(env.DB, migrations.slice(0, indexMigration));
   await env.DB.prepare(`WITH RECURSIVE records(i) AS (
     VALUES(0) UNION ALL SELECT i+1 FROM records WHERE i<9999
   ) INSERT INTO sync_history(id,connection_id,person_id,profile_id,admitted_at,status,sequence)
@@ -37,7 +41,7 @@ test("query indexes upgrade populated databases and bound history/status and tie
   const before = await env.DB.batch(
     queries.map((query) => env.DB.prepare(query)),
   );
-  await applyD1Migrations(env.DB, migrations.slice(-1));
+  await applyD1Migrations(env.DB, migrations.slice(indexMigration));
   const after = await env.DB.batch(
     queries.map((query) => env.DB.prepare(query)),
   );
