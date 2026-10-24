@@ -9,7 +9,7 @@ links. [DESIGN.md](../DESIGN.md) e o [guia](design-system.md) governam a composi
 | --- | --- |
 | `/account` | Resumo completo por período/moeda, categorias, série mensal, recentes e contas/cartões |
 | `/account/transactions` | Table, filtros GET, Dialog de detalhes e parcelas |
-| `/account/rules` | Condições, categoria, prioridade, preview e edição |
+| `/account/rules` | Condições, categoria, prioridade, preview, edição e composição com Flow sob demanda |
 | `/account/groups` | Grupos de planejamento, orçamento, categorias e etiquetas |
 | `/account/sync` | Rodadas, fases, estados, erros e referências históricas |
 | `/account/audit` | Autorizações, requisições, ferramentas, modelos declarados e bytes |
@@ -49,6 +49,12 @@ Regras e grupos usam Dialog. Alterações não salvas exigem descarte; busy bloq
 fechamento e navegação. Salvar regra afeta próximas importações, sem reclassificar
 histórico. Excluir exige confirmação e preserva os vínculos financeiros. Grupo
 Pessoal não oferece exclusão. Nome de cliente/modelo MCP continua declarado.
+
+Regras expandidas mostram escopo → alternativas OU/condições E → categoria com
+Flow Kumo. No editor, “Visualizar composição” acompanha o rascunho; condições
+incompletas exibem orientação textual. Em espaço estreito o fluxo é vertical.
+O diagrama conserva a semântica do motor e não executa nem grava operações.
+[Detalhes e limites](kumo/rule-flow.md).
 
 Visão geral começa pelo resumo financeiro do período. Saldos importados são
 estoques da última observação, separados dos movimentos mensais e da dívida do cartão. Conexões concentra configuração, primeira

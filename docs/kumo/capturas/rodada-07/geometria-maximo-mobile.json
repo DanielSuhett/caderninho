@@ -1,0 +1,33 @@
+{
+  "flows": [
+    {
+      "amounts": [
+        {
+          "fontSize": "16px",
+          "groups": ["90.", "071.", "992.", "547.", "409,93 BRL"],
+          "text": "90.071.992.547.409,93 BRL"
+        },
+        {
+          "fontSize": "16px",
+          "groups": ["90.", "071.", "992.", "547.", "409,93 BRL"],
+          "text": "90.071.992.547.409,93 BRL"
+        },
+        {
+          "fontSize": "16px",
+          "groups": ["90.", "071.", "992.", "547.", "409,93 BRL"],
+          "text": "90.071.992.547.409,93 BRL"
+        },
+        {
+          "fontSize": "16px",
+          "groups": ["90.", "071.", "992.", "547.", "409,93 BRL"],
+          "text": "90.071.992.547.409,93 BRL"
+        }
+      ],
+      "conditions": 32,
+      "nodeOverflow": [false, false, false],
+      "wide": "false"
+    }
+  ],
+  "scrollWidth": 320,
+  "width": 320
+}

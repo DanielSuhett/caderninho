@@ -246,10 +246,6 @@
 .preview-samples small {
   display: block;
 }
-.rule-condition-summary {
-  overflow-wrap: anywhere;
-  white-space: pre-line;
-}
 .workspace-metrics {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));

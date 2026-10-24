@@ -11,6 +11,22 @@ capturas e interações registradas; não é aprovação humana nem de produçã
 [galeria](docs/kumo/capturas/README.md) e
 [dados/contraste/bundle](docs/kumo/dados-e-evidencias.md).
 
+### Rodada 07 — composição das regras
+
+Flow real em regra expandida e rascunho sob Collapsible. Escopo obrigatório antes
+das alternativas OU/condições E, categoria depois; pausa e prioridade explícitas.
+Lista recolhida preservada. Carregamento visível sob demanda e alternativa HTML
+quando o módulo opcional falha. Sem dependências novas.
+
+Inspeção sintética de duas alternativas em desktop 1440/celular 391, máximo 4×8 em
+desktop 1440/celular 320, pausada, editor com preset e condição incompleta,
+continuidade/descarte de rascunho e falha 503 do módulo. O máximo foi corrigido
+após crítica: nós pelo topo e valor financeiro quebrado só entre milhares.
+Quatro testes novos preservam semântica e precisão de apresentação.
+Gate completo passou com 49 testes Node, 108 de integração e runtime local
+Workflow/D1 de 10 mil/100 mil registros. Sem push/deploy ou validação do provedor.
+[Método e limites](docs/kumo/rule-flow.md) · [capturas](docs/kumo/capturas/README.md).
+
 ### Rodada 06 — fluidez React
 
 Aplicados critérios da skill oficial vercel-react-best-practices ao projeto

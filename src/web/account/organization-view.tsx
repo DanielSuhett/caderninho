@@ -20,8 +20,9 @@ import { navigateWorkspace } from "./account-navigation";
 import { DisclosureItem } from "./disclosure-item";
 import { QuerySearch, SearchField } from "./filter-fields";
 import { DeleteOrganizationItem, GroupEditor } from "./group-editor";
-import { conditionFields } from "./rule-draft";
+import { RuleComposition } from "./rule-composition";
 import { RuleEditor } from "./rule-editor";
+import { ruleSummary } from "./rule-presentation";
 import { EmptyView, ScopeFields } from "./workspace-filters";
 import {
   ResourceFeedback,
@@ -214,19 +215,11 @@ export function OrganizationView({
                     const category =
                       data.categories.find((c) => c.id === r.categoryId)
                         ?.name ?? "Categoria não identificada";
-                    const account =
-                      data.accounts.find((item) => item.id === r.accountId)
-                        ?.name ?? "Todas as contas do grupo";
-                    const movement = movementLabel(r.direction);
-                    const accountLabel = account;
-                    const context = r.filter
-                      ? ruleConditionsText({
-                          accounts: data.accounts,
-                          brief: true,
-                          people: snapshot.people,
-                          rule: r,
-                        })
-                      : `Contém “${r.text}”`;
+                    const context = ruleSummary({
+                      accounts: data.accounts,
+                      people: snapshot.people,
+                      rule: r,
+                    });
                     const href = ruleTransactionsHref(r, spaceId);
                     const linkLabel = ruleLinkLabel(r);
                     return (
@@ -251,35 +244,15 @@ export function OrganizationView({
                           }
                         >
                           <div className="record-detail">
-                            {!!r.filter && (
-                              <RuleConditions
-                                accounts={data.accounts}
-                                people={snapshot.people}
-                                rule={r}
-                              />
-                            )}
-                            <dl className="detail-list">
-                              <div hidden={!!r.filter}>
-                                <dt>Movimento</dt>
-                                <dd>{movement}</dd>
-                              </div>
-                              <div hidden={!!r.filter}>
-                                <dt>Conta</dt>
-                                <dd>{accountLabel}</dd>
-                              </div>
-                              {!!r.filter && (
-                                <div>
-                                  <dt>Moeda das condições</dt>
-                                  <dd>
-                                    {r.filter.currency ?? "Todas as moedas"}
-                                  </dd>
-                                </div>
-                              )}
-                            </dl>
-                            <p className="muted">
-                              Classifica transações novas; o histórico é
-                              preservado.
-                            </p>
+                            <RuleComposition
+                              accounts={data.accounts}
+                              category={category}
+                              enabled={r.enabled}
+                              group={current?.name ?? "Grupo não identificado"}
+                              people={snapshot.people}
+                              priority={String(r.priority)}
+                              rule={r}
+                            />
                             <OrganizationActions
                               href={href}
                               item={r}
@@ -569,13 +542,6 @@ function OrganizationActions({
   );
 }
 
-function movementLabel(direction: "DEBIT" | "CREDIT" | null) {
-  if (!direction) {
-    return "Entradas e saídas";
-  }
-  return direction === "DEBIT" ? "Saídas" : "Entradas";
-}
-
 function ruleTransactionsHref(
   rule: {
     filter?: unknown;
@@ -600,101 +566,4 @@ function ruleTransactionsHref(
 
 function ruleLinkLabel(rule: { filter?: unknown }) {
   return rule.filter ? "Ver transações do grupo" : "Ver correspondências";
-}
-
-function ruleConditionsText({
-  rule,
-  accounts,
-  people,
-  brief = false,
-}: {
-  rule: WorkspaceCatalog["rules"][number];
-  accounts: { id: string; name: string; personName: string }[];
-  people: { id: string; name: string }[];
-  brief?: boolean;
-}) {
-  if (!rule.filter) {
-    return "";
-  }
-  const operators: Record<string, string> = {
-    contains: "contém",
-    equals: "é",
-    gte: "≥",
-    lte: "≤",
-    not_contains: "não contém",
-    starts_with: "começa com",
-  };
-  const values: Record<string, string> = {
-    CREDIT: "Entrada",
-    DEBIT: "Saída",
-    PENDING: "Pendente",
-    POSTED: "Confirmada",
-  };
-  function label(
-    condition: NonNullable<
-      typeof rule.filter
-    >["alternatives"][number]["conditions"][number],
-  ) {
-    let value = values[condition.value] ?? condition.value;
-    if (condition.field === "accountId") {
-      const account = accounts.find((row) => row.id === condition.value);
-      value = account
-        ? `${account.name} · ${account.personName}`
-        : "Conta não identificada";
-    }
-    if (condition.field === "personId") {
-      value =
-        people.find((row) => row.id === condition.value)?.name ??
-        "Pessoa não identificada";
-    }
-    if (condition.field === "amount") {
-      value = formatBalance(condition.value, rule.filter?.currency ?? "BRL");
-    }
-    const field =
-      conditionFields.find((row) => row.value === condition.field)?.label ??
-      condition.field;
-    return `${field} ${operators[condition.operator]} ${value}`;
-  }
-  if (brief) {
-    const { alternatives } = rule.filter;
-    const conditions = alternatives.flatMap((row) => row.conditions);
-    const description = conditions.find(
-      (c) => c.field === "description" && c.operator === "contains",
-    );
-    const direction = conditions.find(
-      (c) => c.field === "direction" && c.operator === "equals",
-    );
-    if (
-      alternatives.length === 1 &&
-      description &&
-      conditions.every((c) => c === description || c === direction)
-    ) {
-      const movement = direction
-        ? movementLabel(direction.value === "DEBIT" ? "DEBIT" : "CREDIT")
-        : "Transações";
-      return `${movement} com “${description.value}”`;
-    }
-    const [first] = conditions;
-    if (!first) {
-      return "Condições não disponíveis";
-    }
-    return [
-      alternatives.length > 1 ? `${alternatives.length} alternativas` : "",
-      conditions.length > 1 ? `+ ${conditions.length - 1} condições` : "",
-      label(first),
-    ]
-      .filter(Boolean)
-      .join(" · ");
-  }
-  return rule.filter.alternatives
-    .map(
-      (alternative, index) =>
-        `${index ? "OU: " : ""}${alternative.conditions.map(label).join(" · E ")}`,
-    )
-    .join("\n\n");
-}
-function RuleConditions(props: Parameters<typeof ruleConditionsText>[0]) {
-  const text =
-    ruleConditionsText(props) || `Descrição contém “${props.rule.text}”`;
-  return text ? <p className="rule-condition-summary">{text}</p> : null;
 }

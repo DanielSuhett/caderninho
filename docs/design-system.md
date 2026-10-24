@@ -38,6 +38,7 @@ e responsividade; não reconstrói Button, Select, Checkbox, Tooltip ou modal.
 | Paginação | Pagination com total desconhecido; API só fornece cursor para avançar e URL de reinício |
 | Medidas | Meter apenas com denominador declarado; escala relativa na atividade não representa cota |
 | Explicação de consulta MCP | Flow real 2.14, quatro nós, horizontal/vertical; fallback HTML e carregamento sob demanda na landing |
+| Composição de regras | Flow.Node/Parallel no detalhe e rascunho sob Collapsible; escopo → alternativas OU/condições E → categoria, vertical em espaço menor |
 
 `UiButton` só mapeia `tone="danger"` para `destructive`. `UiField` usa o Field
 integrado do Input. `UiCheckbox` acrescenta estado inicial de formulário à API
@@ -84,6 +85,11 @@ os dados ou a moeda mudarem. A demo mantém o shell ao navegar por GET.
 O preview de regra consulta; salvar afeta as próximas importações, sem
 reclassificar histórico. Grupo Pessoal não pode ser excluído. Acesso MCP sempre
 informa consequências e exige confirmação antes de revogar.
+
+O diagrama de regra acompanha os campos existentes; não é um segundo editor nem
+uma simulação de execução. Prioridade/pausa ficam fora das condições, e filtros
+globais antecedem todas as alternativas. Importação lazy visível e fallback
+textual preservam a consulta. [Contratos e evidências](kumo/rule-flow.md).
 
 ## Dados financeiros e técnicos
 

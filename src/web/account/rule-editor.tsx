@@ -20,6 +20,8 @@ import { tryCatch } from "../../shared";
 import { UiButton } from "../ui";
 import type { createAccountApi } from "./account-api";
 import { BackofficeDialog } from "./backoffice-dialog";
+import { DisclosureItem } from "./disclosure-item";
+import { RuleComposition } from "./rule-composition";
 import {
   conditionDraft,
   conditionFields,
@@ -575,6 +577,15 @@ export function RuleEditor({
             Adicionar alternativa
           </UiButton>
         </fieldset>
+        <RuleDraftComposition
+          accounts={accounts}
+          catalog={catalog}
+          draft={draft}
+          enabled={enabled}
+          fields={fields}
+          people={snapshot.people}
+          spaceId={spaceId}
+        />
         {!!message && (
           <Banner
             className="feedback"
@@ -740,5 +751,50 @@ function DraftFeedback({
       role="status"
       variant="alert"
     />
+  );
+}
+
+function RuleDraftComposition({
+  accounts,
+  catalog,
+  draft,
+  enabled,
+  fields,
+  people,
+  spaceId,
+}: {
+  accounts: { id: string; name: string; personName: string }[];
+  catalog: WorkspaceCatalog;
+  draft: ReturnType<typeof parseRuleDraft>;
+  enabled: boolean;
+  fields: { category: string; priority: string };
+  people: PortalResponse["people"];
+  spaceId: string;
+}) {
+  return (
+    <DisclosureItem summary="Visualizar composição">
+      {draft.success ? (
+        <RuleComposition
+          accounts={accounts}
+          category={
+            catalog.categories.find(
+              (category) => category.id === fields.category,
+            )?.name ?? ""
+          }
+          enabled={enabled}
+          group={
+            catalog.spaces.find((space) => space.id === spaceId)?.name ??
+            "Grupo não identificado"
+          }
+          people={people}
+          priority={fields.priority}
+          rule={draft.data}
+        />
+      ) : (
+        <p className="muted">
+          Complete as condições para visualizar a composição.
+        </p>
+      )}
+    </DisclosureItem>
   );
 }

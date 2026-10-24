@@ -25,9 +25,11 @@ Uma conta: contexto único, sem seletor nem coluna repetida. Rodada 04.
 
 `/account/rules`
 
-![Regras desktop](capturas/rodada-03/final-regras-desktop.jpg)
+Composição expandida com Flow real. Lista recolhida permanece compacta. Rodada 07.
 
-![Regras celular](capturas/rodada-03/final-regras-mobile.jpg)
+![Regras desktop](capturas/rodada-07/regras-composicao-desktop.png)
+
+![Regras celular](capturas/rodada-07/regras-composicao-mobile-resultado.png)
 
 ## Grupos
 

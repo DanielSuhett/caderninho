@@ -1,4 +1,25 @@
-# Capturas — rodadas críticas 03 a 05
+# Capturas — rodadas críticas 03 a 07
+
+## Composição das regras — rodada 07
+
+24/10/2026. Código compilado em fixture privada sintética local 8799.
+[Contratos e limites](../rule-flow.md) · [revisão crítica](../revisao-critica-07-rule-flow.md).
+Somente Regras foi reavaliada nesta rodada; os registros das demais páginas são históricos.
+
+| Estado | Captura |
+| --- | --- |
+| Lista e composição com duas alternativas | [recolhida](rodada-07/regras-recolhidas-desktop.png) / [desktop](rodada-07/regras-composicao-desktop.png) |
+| Fluxo vertical em 391 px | [início](rodada-07/regras-composicao-mobile.png) / [condições e resultado](rodada-07/regras-composicao-mobile-resultado.png) |
+| Editor com preset e regra pausada | [editor](rodada-07/regras-editor-preset-desktop.png) / [pausada](rodada-07/regras-pausada-desktop.png) |
+| Máximo de 4×8 condições | [desktop](rodada-07/regras-maximo-desktop.png) / [320 px](rodada-07/regras-maximo-mobile-320.png) / [geometria móvel](rodada-07/geometria-maximo-mobile.json) |
+| Módulo opcional indisponível | [composição textual após 503](rodada-07/regras-fallback-503.png) |
+
+O máximo exige rolagem vertical; as imagens não mostram todos os nós. As versões
+`regras-maximo-*-inicial.png` são rejeitadas: centralização escondia o escopo e a
+categoria no desktop e o número extremo quebrava no meio de um grupo em 320 px.
+Na versão corrigida, alinhamento nativo pelo topo e quebra só entre milhares.
+Larguras são CSS; screenshots podem ser redimensionados pela API. Sem declaração
+de conformidade completa de acessibilidade, produção ou motor financeiro pela fixture.
 
 ## Movimento e explicação MCP — rodada 05
 
