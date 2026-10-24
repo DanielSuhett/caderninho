@@ -9,9 +9,13 @@ import {
   HouseIcon,
   ReceiptIcon,
 } from "@phosphor-icons/react";
-import { useCallback, useState } from "react";
+import { useCallback } from "react";
 import { createRoot } from "react-dom/client";
 
+import {
+  navigateWorkspace,
+  useWorkspaceNavigation,
+} from "./account/account-navigation";
 import { monthLabel } from "./account/dashboard-period";
 import { FinancialDashboard } from "./account/financial-dashboard";
 import { PeriodPicker } from "./account/period-picker";
@@ -88,7 +92,8 @@ function DemoNavigation() {
   );
 }
 function Demo() {
-  const [params] = useState(() => new URLSearchParams(location.search));
+  const route = useWorkspaceNavigation();
+  const params = new URLSearchParams(location.search);
   const month = selectedDemoMonth(params.get("month"));
   const currency = params.get("currency") === "USD" ? "USD" : "BRL";
   const transactions = location.pathname.startsWith("/demo/transactions");
@@ -96,7 +101,7 @@ function Demo() {
   const changeMonth = useCallback((value: string) => {
     const url = new URL(location.href);
     url.searchParams.set("month", value);
-    location.assign(url);
+    navigateWorkspace(url);
   }, []);
   const changeCurrency = useCallback((value: string | null) => {
     if (!value) {
@@ -105,7 +110,7 @@ function Demo() {
     const url = new URL(location.href);
     url.searchParams.set("currency", value);
     url.searchParams.delete("accountId");
-    location.assign(url);
+    navigateWorkspace(url);
   }, []);
   const transactionsHref = `/demo/transactions?${new URLSearchParams({ month })}`;
   return (
@@ -116,7 +121,7 @@ function Demo() {
         <WorkspaceFrame
           footer="Demonstração pública. Nenhuma conta real ou conexão bancária é utilizada."
           navigation={<DemoNavigation />}
-          route={location.pathname + location.search}
+          route={route}
         >
           <div className="workspace-page">
             <p className="demo-notice">Demonstração · dados fictícios</p>
@@ -146,6 +151,7 @@ function Demo() {
             </WorkspaceHeading>
             {transactions ? (
               <DemoTransactions
+                key={route}
                 month={month}
                 params={params}
               />

@@ -29,7 +29,7 @@ export function MonthlySpendingChart({
   groups: FinancialSummary["groups"];
   currency: string;
 }) {
-  const values = safeChartValues(groups);
+  const values = useMemo(() => safeChartValues(groups), [groups]);
   const options = useMemo(
     () =>
       ({

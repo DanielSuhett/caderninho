@@ -98,5 +98,12 @@ Mês e Conta são editados em Filtros. As notas da consulta ficam sob demanda.
 A busca filtra o conjunto sintético inteiro. A landing oferece Demo no header e CTA.
 Nenhum botão de conexão, edição ou revogação existe nessa navegação.
 
+Mês/moeda, páginas e formulários GET da demo navegam no cliente sem recarregar o
+documento. Voltar/Avançar conserva a URL como fonte do recorte. A navegação não
+intercepta a passagem entre demo pública e painel privado. Sidebar móvel fecha
+ao navegar e transfere foco ao conteúdo. No painel, páginas lazy recebem memo
+para ignorar polling sem novos dados; foco/hover antecipam somente o código da
+próxima página. [Medições e limites](kumo/performance.md).
+
 [Dados e evidências](kumo/dados-e-evidencias.md) registra agregações completas,
 tratamento de dados ausentes, dependência ECharts e distinção local/publicado.

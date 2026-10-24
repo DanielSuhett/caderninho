@@ -1,0 +1,6 @@
+{
+  "beforeLoaded": false,
+  "afterLoaded": true,
+  "dataRequestsBefore": 4,
+  "dataRequestsAfter": 4
+}

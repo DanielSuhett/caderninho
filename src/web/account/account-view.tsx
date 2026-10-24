@@ -1,20 +1,30 @@
 import { Link } from "@cloudflare/kumo";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { lazy, useCallback, useEffect, useRef, useState } from "react";
 
 import type { HouseholdCommand, PortalResponse } from "../../contracts";
 import { sourceIdentity } from "../../domain";
 import { tryCatch } from "../../shared";
 import { UiButton } from "../ui";
 import { createAccountApi } from "./account-api";
-import { useAccountNavigation } from "./account-navigation";
+import { useWorkspaceNavigation } from "./account-navigation";
 import { createConnectWidget } from "./connect-widget";
 import type { ConnectionActivity } from "./connection-journey";
-import { DashboardView } from "./dashboard-view";
 import { createImportMonitor } from "./import-monitor";
+import { WorkspacePageError } from "./workspace-page";
 import { WorkspaceView } from "./workspace-view";
 
+const DashboardView = lazy<typeof import("./dashboard-view").DashboardView>(
+  async () => {
+    const { data, error } = await tryCatch(() => import("./dashboard-view"));
+    if (error) {
+      return { default: WorkspacePageError };
+    }
+    return { default: data.DashboardView };
+  },
+);
+
 export function AccountView() {
-  const route = useAccountNavigation();
+  const route = useWorkspaceNavigation();
   const [snapshot, setSnapshot] = useState<PortalResponse>();
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);

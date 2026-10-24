@@ -1,4 +1,4 @@
-import { tryCatch } from "../shared";
+import { tryCatch } from "../shared/result";
 
 const reduced = matchMedia("(prefers-reduced-motion: reduce)");
 const explanation = document.getElementById("mcp-flow");

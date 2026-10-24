@@ -14,6 +14,10 @@ const paths = new Set([
   "/account/sync",
   "/account/connections",
   "/account/design-system",
+  "/demo",
+  "/demo/",
+  "/demo/transactions",
+  "/demo/transactions/",
 ]);
 const navigationEvent = "caderninho:navigate";
 let navigationGuard: (() => boolean) | null = null;
@@ -29,6 +33,8 @@ export function guardWorkspaceNavigation(guard: () => boolean) {
 export function isWorkspaceUrl(destination: URL, current: URL) {
   return (
     destination.origin === current.origin &&
+    destination.pathname.startsWith("/demo") ===
+      current.pathname.startsWith("/demo") &&
     paths.has(destination.pathname) &&
     !destination.hash
   );
@@ -124,7 +130,7 @@ function submit(event: SubmitEvent) {
   navigateWorkspace(url);
 }
 
-export function useAccountNavigation() {
+export function useWorkspaceNavigation() {
   const route = useSyncExternalStore(subscribe, currentRoute, () => "/account");
   const previous = useRef(route);
   useEffect(() => {

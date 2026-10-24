@@ -9,7 +9,7 @@ import {
   Table,
 } from "@cloudflare/kumo";
 import { BankIcon, CreditCardIcon } from "@phosphor-icons/react";
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useMemo } from "react";
 import type { z } from "zod/v4";
 
 import type {
@@ -283,9 +283,14 @@ function MonthlyAnalysis({
   monthly: FinancialSummary | null;
   currency: string;
 }) {
-  const monthlyGroups = (monthly?.groups ?? [])
-    .filter((group) => group.currency === currency)
-    .toSorted((a, b) => a.group.localeCompare(b.group));
+  const groups = monthly?.groups;
+  const monthlyGroups = useMemo(
+    () =>
+      (groups ?? [])
+        .filter((group) => group.currency === currency)
+        .toSorted((a, b) => a.group.localeCompare(b.group)),
+    [currency, groups],
+  );
   const monthlyUnknown =
     monthly?.totals.find((item) => item.currency === currency)
       ?.unknownAmountCount ?? 0;

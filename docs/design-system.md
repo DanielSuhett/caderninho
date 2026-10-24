@@ -75,6 +75,12 @@ Não usar `finish()` para cancelar animações infinitas ao mudar a preferência
 `cancel()` devolve os elementos ao estado base. Evidências e limites em
 [motion](kumo/motion.md).
 
+Fluidez: páginas privadas lazy ignoram renders do polling com props idênticas;
+foco/hover da Sidebar antecipam módulos sem antecipar consultas. Conexões é
+carregada sob demanda. Grupos/valores/options do Chart conservam referência até
+os dados ou a moeda mudarem. A demo mantém o shell ao navegar por GET.
+[Evidências locais de desempenho](kumo/performance.md).
+
 O preview de regra consulta; salvar afeta as próximas importações, sem
 reclassificar histórico. Grupo Pessoal não pode ser excluído. Acesso MCP sempre
 informa consequências e exige confirmação antes de revogar.

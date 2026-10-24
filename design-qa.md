@@ -11,6 +11,25 @@ capturas e interações registradas; não é aprovação humana nem de produçã
 [galeria](docs/kumo/capturas/README.md) e
 [dados/contraste/bundle](docs/kumo/dados-e-evidencias.md).
 
+### Rodada 06 — fluidez React
+
+Aplicados critérios da skill oficial vercel-react-best-practices ao projeto
+React/Vite. Entry da landing com dependências caiu de 35.144 para 3.059 bytes
+brutos; boot privado de 893.919 para 822.906. Shell da demo cresceu 3.589 bytes
+para evitar reloads. Não confundir esses recortes com tamanho do aplicativo todo.
+
+Snapshot idêntico: antes 23 renders/23 leituras; depois 1 render inicial/12
+leituras. Tab até Transações antecipou o chunk sem novas consultas. Demo manteve
+o mesmo documento ao trocar mês, moeda, navegar, buscar por Enter e usar Voltar.
+Foram vistos detalhe de parcelas, configuração lazy e, no Worker local em
+391×845, navegação móvel com fechamento de Sidebar, foco no conteúdo e sem
+overflow horizontal. Não houve nova nota de designer nem auditoria das 14 páginas.
+
+Gate completo passou: 45 testes Node, 108 de integração, build/dry-run e runtime
+10k/100k; check:quick repetido após o último ajuste. Nenhum FPS/INP de campo foi
+medido. Sem dependências novas ou deploy.
+[Método, tradeoffs e capturas](docs/kumo/performance.md).
+
 ### Rodada 05 — movimento e explicação MCP
 
 Implementação de Flow nativo Kumo 2.14 na landing, com sequência finita de quatro

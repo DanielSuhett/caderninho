@@ -1,0 +1,181 @@
+{
+  "boot": 1792821721813,
+  "commits": 57,
+  "dashboardRenders": 23,
+  "requests": [
+    {
+      "path": "/api/account",
+      "start": 216.70000004768372,
+      "end": 227.4000000357628
+    },
+    {
+      "path": "/api/account/query",
+      "start": 556.5,
+      "end": 567.4000000357628
+    },
+    {
+      "path": "/api/account/query",
+      "start": 556.7000000476837,
+      "end": 567.9000000357628
+    },
+    {
+      "path": "/api/account/catalog",
+      "start": 556.9000000357628,
+      "end": 567.8000000119209
+    },
+    {
+      "path": "/api/account/query",
+      "start": 556.9000000357628,
+      "end": 568.1000000238419
+    },
+    {
+      "path": "/api/account",
+      "start": 2229.300000011921,
+      "end": 2231.900000035763
+    },
+    {
+      "path": "/api/account",
+      "start": 4233.100000023842,
+      "end": 4235.900000035763
+    },
+    {
+      "path": "/api/account",
+      "start": 6237.5,
+      "end": 6239.900000035763
+    },
+    {
+      "path": "/api/account",
+      "start": 8241.900000035763,
+      "end": 8244.600000023842
+    },
+    {
+      "path": "/api/account",
+      "start": 10246.600000023842,
+      "end": 10250.200000047684
+    },
+    {
+      "path": "/api/account",
+      "start": 12252.200000047684,
+      "end": 12255.800000011921
+    },
+    {
+      "path": "/api/account",
+      "start": 14257.200000047684,
+      "end": 14259.400000035763
+    },
+    {
+      "path": "/api/account",
+      "start": 16260.600000023842,
+      "end": 16263.5
+    },
+    {
+      "path": "/api/account",
+      "start": 18265.100000023842,
+      "end": 18267.600000023842
+    },
+    {
+      "path": "/api/account",
+      "start": 20269.700000047684,
+      "end": 20273.30000001192
+    },
+    {
+      "path": "/api/account",
+      "start": 22274.80000001192,
+      "end": 22277.80000001192
+    },
+    {
+      "path": "/api/account",
+      "start": 24279.30000001192,
+      "end": 24282.200000047684
+    },
+    {
+      "path": "/api/account",
+      "start": 26283.80000001192,
+      "end": 26286.600000023842
+    },
+    {
+      "path": "/api/account",
+      "start": 28288.30000001192,
+      "end": 28294.200000047684
+    },
+    {
+      "path": "/api/account",
+      "start": 30296.400000035763,
+      "end": 30301.200000047684
+    },
+    {
+      "path": "/api/account",
+      "start": 32303,
+      "end": 32306
+    },
+    {
+      "path": "/api/account",
+      "start": 34307.40000003576,
+      "end": 34309.700000047684
+    },
+    {
+      "path": "/api/account",
+      "start": 36311,
+      "end": 36320
+    },
+    {
+      "path": "/api/account",
+      "start": 38321.5,
+      "end": 38324.700000047684
+    },
+    {
+      "path": "/api/account",
+      "start": 40326.80000001192,
+      "end": 40336.5
+    },
+    {
+      "path": "/api/account",
+      "start": 42337.90000003576,
+      "end": 42345.90000003576
+    },
+    {
+      "path": "/api/account",
+      "start": 44347.200000047684,
+      "end": 44354.10000002384
+    }
+  ],
+  "longTasks": [],
+  "events": [],
+  "resources": [
+    "/__perf.js",
+    "/account.js",
+    "/chunks/preload-helper-BLdHbfdN.js",
+    "/chunks/validation-DQdTx4Ah.js",
+    "/chunks/rolldown-runtime-COiEfhsA.js",
+    "/chunks/mount-account-DZsMGasi.js",
+    "/chunks/shared-BKX-el_E.js",
+    "/chunks/jsx-runtime-CWQoum3n.js",
+    "/chunks/IconBase.es-UeNFWh-8.js",
+    "/chunks/ui-DHpd1GOW.js",
+    "/chunks/Bank.es-Bcv_DcEA.js",
+    "/chunks/text-f1wxz183ckq7qtl7-CKaVOvLd.js",
+    "/chunks/TooltipPopup-dm4y0hbdeylzp22y-DRCLgVfv.js",
+    "/chunks/account-GI5fFGKW.js",
+    "/chunks/workspace-resource-DXQoy_NG.js",
+    "/chunks/CaretRight.es-Oe4h3BFD.js",
+    "/chunks/ShieldCheck.es-CBlWEJN2.js",
+    "/chunks/toast-bzaothy2yrezh787-_ATgi1lL.js",
+    "/chunks/account-navigation-BaeOYbWD.js",
+    "/chunks/backoffice-dialog-CEOR0xff.js",
+    "/chunks/contracts-Dnd9scUi.js",
+    "/chunks/client-Ba5Ak5xS.js",
+    "/chunks/overview-view-BklS4OiM.js",
+    "/chunks/workspace-filters-FoibLh5i.js",
+    "/chunks/period-picker-D3O4l9Yr.js",
+    "/chunks/CaretLeft.es-BoU70PAE.js",
+    "/chunks/meter-majprsslwmpbmkzg-BJO2nRDN.js",
+    "/chunks/stringifyLocale-bxsgxdnzaef2vcar-CkHjdQTJ.js",
+    "/chunks/table-yf8ul2e5nbemioi1-k8waGklT.js",
+    "/chunks/money-BxkvHdwQ.js",
+    "/chunks/transaction-list-CdiQERSV.js",
+    "/chunks/financial-presentation-uyY--mzg.js",
+    "/chunks/monthly-spending-chart-BCUV7vgW.js",
+    "/chunks/Axis-BFV9l-oj.js",
+    "/chunks/core-CFGQtl1R.js"
+  ]
+}

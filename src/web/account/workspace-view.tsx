@@ -10,7 +10,15 @@ import {
   ShieldCheckIcon,
   SignOutIcon,
 } from "@phosphor-icons/react";
-import { lazy, type ReactNode, Suspense, useCallback } from "react";
+import {
+  type FocusEvent,
+  lazy,
+  type MouseEvent,
+  memo,
+  type ReactNode,
+  Suspense,
+  useCallback,
+} from "react";
 
 import type { PortalResponse } from "../../contracts";
 import { tryCatch } from "../../shared";
@@ -20,58 +28,94 @@ import { scopedHref } from "./workspace-resource";
 import { SidebarFrame, WorkspaceFrame } from "./workspace-shell";
 import { WorkspaceSkeleton } from "./workspace-ui";
 
-const OverviewView = lazy<typeof import("./overview-view").OverviewView>(
-  async () => {
-    const { data, error } = await tryCatch(() => import("./overview-view"));
-    if (error) {
-      return { default: WorkspacePageError };
-    }
-    return { default: data.OverviewView };
-  },
-);
-const AuditView = lazy<typeof import("./audit-view").AuditView>(async () => {
+const loadOverview = async () => {
+  const { data, error } = await tryCatch(() => import("./overview-view"));
+  if (error) {
+    return { default: WorkspacePageError };
+  }
+  return { default: data.OverviewView };
+};
+const loadAudit = async () => {
   const { data, error } = await tryCatch(() => import("./audit-view"));
   if (error) {
     return { default: WorkspacePageError };
   }
   return { default: data.AuditView };
-});
-const DesignSystemView = lazy<
-  typeof import("./design-system-view").DesignSystemView
->(async () => {
+};
+const loadDesignSystem = async () => {
   const { data, error } = await tryCatch(() => import("./design-system-view"));
   if (error) {
     return { default: WorkspacePageError };
   }
   return { default: data.DesignSystemView };
-});
-const OrganizationView = lazy<
-  typeof import("./organization-view").OrganizationView
->(async () => {
+};
+const loadOrganization = async () => {
   const { data, error } = await tryCatch(() => import("./organization-view"));
   if (error) {
     return { default: WorkspacePageError };
   }
   return { default: data.OrganizationView };
-});
-const SyncHistoryView = lazy<
-  typeof import("./sync-history-view").SyncHistoryView
->(async () => {
+};
+const loadSyncHistory = async () => {
   const { data, error } = await tryCatch(() => import("./sync-history-view"));
   if (error) {
     return { default: WorkspacePageError };
   }
   return { default: data.SyncHistoryView };
-});
-const TransactionsView = lazy<
-  typeof import("./transactions-view").TransactionsView
->(async () => {
+};
+const loadTransactions = async () => {
   const { data, error } = await tryCatch(() => import("./transactions-view"));
   if (error) {
     return { default: WorkspacePageError };
   }
   return { default: data.TransactionsView };
-});
+};
+const OverviewView = memo(
+  lazy<typeof import("./overview-view").OverviewView>(loadOverview),
+);
+const AuditView = memo(
+  lazy<typeof import("./audit-view").AuditView>(loadAudit),
+);
+const DesignSystemView = memo(
+  lazy<typeof import("./design-system-view").DesignSystemView>(
+    loadDesignSystem,
+  ),
+);
+const OrganizationView = memo(
+  lazy<typeof import("./organization-view").OrganizationView>(loadOrganization),
+);
+const SyncHistoryView = memo(
+  lazy<typeof import("./sync-history-view").SyncHistoryView>(loadSyncHistory),
+);
+const TransactionsView = memo(
+  lazy<typeof import("./transactions-view").TransactionsView>(loadTransactions),
+);
+const pageLoaders: Record<string, (() => Promise<unknown>) | undefined> = {
+  "/account": loadOverview,
+  "/account/audit": loadAudit,
+  "/account/connections": () => import("./dashboard-view"),
+  "/account/design-system": loadDesignSystem,
+  "/account/groups": loadOrganization,
+  "/account/rules": loadOrganization,
+  "/account/sync": loadSyncHistory,
+  "/account/transactions": loadTransactions,
+};
+
+function preloadPage(event: FocusEvent<HTMLElement> | MouseEvent<HTMLElement>) {
+  const href = event.currentTarget.getAttribute("href");
+  if (!href) {
+    return;
+  }
+  const path = new URL(href, location.href).pathname;
+  const load = pageLoaders[path];
+  if (load) {
+    // Warm code on intent only; queries still belong to the mounted page.
+    tryCatch(load).then(
+      ({ data: _data, error: _error }) => undefined,
+      () => undefined,
+    );
+  }
+}
 const pages = [
   {
     icon: HouseIcon,
@@ -227,6 +271,8 @@ function WorkspaceNavigation({
                 href={scopedHref(page.path, params)}
                 icon={page.icon}
                 key={page.path}
+                onFocus={preloadPage}
+                onMouseEnter={preloadPage}
                 tooltip={page.name}
               >
                 {page.name}
@@ -242,6 +288,8 @@ function WorkspaceNavigation({
             className="text-base"
             href="/account/design-system"
             icon={PaletteIcon}
+            onFocus={preloadPage}
+            onMouseEnter={preloadPage}
             tooltip="Referência visual"
           >
             Referência visual
