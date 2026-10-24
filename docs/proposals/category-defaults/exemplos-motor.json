@@ -1,0 +1,449 @@
+{
+  "status": "proposal_only_not_installed",
+  "category_resolution": "Resolver category por get_categories para categoryId local; os demais campos de rule seguem o contrato existente.",
+  "examples": [
+    {
+      "id": "farmacia-ifood",
+      "category": "Farmácia",
+      "source_ids": ["ifood"],
+      "rule": {
+        "accountId": null,
+        "direction": "DEBIT",
+        "text": "ifood",
+        "priority": 900,
+        "filter": {
+          "currency": null,
+          "alternatives": [
+            {
+              "conditions": [
+                {
+                  "field": "description",
+                  "operator": "contains",
+                  "value": "farmacia"
+                },
+                {
+                  "field": "description",
+                  "operator": "not_contains",
+                  "value": "estorno"
+                },
+                {
+                  "field": "description",
+                  "operator": "not_contains",
+                  "value": "refund"
+                },
+                {
+                  "field": "description",
+                  "operator": "not_contains",
+                  "value": "fatura"
+                },
+                {
+                  "field": "description",
+                  "operator": "not_contains",
+                  "value": "veterinaria"
+                },
+                {
+                  "field": "description",
+                  "operator": "not_contains",
+                  "value": "veterinária"
+                }
+              ]
+            },
+            {
+              "conditions": [
+                {
+                  "field": "description",
+                  "operator": "contains",
+                  "value": "farmácia"
+                },
+                {
+                  "field": "description",
+                  "operator": "not_contains",
+                  "value": "estorno"
+                },
+                {
+                  "field": "description",
+                  "operator": "not_contains",
+                  "value": "refund"
+                },
+                {
+                  "field": "description",
+                  "operator": "not_contains",
+                  "value": "fatura"
+                },
+                {
+                  "field": "description",
+                  "operator": "not_contains",
+                  "value": "veterinaria"
+                },
+                {
+                  "field": "description",
+                  "operator": "not_contains",
+                  "value": "veterinária"
+                }
+              ]
+            },
+            {
+              "conditions": [
+                {
+                  "field": "description",
+                  "operator": "contains",
+                  "value": "FARMÁCIA"
+                },
+                {
+                  "field": "description",
+                  "operator": "not_contains",
+                  "value": "estorno"
+                },
+                {
+                  "field": "description",
+                  "operator": "not_contains",
+                  "value": "refund"
+                },
+                {
+                  "field": "description",
+                  "operator": "not_contains",
+                  "value": "fatura"
+                },
+                {
+                  "field": "description",
+                  "operator": "not_contains",
+                  "value": "veterinaria"
+                },
+                {
+                  "field": "description",
+                  "operator": "not_contains",
+                  "value": "veterinária"
+                }
+              ]
+            },
+            {
+              "conditions": [
+                {
+                  "field": "description",
+                  "operator": "contains",
+                  "value": "drogaria"
+                },
+                {
+                  "field": "description",
+                  "operator": "not_contains",
+                  "value": "estorno"
+                },
+                {
+                  "field": "description",
+                  "operator": "not_contains",
+                  "value": "refund"
+                },
+                {
+                  "field": "description",
+                  "operator": "not_contains",
+                  "value": "fatura"
+                },
+                {
+                  "field": "description",
+                  "operator": "not_contains",
+                  "value": "veterinaria"
+                },
+                {
+                  "field": "description",
+                  "operator": "not_contains",
+                  "value": "veterinária"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "cases": [
+        {
+          "description": "IFOOD FARMACIA",
+          "matches": true
+        },
+        {
+          "description": "IFOOD FARMÁCIA",
+          "matches": true
+        },
+        {
+          "description": "ifood farmácia",
+          "matches": true
+        },
+        {
+          "description": "IFOOD DROGARIA",
+          "matches": true
+        },
+        {
+          "description": "IFOOD MERCADO",
+          "matches": false
+        },
+        {
+          "description": "ESTORNO IFOOD FARMACIA",
+          "matches": false
+        },
+        {
+          "description": "IFOOD FARMACIA VETERINARIA",
+          "matches": false
+        },
+        {
+          "description": "IFOOD FARMACIA",
+          "direction": "CREDIT",
+          "matches": false
+        }
+      ]
+    },
+    {
+      "id": "farmacia-rappi",
+      "category": "Farmácia",
+      "source_ids": ["rappi"],
+      "rule": {
+        "accountId": null,
+        "direction": "DEBIT",
+        "text": "rappi",
+        "priority": 900,
+        "filter": {
+          "currency": null,
+          "alternatives": [
+            {
+              "conditions": [
+                {
+                  "field": "description",
+                  "operator": "contains",
+                  "value": "farmacia"
+                },
+                {
+                  "field": "description",
+                  "operator": "not_contains",
+                  "value": "estorno"
+                },
+                {
+                  "field": "description",
+                  "operator": "not_contains",
+                  "value": "refund"
+                },
+                {
+                  "field": "description",
+                  "operator": "not_contains",
+                  "value": "fatura"
+                },
+                {
+                  "field": "description",
+                  "operator": "not_contains",
+                  "value": "veterinaria"
+                },
+                {
+                  "field": "description",
+                  "operator": "not_contains",
+                  "value": "veterinária"
+                }
+              ]
+            },
+            {
+              "conditions": [
+                {
+                  "field": "description",
+                  "operator": "contains",
+                  "value": "farmácia"
+                },
+                {
+                  "field": "description",
+                  "operator": "not_contains",
+                  "value": "estorno"
+                },
+                {
+                  "field": "description",
+                  "operator": "not_contains",
+                  "value": "refund"
+                },
+                {
+                  "field": "description",
+                  "operator": "not_contains",
+                  "value": "fatura"
+                },
+                {
+                  "field": "description",
+                  "operator": "not_contains",
+                  "value": "veterinaria"
+                },
+                {
+                  "field": "description",
+                  "operator": "not_contains",
+                  "value": "veterinária"
+                }
+              ]
+            },
+            {
+              "conditions": [
+                {
+                  "field": "description",
+                  "operator": "contains",
+                  "value": "FARMÁCIA"
+                },
+                {
+                  "field": "description",
+                  "operator": "not_contains",
+                  "value": "estorno"
+                },
+                {
+                  "field": "description",
+                  "operator": "not_contains",
+                  "value": "refund"
+                },
+                {
+                  "field": "description",
+                  "operator": "not_contains",
+                  "value": "fatura"
+                },
+                {
+                  "field": "description",
+                  "operator": "not_contains",
+                  "value": "veterinaria"
+                },
+                {
+                  "field": "description",
+                  "operator": "not_contains",
+                  "value": "veterinária"
+                }
+              ]
+            },
+            {
+              "conditions": [
+                {
+                  "field": "description",
+                  "operator": "contains",
+                  "value": "drogaria"
+                },
+                {
+                  "field": "description",
+                  "operator": "not_contains",
+                  "value": "estorno"
+                },
+                {
+                  "field": "description",
+                  "operator": "not_contains",
+                  "value": "refund"
+                },
+                {
+                  "field": "description",
+                  "operator": "not_contains",
+                  "value": "fatura"
+                },
+                {
+                  "field": "description",
+                  "operator": "not_contains",
+                  "value": "veterinaria"
+                },
+                {
+                  "field": "description",
+                  "operator": "not_contains",
+                  "value": "veterinária"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "cases": [
+        {
+          "description": "RAPPI FARMACIA",
+          "matches": true
+        },
+        {
+          "description": "RAPPI FARMÁCIA",
+          "matches": true
+        },
+        {
+          "description": "rappi farmácia",
+          "matches": true
+        },
+        {
+          "description": "RAPPI DROGARIA",
+          "matches": true
+        },
+        {
+          "description": "RAPPI MERCADO",
+          "matches": false
+        },
+        {
+          "description": "ESTORNO RAPPI FARMACIA",
+          "matches": false
+        },
+        {
+          "description": "RAPPI FARMACIA VETERINARIA",
+          "matches": false
+        },
+        {
+          "description": "RAPPI FARMACIA",
+          "direction": "CREDIT",
+          "matches": false
+        }
+      ]
+    },
+    {
+      "id": "corridas-uber-descritor-inteiro",
+      "category": "Corridas",
+      "source_ids": ["pr5"],
+      "rule": {
+        "accountId": null,
+        "direction": "DEBIT",
+        "text": "",
+        "priority": 900,
+        "filter": {
+          "currency": null,
+          "alternatives": [
+            {
+              "conditions": [
+                {
+                  "field": "description",
+                  "operator": "equals",
+                  "value": "uber trip"
+                }
+              ]
+            },
+            {
+              "conditions": [
+                {
+                  "field": "description",
+                  "operator": "equals",
+                  "value": "uber*trip"
+                }
+              ]
+            },
+            {
+              "conditions": [
+                {
+                  "field": "description",
+                  "operator": "equals",
+                  "value": "uber viagem"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "cases": [
+        {
+          "description": "UBER TRIP",
+          "matches": true
+        },
+        {
+          "description": "UBER*TRIP",
+          "matches": true
+        },
+        {
+          "description": "UBER EATS",
+          "matches": false
+        },
+        {
+          "description": "UBER TRIP UBER EATS",
+          "matches": false
+        },
+        {
+          "description": "UBER TRIPLEX",
+          "matches": false
+        },
+        {
+          "description": "UBER TRIP 12345",
+          "matches": false
+        }
+      ]
+    }
+  ]
+}

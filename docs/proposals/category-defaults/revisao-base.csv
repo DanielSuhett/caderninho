@@ -1,0 +1,34 @@
+﻿original_rule_id,decision,reason,private_data_used,direct_product_import
+delivery-uber-eats,restringir/desdobrar,Restringe a segmento de restaurante explícito; não transporta o alias de delivery para toda finalidade da plataforma.,não,não
+delivery-99food,restringir/desdobrar,Restringe a restaurante explícito e preserva separação de 99Pay e 99Pop.,não,não
+delivery-ifood-rappi,restringir/desdobrar,"Remove a inferência por marca isolada: fontes atuais mostram mercado, farmácia, pets e outros ramos.",não,não
+corridas-uber,preservar com exclusões conservadoras,"Mantém Trip/Viagem, exclui Eats/One e impede rótulo de corrida quando há conflito de serviço.",não,não
+corridas-99pop,preservar com exclusões conservadoras,"Mantém serviço Pop, exclui 99Pay/99Food; não transforma carteira em transporte.",não,não
+compras-aliexpress,preservar com exclusões conservadoras,Mantém apenas Compras ampla; não infere item ou país de origem da compra.,não,não
+compras-mercado-livre,preservar com exclusões conservadoras,"Mantém Compras ampla e bloqueia Mercado Pago, faturas e serviços financeiros.",não,não
+compras-shopee,preservar com exclusões conservadoras,Mantém Compras ampla; ShopeePay e estornos se abstêm.,não,não
+compras-magalu,preservar com exclusões conservadoras,Mantém Compras ampla; serviços financeiros não recebem categoria de varejo.,não,não
+compras-vestuario,restringir/desdobrar,Desdobra marcas para revisão independente e mantém categoria ampla Compras; teatro/financeira não são roupa.,não,não
+compras-eletronicos,restringir/desdobrar,"Desdobra KaBuM e Terabyte; categoria continua Compras, sem inferir produto exato.",não,não
+cuidados-boticario,preservar com exclusões conservadoras,Mantém identidade pública da marca; CNPJ completo do canal fica separado de qualquer franquia privada.,não,não
+cuidados-cabelo,preservar com exclusões conservadoras,Mantém termos de ramo; não inclui salão genérico ou nomes de profissionais.,não,não
+petshop,restringir/desdobrar,"Separa termo genérico e Petz; não publica contatos, localidade, pessoa ou fornecedor privado.",não,não
+farmacia,restringir/desdobrar,Separa Raia/Drogasil e termos genéricos; exclui veterinária e conflitos com outros ramos.,não,não
+mercado,restringir/desdobrar,Separa supermercado/Assaí/Carrefour; Carrefour isolado não prova mercado e documentos de filiais não generalizam raiz.,não,não
+lanches-doces,restringir/desdobrar,"Separa Cacau Show/Lindt; mantém Lanches como convenção editável da taxonomia, sem inferir cesta.",não,não
+lanches-estabelecimentos,restringir/desdobrar,"Separa padaria/lanchonete/cafeteria/sorveteria e exclui máquinas, insumos e equipamentos.",não,não
+restaurantes-kfc,preservar com exclusões conservadoras,Mantém convenção Restaurantes; regras específicas de redes coexistem com o ramo genérico sem alterar a origem.,não,não
+assinatura-netflix,preservar com exclusões conservadoras,Exclui loja/mercadoria; identidade canônica e assinatura continuam propostas separadas.,não,não
+assinatura-spotify,preservar com exclusões conservadoras,Exclui publicidade/Ads/loja para não confundir anúncio com assinatura pessoal.,não,não
+assinatura-disney-plus,preservar com exclusões conservadoras,Preserva + como plus e serviço explícito; Disney sem serviço se abstém.,não,não
+assinatura-youtube-premium,preservar com exclusões conservadoras,Serviço Premium explícito; YouTube genérico se abstém.,não,não
+assinatura-google-one,preservar com exclusões conservadoras,Serviço One explícito; Google genérico ou aplicativo não recebe assinatura.,não,não
+assinatura-claude,preservar com exclusões conservadoras,Mantém Subscription explícito; nome de fornecedor sozinho não prova assinatura.,não,não
+lazer-ticketmaster,preservar com exclusões conservadoras,"Mantém categoria ampla Lazer; CNPJ contratante identifica serviço de ingresso, sem inferir evento pessoal.",não,não
+lazer-steam,preservar com exclusões conservadoras,Mantém Purchase explícito; Steam genérico não é convertido em lazer automaticamente.,não,não
+estacionamento-pedagio,preservar com exclusões conservadoras,Mantém termos específicos e exclui conflitos; Park/Indigo/Sem Parar genéricos continuam sem finalidade presumida.,não,não
+academia-smart-fit,preservar com exclusões conservadoras,Mantém marca específica; documento da matriz não cobre franquias e não inclui academia de familiar.,não,não
+educacao-cursos,restringir/desdobrar,"Separa Alura/Udemy; outras mensalidades entram por propósito explícito, sem nomes pessoais.",não,não
+tributos,restringir/desdobrar,"Restringe a pagamento/cobrança de cada tributo e exclui simulação, estimativa e mera menção informativa.",não,não
+salario,preservar com exclusões conservadoras,"Exige crédito e descritor de salário; não trata todo Pix, TED, folha ou crédito como renda.",não,não
+doacoes,restringir/desdobrar,Restringe à finalidade explícita de pagamento; palavra isolada pode compor nome comercial.,não,não
