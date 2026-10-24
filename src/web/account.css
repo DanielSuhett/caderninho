@@ -28,6 +28,97 @@ main:has(.finance-dashboard) {
 .dashboard-message:empty {
   margin: 0;
 }
+.connection-journey {
+  max-width: 850px;
+  padding-block: 24px;
+}
+.journey-heading,
+.journey-phase {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.journey-heading {
+  flex-wrap: wrap;
+}
+.journey-heading h2,
+.journey-phase h3 {
+  margin: 0;
+}
+.journey-origin {
+  margin-block: 8px 24px;
+}
+.journey-phase {
+  align-items: start;
+  margin-top: 24px;
+}
+.journey-phase p {
+  margin-block: 4px 0;
+}
+.journey-success {
+  flex-shrink: 0;
+  color: var(--success-text);
+}
+.journey-spinner {
+  flex-shrink: 0;
+  color: var(--info-text);
+  animation: journey-spin 1.5s linear infinite;
+}
+@keyframes journey-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .journey-spinner {
+    animation: none;
+  }
+}
+.journey-observed {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+.journey-connect {
+  margin-block: 24px;
+}
+.journey-connect select {
+  max-width: 750px;
+}
+.journey-connect button {
+  margin-top: 8px;
+}
+.journey-connect label {
+  display: block;
+}
+.journey-accounts {
+  padding: 0;
+  margin-block: 16px 24px;
+  list-style: none;
+}
+.journey-accounts li {
+  padding-block: 12px;
+}
+.journey-accounts :where(li + li) {
+  border-top: 1px solid var(--line);
+}
+.journey-details,
+.journey-management,
+.journey-assistants {
+  margin-top: 24px;
+}
+.journey-details > a,
+:where(.connection-journey) .notice a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
+.journey-management > section {
+  margin-top: 24px;
+}
+.journey-result {
+  margin-block: 20px;
+}
 .workspace-metrics {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));

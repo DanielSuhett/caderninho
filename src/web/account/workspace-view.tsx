@@ -173,8 +173,10 @@ export function WorkspaceView({
           Instalação privada
           <br />
           <small>
-            {snapshot.people.length} pessoas · {snapshot.connections.length}{" "}
-            conexões
+            {snapshot.people.length}{" "}
+            {snapshot.people.length === 1 ? "pessoa" : "pessoas"} ·{" "}
+            {snapshot.connections.length}{" "}
+            {snapshot.connections.length === 1 ? "conexão" : "conexões"}
           </small>
         </p>
       </div>

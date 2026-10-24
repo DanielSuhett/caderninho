@@ -21,6 +21,45 @@ import { env } from "cloudflare:workers";
 const now = "2026-10-01T00:00:00.000Z";
 const finance = () => createFinancialService(createFinancialRepository(env.DB));
 beforeEach(setup);
+test("first-import admission is atomic and cannot restart a completed connection after the daily window", async () => {
+  const installation = createInstallationRepository(env.DB);
+  await installation.register("c");
+  assert.equal(
+    (await installation.state()).connections[0]?.hasTransactions,
+    false,
+  );
+  const repository = createSyncRepository(env.DB);
+  const admissions = await Promise.all([
+    repository.admit(["c"], now, true),
+    repository.admit(["c"], now, true),
+  ]);
+  const id = admissions[0]?.[0]?.importId;
+  assert.ok(id);
+  assert.equal(id, admissions[1]?.[0]?.importId);
+  assert.equal(
+    admissions.flat().filter((a) => a.status === "started").length,
+    1,
+  );
+  await runImport(
+    {
+      now: () => now,
+      repository,
+      source: source([]),
+      steps: { do: (_name, fn) => fn() },
+    },
+    id,
+  );
+  const [empty] = (await installation.state()).connections;
+  assert.equal(empty?.importStatus, "succeeded");
+  assert.equal(empty?.hasTransactions, false);
+  assert.ok(empty?.lastSuccessAt);
+  const nextDay = "2026-10-02T00:00:00.000Z";
+  const repeated = await repository.admit(["c"], nextDay, true);
+  assert.equal(repeated[0]?.importId, id);
+  assert.equal(repeated[0]?.status, "cooldown");
+  assert.equal((await repository.active()).length, 0);
+  assert.equal((await repository.admit(["c"], nextDay))[0]?.status, "started");
+});
 test("simultaneous manual/cron admissions are isolated by connection and enforce 24h even after failure", async () => {
   const installation = createInstallationRepository(env.DB);
   await installation.register("c");
@@ -160,6 +199,7 @@ test("partial pages keep prior success and confirmed data, reject conflicting ID
     { code: "UPSTREAM_AUTH" },
   );
   const state = await createInstallationRepository(env.DB).state();
+  assert.equal(state.connections[0]?.hasTransactions, true);
   assert.equal(state.connections[0]?.partial, true);
   assert.equal(state.connections[0]?.lastSuccessAt, now);
   assert.equal(

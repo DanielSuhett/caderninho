@@ -1,13 +1,26 @@
-import { type FormEvent, type MouseEvent, useCallback } from "react";
+import {
+  type FormEvent,
+  type MouseEvent,
+  type SyntheticEvent,
+  useCallback,
+  useState,
+} from "react";
 
 import type { HouseholdCommand, PortalResponse } from "../../contracts";
+import { tryCatch } from "../../shared";
 import { UiButton } from "../ui";
 import { BankMark } from "./bank-mark";
+import {
+  type ConnectionActivity,
+  ConnectionJourney,
+  importFailureMessage,
+} from "./connection-journey";
 import { DisclosureItem } from "./disclosure-item";
 import { HouseholdPanel } from "./household-view";
 import { dayLabel } from "./workspace-resource";
 import {
   FilterDrawer,
+  RefreshButton,
   WorkspaceHeading,
   WorkspaceMetrics,
 } from "./workspace-ui";
@@ -43,6 +56,11 @@ export function DashboardView(props: {
   section: "overview" | "connections";
   busy: boolean;
   message: string;
+  activity: ConnectionActivity | null;
+  observedAt: string | null;
+  readError: boolean;
+  cancel: () => void;
+  refresh: () => void;
   personId: string;
   connect: (profileId: string, id?: string) => void;
   command: (action: string, ids?: string[]) => void;
@@ -56,6 +74,46 @@ export function DashboardView(props: {
     manage,
     connect: openConnection,
   } = props;
+  const [managementOpen, setManagementOpen] = useState(!snapshot.configured);
+  const [copyMessage, setCopyMessage] = useState("");
+  const hasResult = snapshot.connections.some(
+    (c) => c.hasTransactions || c.lastSuccessAt,
+  );
+  const openManagement = useCallback(() => {
+    if (props.section === "overview") {
+      location.assign("/account/connections");
+      return;
+    }
+    setManagementOpen(true);
+    requestAnimationFrame(() =>
+      document
+        .getElementById(
+          snapshot.configured ? "connections-heading" : "household-heading",
+        )
+        ?.focus(),
+    );
+  }, [snapshot.configured, props.section]);
+  const toggleManagement = useCallback(
+    (event: SyntheticEvent<HTMLDetailsElement>) =>
+      setManagementOpen(event.currentTarget.open),
+    [],
+  );
+  const copyMcp = useCallback(async () => {
+    const { data: _data, error } = await tryCatch(() =>
+      navigator.clipboard.writeText(`${snapshot.origin}/mcp`),
+    );
+    setCopyMessage(
+      error
+        ? "Não foi possível copiar. Selecione a URL abaixo."
+        : "URL MCP copiada.",
+    );
+  }, [snapshot.origin]);
+  const onCopyMcp = useCallback(() => {
+    copyMcp().then(
+      () => undefined,
+      () => undefined,
+    );
+  }, [copyMcp]);
   const visible = snapshot.connections.filter(
     (c) => !personId || c.personId === personId,
   );
@@ -128,43 +186,60 @@ export function DashboardView(props: {
         description={
           props.section === "overview"
             ? "Contas e cartões, com titular e origem identificados."
-            : "Pessoas, perfis Pluggy e acesso aos bancos."
+            : "Conecte seu banco e acompanhe a importação."
         }
         title={props.section === "overview" ? "Visão geral" : "Conexões"}
-      />
-      <FilterDrawer
-        action={
-          props.section === "overview" ? "/account" : "/account/connections"
-        }
-        summary={[
-          `Pessoa: ${snapshot.people.find((p) => p.id === personId)?.name ?? "Todas"}`,
-        ]}
       >
-        <label>
-          Pessoa
-          <select
-            defaultValue={personId}
-            name="person"
-          >
-            <option value="">Todas as pessoas</option>
-            {snapshot.people.map((p) => (
-              <option
-                key={p.id}
-                value={p.id}
-              >
-                {p.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <input
-          name="space"
-          type="hidden"
-          value={
-            new URLSearchParams(location.search).get("space") ?? "personal"
-          }
+        <RefreshButton
+          disabled={busy}
+          label="Atualizar status da importação"
+          onClick={props.refresh}
         />
-      </FilterDrawer>
+      </WorkspaceHeading>
+      <ConnectionJourney
+        activity={props.activity}
+        cancel={props.cancel}
+        connect={openConnection}
+        manage={openManagement}
+        observedAt={props.observedAt}
+        readError={props.readError}
+        snapshot={snapshot}
+      />
+      {hasResult && (props.section === "overview" || managementOpen) && (
+        <FilterDrawer
+          action={
+            props.section === "overview" ? "/account" : "/account/connections"
+          }
+          summary={[
+            `Pessoa: ${snapshot.people.find((p) => p.id === personId)?.name ?? "Todas"}`,
+          ]}
+        >
+          <label>
+            Pessoa
+            <select
+              defaultValue={personId}
+              name="person"
+            >
+              <option value="">Todas as pessoas</option>
+              {snapshot.people.map((p) => (
+                <option
+                  key={p.id}
+                  value={p.id}
+                >
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <input
+            name="space"
+            type="hidden"
+            value={
+              new URLSearchParams(location.search).get("space") ?? "personal"
+            }
+          />
+        </FilterDrawer>
+      )}
       <p
         aria-live="polite"
         className="dashboard-message"
@@ -175,7 +250,7 @@ export function DashboardView(props: {
             ? "Há conexões com dados parciais. Confira a situação abaixo antes de analisar totais."
             : "")}
       </p>
-      {props.section === "overview" && (
+      {props.section === "overview" && hasResult && (
         <>
           <WorkspaceMetrics
             items={[
@@ -279,179 +354,201 @@ export function DashboardView(props: {
       )}
       {props.section === "connections" && (
         <>
-          <section aria-labelledby="connections-heading">
-            <div className="section-heading">
-              <h2 id="connections-heading">Conexões e atualização</h2>
-              <UiButton
-                disabled={busy || !importable.length}
-                onClick={action}
-                type="button"
-                value="sync"
-                variant="secondary"
-              >
-                Importar esta visão
-              </UiButton>
-            </div>
-            {importable.length < visible.length && (
-              <p
-                className="notice"
-                data-tone="warning"
-              >
-                Perfis pausados ou sem credenciais ficam fora desta importação.
-                Seus dados continuam visíveis.
-              </p>
-            )}
-            <form
-              className="connect-form"
-              onSubmit={connect}
-            >
-              <label htmlFor="connect-profile">Conectar usando o perfil</label>
-              <div className="inline-fields">
-                <select
-                  disabled={!enabled.length}
-                  id="connect-profile"
-                  name="profileId"
+          <details
+            className="journey-management"
+            onToggle={toggleManagement}
+            open={managementOpen}
+          >
+            <summary>Pessoas, perfis e outras conexões</summary>
+            <section aria-labelledby="connections-heading">
+              <div className="section-heading">
+                <h2
+                  id="connections-heading"
+                  tabIndex={-1}
                 >
-                  {enabled.map((p) => (
-                    <option
-                      key={p.id}
-                      value={p.id}
-                    >
-                      {p.name} ·{" "}
-                      {
-                        snapshot.people.find(
-                          (person) => person.id === p.personId,
-                        )?.name
-                      }
-                    </option>
-                  ))}
-                </select>
+                  Conexões e atualização
+                </h2>
                 <UiButton
-                  disabled={busy || !enabled.length}
-                  type="submit"
+                  disabled={busy || !importable.length}
+                  onClick={action}
+                  type="button"
+                  value="sync"
+                  variant="secondary"
                 >
-                  Conectar Meu Pluggy
+                  Importar esta visão
                 </UiButton>
               </div>
-            </form>
-            {!enabled.length && (
-              <p
-                className="notice"
-                data-tone="warning"
-              >
-                Adicione ou ative um perfil em “Pessoas e perfis Pluggy” para
-                conectar.
-              </p>
-            )}
-            <div className="connection-list">
-              {visible.map((c) => (
-                <article
-                  className="connection-row"
-                  key={c.id}
+              {importable.length < visible.length && (
+                <p
+                  className="notice"
+                  data-tone="warning"
                 >
-                  <div>
-                    <span
-                      className={`sync-state sync-${c.importStatus ?? "pending"}`}
-                    >
-                      {c.importStatus
-                        ? importLabels[c.importStatus]
-                        : "Não importada"}
-                    </span>
-                    <h3>
-                      {c.personName}{" "}
-                      <span className="muted">/ {c.profileName}</span>
-                    </h3>
-                    <p>
-                      {Object.values(c.accounts)
-                        .map((a) => a.name)
-                        .join(" · ") ||
-                        "Conexão aguardando primeira importação"}
-                    </p>
-                    <p className="muted">
-                      Última importação: {timestamp(c.lastSuccessAt)}
-                      <br />
-                      Nova importação a partir de:{" "}
-                      {c.nextEligibleAt
-                        ? timestamp(c.nextEligibleAt)
-                        : "Disponível agora"}
-                    </p>
-                    {!!c.importError && (
-                      <p
-                        className="notice"
-                        data-tone="error"
+                  Perfis pausados ou sem credenciais ficam fora desta
+                  importação. Seus dados continuam visíveis.
+                </p>
+              )}
+              <form
+                className="connect-form"
+                onSubmit={connect}
+              >
+                <label htmlFor="connect-profile">
+                  Conectar usando o perfil
+                </label>
+                <div className="inline-fields">
+                  <select
+                    disabled={!enabled.length}
+                    id="connect-profile"
+                    name="profileId"
+                  >
+                    {enabled.map((p) => (
+                      <option
+                        key={p.id}
+                        value={p.id}
                       >
-                        A importação foi interrompida ({c.importError}). Confira
-                        o perfil e a autorização no Meu Pluggy. Os dados já
-                        importados foram preservados.
+                        {p.name} ·{" "}
+                        {
+                          snapshot.people.find(
+                            (person) => person.id === p.personId,
+                          )?.name
+                        }
+                      </option>
+                    ))}
+                  </select>
+                  <UiButton
+                    disabled={busy || !enabled.length}
+                    type="submit"
+                  >
+                    Conectar Meu Pluggy
+                  </UiButton>
+                </div>
+              </form>
+              {!enabled.length && (
+                <p
+                  className="notice"
+                  data-tone="warning"
+                >
+                  Adicione ou ative um perfil em “Pessoas e perfis Pluggy” para
+                  conectar.
+                </p>
+              )}
+              <div className="connection-list">
+                {visible.map((c) => (
+                  <article
+                    className="connection-row"
+                    key={c.id}
+                  >
+                    <div>
+                      <span
+                        className={`sync-state sync-${c.importStatus ?? "pending"}`}
+                      >
+                        {c.importStatus
+                          ? importLabels[c.importStatus]
+                          : "Não importada"}
+                      </span>
+                      <h3>
+                        {c.personName}{" "}
+                        <span className="muted">/ {c.profileName}</span>
+                      </h3>
+                      <p>
+                        {Object.values(c.accounts)
+                          .map((a) => a.name)
+                          .join(" · ") ||
+                          "Conexão aguardando primeira importação"}
                       </p>
-                    )}
-                  </div>
-                  <div className="connection-actions">
-                    <UiButton
-                      data-profile={c.profileId ?? "default"}
-                      disabled={
-                        busy || !readyProfiles.has(c.profileId ?? "default")
-                      }
-                      onClick={reconnect}
-                      type="button"
-                      value={c.id}
-                      variant="secondary"
-                    >
-                      Reautorizar conexão
-                    </UiButton>
-                    <details>
-                      <summary>Alterar titular</summary>
-                      <form
-                        data-id={c.id}
-                        onSubmit={assign}
-                      >
-                        <label htmlFor={`owner-${c.id}`}>
-                          Pessoa desta conexão
-                        </label>
-                        <select
-                          defaultValue={c.personId ?? "self"}
-                          id={`owner-${c.id}`}
-                          name="personId"
+                      <p className="muted">
+                        Última importação: {timestamp(c.lastSuccessAt)}
+                        <br />
+                        Nova importação a partir de:{" "}
+                        {c.nextEligibleAt
+                          ? timestamp(c.nextEligibleAt)
+                          : "Disponível agora"}
+                      </p>
+                      {!!c.importError && (
+                        <p
+                          className="notice"
+                          data-tone="error"
                         >
-                          {snapshot.people.map((p) => (
-                            <option
-                              key={p.id}
-                              value={p.id}
-                            >
-                              {p.name}
-                            </option>
-                          ))}
-                        </select>
-                        <p className="muted">
-                          Reatribui o histórico desta conexão. Não altera o
-                          titular na instituição nem as credenciais.
+                          {importFailureMessage(c.importError)}
+                          <br />
+                          Código: {c.importError}.
                         </p>
-                        <UiButton
-                          disabled={busy}
-                          type="submit"
+                      )}
+                    </div>
+                    <div className="connection-actions">
+                      <UiButton
+                        data-profile={c.profileId ?? "default"}
+                        disabled={
+                          busy || !readyProfiles.has(c.profileId ?? "default")
+                        }
+                        onClick={reconnect}
+                        type="button"
+                        value={c.id}
+                        variant="secondary"
+                      >
+                        Reautorizar conexão
+                      </UiButton>
+                      <details>
+                        <summary>Alterar titular</summary>
+                        <form
+                          data-id={c.id}
+                          onSubmit={assign}
                         >
-                          Salvar titular
-                        </UiButton>
-                      </form>
-                    </details>
-                  </div>
-                </article>
-              ))}
-            </div>
-          </section>
-          <HouseholdPanel
-            busy={busy}
-            manage={props.manage}
-            snapshot={snapshot}
-          />
-          <section aria-labelledby="assistant-heading">
-            <h2 id="assistant-heading">Assistentes com a mesma visão</h2>
+                          <label htmlFor={`owner-${c.id}`}>
+                            Pessoa desta conexão
+                          </label>
+                          <select
+                            defaultValue={c.personId ?? "self"}
+                            id={`owner-${c.id}`}
+                            name="personId"
+                          >
+                            {snapshot.people.map((p) => (
+                              <option
+                                key={p.id}
+                                value={p.id}
+                              >
+                                {p.name}
+                              </option>
+                            ))}
+                          </select>
+                          <p className="muted">
+                            Reatribui o histórico desta conexão. Não altera o
+                            titular na instituição nem as credenciais.
+                          </p>
+                          <UiButton
+                            disabled={busy}
+                            type="submit"
+                          >
+                            Salvar titular
+                          </UiButton>
+                        </form>
+                      </details>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </section>
+            <HouseholdPanel
+              busy={busy}
+              manage={props.manage}
+              snapshot={snapshot}
+            />
+          </details>
+          <details className="journey-assistants">
+            <summary>Conectar meu assistente MCP</summary>
             <p>
               Use a URL abaixo no ChatGPT ou Claude. Peça consultas por pessoa
               ou uma visão conjunta. Quem autorizar o assistente dará acesso aos
               dados de toda a instalação.
             </p>
             <code className="mcp-address">{snapshot.origin}/mcp</code>
+            <UiButton
+              onClick={onCopyMcp}
+              type="button"
+              variant="secondary"
+            >
+              Copiar URL MCP
+            </UiButton>
+            <p role="status">{copyMessage}</p>
             <details>
               <summary>Gerenciar acesso dos assistentes</summary>
               <p>
@@ -469,8 +566,13 @@ export function DashboardView(props: {
                 Revogar todos os assistentes
               </UiButton>
             </details>
-          </section>
+          </details>
         </>
+      )}
+      {props.section === "overview" && !hasResult && (
+        <p>
+          <a href="/account/connections">Gerenciar pessoas e perfis Pluggy</a>
+        </p>
       )}
     </div>
   );

@@ -22,6 +22,7 @@ export {
 } from "./planning";
 export type {
   AccountConnectToken,
+  ConnectionInfo,
   InstallationState,
   PortalResponse,
 } from "./portal.types";

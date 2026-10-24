@@ -20,6 +20,7 @@ export const PortalResponseSchema = z.object({
           })
           .strict(),
       ),
+      hasTransactions: z.boolean().optional(),
       id: z.string(),
       importCheckpoint: z
         .object({

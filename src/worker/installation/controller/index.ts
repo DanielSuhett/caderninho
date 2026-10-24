@@ -181,7 +181,11 @@ export function installationRoutes(access: Hono<PortalEnv>) {
       c.get("session").csrf,
       ItemActionSchema,
     );
-    await installationService(c.env).connect(input.itemId, input.profileId);
+    const id = await installationService(c.env).connect(
+      input.itemId,
+      input.profileId,
+    );
+    await syncService(c.env).request([id], true);
     return c.json({ ok: true });
   });
   app.post("/api/account/sync", async (c) => {

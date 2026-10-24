@@ -139,9 +139,11 @@ test("a fresh installation connects/reconnects the widget, imports cumulative pa
     });
   });
   const config = settings();
+  const dispatches: string[] = [];
   config.FINANCE = {
     ...config.FINANCE,
     create: async ({ id, params }) => {
+      dispatches.push(id);
       await runImport(
         {
           ...synchronizationDependencies(config),
@@ -217,10 +219,15 @@ test("a fresh installation connects/reconnects the widget, imports cumulative pa
     { options: { avoidDuplicates: true } },
     { itemId, options: { avoidDuplicates: true } },
   ]);
-  await api.command("sync", initial.csrf, signal);
+  assert.equal(
+    dispatches.length,
+    1,
+    "registration starts the first import once, including reconnect callbacks",
+  );
   const imported = await api.read(signal);
   assert.equal(imported.connections.length, 1);
   assert.equal(imported.connections[0]?.importStatus, "succeeded");
+  assert.equal(imported.connections[0]?.hasTransactions, true);
   assert.equal(
     imported.connections[0]?.accounts[accountId]?.balanceMinor,
     "12345",

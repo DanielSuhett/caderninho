@@ -122,8 +122,10 @@ export function syncService(env: Bindings, now: () => Date = () => new Date()) {
   const service = createSyncService(
     {
       ...repository,
-      admit: (ids, time) =>
-        observeSpan(SpanName.admission, () => repository.admit(ids, time)),
+      admit: (ids, time, initialOnly) =>
+        observeSpan(SpanName.admission, () =>
+          repository.admit(ids, time, initialOnly),
+        ),
     },
     {
       create: async (id) => {
@@ -148,7 +150,7 @@ export function syncService(env: Bindings, now: () => Date = () => new Date()) {
   );
   return {
     recover: () => observeSpan(SpanName.recovery, () => service.recover()),
-    request: (ids?: string[]) =>
+    request: (ids?: string[], initialOnly = false) =>
       observeSpan(SpanName.dispatch, async () => {
         const state = await createHouseholdRepository(env.DB).read();
         const selected = state.owners.filter(
@@ -168,7 +170,7 @@ export function syncService(env: Bindings, now: () => Date = () => new Date()) {
             throw new Error("NOT_CONFIGURED");
           }
         }
-        return service.request(ids);
+        return service.request(ids, initialOnly);
       }),
   };
 }

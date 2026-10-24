@@ -81,7 +81,12 @@ export function HouseholdPanel({
     >
       <div className="section-heading">
         <div>
-          <h2 id="household-heading">Pessoas e perfis Pluggy</h2>
+          <h2
+            id="household-heading"
+            tabIndex={-1}
+          >
+            Pessoas e perfis Pluggy
+          </h2>
         </div>
       </div>
       <p>
