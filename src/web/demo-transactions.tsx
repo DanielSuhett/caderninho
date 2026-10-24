@@ -44,7 +44,7 @@ export function DemoTransactions({
           <QuerySearch
             action="/demo/transactions"
             compact
-            label="Buscar descrição"
+            label="Buscar transação"
             name="text"
             params={search}
           />

@@ -1,6 +1,10 @@
 export function DesignHead() {
   return (
     <>
+      <script
+        async
+        src="/theme.js"
+      />
       <link
         as="font"
         crossOrigin="anonymous"

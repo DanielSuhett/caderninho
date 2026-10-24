@@ -18,7 +18,8 @@ import type {
   PortalTransactionListSchema,
 } from "../../contracts";
 import { tryCatch } from "../../shared";
-import { formatBalance } from "../money";
+import { formatBalance, type MoneyTone } from "../money";
+import type { CategoryAppearance } from "./category-appearance";
 import { DisclosureItem } from "./disclosure-item";
 import { categoryVolumes, summaryCurrency } from "./financial-presentation";
 import { TransactionList } from "./transaction-list";
@@ -70,7 +71,7 @@ type RecentRecords = z.infer<
   typeof PortalTransactionListSchema
 >["data"]["records"];
 export interface FinancialDashboardProps {
-  categories: Array<{ id: string; name: string }>;
+  categories: CategoryAppearance[];
   currency: string;
   monthly: FinancialSummary | null;
   overview: FinancialOverview;
@@ -85,11 +86,13 @@ function FinancialMetric({
   amount,
   currency,
   hint,
+  tone = "neutral",
 }: {
   label: string;
   amount: string | null;
   currency: string;
   hint: string;
+  tone?: MoneyTone;
 }) {
   const value =
     amount === null ? "Indisponível" : formatBalance(amount, currency);
@@ -97,7 +100,12 @@ function FinancialMetric({
     <div className="financial-metric">
       <dt>{label}</dt>
       <dd>
-        <span className="metric-amount">
+        <span
+          className="metric-amount"
+          data-money-tone={
+            amount !== null && BigInt(amount) !== 0n ? tone : "neutral"
+          }
+        >
           {amount === null ? value : value.slice(0, -(currency.length + 1))}
         </span>
         {amount !== null && <span className="metric-currency">{currency}</span>}
@@ -146,12 +154,14 @@ export function FinancialDashboard({
               currency={currency}
               hint="Categorias explícitas · no período"
               label="Receitas classificadas"
+              tone="income"
             />
             <FinancialMetric
               amount={expense}
               currency={currency}
               hint="Estornos descontados · no período"
               label="Despesas classificadas"
+              tone="expense"
             />
             <FinancialMetric
               amount={flow}
@@ -380,25 +390,28 @@ function CategoryRows({
   currency,
 }: {
   groups: ReturnType<typeof categoryVolumes>;
-  categories: Array<{ id: string; name: string }>;
+  categories: CategoryAppearance[];
   currency: string;
 }) {
   return (
     <ul className="category-volumes">
-      {groups.map((group) => (
-        <li key={group.group}>
-          <Meter
-            aria-label={`Volume de ${categories.find((category) => category.id === group.group)?.name ?? "categoria"}`}
-            customValue={formatBalance(group.amountMinor, currency)}
-            indicatorClassName="category-volume-indicator"
-            label={
-              categories.find((category) => category.id === group.group)
-                ?.name ?? "Categoria não identificada"
-            }
-            value={group.volume}
-          />
-        </li>
-      ))}
+      {groups.map((group) => {
+        const category = categories.find((item) => item.id === group.group);
+        return (
+          <li
+            key={group.group}
+            style={{ color: category?.color ?? "var(--text)" }}
+          >
+            <Meter
+              aria-label={`Volume de ${category?.name ?? "categoria não identificada"}`}
+              customValue={formatBalance(group.amountMinor, currency)}
+              indicatorClassName="category-volume-indicator"
+              label={category?.name ?? "Categoria não identificada"}
+              value={group.volume}
+            />
+          </li>
+        );
+      })}
     </ul>
   );
 }

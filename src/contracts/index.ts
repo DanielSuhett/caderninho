@@ -44,10 +44,15 @@ export {
   SyncActionSchema,
 } from "./portal-contract";
 export { brasilRulePack } from "./rule-packs";
-export type { RulePreviewInput, RulePreviewResult } from "./rules";
+export type {
+  RulePreviewInput,
+  RulePreviewQuery,
+  RulePreviewResult,
+} from "./rules";
 export {
   RuleConditionSchema,
   RuleFilterSchema,
+  RulePreviewQuerySchema,
   RulePreviewResultSchema,
   RulePreviewSchema,
 } from "./rules";

@@ -32,7 +32,8 @@ próxima instalação explícita. Esta versão não atualiza regras instaladas e
 
 A instalação não toca transações. O trigger existente classifica **novas**
 transações nas próximas importações normais do produto. Para o histórico, use a
-prévia do editor (correspondências, não vencedor) e `apply_rules` com período,
+tool `preview_rule` ou a prévia do editor (correspondências, não vencedor),
+e depois `apply_rules` com período,
 confirmação e nova chave. O limite continua sendo 500 transações por aplicação.
 Não é necessário nem apropriado disparar uma importação para instalar o pacote.
 

@@ -6,10 +6,10 @@ import { z } from "zod/v4";
 import {
   brasilRulePack,
   PlanningCommandSchema,
-  RulePreviewSchema,
+  RulePreviewResultSchema,
 } from "../../src/contracts";
 import type { ProviderTransaction } from "../../src/domain";
-import { createPlanningService, previewRule } from "../../src/worker/planning";
+import { createPlanningService } from "../../src/worker/planning";
 import { createPlanningRepository } from "../../src/worker/planning/repository";
 import { fixture as appFixture, cookies, grant, login } from "./access-fixture";
 import { collect, setup, source, transaction } from "./fixture";
@@ -65,9 +65,13 @@ async function transactions(f: ReturnType<typeof fixture>) {
 
 test("native JSON installs atomically, reuses local categories and replays without duplicates or edits", async () => {
   const f = fixture();
-  const pharmacy = identify(
-    await f.write("create_category", { kind: "expense", name: "Farmácia" }),
-  );
+  const initial = await f.repository.read();
+  const pharmacy = initial.state.categories.find((c) => c.name === "Farmácia");
+  assert.ok(pharmacy);
+  // A legacy/synthetic space may lack a fixed category: exercise creation too.
+  await env.DB.prepare(
+    "DELETE FROM planning_categories WHERE json_extract(data,'$.name')='Academia' AND json_extract(data,'$.spaceId')='personal'",
+  ).run();
   assert.throws(() =>
     PlanningCommandSchema.parse({
       idempotency_key: "unconfirmed",
@@ -89,8 +93,8 @@ test("native JSON installs atomically, reuses local categories and replays witho
     await f.install({ idempotency_key: "install" }),
   );
   assert.equal(first.rulesCreated, 30);
-  assert.equal(first.categoriesCreated, 8);
-  assert.equal(first.categoryIds.farmacia, pharmacy);
+  assert.equal(first.categoriesCreated, 1);
+  assert.equal(first.categoryIds.farmacia, pharmacy.id);
   assert.deepEqual(await f.install({ idempotency_key: "install" }), first);
   const second = installed.parse(await f.install());
   assert.equal(second.rulesCreated, 0);
@@ -99,6 +103,16 @@ test("native JSON installs atomically, reuses local categories and replays witho
   const snapshot = await f.repository.read();
   assert.equal(snapshot.state.rules.length, 30);
   assert.equal(snapshot.state.edits.length, 0);
+  assert.deepEqual(
+    snapshot.state.categories.find((c) => c.id === pharmacy.id),
+    pharmacy,
+  );
+  for (const key of ["ifood-farmacia", "rappi-farmacia"]) {
+    assert.equal(
+      snapshot.state.rules.find((r) => r.pack?.key === key)?.categoryId,
+      pharmacy.id,
+    );
+  }
   for (const rule of snapshot.state.rules) {
     const definition = brasilRulePack.rules.find(
       (r) => r.key === rule.pack?.key,
@@ -118,7 +132,7 @@ test("native JSON installs atomically, reuses local categories and replays witho
   await assert.rejects(
     () =>
       f.install({
-        categoryIds: { farmacia: pharmacy },
+        categoryIds: { farmacia: pharmacy.id },
         idempotency_key: "install",
       }),
     { message: "IDEMPOTENCY_CONFLICT" },
@@ -265,18 +279,17 @@ test("persisted pack uses real preview and explicit application, then identical 
     state: { rules },
   } = await f.repository.read();
   const previews = await Promise.all(
-    rules.map((rule) =>
-      previewRule(
-        f.repository,
-        RulePreviewSchema.parse({
-          accountId: rule.accountId,
-          csrf: "synthetic",
-          direction: rule.direction,
-          filter: rule.filter,
-          spaceId: "personal",
-          text: rule.text,
-        }),
-      ),
+    rules.map(
+      async (rule) =>
+        z.object({ data: RulePreviewResultSchema }).parse(
+          await f.call("preview_rule", {
+            accountId: rule.accountId,
+            direction: rule.direction,
+            filter: rule.filter,
+            spaceId: "personal",
+            text: rule.text,
+          }),
+        ).data,
     ),
   );
   rules.forEach((rule, i) => {

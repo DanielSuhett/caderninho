@@ -1,7 +1,8 @@
 import { z } from "zod/v4";
 
+import { CategoryColorSchema, CategoryIconSchema } from "../domain";
 import { RulePackCategoryKeySchema } from "./rule-packs";
-import { RuleFilterSchema } from "./rules";
+import { RuleFilterSchema, RulePreviewQuerySchema } from "./rules";
 
 const id = z.string().min(1).max(160);
 const text = z.string().trim().min(1).max(240);
@@ -29,6 +30,11 @@ const mutation = {
   spaceId: id,
 };
 const listing = { ...scope, include_hidden: z.boolean().default(false) };
+const categoryAppearance = {
+  color: CategoryColorSchema.optional(),
+  groupId: id.nullable().optional(),
+  icon: CategoryIconSchema.optional(),
+};
 const period = { ...scope, from: day, to: day };
 const selection = {
   ...scope,
@@ -220,7 +226,9 @@ export const planningDefinitions = [
       "Listar registros locais e importados, incluindo ocultos quando solicitado.",
     name: "get_categories",
     readOnly: true,
-    schema: z.object({ ...listing }).strict(),
+    schema: z
+      .object({ ...listing, groupId: id.nullable().optional() })
+      .strict(),
   },
   {
     description:
@@ -593,18 +601,21 @@ export const planningDefinitions = [
     schema: z
       .object({
         ...mutation,
+        ...categoryAppearance,
         kind: z.enum(["income", "expense", "transfer"]),
         name: text,
       })
       .strict(),
   },
   {
-    description: "Renomear, ocultar ou restaurar categoria personalizada.",
+    description:
+      "Configurar ícone, cor e grupo de qualquer categoria. Nomes de categorias fixas são protegidos.",
     name: "update_category",
     readOnly: false,
     schema: z
       .object({
         ...mutation,
+        ...categoryAppearance,
         hidden: z.boolean().optional(),
         id,
         name: text.optional(),
@@ -922,6 +933,70 @@ export const planningDefinitions = [
   },
   {
     description:
+      "Listar agrupadores de categorias de um espaço; não são espaços financeiros.",
+    name: "get_category_groups",
+    readOnly: true,
+    schema: z.object({ ...scope }).strict(),
+  },
+  {
+    description: "Criar agrupador de categorias com nome, ícone e cor.",
+    name: "create_category_group",
+    readOnly: false,
+    schema: z
+      .object({
+        ...mutation,
+        color: CategoryColorSchema,
+        icon: CategoryIconSchema,
+        name: text,
+      })
+      .strict(),
+  },
+  {
+    description: "Editar nome, ícone ou cor de um agrupador de categorias.",
+    name: "update_category_group",
+    readOnly: false,
+    schema: z
+      .object({
+        ...mutation,
+        color: CategoryColorSchema.optional(),
+        icon: CategoryIconSchema.optional(),
+        id,
+        name: text.optional(),
+      })
+      .strict(),
+  },
+  {
+    description:
+      "Remover agrupador; suas categorias e transações são preservadas e ficam sem grupo.",
+    name: "delete_category_group",
+    readOnly: false,
+    schema: z.object({ ...mutation, id }).strict(),
+  },
+  {
+    description:
+      "Compras e transações com parcelas de cartão agrupadas antes da paginação, como na lista do painel. Mantém valores de cada parcela, moeda, pendência, datas e identificação. Datas filtram a compra ou primeira parcela conhecida; nunca some a página para calcular totais.",
+    name: "get_transaction_purchases",
+    readOnly: true,
+    schema: z
+      .object({
+        ...selection,
+        cursor: z.string().max(4096).optional(),
+        future: z.boolean().default(false),
+        limit: z.number().int().min(1).max(500).default(100),
+        order: z.literal("date_desc").default("date_desc"),
+      })
+      .omit({ cardNumber: true, tagId: true })
+      .strict(),
+  },
+  {
+    description:
+      "Simular uma regra sem salvar nem reclassificar. Usa o mesmo escopo obrigatório, alternativas OU, condições E e dinheiro exato do painel. Informa contagem, amostras e limites de cobertura; truncated ou partial impedem tratar a contagem como definitiva.",
+    name: "preview_rule",
+    readOnly: true,
+    schema: RulePreviewQuerySchema,
+  },
+  {
+    description:
       "Instalar o pacote Brasil no espaço: cria categorias ausentes e regras compostas sem duplicar nem sobrescrever regras pessoais. Não reaplica o histórico; novas importações usam as regras. categoryIds resolve nomes locais ambíguos.",
     name: "install_rule_pack",
     readOnly: false,
@@ -935,6 +1010,24 @@ export const planningDefinitions = [
   },
 ] as const;
 export const PlanningCommandSchema = z.discriminatedUnion("tool", [
+  planningDefinitions[94].schema.extend({
+    tool: z.literal("get_transaction_purchases"),
+  }),
+  planningDefinitions[95].schema.safeExtend({
+    tool: z.literal("preview_rule"),
+  }),
+  planningDefinitions[90].schema.extend({
+    tool: z.literal("get_category_groups"),
+  }),
+  planningDefinitions[91].schema.extend({
+    tool: z.literal("create_category_group"),
+  }),
+  planningDefinitions[92].schema.extend({
+    tool: z.literal("update_category_group"),
+  }),
+  planningDefinitions[93].schema.extend({
+    tool: z.literal("delete_category_group"),
+  }),
   planningDefinitions[0].schema.extend({ tool: z.literal("get_accounts") }),
   planningDefinitions[1].schema.extend({ tool: z.literal("get_cards") }),
   planningDefinitions[2].schema.extend({ tool: z.literal("get_transactions") }),
@@ -1123,7 +1216,7 @@ export const PlanningCommandSchema = z.discriminatedUnion("tool", [
     tool: z.literal("set_notification_preference"),
   }),
   planningDefinitions[89].schema.extend({ tool: z.literal("delete_space") }),
-  planningDefinitions[90].schema.extend({
+  planningDefinitions[96].schema.extend({
     tool: z.literal("install_rule_pack"),
   }),
 ]);

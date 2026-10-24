@@ -30,6 +30,8 @@
     --line: var(--color-kumo-line);
     --accent: var(--text-color-kumo-link);
     --success-text: var(--text-color-kumo-success);
+    --finance-income: var(--text-color-kumo-success);
+    --finance-expense: var(--text-color-kumo-danger);
     font-family: var(--font-sans);
     font-size: 16px;
     font-optical-sizing: auto;
@@ -111,12 +113,35 @@
   }
 }
 /* Semantic theme values, shared by the Kumo components and product text. */
+:root[data-mode] {
+  --text-color-kumo-placeholder: var(--text-color-kumo-subtle);
+}
 :root[data-mode="dark"] {
   --text-color-kumo-default: #f4f4f5;
   --text-color-kumo-strong: #ffffff;
   --text-color-kumo-subtle: #b3b3b8;
   --text-color-kumo-inactive: #a0a0a6;
   --text-color-kumo-link: #e4e4e7;
+  color-scheme: dark;
+}
+:root[data-mode="light"] {
+  color-scheme: light;
+}
+.theme-target-light,
+.theme-target-dark {
+  display: none;
+  align-items: center;
+  justify-content: center;
+}
+:root[data-mode="dark"] .theme-target-light,
+:root[data-mode="light"] .theme-target-dark {
+  display: inline-flex;
+}
+[data-money-tone="income"] {
+  color: var(--finance-income);
+}
+[data-money-tone="expense"] {
+  color: var(--finance-expense);
 }
 .feedback {
   margin-block: 16px;

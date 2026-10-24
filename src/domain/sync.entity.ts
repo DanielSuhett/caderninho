@@ -20,6 +20,7 @@ export interface Checkpoint {
     | "investments"
     | "loans"
     | "bills"
+    | "classification"
     | "finish";
 }
 export interface CommitResult {

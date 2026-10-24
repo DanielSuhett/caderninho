@@ -1,4 +1,4 @@
-import { Chart } from "@cloudflare/kumo/components/chart";
+import { Chart, ChartPalette } from "@cloudflare/kumo/components/chart";
 import { LineChart } from "echarts/charts";
 import {
   AriaComponent,
@@ -10,6 +10,7 @@ import { useMemo } from "react";
 
 import type { FinancialSummary } from "../../contracts";
 import { formatBalance } from "../money";
+import { useTheme } from "../use-theme";
 import { monthLabel } from "./dashboard-period";
 import { safeChartValues } from "./financial-presentation";
 
@@ -30,6 +31,8 @@ export function MonthlySpendingChart({
   currency: string;
 }) {
   const values = useMemo(() => safeChartValues(groups), [groups]);
+  const dark = useTheme() === "dark";
+  const expenseColor = ChartPalette.semantic("Attention", dark);
   const options = useMemo(
     () =>
       ({
@@ -42,10 +45,10 @@ export function MonthlySpendingChart({
         grid: { bottom: 32, containLabel: false, left: 70, right: 12, top: 24 },
         series: [
           {
-            areaStyle: { color: "rgba(228,228,231,.035)" },
+            areaStyle: { color: expenseColor, opacity: 0.04 },
             data: values ?? [],
-            itemStyle: { color: "#f4f4f5" },
-            lineStyle: { color: "#e4e4e7", width: 2 },
+            itemStyle: { color: expenseColor },
+            lineStyle: { color: expenseColor, width: 2 },
             name: `Despesas · ${currency}`,
             symbol: "circle",
             symbolSize: 7,
@@ -54,10 +57,8 @@ export function MonthlySpendingChart({
         ],
         textStyle: { fontFamily: "Inter, sans-serif", fontSize: 14 },
         tooltip: {
-          backgroundColor: "#18181b",
-          borderColor: "#52525b",
           renderMode: "richText",
-          textStyle: { color: "#fafafa", fontSize: 14 },
+          textStyle: { fontSize: 14 },
           trigger: "axis",
           valueFormatter: (value: unknown) =>
             typeof value === "number"
@@ -66,11 +67,13 @@ export function MonthlySpendingChart({
         },
         xAxis: {
           axisLabel: {
-            color: "#b3b3b8",
+            color: ChartPalette.text("primary", dark),
             fontSize: 14,
             formatter: (value: string) => value.slice(0, 3),
           },
-          axisLine: { lineStyle: { color: "#3f3f46" } },
+          axisLine: {
+            lineStyle: { color: ChartPalette.text("secondary", dark) },
+          },
           axisTick: { show: false },
           data: groups.map((group) =>
             monthLabel(group.group).replace(" de ", " "),
@@ -79,7 +82,7 @@ export function MonthlySpendingChart({
         },
         yAxis: {
           axisLabel: {
-            color: "#b3b3b8",
+            color: ChartPalette.text("primary", dark),
             fontSize: 14,
             formatter: (value: number) =>
               formatBalance(Math.trunc(value).toString(), currency).replace(
@@ -87,11 +90,16 @@ export function MonthlySpendingChart({
                 "",
               ),
           },
-          splitLine: { lineStyle: { color: "#29292e" } },
+          splitLine: {
+            lineStyle: {
+              color: ChartPalette.text("secondary", dark),
+              opacity: 0.2,
+            },
+          },
           type: "value",
         },
       }) satisfies Parameters<typeof Chart>[0]["options"],
-    [currency, groups, values],
+    [currency, dark, expenseColor, groups, values],
   );
   if (!values) {
     return (
@@ -105,7 +113,7 @@ export function MonthlySpendingChart({
     <Chart
       echarts={echarts}
       height={260}
-      isDarkMode
+      isDarkMode={dark}
       options={options}
     />
   );

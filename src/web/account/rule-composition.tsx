@@ -20,17 +20,19 @@ export function RuleComposition(
   const root = useRef<HTMLElement>(null);
   const [visible, setVisible] = useState(false);
   const [wide, setWide] = useState(false);
-  const { rule, accounts, people, category, enabled } = props;
+  const { rule, accounts, people, category, categoryAppearance, enabled } =
+    props;
   const model = useMemo(
     () =>
       buildRuleComposition({
         accounts,
         category,
+        categoryAppearance,
         enabled,
         people,
         rule,
       }),
-    [rule, accounts, people, category, enabled],
+    [rule, accounts, people, category, categoryAppearance, enabled],
   );
   useEffect(() => {
     const element = root.current;

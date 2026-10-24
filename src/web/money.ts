@@ -1,3 +1,20 @@
+export type MoneyTone = "income" | "expense" | "neutral";
+
+export function transactionTone(row: {
+  amountMinor: string | null;
+  direction: "CREDIT" | "DEBIT";
+  ignored: boolean;
+}): MoneyTone {
+  if (
+    row.ignored ||
+    row.amountMinor === null ||
+    BigInt(row.amountMinor) === 0n
+  ) {
+    return "neutral";
+  }
+  return row.direction === "CREDIT" ? "income" : "expense";
+}
+
 export function formatBalance(value: string | null, currency: string) {
   if (value === null) {
     return "Saldo indisponível";

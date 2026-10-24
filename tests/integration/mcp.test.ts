@@ -3,7 +3,13 @@ import assert from "node:assert/strict";
 import { beforeEach, test } from "vitest";
 import { z } from "zod/v4";
 
-import { Fault, FaultCode, type FinancialSource } from "../../src/domain";
+import {
+  Fault,
+  FaultCode,
+  type FinancialSource,
+  TransactionClassificationSchema,
+  TransactionIdentificationSchema,
+} from "../../src/domain";
 import { createLogger } from "../../src/shared/logger";
 import { createInstallationRepository } from "../../src/worker/installation/repository";
 import { withObservation } from "../../src/worker/observability";
@@ -368,6 +374,7 @@ test("MCP accumulates imported history and updates only matching source IDs", as
     category: "Updated",
     description: "Updated by source",
     id: "B",
+    merchant: { cnpj: "00.000.000/0001-91", name: "Synthetic merchant" },
   });
   const updated: FinancialSource = {
     ...source([]),
@@ -379,7 +386,7 @@ test("MCP accumulates imported history and updates only matching source IDs", as
         });
       }
       return Promise.resolve({
-        next: cursor ? "last" : "overlap",
+        next: cursor === null ? "overlap" : "last",
         records: [changedB],
       });
     },
@@ -410,11 +417,13 @@ test("MCP accumulates imported history and updates only matching source IDs", as
           accountId: z.string(),
           amountMinor: z.string().nullable(),
           category: z.string().nullable(),
+          classification: TransactionClassificationSchema.nullable(),
           currency: z.string(),
           date: z.string(),
           description: z.string(),
           direction: z.enum(["DEBIT", "CREDIT"]),
           id: z.string(),
+          identification: TransactionIdentificationSchema.nullable(),
           status: z.enum(["POSTED", "PENDING"]),
         })
         .strict(),
@@ -433,6 +442,10 @@ test("MCP accumulates imported history and updates only matching source IDs", as
     "Updated by source",
   );
   assert.equal(page.records.find((row) => row.id === "B")?.category, "Updated");
+  assert.deepEqual(
+    page.records.find((row) => row.id === "B")?.identification?.merchant,
+    { cnpj: "00.000.000/0001-91", name: "Synthetic merchant" },
+  );
   const totals = aggregate.parse(
     await call("caderninho_aggregate", { metric: "debits" }),
   );
@@ -513,7 +526,7 @@ test("MCP accumulates imported history and updates only matching source IDs", as
   assert.equal(partialTotal.partial, true);
 });
 
-test("OAuth exposes 93 tools and executes confirmed local writes with durable replay", async () => {
+test("OAuth exposes 100 tools and executes confirmed local writes with durable replay", async () => {
   const app = fixture();
   const token = await grant(app, cookies(await login(app)));
   async function rpc(method: string, params: Record<string, unknown>) {
@@ -540,7 +553,43 @@ test("OAuth exposes 93 tools and executes confirmed local writes with durable re
     );
   }
   const listed = await rpc("tools/list", {});
-  assert.equal(listed.result?.tools?.length, 95);
+  assert.equal(listed.result?.tools?.length, 101);
+  const groupRequest = {
+    arguments: {
+      color: "#123456",
+      confirmed: true,
+      icon: "gift",
+      idempotency_key: "mcp-group",
+      name: "Eventos",
+      spaceId: "personal",
+    },
+    name: "create_category_group",
+  };
+  const group = await rpc("tools/call", groupRequest);
+  assert.equal(group.result?.isError, false);
+  assert.deepEqual(await rpc("tools/call", groupRequest), group);
+  const groupId = z
+    .object({ id: z.string() })
+    .parse(JSON.parse(group.result?.content?.[0]?.text ?? "{}")).id;
+  const updatedCategory = await rpc("tools/call", {
+    arguments: {
+      color: "#abcdef",
+      confirmed: true,
+      groupId,
+      icon: "heart",
+      id: "personal:fixed:casamento",
+      idempotency_key: "mcp-category",
+      spaceId: "personal",
+    },
+    name: "update_category",
+  });
+  assert.equal(updatedCategory.result?.isError, false);
+  const groups = await rpc("tools/call", {
+    arguments: { spaceId: "personal" },
+    name: "get_category_groups",
+  });
+  assert.equal(groups.result?.isError, false);
+  assert.ok((groups.result?.content?.[0]?.text ?? "").includes(groupId));
   const args = {
     currency: "BRL",
     idempotency_key: "mcp-write",

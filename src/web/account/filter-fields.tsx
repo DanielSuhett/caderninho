@@ -18,6 +18,7 @@ import {
 } from "react";
 
 import { UiButton } from "../ui";
+import { type CategoryAppearance, CategoryLabel } from "./category-appearance";
 
 const Calendar = lazy(async () => {
   const { DatePicker } = await import(
@@ -119,6 +120,7 @@ export function QuerySearch({
 }
 
 interface CatalogOption {
+  appearance?: CategoryAppearance;
   label: string;
   value: string;
 }
@@ -183,7 +185,14 @@ function renderOption(item: CatalogOption) {
       key={item.value}
       value={item}
     >
-      {item.label}
+      {item.appearance ? (
+        <CategoryLabel
+          category={item.appearance}
+          label={item.label}
+        />
+      ) : (
+        item.label
+      )}
     </Combobox.Item>
   );
 }

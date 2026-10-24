@@ -1,20 +1,35 @@
-import { MoneyValue } from "../money-value";
-import type { RuleCompositionModel } from "./rule-presentation";
+import { Badge } from "@cloudflare/kumo/components/badge";
 
-function RuleConditionText({
-  condition,
-}: {
-  condition: RuleCompositionModel["alternatives"][number]["conditions"][number];
-}) {
-  if (!condition.amount) {
-    return <span>{condition.label}</span>;
-  }
-  const prefix = condition.label.slice(0, -condition.amount.length);
+import { MoneyValue } from "../money-value";
+import { CategoryLabel } from "./category-appearance";
+import type { RuleCompositionModel, RuleTerm } from "./rule-presentation";
+
+function RuleConditionText({ condition }: { condition: RuleTerm }) {
   return (
     <span>
-      {prefix}
-      <span className="rule-flow-amount">
-        <MoneyValue value={condition.amount} />
+      <span className="rule-flow-field">{condition.field}</span>{" "}
+      {!!condition.operator && (
+        <>
+          <Badge
+            className="rule-flow-operator"
+            variant="info"
+          >
+            {condition.operator}
+          </Badge>{" "}
+        </>
+      )}
+      <span
+        className={
+          condition.monetary
+            ? "rule-flow-value rule-flow-amount"
+            : "rule-flow-value"
+        }
+      >
+        {condition.monetary ? (
+          <MoneyValue value={condition.value} />
+        ) : (
+          condition.value
+        )}
       </span>
     </span>
   );
@@ -51,7 +66,10 @@ export function RuleOutcome({ model }: { model: RuleCompositionModel }) {
         {model.enabled ? "Classificar como" : "Ao ativar, classificar como"}
       </h4>
       <p className="rule-flow-category">
-        {model.category || "Escolha uma categoria"}
+        <CategoryLabel
+          category={model.categoryAppearance}
+          label={model.category || "Escolha uma categoria"}
+        />
       </p>
     </>
   );
@@ -65,8 +83,10 @@ export function RuleScope({ model }: { model: RuleCompositionModel }) {
     <>
       <h4>Escopo obrigatório</h4>
       <ul className="rule-flow-scope">
-        {model.scope.map((label) => (
-          <li key={label}>{label}</li>
+        {model.scope.map((condition) => (
+          <li key={condition.field}>
+            <RuleConditionText condition={condition} />
+          </li>
         ))}
       </ul>
     </>

@@ -119,6 +119,12 @@ function syntheticSource(
             date: "2026-10-01",
             description: "Synthetic transaction",
             id: resourceId(base + 2 + (id === bankId ? 0 : perAccount) + index),
+            merchant: {
+              cnae: "4711302",
+              cnpj: "00.000.000/0001-91",
+              name: "Synthetic merchant",
+            },
+            providerCode: `synthetic-${index}`,
             status: "POSTED",
             type: "DEBIT",
           };

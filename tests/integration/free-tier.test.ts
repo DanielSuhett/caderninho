@@ -157,11 +157,13 @@ test("daily reconciliation skips unchanged writes and still accepts source corre
     accountId: "a",
     amountMinor: "-9999999999999999999999",
     category: "Updated",
+    classification: null,
     currency: "BRL",
     date: "2026-10-02",
     description: "Corrected source",
     direction: "CREDIT",
     id: "t",
+    identification: { category: "Updated" },
     status: "PENDING",
   });
 });

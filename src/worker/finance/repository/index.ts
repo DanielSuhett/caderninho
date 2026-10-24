@@ -20,11 +20,13 @@ const transactionFields = {
   accountId: t.accountId,
   amountMinor: t.amountMinor,
   category: t.category,
+  classification: t.classification,
   currency: t.currency,
   date: t.date,
   description: t.description,
   direction: t.direction,
   id: t.id,
+  identification: t.identification,
   status: t.status,
 };
 function ownerMembership(filter: TransactionFilter) {

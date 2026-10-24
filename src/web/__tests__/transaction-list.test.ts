@@ -7,6 +7,7 @@ import type { z } from "zod/v4";
 
 import { PortalTransactionListSchema } from "../../contracts";
 import { transactionFixture } from "../../fixtures/finance";
+import { transactionIdentification } from "../../fixtures/transaction-identification";
 import {
   TransactionDetailContent,
   TransactionList,
@@ -59,6 +60,45 @@ test("transaction rows keep exact source money, direction and category while ide
   assert.ok(details.includes("Pessoa exemplo"));
   assert.ok(details.includes("synthetic-transaction"));
   assert.ok(render(row, true).includes("Pessoa exemplo"));
+});
+
+test("details expose identifying source fields and keep them out of list summaries", () => {
+  const identified = { ...row, identification: transactionIdentification };
+  const html = renderToStaticMarkup(
+    createElement(TransactionDetailContent, {
+      account: "Cartão exemplo",
+      category: "Alimentação",
+      row: identified,
+    }),
+  );
+  for (const value of [
+    "Mercado de exemplo",
+    "00.000.000/0001-91",
+    "4711302",
+    "Pagador sintético",
+    "Recebedor sintético",
+    "synthetic-end-to-end",
+    "5411",
+    "institution-synthetic",
+    "Ordem no dia",
+    "synthetic-authentication",
+    "9.007.199.254.740.993,01",
+  ]) {
+    assert.ok(html.includes(value), value);
+  }
+  assert.equal(render(identified).includes("00.000.000/0001-91"), false);
+  const escaped = renderToStaticMarkup(
+    createElement(TransactionDetailContent, {
+      account: "Cartão exemplo",
+      category: "Alimentação",
+      row: {
+        ...row,
+        identification: { merchant: { name: "<script>private</script>" } },
+      },
+    }),
+  );
+  assert.equal(escaped.includes("<script>private</script>"), false);
+  assert.ok(escaped.includes("&lt;script&gt;private&lt;/script&gt;"));
 });
 test("pending, future and ignored records stay explicit; zero and unavailable money are distinct", () => {
   const html = render({

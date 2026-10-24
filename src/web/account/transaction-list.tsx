@@ -12,9 +12,11 @@ import type {
   PortalTransactionListSchema,
   TransactionListSchema,
 } from "../../contracts";
-import { formatBalance } from "../money";
+import { formatBalance, type MoneyTone, transactionTone } from "../money";
 import { MoneyValue } from "../money-value";
 import { UiButton } from "../ui";
+import { type CategoryAppearance, CategoryLabel } from "./category-appearance";
+import { TransactionIdentificationDetails } from "./transaction-identification";
 import { dayLabel } from "./workspace-resource";
 import { RecordReference } from "./workspace-ui";
 
@@ -43,11 +45,17 @@ function amountLabel(row: Transaction) {
 function TransactionAmount({
   amount,
   available,
+  tone,
 }: {
   amount: string;
   available: boolean;
+  tone: MoneyTone;
 }) {
-  return available ? <MoneyValue value={amount} /> : <span>{amount}</span>;
+  return (
+    <span data-money-tone={tone}>
+      {available ? <MoneyValue value={amount} /> : <span>{amount}</span>}
+    </span>
+  );
 }
 
 function directionIsExplicit(row: Transaction) {
@@ -71,7 +79,7 @@ export function TransactionList({
 }: {
   records: Array<Transaction | PortalTransaction>;
   accounts: Array<{ id: string; name: string }>;
-  categories: Array<{ id: string; name: string }>;
+  categories: CategoryAppearance[];
   referenceDay?: string;
   showOwner?: boolean;
   showAccount?: boolean;
@@ -101,24 +109,26 @@ export function TransactionList({
           </Table.Row>
         </Table.Header>
         <Table.Body>
-          {records.map((row) => (
-            <TransactionItem
-              account={
-                accounts.find((item) => item.id === row.accountId)?.name ??
-                "Conta não identificada"
-              }
-              category={
-                categories.find((item) => item.id === row.category)?.name ??
-                row.category ??
-                "Sem categoria"
-              }
-              key={row.id}
-              referenceDay={referenceDay}
-              row={row}
-              showAccount={showAccount}
-              showOwner={showOwner}
-            />
-          ))}
+          {records.map((row) => {
+            const category = categories.find(
+              (item) => item.id === row.category,
+            );
+            return (
+              <TransactionItem
+                account={
+                  accounts.find((item) => item.id === row.accountId)?.name ??
+                  "Conta não identificada"
+                }
+                category={category?.name ?? row.category ?? "Sem categoria"}
+                categoryAppearance={category}
+                key={row.id}
+                referenceDay={referenceDay}
+                row={row}
+                showAccount={showAccount}
+                showOwner={showOwner}
+              />
+            );
+          })}
         </Table.Body>
       </Table>
     </LayerCard>
@@ -129,6 +139,7 @@ function TransactionItem({
   row,
   account,
   category,
+  categoryAppearance,
   referenceDay,
   showOwner,
   showAccount,
@@ -136,6 +147,7 @@ function TransactionItem({
   row: Transaction | PortalTransaction;
   account: string;
   category: string;
+  categoryAppearance?: CategoryAppearance | undefined;
   referenceDay: string | undefined;
   showOwner: boolean;
   showAccount: boolean;
@@ -146,11 +158,10 @@ function TransactionItem({
   const amount = amountLabel(row);
   const anchorDate = "anchorDate" in row ? row.anchorDate : row.date;
   const firstKnown = "anchorKind" in row && row.anchorKind === "first_seen";
-  const displayedCategory = installments.some(
+  const variedCategories = installments.some(
     (item) => item.category !== row.category,
-  )
-    ? "Categorias variadas"
-    : category;
+  );
+  const displayedCategory = variedCategories ? "Categorias variadas" : category;
   const { pendingLabel, futureLabel } = transactionStates(
     row,
     installments,
@@ -176,7 +187,12 @@ function TransactionItem({
             {row.description || "Sem descrição"}
           </LayerDialog.Trigger>
           <div className="transaction-meta">
-            <span className="table-secondary">{displayedCategory}</span>
+            <span className="table-secondary">
+              <CategoryLabel
+                category={variedCategories ? undefined : categoryAppearance}
+                label={displayedCategory}
+              />
+            </span>
             {!!pendingLabel && <Badge variant="warning">{pendingLabel}</Badge>}
             {!!futureLabel && <Badge variant="info">{futureLabel}</Badge>}
             {!!row.ignored && <Badge variant="secondary">Ignorada</Badge>}
@@ -204,6 +220,7 @@ function TransactionItem({
             <TransactionAmount
               amount={amount}
               available={row.amountMinor !== null}
+              tone={transactionTone(row)}
             />
           </strong>
           <span
@@ -229,6 +246,9 @@ function TransactionItem({
           <TransactionDetailContent
             account={account}
             category={displayedCategory}
+            categoryAppearance={
+              variedCategories ? undefined : categoryAppearance
+            }
             referenceDay={referenceDay}
             row={row}
           />
@@ -242,11 +262,13 @@ export function TransactionDetailContent({
   row,
   account,
   category,
+  categoryAppearance,
   referenceDay,
 }: {
   row: Transaction | PortalTransaction;
   account: string;
   category: string;
+  categoryAppearance?: CategoryAppearance | undefined;
   referenceDay?: string | undefined;
 }) {
   const installments = "installments" in row ? row.installments : [];
@@ -259,6 +281,7 @@ export function TransactionDetailContent({
           <TransactionAmount
             amount={amountLabel(row)}
             available={row.amountMinor !== null}
+            tone={transactionTone(row)}
           />
         </strong>
         <span>{row.direction === "DEBIT" ? "Saída" : "Entrada"}</span>
@@ -279,9 +302,14 @@ export function TransactionDetailContent({
       <TransactionDetails
         account={account}
         category={category}
+        categoryAppearance={categoryAppearance}
         current={current}
         row={row}
         total={total}
+      />
+      <TransactionIdentificationDetails
+        currency={row.currency}
+        identification={row.identification}
       />
     </>
   );
@@ -343,6 +371,7 @@ function InstallmentSchedule({
               <TransactionAmount
                 amount={amountLabel(item)}
                 available={item.amountMinor !== null}
+                tone={transactionTone(item)}
               />
             </strong>
             <span className="installment-states">
@@ -352,6 +381,15 @@ function InstallmentSchedule({
               {!!referenceDay && item.date > referenceDay && " · Futura"}
               {!!item.ignored && " · Ignorada"}
             </span>
+            {!!item.identification && (
+              <details className="installment-identification">
+                <summary>Identificação desta parcela</summary>
+                <TransactionIdentificationDetails
+                  currency={item.currency}
+                  identification={item.identification}
+                />
+              </details>
+            )}
           </li>
         ))}
       </ol>
@@ -378,12 +416,14 @@ function TransactionDetails({
   current,
   total,
   category,
+  categoryAppearance,
 }: {
   row: Transaction | PortalTransaction;
   account: string;
   current: number | null;
   total: number | null;
   category: string;
+  categoryAppearance?: CategoryAppearance | undefined;
 }) {
   const anchorDate = "anchorDate" in row ? row.anchorDate : row.date;
   const anchorKind = "anchorKind" in row ? row.anchorKind : "transaction";
@@ -408,7 +448,12 @@ function TransactionDetails({
         </div>
         <div>
           <dt>Categoria</dt>
-          <dd>{category}</dd>
+          <dd>
+            <CategoryLabel
+              category={categoryAppearance}
+              label={category}
+            />
+          </dd>
         </div>
         {current !== null && total !== null && (
           <div>

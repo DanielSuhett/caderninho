@@ -4,6 +4,40 @@ final result: pass
 
 ## Resultado local em 24/10/2026
 
+### Rodada 10 — temas, comparadores e cores de categoria
+
+Correção da série mensal: despesas usam vermelho semântico ChartPalette
+Attention na linha, pontos e preenchimento discreto. Temas claro/escuro vistos
+em 1440×1000 CSS, com eixos/grade neutros e os mesmos valores exatos. Capturas
+`despesas-mensais-light.png` e `despesas-mensais-dark.png` na rodada 10 substituem
+a série neutra das imagens anteriores.
+
+Temas nativos claro/escuro, alternador sol/lua público/privado e preferência
+local. Receita/entrada verde, despesa/saída vermelha; saldo, fluxo, zero,
+indisponível e ignorados neutros. Campo/comparador/valor de regras distintos,
+com Badge info e dinheiro exato. Rascunho preservado entre temas e abas da mesma
+origem; bootstrap assíncrono não garante zero flash inicial.
+
+Aparência de categoria vem do catálogo atual por ID: barras, transações,
+detalhes, resumo/resultado das regras e opções. Edição sintética de Mercado para
+roxo refletiu nos usos sem reaplicar regras ou mudar totais. Nomes e valores
+continuam neutros; o valor financeiro conserva sua cor semântica própria.
+
+[Capturas, percursos e limites](docs/kumo/capturas/rodada-10/README.md) ·
+[contrato](docs/kumo/temas-e-contraste.md). Desktop final 1440×1000, móvel
+391×845 e 320×845, sem overflow observado. Landing/acesso claros também vistos.
+Revisão independente inicial: Regras/Transações 8,5/10 e resumo/editores 8/10,
+inferências qualitativas dos estados amostrados.
+Complemento crítico de 13 capturas da identidade de categoria: 8,5/10, sem
+bloqueio concreto nos estados vistos; nomes neutros preservam leitura para
+cores customizadas, cujo contraste futuro não foi validado.
+
+`mise run check` passou: 68 testes Node, 118 de integração/21 arquivos,
+lint, tipos, formato, build/dry-run e runtime Workflow/D1 10k/100k com persistência
+e falha parcial. Checkout compartilhado contém trabalho simultâneo preservado.
+Sem commit/push/deploy nesta rodada; sem prova de OAuth/produção/acessibilidade
+completa. A evidência das rodadas anteriores abaixo mantém seu escopo histórico.
+
 ### Rodada 09 — demo com regras e grupos
 
 Fixtures centralizadas para demo e três testes de UI, mantendo expectativas

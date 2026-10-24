@@ -1,4 +1,10 @@
-# Capturas — rodadas críticas 03 a 09
+# Capturas — rodadas críticas 03 a 10
+
+## Temas e cores semânticas — rodada 10
+
+[Temas, comparadores e identidade de categoria](rodada-10/README.md).
+[Contrato e limites](../temas-e-contraste.md). Código compilado local sintético;
+resumo, ledger, regras, editores e navegação pública amostrados.
 
 ## Demo interativa — rodada 09
 

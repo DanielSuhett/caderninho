@@ -76,3 +76,10 @@ Rodada 09: `/demo/rules` reutiliza esta composição e o editor real, com fixtur
 compartilhadas e mutações em memória. Salvar e reaplicar são ações separadas;
 reaplicação local usa `ruleMatches` e a ordenação `activeRules` do domínio.
 Ela não executa importações ou mutações privadas. [Contrato da demo](demo-interativa.md).
+
+Rodada 10: campo, comparador e valor são partes estruturadas da apresentação;
+não há recorte de strings para encontrar o dinheiro. O comparador usa Badge info
+do Kumo, o campo usa metadado de 14 px e o valor permanece em 16 px/peso 500.
+Escopo, alternativas, rascunho e fallback compartilham o mesmo renderer.
+Os temas claro/escuro conservam essa hierarquia com os tokens nativos. Comparações
+continuam inclusivas e valores monetários exatos; cor não altera a avaliação.
