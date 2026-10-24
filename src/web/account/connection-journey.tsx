@@ -1,11 +1,4 @@
-import {
-  Badge,
-  Banner,
-  LayerCard,
-  Link,
-  Loader,
-  Select,
-} from "@cloudflare/kumo";
+import { Banner, LayerCard, Link, Loader, Select } from "@cloudflare/kumo";
 import { CheckCircleIcon } from "@phosphor-icons/react";
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 
@@ -49,6 +42,12 @@ function journeyTitle(
       registering: "Registrando primeira importação…",
       widget: "Autorize seu banco no Meu Pluggy",
     }[activity.stage];
+  }
+  if (
+    connection?.importStatus === "running" &&
+    connection.importCheckpoint?.phase
+  ) {
+    return phases[connection.importCheckpoint.phase];
   }
   if (connection?.importStatus) {
     return {
@@ -165,6 +164,7 @@ function ConnectProfile({
         onSubmit={submit}
       >
         <Select
+          className="w-full"
           defaultValue={ready[0]?.id ?? ""}
           id="journey-profile"
           items={[
@@ -185,7 +185,12 @@ function ConnectProfile({
           name="profileId"
         />
         <p className="muted">Perfil configurado</p>
-        <UiButton type="submit">Conectar Meu Pluggy</UiButton>
+        <UiButton
+          type="submit"
+          variant="primary"
+        >
+          Conectar Meu Pluggy
+        </UiButton>
         <p>
           Depois de autorizar, a primeira importação começa automaticamente.
         </p>
@@ -200,14 +205,7 @@ function ConnectProfile({
     </>
   );
 }
-function ImportProgress({
-  connection,
-  observedAt,
-}: {
-  connection: ConnectionInfo;
-  observedAt: string | null;
-}) {
-  const phase = connection.importCheckpoint?.phase;
+function ImportProgress({ connection }: { connection: ConnectionInfo }) {
   const currentAccount = connection.importCheckpoint?.accountId;
   const accountName = currentAccount
     ? connection.accounts[currentAccount]?.name
@@ -215,47 +213,18 @@ function ImportProgress({
   const count = Object.keys(connection.accounts).length;
   return (
     <>
-      <div className="journey-phase">
-        <Loader
-          aria-label="Importação em andamento"
-          size="base"
-        />
-        <div>
-          <h3>
-            {connection.importStatus === "running" && phase
-              ? phases[phase]
-              : "Aguardando início da execução"}
-          </h3>
-          {!!accountName && <p>Recebendo dados de {accountName}.</p>}
-        </div>
-      </div>
-      <p className="muted">
-        Conexão registrada · {count}{" "}
-        {count === 1 ? "conta identificada" : "contas identificadas"}
+      <p className="journey-progress-context">
+        {!!accountName && `${accountName} · `}
+        {count} {count === 1 ? "conta identificada" : "contas identificadas"}
       </p>
-      {!!observedAt && (
-        <p className="journey-observed">
-          Consultado em {momentLabel(observedAt)}.
-        </p>
-      )}
       <Banner
         className="feedback"
         description={
           connection.hasTransactions
-            ? "Dados parciais. A importação ainda está em andamento."
+            ? "Histórico parcial. Os dados já recebidos continuam disponíveis."
             : "Aguardando os primeiros lançamentos. A importação ainda não foi concluída."
         }
-        variant={
-          (
-            {
-              error: "error",
-              info: "default",
-              neutral: "secondary",
-              success: "secondary",
-              warning: "alert",
-            } as const
-          )[connection.hasTransactions ? "warning" : "info"]
-        }
+        variant="secondary"
       />
     </>
   );
@@ -300,13 +269,13 @@ function ImportJourney({
         {connection.personName ?? "Eu"} ·{" "}
         {connection.profileName ?? "Pluggy principal"}
       </p>
-      {active === true && (
-        <ImportProgress
-          connection={connection}
-          observedAt={observedAt}
-        />
-      )}
+      {active === true && <ImportProgress connection={connection} />}
       {done && <ImportResult connection={connection} />}
+      {!!observedAt && (
+        <p className="journey-observed">
+          Consultado em {momentLabel(observedAt)}.
+        </p>
+      )}
       {connection.importStatus === "failed" && (
         <Banner
           className="feedback"
@@ -328,7 +297,6 @@ function ImportJourney({
           >
             {partial ? "Ver transações disponíveis" : "Ver transações"}
           </UiLink>
-          {active === true && <p className="muted">A importação continua.</p>}
         </div>
       )}
       <DisclosureItem
@@ -336,9 +304,7 @@ function ImportJourney({
         summary={<>Detalhes da importação</>}
       >
         <p>Consulta à cópia importada, não ao banco ao vivo.</p>
-        {!active && !!observedAt && (
-          <p>Estado consultado em {momentLabel(observedAt)}.</p>
-        )}
+        {!!observedAt && <p>Estado consultado em {momentLabel(observedAt)}.</p>}
         {done && (
           <>
             <p>Concluída em {momentLabel(connection.lastSuccessAt)}.</p>
@@ -434,11 +400,6 @@ export function ConnectionJourney({
       />
     );
   }
-  const phase = connection?.importCheckpoint?.phase;
-  const announcement =
-    !activity && connection?.importStatus === "running" && phase
-      ? `${title}. ${phases[phase]}`
-      : title;
   return (
     <LayerCard
       aria-labelledby="connection-journey-heading"
@@ -449,23 +410,22 @@ export function ConnectionJourney({
         className="sr-only"
         role="status"
       >
-        {announcement}
+        {title}
       </p>
       <div className="journey-heading">
-        <h2 id="connection-journey-heading">{title}</h2>
+        <h2 id="connection-journey-heading">{title}</h2>{" "}
+        {active && !activity && (
+          <Loader
+            aria-label="Importação em andamento"
+            size="base"
+          />
+        )}
         {!activity && connection?.importStatus === "succeeded" && (
           <CheckCircleIcon
             aria-hidden="true"
             className="journey-success"
             size={22}
           />
-        )}
-        {active && !activity && (
-          <Badge variant="info">
-            {connection?.importStatus === "running"
-              ? "Em andamento"
-              : "Na fila"}
-          </Badge>
         )}
       </div>
       {content}

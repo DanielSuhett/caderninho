@@ -8,20 +8,23 @@ export function DisclosureItem({
   className = "",
   open,
   onOpenChange,
+  defaultOpen,
 }: {
   summary: ReactNode;
   children: ReactNode;
   className?: string;
   open?: boolean;
+  defaultOpen?: boolean;
   onOpenChange?: (open: boolean) => void;
 }) {
   return (
     <Collapsible.Root
+      {...(defaultOpen !== undefined && { defaultOpen })}
       {...(open !== undefined && { open })}
       {...(onOpenChange && { onOpenChange })}
       className={`disclosure-item ${className}`}
     >
-      <Collapsible.DefaultTrigger className="disclosure-trigger text-sm">
+      <Collapsible.DefaultTrigger className="disclosure-trigger text-base">
         <span className="disclosure-label">{summary}</span>
       </Collapsible.DefaultTrigger>
       <Collapsible.DefaultPanel

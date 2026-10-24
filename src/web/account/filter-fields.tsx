@@ -230,7 +230,7 @@ export function DateRangeFields({
           />
           Escolher no calendário
         </Popover.Trigger>
-        <Popover.Content>
+        <Popover.Content className="transaction-calendar">
           <Popover.Title>Período das transações</Popover.Title>
           <Suspense fallback={<Loader aria-label="Carregando calendário" />}>
             <Calendar

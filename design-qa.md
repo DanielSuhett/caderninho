@@ -1,51 +1,67 @@
-# QA visual — migração e polimento Kumo
+# QA visual — Kumo e demonstração pública
 
-final result: blocked
+final result: pass
 
-## Estado em 24/10/2026
+## Resultado local em 24/10/2026
 
-A migração de componentes passou tipos, lint, 40 testes Node, 107 testes de
-integração, build/dry-run e runtime Workflow/D1 com 10 mil/100 mil registros.
-A aprovação visual foi **reaberta** pelo usuário: alinhamento, hierarquia,
-contraste, densidade e identidade monocromática ainda precisam de correção.
-A aprovação técnica não é aprovação de design.
+Revisão concluída com 8/10 qualitativo em cada uma das 14 páginas, após três rodadas
+com agente independente no papel de designer crítica. Aprovação limitada às
+capturas e interações registradas; não é aprovação humana nem de produção.
+[Relatório por página](docs/kumo/revisao-critica-03.md),
+[galeria](docs/kumo/capturas/README.md) e
+[dados/contraste/bundle](docs/kumo/dados-e-evidencias.md).
 
-## Referências e comparação
+## Cinco superfícies verificadas
 
-Referências atuais: screenshot de Sidebar Kumo enviado pelo usuário,
-`docs/kumo/referencias/collapsible-oficial.jpg`, e dashboard/transações da demo
-Securo em `docs/kumo/referencias/`. As referências e os renders foram abertos
-em uma mesma entrada de comparação; não há alegação de identidade pixel a pixel.
-A Sidebar de referência tem empresa/busca/árvore que o produto não possui.
-A estrutura Securo orienta composição; não autoriza misturar moedas ou inventar
-indicadores, projeções, permissões ou operações.
-
-## Rodada crítica independente
-
-O usuário autorizou um agente no papel de designer crítica. Notas por página
-são julgamentos qualitativos, não medição de UX nem auditoria humana.
-[Rodada 1](docs/kumo/revisao-critica-01.md) registra problemas e critérios de 8/10.
-A próxima rodada precisa de Inter, escala tipográfica e grade comum, dashboard
-com dados completos, transações compactas e demo pública isolada.
-
-## Cinco superfícies obrigatórias
-
-| Superfície | Estado atual |
+| Superfície | Evidência atual |
 | --- | --- |
-| Tipografia | Bloqueada: corpo/valores/metadados achatados em14; usuário prefere Inter e tamanho maior. |
-| Espaço e alinhamento | Bloqueada: busca, ações, status e chevron em eixos concorrentes; falta revisão da grade de todas as páginas. |
-| Cor e contraste | Bloqueada: medir pares efetivos e reforçar neutros; cor reservada a estado/ação relevante. |
-| Imagens e ícones | Ícones reais Phosphor; assets bancários sem consumidor operacional removidos. Captura Sync móvel rejeitada por escala/crop. |
-| Copy e conteúdo | Semântica financeira e textos legais preservados; revisar densidade e descoberta sem esconder parcialidade. |
+| Tipografia | Inter local; conteúdo e controles 16 px, metadados 14 px, títulos 28/20px, métricas 32/26 px e moeda subordinada. Peso máximo 600 e tracking original. |
+| Espaço e alinhamento |14 páginas desktop/móvel com grade 12/4 colunas, gutter 24/16 px e baseline 8 px. Eixos de headings, toolbars, linhas, valores e chevrons inspecionados. Sem overflow horizontal nas larguras testadas. |
+| Cor e contraste | Neutros reforçados; quatro pares amostrados entre 9,16:1 e 18,73:1. Cor reservada a ação/estado; laranja de consumo público restaurado, com denominador/estimativa e 103% no texto. |
+| Imagens e ícones | Phosphor real e componentes Kumo compilados. Galeria de screenshots atuais, sem mockup apresentado como implementação. Capturas transitórias/sem CSS foram rejeitadas. |
+| Copy e conteúdo | Parcialidade, moeda, período, classificação, consequência e recuperação visíveis. IDs recolhidos; transações móveis compactas; categorias e referência descobertas. Textos legais preservados. |
 
-## Evidência e limites
+## Estados e interações
 
-Capturas intermediárias em [índice](docs/kumo/capturas/README.md). Desktop e
-celular foram exercitados, inclusive conta/parcelas/filtros/editores abertos,
-rascunho, erro, busy, salvamento sintético e teclado do menu. Captura em estado
-carregando ou com escala/crop incorreto não pode provar polimento.
+Desktop 1541×863; móvel emulado 391×845. Cobertura detalhada na galeria e revisão 03.
+Overview: parcial, política aberta, categorias, série/tabela, recentes, contas,
+primeiro banco, falha da série e falha do chunk gráfico com alternativa exata.
+Transações: lista, vazio, erro, carregamento, busca, filtros, calendário pt-BR,
+intervalo civil 1–24 out, detalhe e parcelas pendentes/futuras. Regras/grupos:
+expandido, editor, rascunho, descarte/continuidade, exclusão e catálogo. Operação:
+importação ativa/falha, histórico expandido, perfis/pessoas, URL MCP, grants,
+atividade/requisições, modelos/bytes e confirmação de revogação cancelada.
+Público: hero, instalação, desempenho/método, CPU/cotas/premissas, FAQ, acesso
+normal/erro/recuperação, consentimento e 404. Demo: período/moeda, busca GET e detalhe.
 
-Preview usa componentes compilados reais com APIs sintéticas. Os testes de
-persistência são locais e separados. Nenhuma evidência aqui comprova Pluggy,
-OAuth real, produção, host MCP ou acessibilidade completa. O produto publicado
-permanece sem alteração: não houve push/deploy.
+Sidebar móvel: foco inicial, cicloTab, Escape, retorno ao gatilho e bloqueio de
+navegação durante edição exercitados na migração. Roots de LayerDialog continuam
+montados. A rodada de polimento confirmou visualmente diálogos/ações completos,
+rascunho preservado e retorno de foco nos fluxos exercitados. Não extrapolar isso
+para conformidade total de acessibilidade ou todos os dispositivos.
+
+## Verificação técnica
+
+`mise run check` final passou em 24/10/2026: tipos, formato, lint,44 testes Node,
+108 testes de integração em 19 arquivos, build/dry-run e runtime local Workflow/D1.
+Runtime cobriu 10 mil/100 mil registros, cliente desconectado, falha parcial,
+replay, recomeço e persistência após reiniciar. Agregados completos foram testados
+com mais de uma página, moedas separadas e dinheiro acima do inteiro seguro JS.
+A leitura por portal validou o envelope real do serviço e a rejeição por CSRF.
+
+O runner Vitest/workerd ainda emite avisos da dependência opcional
+`@emotion/is-prop-valid` no pacote Kumo; todos os testes passaram. Não foi ocultado
+o diagnóstico nem instalada dependência só para silenciar o log.
+
+## Inferências e limites
+
+Variação visual baixa entre páginas e moderada entre papéis da informação;
+densidade moderada nas listas e maior quando detalhes técnicos estão abertos.
+Transações móvel usa nome/valor e conta/data em duas bandas. Dashboard é mais
+longo por comportar análises. Movimento parece baixo no uso observado e o gráfico
+não anima; screenshots estáticos não medem movimento. São inferências qualitativas.
+
+Preview privado é sintético. Demo é ledger fictício isolado, também aberto no
+Worker local sem sessão. Sem push/deploy, OAuth/Pluggy reais, operações financeiras,
+revogação real ou validação em host MCP. A evidência de 404 visual usa o componente
+local; o build gera 404.html para o site, sem alegar comportamento publicado.

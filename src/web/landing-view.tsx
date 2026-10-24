@@ -92,362 +92,10 @@ export function landingPage({
               />
             </>
           )}
-          <style>{`
-          .shell {
-            max-width: 1120px;
-            margin: auto;
-            padding: 0 32px;
-          }
-          header,
-          nav,
-          .actions,
-          footer {
-            display: flex;
-            align-items: center;
-            gap: 24px;
-          }
-          header {
-            justify-content: space-between;
-            min-height: 104px;
-          }
-          .brand {
-            font-size: 14px;
-            font-weight: 500;
-
-            text-decoration: none;
-          }
-          nav a,
-          footer a,
-          .skip {
-            display: inline-flex;
-            align-items: center;
-            min-height: 44px;
-          }
-          nav,
-          footer {
-            font-size: 14px;
-          }
-          .skip {
-            position: absolute;
-            left: 24px;
-            top: -100px;
-            padding: 8px 16px;
-            background: var(--surface);
-          }
-          .skip:focus {
-            top: 12px;
-          }
-          h1,
-          h2,
-          h3,
-          p {
-            margin: 0;
-          }
-          h1 {
-            font-size: clamp(32px, 5vw, 56px);
-            line-height: 1.02;
-
-            font-weight: 600;
-            margin: 0 auto 28px;
-            text-wrap: balance;
-          }
-          h2 {
-            font-size: clamp(24px, 3.3vw, 32px);
-            line-height: 1.13;
-
-            font-weight: 500;
-          }
-          h3 {
-            font-size: 16px;
-            font-weight: 500;
-            margin-bottom: 8px;
-          }
-          p {
-            max-width: 65ch;
-          }
-          .hero {
-            text-align: center;
-            padding: 64px 0 72px;
-          }
-          .intro {
-            font-size: 14px;
-            color: var(--muted);
-            max-width: 660px;
-            margin: auto;
-            text-wrap: balance;
-          }
-          .actions {
-            justify-content: center;
-            flex-wrap: wrap;
-            margin-top: 30px;
-          }
-          .note {
-            color: var(--muted);
-            font-size: 14px;
-            margin: 18px auto 0;
-          }
-          .install,
-          .performance,
-          .free-tier,
-          .faq {
-            border-top: 1px solid var(--line);
-            padding: 48px 0;
-          }
-          .install {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 64px;
-          }
-          .install p {
-            color: var(--muted);
-            margin-top: 20px;
-          }
-          ol {
-            list-style: decimal;
-            padding-left: 24px;
-            margin: 0;
-          }
-          li {
-            padding: 0 0 24px 8px;
-          }
-          li:last-child {
-            padding-bottom: 0;
-          }
-          .install li p {
-            margin-top: 0;
-          }
-          .free-tier {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 32px 64px;
-          }
-          .performance {
-            display: grid;
-            grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-            gap: 32px 64px;
-          }
-          .performance-copy > p {
-            margin-top: 20px;
-            color: var(--muted);
-          }
-          .response-timing {
-            margin-top: 28px;
-          }
-          .response-timing strong {
-            display: block;
-            font-size: 14px;
-            line-height: 1.1;
-            font-weight: 600;
-
-            font-variant-numeric: tabular-nums;
-          }
-          .response-timing span {
-            display: block;
-            margin-top: 8px;
-            font-size: 14px;
-            color: var(--muted);
-          }
-          .response-comparison {
-            min-width: 0;
-            margin: 0;
-            padding: 24px;
-
-          }
-          .response-comparison figcaption {
-            margin-bottom: 24px;
-            font-size: 14px;
-            font-weight: 500;
-            text-wrap: balance;
-          }
-          .response-chart-note {
-            margin: -12px 0 24px;
-            font-size: 14px;
-            color: var(--muted);
-          }
-          .response-axis {
-            display: flex;
-            justify-content: space-between;
-            margin-top: 24px;
-            padding-top: 12px;
-            border-top: 1px solid var(--line);
-            font-size: 14px;
-            font-variant-numeric: tabular-nums;
-            color: var(--muted);
-          }
-          .response-sample > p {
-            font-size: 14px;
-            color: var(--muted);
-          }
-          .response-sample + .response-sample {
-            margin-top: 24px;
-            padding-top: 24px;
-            border-top: 1px solid var(--line);
-          }
-          .response-method {
-            grid-column: 1 / -1;
-            max-width: none;
-            padding-top: 16px;
-            border-top: 1px solid var(--line);
-            font-size: 14px;
-            color: var(--muted);
-          }
-          .response-method a {
-            color: var(--accent);
-          }
-          .free-tier-copy > p {
-            margin-top: 20px;
-            color: var(--muted);
-          }
-          .free-tier-copy .eyebrow {
-            margin: 0 0 12px;
-            color: var(--accent);
-            font-size: 14px;
-            font-weight: 600;
-          }
-          .cpu-chart {
-            min-width: 0;
-            margin: 0;
-            padding: 24px;
-
-          }
-          .cpu-chart figcaption {
-            margin-bottom: 28px;
-            font-size: 14px;
-            color: var(--muted);
-          }
-          .cpu-sample + .cpu-sample {
-            margin-top: 24px;
-          }
-          .cpu-label {
-            display: flex;
-            align-items: baseline;
-            justify-content: space-between;
-            flex-wrap: wrap;
-            gap: 4px 16px;
-            margin-bottom: 10px;
-            font-size: 14px;
-          }
-          .cpu-value {
-            font-size: 14px;
-            font-weight: 600;
-            font-variant-numeric: tabular-nums;
-          }
-          .quota-consumption { background: var(--color-orange-500); }
-          .cpu-scale {
-            display: flex;
-            justify-content: space-between;
-            margin-top: 12px;
-            font-size: 14px;
-            font-variant-numeric: tabular-nums;
-            color: var(--muted);
-          }
-          .cpu-reference {
-            padding-top: 20px;
-            margin-top: 20px;
-            border-top: 1px solid var(--line);
-            font-size: 14px;
-          }
-          .cpu-reference a {
-            color: var(--accent);
-          }
-          .cpu-method {
-            grid-column: 1 / -1;
-            margin: 0;
-            padding-top: 16px;
-            border-top: 1px solid var(--line);
-            font-size: 14px;
-            color: var(--muted);
-          }
-          .cpu-method strong {
-            color: var(--text);
-            font-weight: 500;
-          }
-          .quota-heading,
-          .quota-method {
-            grid-column: 1 / -1;
-          }
-          .quota-heading > p {
-            margin-top: 12px;
-            color: var(--muted);
-          }
-          .measurement-notes {
-            grid-column: 1 / -1;
-            padding: 0;
-            border: 0;
-          }
-          .measurement-notes > summary {
-            min-height: 44px;
-            font-size: 14px;
-            color: var(--accent);
-          }
-          .measurement-notes p {
-            font-size: 14px;
-          }
-          .measurement-notes a {
-            color: var(--accent);
-          }
-          .quota-count {
-            margin-top: 8px;
-            font-size: 14px;
-            font-variant-numeric: tabular-nums;
-            color: var(--muted);
-          }
-          .quota-method {
-            font-size: 14px;
-            color: var(--muted);
-          }
-          details {
-            border-bottom: 1px solid var(--line);
-            padding: 16px 0;
-          }
-          summary {
-            cursor: pointer;
-            min-height: 48px;
-            align-content: center;
-            font-size: 14px;
-            font-weight: 500;
-          }
-          details p {
-            margin: 12px 0;
-            color: var(--muted);
-          }
-          footer {
-            flex-wrap: wrap;
-            border-top: 1px solid var(--line);
-            padding: 24px 0 40px;
-            color: var(--muted);
-          }
-          footer p {
-            margin-right: auto;
-          }
-          @media (max-width: 640px) {
-            .shell {
-              padding: 0 20px;
-            }
-            header {
-              align-items: flex-start;
-              flex-direction: column;
-              gap: 8px;
-              padding-top: 24px;
-            }
-            nav {
-              flex-wrap: wrap;
-              gap: 20px;
-            }
-            .hero {
-              padding: 48px 0;
-            }
-            .intro {
-              font-size: 14px;
-            }
-            .install,
-            .performance,
-            .free-tier {
-              grid-template-columns: 1fr;
-              gap: 32px;
-            }
-          }
-        `}</style>
+          <link
+            href="/landing.css"
+            rel="stylesheet"
+          />
         </>
       }
       title="Caderninho · MCP financeiro pessoal"
@@ -468,10 +116,33 @@ export function landingPage({
             Caderninho
           </a>
           <nav aria-label="Navegação principal">
-            <a href="#desempenho">Desempenho</a>
-            <a href="#free-tier">Free tier</a>
-            <a href="https://github.com/DanielSuhett/caderninho">Código</a>
-            {!publicSite && <a href="/account">Entrar nesta instância</a>}
+            <a href="/demo?month=2026-10">Demo</a>
+            <a
+              className="nav-secondary"
+              href="#desempenho"
+            >
+              Desempenho
+            </a>
+            <a
+              className="nav-secondary"
+              href="#free-tier"
+            >
+              Free tier
+            </a>
+            <a
+              className="nav-secondary"
+              href="https://github.com/DanielSuhett/caderninho"
+            >
+              Código
+            </a>
+            {!publicSite && (
+              <a
+                aria-label="Entrar nesta instância"
+                href="/account"
+              >
+                Entrar
+              </a>
+            )}
           </nav>
         </header>
         <main id="conteudo">
@@ -497,7 +168,13 @@ export function landingPage({
               >
                 Instalar na minha Cloudflare
               </UiLink>
-              {!publicSite && <a href="/account">Abrir meu painel</a>}
+              <UiLink
+                href="/demo?month=2026-10"
+                size="lg"
+                variant="secondary"
+              >
+                Explorar demonstração
+              </UiLink>
             </div>
             <p className="note">
               Software gratuito. Cloudflare e Pluggy têm limites e custos
@@ -818,7 +495,7 @@ export function landingPage({
                 aplicações na conta aumentam o consumo. Projeção baseada na
                 simulação de 22 out 2026.
               </p>
-              <p>
+              <p className="quota-sources">
                 {quotaServices.map((service) => (
                   <a
                     href={service.source}

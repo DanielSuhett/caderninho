@@ -163,16 +163,19 @@ export function WorkspaceDetails({
   hint,
   open,
   onOpenChange,
+  defaultOpen,
 }: {
   title: string;
   children: ReactNode;
   hint?: string;
   open?: boolean;
+  defaultOpen?: boolean;
   onOpenChange?: (open: boolean) => void;
 }) {
   return (
     <DisclosureItem
       className="workspace-details"
+      {...(defaultOpen !== undefined && { defaultOpen })}
       {...(onOpenChange && { onOpenChange })}
       {...(open !== undefined && { open })}
       summary={

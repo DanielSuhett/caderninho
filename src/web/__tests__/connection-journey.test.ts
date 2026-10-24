@@ -74,9 +74,9 @@ test("identified accounts alone do not unlock a transaction CTA; published data 
   assert.ok(initial.includes("Aguardando os primeiros lançamentos"));
   assert.equal(initial.includes("Ver transações disponíveis"), false);
   const partial = render([{ ...connection, hasTransactions: true }]);
-  assert.ok(partial.includes("Dados parciais"));
+  assert.ok(partial.includes("Histórico parcial"));
   assert.ok(partial.includes("Ver transações disponíveis"));
-  assert.ok(partial.includes("A importação continua"));
+  assert.equal((partial.match(/Histórico parcial/g) ?? []).length, 1);
   assert.ok(partial.includes("Consultado em"));
   assert.ok(
     partial.indexOf("Consultado em") <

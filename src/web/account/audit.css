@@ -70,3 +70,32 @@
     content: attr(data-label);
   }
 }
+
+.audit-volume,
+.audit-duration,
+.audit-byte {
+  display: inline-flex;
+  gap: 4px;
+  align-items: baseline;
+}
+.audit-volume {
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  font-size: 20px;
+}
+.audit-byte small,
+.audit-duration small {
+  font-size: var(--type-meta);
+  font-weight: 400;
+  color: var(--muted);
+}
+.audit-activity-indicator {
+  background: var(--text);
+}
+
+/* Align both label and value tracks across paired cells in the mobile record. */
+@media (max-width: 760px) {
+  .audit-table td:not(:first-child)::before {
+    min-height: 42px;
+  }
+}

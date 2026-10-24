@@ -205,7 +205,7 @@ export function TransactionsView({
                   Histórico parcial. <a href="/account/sync">Ver importações</a>
                 </>
               }
-              variant="alert"
+              variant="secondary"
             />
           )}
           {data.result.data.records.length ? (

@@ -47,6 +47,15 @@ function bytes(value: number) {
   }
   return `${(value / 1_048_576).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} MiB`;
 }
+function CompactBytes({ value }: { value: number }) {
+  const [amount, unit] = bytes(value).split(" ");
+  return (
+    <span className="audit-byte">
+      <span>{amount}</span>
+      <small>{unit}</small>
+    </span>
+  );
+}
 function rate(errors: number, total: number) {
   return total
     ? `${((100 * errors) / total).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`
@@ -89,7 +98,7 @@ export function AuditView({
   );
   const resource = useResource(load);
   const { data } = resource;
-  const [activityOpen, setActivityOpen] = useState(false);
+  const [activityOpen, setActivityOpen] = useState(true);
   const activitySection = useRef<HTMLDivElement>(null);
   const showActivity = useCallback(() => {
     setActivityOpen(true);
@@ -357,20 +366,36 @@ export function AuditView({
             >
               <WorkspaceMetrics
                 items={[
-                  { label: "Ferramentas", value: data.totals.toolCalls },
+                  {
+                    label: "Chamadas de ferramentas",
+                    value: data.totals.toolCalls,
+                  },
                   {
                     label: "Falhas / interrupções",
                     value: `${data.totals.errors} / ${data.totals.cancelled}`,
                   },
                   {
                     label: "Entrada / saída",
-                    value: `${bytes(data.totals.inputBytes)} / ${bytes(data.totals.outputBytes)}`,
+                    value: (
+                      <span className="audit-volume">
+                        <CompactBytes value={data.totals.inputBytes} />
+                        <span>/</span>
+                        <CompactBytes value={data.totals.outputBytes} />
+                      </span>
+                    ),
                   },
                   {
                     label: "Duração média",
-                    value: data.totals.requests
-                      ? `${Math.round(data.totals.durationMs / data.totals.requests)} ms`
-                      : "—",
+                    value: data.totals.requests ? (
+                      <span className="audit-duration">
+                        {Math.round(
+                          data.totals.durationMs / data.totals.requests,
+                        ).toLocaleString("pt-BR")}
+                        <small>ms</small>
+                      </span>
+                    ) : (
+                      "—"
+                    ),
                   },
                 ]}
               />
@@ -394,6 +419,7 @@ export function AuditView({
                             {day.day.slice(5).split("-").reverse().join("/")}
                           </span>
                           <Meter
+                            indicatorClassName="audit-activity-indicator"
                             label={`${day.day}: ${day.requests} requisições, ${day.errors} falhas`}
                             max={Math.max(
                               ...data.daily.map((d) => d.requests),
@@ -422,7 +448,7 @@ export function AuditView({
                         <Table.Header>
                           <Table.Row>
                             <Table.Head>Modelo</Table.Head>
-                            <Table.Head>Ferramentas</Table.Head>
+                            <Table.Head>Chamadas de ferramentas</Table.Head>
                             <Table.Head>Falhas</Table.Head>
                             <Table.Head>Taxa de erro</Table.Head>
                             <Table.Head>Entrada / saída</Table.Head>
@@ -434,7 +460,7 @@ export function AuditView({
                               <Table.Cell data-label="Modelo">
                                 {row.model ?? "Não informado"}
                               </Table.Cell>
-                              <Table.Cell data-label="Ferramentas">
+                              <Table.Cell data-label="Chamadas de ferramentas">
                                 {row.toolCalls}
                               </Table.Cell>
                               <Table.Cell data-label="Falhas">

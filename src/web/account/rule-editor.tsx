@@ -339,6 +339,7 @@ export function RuleEditor({
           />
           <div className="editor-grid">
             <Select
+              className="w-full"
               items={[
                 ...catalog.categories.map((c) => ({
                   label: c.name,
@@ -387,6 +388,7 @@ export function RuleEditor({
           </div>
           <p className="muted">Presets substituem as condições e usam BRL.</p>
           <Select
+            className="w-full"
             description={
               <small>
                 Obrigatória ao comparar valores. Valor absoluto não distingue
@@ -422,6 +424,7 @@ export function RuleEditor({
           ) && (
             <div className="editor-grid">
               <Select
+                className="w-full"
                 items={[
                   { label: "Todas", value: "" },
                   ...accounts.map((account) => ({
@@ -439,6 +442,7 @@ export function RuleEditor({
                 value={fields.legacyAccount}
               />
               <Select
+                className="w-full"
                 items={[
                   { label: "Todos", value: "" },
                   { label: "Saída", value: "DEBIT" },
@@ -619,6 +623,7 @@ function ConditionSelect({
   );
   return (
     <Select
+      className="w-full"
       {...props}
       onValueChange={select}
     />
@@ -674,6 +679,7 @@ function ConditionValue({
   if (choices) {
     return (
       <Select
+        className="w-full"
         data-alternative={alternative}
         data-condition={condition.id}
         data-part="value"

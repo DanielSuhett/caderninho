@@ -85,11 +85,20 @@ export function DesignSystemView() {
         description="Componentes reais do Kumo 2.14.0 com dados fictícios."
         title="Referência visual"
       />
-      <Banner description="Exemplos de desenvolvimento. Nenhum dado financeiro é alterado." />
-      <WorkspaceDetails title="Fundação e tokens">
+      <Banner
+        description="Exemplos de desenvolvimento. Nenhum dado financeiro é alterado."
+        variant="secondary"
+      />
+      <WorkspaceDetails
+        defaultOpen
+        title="Fundação e tokens"
+      >
         <DesignPalette />
       </WorkspaceDetails>
-      <WorkspaceDetails title="Controles e formulários">
+      <WorkspaceDetails
+        defaultOpen
+        title="Controles e formulários"
+      >
         <LayerCard className="gallery-surface">
           <Grid
             gap="sm"
@@ -106,8 +115,7 @@ export function DesignSystemView() {
             />
             <Field
               description="Um rótulo não substitui a identidade do registro."
-              label="Apelido opcional"
-              required={false}
+              label="Apelido (opcional)"
             >
               <Input placeholder="Ex.: Conta da casa" />
             </Field>
@@ -143,7 +151,10 @@ export function DesignSystemView() {
           </Label>
         </LayerCard>
       </WorkspaceDetails>
-      <WorkspaceDetails title="Feedback e estados">
+      <WorkspaceDetails
+        defaultOpen
+        title="Feedback e estados"
+      >
         <div className="design-feedback">
           <Banner
             description="Os dados já publicados continuam consultáveis."
@@ -172,7 +183,10 @@ export function DesignSystemView() {
           <WorkspaceSkeleton />
         </div>
       </WorkspaceDetails>
-      <WorkspaceDetails title="Transação e parcelas">
+      <WorkspaceDetails
+        defaultOpen
+        title="Transação e parcelas"
+      >
         <TransactionList
           accounts={[{ id: "demo-card", name: "Cartão · exemplo" }]}
           categories={[{ id: "Viagem", name: "Viagem" }]}

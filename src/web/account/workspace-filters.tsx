@@ -16,6 +16,7 @@ export function ScopeFields({
   return (
     <>
       <Select
+        className="w-full"
         defaultValue={params.get("space") ?? "personal"}
         items={[...catalog.spaces.map((s) => ({ label: s.name, value: s.id }))]}
         label="Grupo"
@@ -23,6 +24,7 @@ export function ScopeFields({
       />
       {person ? (
         <Select
+          className="w-full"
           defaultValue={params.get("person") ?? ""}
           items={[
             { label: "Todas as pessoas", value: "" },

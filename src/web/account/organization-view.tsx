@@ -13,10 +13,10 @@ import {
   type PortalResponse,
   type WorkspaceCatalog,
 } from "../../contracts";
+import { formatBalance } from "../money";
 import { UiButton } from "../ui";
 import type { createAccountApi } from "./account-api";
 import { navigateWorkspace } from "./account-navigation";
-import { formatBalance } from "./dashboard-view";
 import { DisclosureItem } from "./disclosure-item";
 import { QuerySearch, SearchField } from "./filter-fields";
 import { DeleteOrganizationItem, GroupEditor } from "./group-editor";
@@ -125,6 +125,7 @@ export function OrganizationView({
           disabled={!data}
           onClick={newItem}
           type="button"
+          variant="primary"
         >
           {page === "rules" ? "Nova regra" : "Novo grupo"}
         </UiButton>
@@ -250,11 +251,13 @@ export function OrganizationView({
                           }
                         >
                           <div className="record-detail">
-                            <RuleConditions
-                              accounts={data.accounts}
-                              people={snapshot.people}
-                              rule={r}
-                            />
+                            {!!r.filter && (
+                              <RuleConditions
+                                accounts={data.accounts}
+                                people={snapshot.people}
+                                rule={r}
+                              />
+                            )}
                             <dl className="detail-list">
                               <div hidden={!!r.filter}>
                                 <dt>Movimento</dt>
@@ -272,10 +275,6 @@ export function OrganizationView({
                                   </dd>
                                 </div>
                               )}
-                              <div>
-                                <dt>Categoria</dt>
-                                <dd>{category}</dd>
-                              </div>
                             </dl>
                             <p className="muted">
                               Classifica transações novas; o histórico é
@@ -387,6 +386,7 @@ export function OrganizationView({
                 ))}
               </LayerCard>
               <WorkspaceDetails
+                defaultOpen
                 hint={String(data.categories.length)}
                 title={`Categorias de ${current?.name ?? spaceId}`}
               >
@@ -417,6 +417,7 @@ export function OrganizationView({
                 )}
               </WorkspaceDetails>
               <WorkspaceDetails
+                defaultOpen
                 hint={String(data.tags.length)}
                 title="Etiquetas"
               >

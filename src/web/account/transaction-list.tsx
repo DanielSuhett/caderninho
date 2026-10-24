@@ -12,9 +12,10 @@ import type {
   PortalTransactionListSchema,
   TransactionListSchema,
 } from "../../contracts";
+import { formatBalance } from "../money";
 import { UiButton } from "../ui";
-import { formatBalance } from "./dashboard-view";
 import { dayLabel } from "./workspace-resource";
+import { RecordReference } from "./workspace-ui";
 
 type Transaction = z.infer<
   typeof TransactionListSchema
@@ -58,7 +59,7 @@ export function TransactionList({
             <Table.Head>Descrição</Table.Head>
             <Table.Head>Conta</Table.Head>
             <Table.Head>Data</Table.Head>
-            <Table.Head>Valor e moeda</Table.Head>
+            <Table.Head className="money-heading">Valor e moeda</Table.Head>
           </Table.Row>
         </Table.Header>
         <Table.Body>
@@ -166,7 +167,9 @@ function TransactionItem({
         closeLabel="Fechar detalhes"
         size="lg"
       >
-        <LayerDialog.Title>Detalhes da transação</LayerDialog.Title>
+        <LayerDialog.Title>
+          <span className="text-xl">Detalhes da transação</span>
+        </LayerDialog.Title>
         <LayerDialog.Body>
           <TransactionDetailContent
             account={account}
@@ -197,8 +200,8 @@ export function TransactionDetailContent({
   return (
     <>
       <p className="transaction-dialog-amount">
-        <strong>{amountLabel(row)}</strong> ·{" "}
-        {row.direction === "DEBIT" ? "Saída" : "Entrada"}
+        <strong>{amountLabel(row)}</strong>
+        <span>{row.direction === "DEBIT" ? "Saída" : "Entrada"}</span>
       </p>
       {row.ignored === true && (
         <Banner
@@ -326,69 +329,83 @@ function TransactionDetails({
     dateLabel = "Primeira parcela conhecida em";
   }
   return (
-    <dl className="transaction-detail">
-      <div className="transaction-identifier">
-        <dt>Descrição completa</dt>
-        <dd>{row.description || "Sem descrição"}</dd>
-      </div>
-      <div>
-        <dt>{dateLabel}</dt>
-        <dd>
-          <time dateTime={anchorDate}>{dayLabel(anchorDate)}</time>
-        </dd>
-      </div>
-      <div>
-        <dt>Categoria</dt>
-        <dd>{category}</dd>
-      </div>
-      {current !== null && total !== null && (
+    <>
+      <dl className="transaction-detail">
+        <div className="transaction-identifier">
+          <dt>Descrição completa</dt>
+          <dd>{row.description || "Sem descrição"}</dd>
+        </div>
         <div>
-          <dt>Parcela deste registro</dt>
+          <dt>{dateLabel}</dt>
           <dd>
-            {current}/{total}
+            <time dateTime={anchorDate}>{dayLabel(anchorDate)}</time>
           </dd>
         </div>
-      )}
-      <div>
-        <dt>Conta</dt>
-        <dd>
-          {account}
-          <code className="transaction-account-id">{row.accountId}</code>
-        </dd>
-      </div>
-      <div>
-        <dt>Titular</dt>
-        <dd>{row.personName}</dd>
-      </div>
-      <div>
-        <dt>Estado deste registro</dt>
-        <dd>
-          {row.status === "PENDING"
-            ? "Pendente na origem"
-            : "Registrada na origem"}
-        </dd>
-      </div>
-      <div>
-        <dt>Origem</dt>
-        <dd>{row.manual ? "Lançamento manual" : "Importado da origem"}</dd>
-      </div>
-      <div className="transaction-identifier">
-        <dt>
-          {current !== null && total !== null
-            ? "Identificador desta parcela"
-            : "Identificador"}
-        </dt>
-        <dd>
-          <InlineCopyText
-            labels={{
-              copied: "Identificador copiado",
-              copyAction: "Copiar identificador",
-            }}
-          >
-            {row.id}
-          </InlineCopyText>
-        </dd>
-      </div>
-    </dl>
+        <div>
+          <dt>Categoria</dt>
+          <dd>{category}</dd>
+        </div>
+        {current !== null && total !== null && (
+          <div>
+            <dt>Parcela deste registro</dt>
+            <dd>
+              {current}/{total}
+            </dd>
+          </div>
+        )}
+        <div>
+          <dt>Conta</dt>
+          <dd>{account}</dd>
+        </div>
+        <div>
+          <dt>Titular</dt>
+          <dd>{row.personName}</dd>
+        </div>
+        <div>
+          <dt>Estado deste registro</dt>
+          <dd>
+            {row.status === "PENDING"
+              ? "Pendente na origem"
+              : "Registrada na origem"}
+          </dd>
+        </div>
+        <div>
+          <dt>Origem</dt>
+          <dd>{row.manual ? "Lançamento manual" : "Importado da origem"}</dd>
+        </div>
+      </dl>
+      <RecordReference>
+        <div className="transaction-identifier">
+          <dt>Identificador da conta</dt>
+          <dd>
+            <InlineCopyText
+              labels={{
+                copied: "Conta copiada",
+                copyAction: "Copiar identificador da conta",
+              }}
+            >
+              {row.accountId}
+            </InlineCopyText>
+          </dd>
+        </div>
+        <div className="transaction-identifier">
+          <dt>
+            {current !== null && total !== null
+              ? "Identificador desta parcela"
+              : "Identificador"}
+          </dt>
+          <dd>
+            <InlineCopyText
+              labels={{
+                copied: "Identificador copiado",
+                copyAction: "Copiar identificador",
+              }}
+            >
+              {row.id}
+            </InlineCopyText>
+          </dd>
+        </div>
+      </RecordReference>
+    </>
   );
 }

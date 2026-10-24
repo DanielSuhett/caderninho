@@ -6,8 +6,8 @@ export function DesignPalette() {
   return (
     <>
       <Text>
-        Fonte do sistema, conteúdo de 14 px e títulos em sentence case. Cores e
-        estados vêm do tema claro do Kumo.
+        Inter local, conteúdo de 16 px, metadados de 14 px e títulos em sentence
+        case. Superfícies escuras e estados vêm do Kumo.
       </Text>
       <Grid
         gap="sm"
@@ -16,12 +16,10 @@ export function DesignPalette() {
         {Object.entries(colorTokens).map(([name, value]) => (
           <div
             className="design-token"
+            data-token={name}
             key={name}
           >
-            <span
-              aria-hidden
-              style={{ background: `var(--${name})` }}
-            />
+            <span aria-hidden />
             <Text bold>{name}</Text>
             <code>{value}</code>
           </div>

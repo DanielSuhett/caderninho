@@ -150,6 +150,7 @@ export function GroupEditor({
             variant="2up"
           >
             <Select
+              className="w-full"
               items={[
                 { label: "Pessoal", value: "personal" },
                 { label: "Família", value: "family" },
@@ -170,6 +171,7 @@ export function GroupEditor({
             />
           </Grid>
           <Select
+            className="w-full"
             description={
               !!space && (
                 <small>

@@ -25,7 +25,9 @@ export function FilterDialog({
         closeLabel="Fechar filtros"
         size="base"
       >
-        <LayerDialog.Title>{title}</LayerDialog.Title>
+        <LayerDialog.Title>
+          <span className="text-xl">{title}</span>
+        </LayerDialog.Title>
         <LayerDialog.Body>{children}</LayerDialog.Body>
         <LayerDialog.Actions dismissLabel="Cancelar">
           <LayerDialog.Actions.Primary

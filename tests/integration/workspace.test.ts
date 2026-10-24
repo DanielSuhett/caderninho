@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import { beforeEach, test } from "vitest";
 
 import {
+  FinancialOverviewResponseSchema,
+  MonthlySpendingResponseSchema,
   PortalTransactionListSchema,
   SyncHistoryResultSchema,
   TransactionListSchema,
@@ -404,4 +406,66 @@ test("card installments without purchase date use the first observed installment
   assert.equal(page.data.records[0]?.anchorDate, "2024-12-26");
   assert.equal(page.data.records[0]?.anchorKind, "first_seen");
   assert.equal(page.data.records[0]?.installments.length, 3);
+});
+
+test("owner dashboard reads the whole period with exact money and separate currencies beyond transaction pagination", async () => {
+  await collect(
+    source(
+      [
+        ...Array.from({ length: 65 }, (_, index) =>
+          transaction({
+            amount: "-9007199254740993.01",
+            id: `dashboard-${index}`,
+          }),
+        ),
+        transaction({
+          accountId: "usd",
+          amount: "-5",
+          currencyCode: "USD",
+          id: "usd",
+        }),
+      ],
+      [account(), account({ currencyCode: "USD", id: "usd" })],
+    ),
+  );
+  const app = fixture();
+  const cookie = cookies(await login(app));
+  const period = { from: "2026-10-01", spaceId: "personal", to: "2026-10-31" };
+  const response = await command(app, cookie, "query", {
+    query: { tool: "get_overview", ...period },
+  });
+  assert.equal(response.status, 200);
+  const { data } = FinancialOverviewResponseSchema.parse(await response.json());
+  const total = data.totals.find((row) => row.currency === "BRL");
+  assert.equal(total?.count, 65);
+  assert.equal(total?.cashFlowMinor, (-900719925474099301n * 65n).toString());
+  assert.equal(
+    data.totals.find((row) => row.currency === "USD")?.cashFlowMinor,
+    "-500",
+  );
+  assert.equal(data.accounts.length, 2);
+  const chart = await command(app, cookie, "query", {
+    query: {
+      tool: "generate_chart",
+      ...period,
+      groupBy: "month",
+      type: "line",
+    },
+  });
+  assert.equal(chart.status, 200);
+  assert.equal(
+    MonthlySpendingResponseSchema.parse(await chart.json()).data.totals.find(
+      (row) => row.currency === "BRL",
+    )?.cashFlowMinor,
+    total?.cashFlowMinor,
+  );
+  assert.equal(
+    (
+      await command(app, cookie, "query", {
+        csrf: "wrong",
+        query: { tool: "get_overview", ...period },
+      })
+    ).status,
+    403,
+  );
 });

@@ -87,7 +87,10 @@ export function accessPage({
                   required
                   type="password"
                 />
-                <UiButton size="lg">
+                <UiButton
+                  size="lg"
+                  variant="primary"
+                >
                   {authorizing ? "Entrar e continuar" : "Entrar"}
                 </UiButton>
               </form>

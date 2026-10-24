@@ -4,7 +4,8 @@
 
 Migração no código real, branch `codex/kumo-refactor`, a partir da main local
 `e6e9f09`. O estado anterior foi preservado em `6f1ebad`, sem squash. Nenhum
-push, deploy, migração remota, atualização de pacote ou instalação de dependência.
+push, deploy ou migração remota. Na ampliação autorizada foi adicionado ECharts 6.1.0;
+o pacote Kumo não foi atualizado.
 A versão continua **2.14.0**. A identidade adotada é o Kumo escuro da referência
 enviada pelo usuário; DESIGN.md conserva os princípios e contratos financeiros.
 
@@ -46,7 +47,7 @@ no catálogo não justifica criar uma funcionalidade para encaixá-lo.
 | Pagination | Usado | Apenas quando há próximo cursor; reinício por link separado. Nenhum total/página anterior inventados; contagem permanece quando não há próxima página. |
 | Popover | Usado | Calendário; não substitui editor extenso. |
 | Select | Usado | Pequenos conjuntos de escopo, período, estado, moeda e campos de regra. |
-| Sidebar | Usado | Provider/Header/Content/Group/Menu/MenuButton/Footer/Trigger/Close. Footer de uma linha; referências e saída ficam no Content. |
+| Sidebar | Usado | Provider/Header/Content/Group/Menu/MenuButton/Footer/Trigger/Close. Footer compacto com quebra segura; referências e saída ficam no Content. |
 | Surface | Substituído | Deprecated; LayerCard atende as superfícies existentes. |
 | Switch | Usado | Ativação no rascunho de regra; só persiste ao salvar. |
 | Table | Usado | Transações e atividade MCP; conteúdo reorganizado em linhas no celular, sem soma da página. |
@@ -57,7 +58,7 @@ no catálogo não justifica criar uma funcionalidade para encaixá-lo.
 | Autocomplete | Condicional | Não há endpoint de sugestões úteis de descrição; a busca livre deve continuar aceitando qualquer texto. |
 | Breadcrumbs | Sem ganho atual | Rotas planas da Sidebar e detalhes em diálogo; não inventar hierarquia. |
 | ButtonGroup | Avaliado, não adotado | Presets substituem condições e precisam quebrar linhas no celular; botões independentes com texto são claros. Sem split action ou seleção persistente equivalente. |
-| Chart | Depende de dados | Não há agregado financeiro completo por período/moeda/política. Não somar páginas; ECharts não instalado nesta migração. |
+| Chart | Usado após ampliação | Série mensal de despesas no painel/demo, com agregados completos existentes, moeda explícita, ECharts lazy e tabela exata alternativa. |
 | CloudflareLogo | Sem ganho atual | Infraestrutura já identificada em texto; não substituir a marca do produto pela do fornecedor. |
 | CommandPalette | Condicional | Sete destinos já descobertos na Sidebar; demanda de busca global/atalhos não estabelecida. Não duplicar navegação apenas pelo catálogo. |
 | InputArea | Sem campo atual | Nenhum campo longo/JSON editável neste fluxo; não inventar configuração avançada. |
@@ -68,7 +69,7 @@ no catálogo não justifica criar uma funcionalidade para encaixá-lo.
 | TableOfContents | Sem ganho atual | Referência tem cinco seções Collapsible curtas; outro menu não melhora navegação. |
 | Tabs | Avaliado, não adotado | Categorias e etiquetas podem ser consultadas juntas; Collapsible independente conserva esse uso e evita esconder uma seção atrás da outra. |
 | TagInput | Sem edição atual | Painel consulta etiquetas do catálogo; não há campo livre de edição. Uma futura seleção restrita pede Combobox múltiplo. |
-| TimeseriesChart | Condicional | Auditoria já tem agregado diário UTC; Meter relativo + Table mostram os valores. ECharts exige decisão de dependência/bundle. Finanças ainda precisam dos contratos de agregado. |
+| TimeseriesChart | Alternativa atendida | Chart nativo atende a série mensal categórica. Auditoria mantém Meter relativo + Table; não acrescentar um segundo gráfico para a mesma leitura. |
 | BubbleMap | Sem aplicação | Não há geolocalização no contrato. |
 | ChoroplethMap | Sem aplicação | Não há agregação geográfica no contrato. |
 | GlobeMap | Sem aplicação | Não há jornada geográfica no produto. |
@@ -100,7 +101,7 @@ no catálogo não justifica criar uma funcionalidade para encaixá-lo.
 | Contadores grudados no título e resets zerando o espaço das seções | Badge para contagem; remoção do reset genérico de disclosure | grupos-celular, auditoria-celular |
 | Paginação com dois botões inúteis sem próximo cursor | Controle só quando há próxima página; reinício conserva URL conhecida | transacoes-desktop, sincronizacoes-celular |
 | Banner MCP mandava procurar atividade escondida | Ação Ver atividade abre o Collapsible correspondente e rola até ele | auditoria-atividade-celular |
-| Hanken, wordmark, paleta e sombras próprias mantinham outra identidade | Fonte e tokens Kumo; assets sem consumidor removidos; galeria refeita | DESIGN.md, design.tsx, design-tokens.ts |
+| Hanken, wordmark, paleta e sombras próprias mantinham outra identidade | Inter local e tokens semânticos Kumo; assets sem consumidor removidos; galeria refeita | DESIGN.md, design.tsx, design-tokens.ts |
 
 ## Baseline preservada
 
@@ -109,7 +110,7 @@ no catálogo não justifica criar uma funcionalidade para encaixá-lo.
 | Rotas públicas | /, /account/login, /authorize, 404; canonical https://usecaderninho.com/ e URL Deploy to Cloudflare. |
 | Rotas privadas | /account, /account/transactions, /account/rules, /account/groups, /account/sync, /account/connections, /account/audit, /account/design-system. Sidebar e links conservam pessoa/grupo quando aplicável. |
 | Landing | Âncoras de navegação/instalação/metodologia/FAQ existentes, GitHub e Deploy Button; sem introduzir ações privadas no site público. Teste public-navigation verifica a distinção site/instância. |
-| Acesso | POST /account/login; csrf, returnTo, password, limites16–256, current-password; configuração/recuperação sem JS. |
+| Acesso | POST /account/login; csrf, returnTo, password, limites 16–256, current-password; configuração/recuperação sem JS. |
 | Consentimento | POST na rota atual; handle, decision=approve/deny; cliente/destino e texto integral sobre acesso, envio de resultados, confirmações e revogação. Entrar não aprova automaticamente. |
 | Filtros | space, person, text/q, from, to, direction, accountId, categoryId, status, future=on, ignored=on, days e filtros de histórico. Cursor é removido ao aplicar; cancelamento conserva URL. |
 | Escritas | CSRF/origem, confirmação, idempotência e comportamento diante de resultado incerto; não acrescentar retries silenciosos. |
@@ -120,10 +121,11 @@ no catálogo não justifica criar uma funcionalidade para encaixá-lo.
 Dinheiro permanece em amountMinor com moeda e direção explícitas. Zero difere de
 ausente; cartão não é dinheiro disponível; ignoradas/pendentes/futuras e parcelas
 continuam consultáveis. O estado da origem não prova pagamento da fatura.
-Não há soma da página, conversão cambial ou gráfico financeiro fictício.
+Não há soma da página ou conversão cambial. O gráfico operacional usa agregados completos reais;
+a demo identifica seu ledger como fictício.
 
-Gráficos financeiros futuros precisam do período completo, escopo e moeda, com
-políticas de transferências/ignoradas/pendentes/parcelas. A auditoria tem dias UTC
+O contrato dos gráficos atuais registra período completo, escopo e moeda, com
+políticas de transferências/ignoradas/pendentes/parcelas em [dados-e-evidencias.md](dados-e-evidencias.md). A auditoria tem dias UTC
 mas não mede custo de IA: requisições, ferramentas, falhas, cancelamentos, bytes e
 modelos declarados ficam distintos. Meter diário é relativo ao máximo observado,
 explicitamente descrito, sem sugerir limite contratado.
@@ -136,14 +138,15 @@ sem denominador global conhecido não há porcentagem de importação.
 ## Adaptações necessárias na versão instalada
 
 Sidebar 2.14.0 mantém posicionamento/overlay/collapse próprios. O shell fornece
-altura100dvh e área principal rolável. No móvel, composição por props acrescenta
+altura 100dvh e área principal rolável. No móvel, composição por props acrescenta
 role dialog/aria-modal, inert no conteúdo externo e ciclo de Tab; Escape e retorno
 ao gatilho foram exercitados. O Trigger externo usa openMobile no aria-expanded
 porque o interno da versão usa open de desktop. Não sobrescrever position sticky.
 
 Checkbox é controlado: UiCheckbox acrescenta estado inicial mantendo o valor on.
-Conteúdo usa14px, inclusive labels/badges; DefaultTrigger recebe text-sm conforme
-skill, sem mudar tracking. Campos têm label integrado, especialmente Select.
+Conteúdo e controles usam 16 px, metadados usam 14 px; Inter local e escala maior
+são preferências explícitas que prevalecem sobre 14 px da skill. DefaultTrigger
+e controles mantêm comportamento nativo, sem mudar tracking. Campos têm label integrado, especialmente Select.
 DatePicker range substitui o DateRangePicker deprecated. Surface e Code simples
 não devem aparecer em novas composições.
 
@@ -169,5 +172,23 @@ espaço deixado por uma amostra pequena com cards/gráficos sem tarefa ou dados.
 
 Resultado final, comandos e limite de evidência estão em design-qa.md. Build e
 runtime são locais; não comprovam provedor, OAuth real, produção ou host MCP.
-Pacote e lockfile permanecem iguais. Capturas rejeitadas por escala/carregamento
-ficam fora da evidência versionada.
+Kumo permanece 2.14.0; package/lock incluem ECharts 6.1.0. Capturas históricas
+rejeitadas ficam identificadas como tais; a galeria final só aponta evidência aceita.
+
+## Polimento após as rodadas críticas
+
+Inter local, tipos semânticos, tokens de contraste compartilhados, toolbars e
+resumos alinhados, Transações móvel compacta e Sidebar compartilhada com a demo.
+IDs financeiros foram movidos para RecordReference; descarte de rascunho separa
+mensagem e ações, sem corte móvel. Formulários de pessoas não sobrepõem controles.
+CSS authored inline foi removido. O build incorpora o CSS oficial que faltava
+no DatePicker standalone 2.14; a largura do Popover respeita a viewport.
+
+Três oportunidades concretizadas: controles/estados pertencem ao Kumo; resumo
+financeiro completo e descoberto substitui leitura de saldo isolado; demo pública
+permite experimentar mês/moeda/busca antes da instalação.
+
+Revisão crítica 03:8/10 qualitativo por página nos estados listados, após três
+rodadas com correções intermediárias rejeitadas. Gráfico mantém tabela exata
+quando o chunk falha; falha isolada da série não derruba o resto do resumo.
+[Galeria](capturas/README.md) e [QA](../../design-qa.md) são a evidência atual.

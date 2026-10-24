@@ -1,14 +1,4 @@
-import {
-  Badge,
-  Banner,
-  ClipboardText,
-  Empty,
-  InlineCopyText,
-  LayerCard,
-  Link,
-  Select,
-} from "@cloudflare/kumo";
-import { BankIcon } from "@phosphor-icons/react";
+import { Badge, Banner, ClipboardText, Link, Select } from "@cloudflare/kumo";
 import { type FormEvent, type MouseEvent, useCallback, useState } from "react";
 
 import type { HouseholdCommand, PortalResponse } from "../../contracts";
@@ -23,12 +13,9 @@ import { DisclosureItem } from "./disclosure-item";
 import { HouseholdPanel } from "./household-view";
 import { dayLabel } from "./workspace-resource";
 import {
-  RecordReference,
   RefreshButton,
-  WorkspaceDetails,
   WorkspaceFilters,
   WorkspaceHeading,
-  WorkspaceMetrics,
 } from "./workspace-ui";
 
 const importLabels = {
@@ -44,21 +31,6 @@ function timestamp(value: string | null) {
   return value
     ? new Date(value).toLocaleString("pt-BR")
     : "Ainda não importada";
-}
-export function formatBalance(value: string | null, currency: string) {
-  if (value === null) {
-    return "Saldo indisponível";
-  }
-  const scale =
-    new Intl.NumberFormat("pt-BR", {
-      currency,
-      style: "currency",
-    }).resolvedOptions().maximumFractionDigits ?? 0;
-  const negative = value.startsWith("-");
-  const digits = value.replace("-", "").padStart(scale + 1, "0");
-  const whole = scale ? digits.slice(0, -scale) : digits;
-  const fraction = scale ? `,${digits.slice(-scale)}` : "";
-  return `${negative ? "−" : ""}${BigInt(whole).toLocaleString("pt-BR")}${fraction} ${currency}`;
 }
 function DashboardMessage({
   message,
@@ -87,7 +59,7 @@ function DashboardMessage({
       className="feedback"
       description={content}
       role="status"
-      variant={readError || partial ? "alert" : "default"}
+      variant={readError ? "error" : "secondary"}
     />
   );
 }
@@ -142,15 +114,6 @@ export function DashboardView(props: {
   }, [snapshot.configured, props.section]);
   const visible = snapshot.connections.filter(
     (c) => !personId || c.personId === personId,
-  );
-  const accounts = visible.flatMap((c) =>
-    Object.entries(c.accounts).map(([id, a]) => ({
-      ...a,
-      id,
-      partial: c.partial,
-      personName: c.personName ?? "Eu",
-      profileName: c.profileName ?? "Pluggy principal",
-    })),
   );
   const readyProfiles = new Set(
     snapshot.profiles.filter((p) => p.enabled && p.configured).map((p) => p.id),
@@ -259,6 +222,7 @@ export function DashboardView(props: {
           }
         >
           <Select
+            className="w-full"
             defaultValue={personId}
             items={[
               { label: "Todas as pessoas", value: "" },
@@ -281,128 +245,6 @@ export function DashboardView(props: {
         partial={props.section === "overview" && visible.some((c) => c.partial)}
         readError={props.section === "overview" && hasResult && props.readError}
       />
-      {props.section === "overview" && hasResult && (
-        <>
-          <section
-            aria-labelledby="accounts-heading"
-            className="account-section"
-          >
-            <h2
-              className="sr-only"
-              id="accounts-heading"
-            >
-              Contas e cartões
-            </h2>
-            {!accounts.length && (
-              <Empty
-                description="Adicione um perfil Pluggy, conecte uma instituição e importe os dados."
-                size="sm"
-                title="Suas contas aparecem aqui após a importação."
-              />
-            )}
-            <LayerCard
-              aria-label="Contas e cartões"
-              className="record-list"
-              render={<ul />}
-            >
-              {accounts.map((a) => (
-                <li key={a.id}>
-                  <DisclosureItem
-                    className={
-                      formatBalance(a.balanceMinor, a.currency).length > 18 ||
-                      a.balanceMinor === null
-                        ? "record-item wide-value"
-                        : "record-item"
-                    }
-                    summary={
-                      <>
-                        <span className="record-title bank-heading">
-                          <BankIcon
-                            aria-hidden
-                            size={20}
-                          />
-                          {a.name}
-                        </span>
-                        <span className="record-value">
-                          {formatBalance(a.balanceMinor, a.currency)}
-                        </span>
-                        {!personId && snapshot.people.length > 1 && (
-                          <span className="record-context">{a.personName}</span>
-                        )}
-                        <span className="record-meta">
-                          {a.type === "CREDIT" && (
-                            <span>Cartão · não é dinheiro disponível</span>
-                          )}
-                          <span>
-                            {a.balanceObservedAt
-                              ? `Saldo em ${dayLabel(a.balanceObservedAt)}`
-                              : "Saldo ainda não observado"}
-                          </span>
-                          {!!a.partial && (
-                            <Badge variant="warning">Dados parciais</Badge>
-                          )}
-                        </span>
-                      </>
-                    }
-                  >
-                    <div className="record-detail">
-                      <dl className="detail-list">
-                        <div>
-                          <dt>Titular</dt>
-                          <dd>{a.personName}</dd>
-                        </div>
-                        <div>
-                          <dt>Perfil Pluggy</dt>
-                          <dd>{a.profileName}</dd>
-                        </div>
-                        <div>
-                          <dt>Saldo observado em</dt>
-                          <dd>{timestamp(a.balanceObservedAt)}</dd>
-                        </div>
-                      </dl>
-                      <Link
-                        href={`/account/transactions?${new URLSearchParams({ accountId: a.id, ...(personId && { person: personId }), space: new URLSearchParams(location.search).get("space") ?? "personal" })}`}
-                      >
-                        Ver transações desta conta
-                      </Link>
-                      <RecordReference>
-                        <div>
-                          <dt>Identificador da conta</dt>
-                          <dd>
-                            <InlineCopyText
-                              labels={{
-                                copied: "Identificador copiado",
-                                copyAction: "Copiar identificador",
-                              }}
-                            >
-                              {a.id}
-                            </InlineCopyText>
-                          </dd>
-                        </div>
-                      </RecordReference>
-                    </div>
-                  </DisclosureItem>
-                </li>
-              ))}
-            </LayerCard>
-          </section>
-          <WorkspaceDetails title="Resumo da instalação">
-            <WorkspaceMetrics
-              items={[
-                {
-                  label: "Pessoas nesta visão",
-                  value: personId ? 1 : snapshot.people.length,
-                },
-                { label: "Conexões bancárias", value: visible.length },
-                {
-                  label: "Contas e cartões importados",
-                  value: accounts.length,
-                },
-              ]}
-            />
-          </WorkspaceDetails>
-        </>
-      )}
       {props.section === "connections" && (
         <>
           <DisclosureItem
@@ -447,6 +289,7 @@ export function DashboardView(props: {
               >
                 <div className="inline-fields">
                   <Select
+                    className="w-full"
                     defaultValue={enabled[0]?.id ?? ""}
                     disabled={!enabled.length}
                     id="connect-profile"
@@ -562,6 +405,7 @@ export function DashboardView(props: {
                           onSubmit={assign}
                         >
                           <Select
+                            className="w-full"
                             defaultValue={c.personId ?? "self"}
                             id={`owner-${c.id}`}
                             items={[

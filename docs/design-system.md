@@ -8,13 +8,14 @@ sobre a documentação do site. [Inventário](kumo/inventario.md),
 ## Fundação
 
 `Document` carrega `kumo.css` standalone e declara `data-mode="dark"`.
-`DesignHead` publica aliases de layout e regras de documento em `@layer base`:
+`DesignHead` carrega Inter local e `design.css`, com aliases de layout e regras de documento em `@layer base`:
 as classes de componentes Kumo mantêm prioridade. Não definir a cor global de
 `a`, fontes de controles ou seletores genéricos por `data-kumo-component`.
 Não há Hanken nem wordmark especial. O nome é Caderninho.
 
-Conteúdo tem 14 px, inclusive `--text-xs` e `--text-sm`, conforme a skill.
-Texto do sistema usa `--font-sans`. Títulos usam `Text` ou headings sem alterar
+Conteúdo e controles têm 16 px; metadados, `--text-xs` e `--text-sm` têm 14 px.
+Inter local em `--font-sans` atende à preferência explícita do usuário, que
+prevalece sobre a regra 14 px da skill. Métricas usam 32 px desktop/26 px móvel. Títulos usam `Text` ou headings sem alterar
 tracking. Peso máximo 600. Componentes conservam foco, raios, sombras e estados.
 Espaços do produto seguem 4, 8, 12, 16, 24 e 32 px. CSS próprio organiza conteúdo
 e responsividade; não reconstrói Button, Select, Checkbox, Tooltip ou modal.
@@ -23,7 +24,7 @@ e responsividade; não reconstrói Button, Select, Checkbox, Tooltip ou modal.
 
 | Responsabilidade | Implementação |
 | --- | --- |
-| Navegação autenticada | `workspace-view.tsx`: Sidebar.Provider/Header/Content/Group/Menu/MenuButton/Footer/Trigger e useSidebar |
+| Navegação autenticada | `workspace-shell.tsx`: Sidebar.Provider/Header/Content/Group/Menu/MenuButton/Footer/Trigger e useSidebar |
 | Navegação pública | `PublicLayout` e landing estática, com seus links e âncoras próprios |
 | Superfícies | LayerCard em listas irmãs; nunca LayerCard aninhado |
 | Transações | Table, Badge e LayerDialog; descrição abre detalhes por botão com nome contextual |
@@ -77,9 +78,11 @@ dinheiro disponível. Parcelas usam datas e metadados estruturados da origem;
 
 Importação mostra fase/conta reais e segue consultável quando parcial. Não há
 progresso global com denominador conhecido no contrato Pluggy atual.
-Gráficos financeiros exigem agregação do período completo por moeda e política
-explícita para transferências, ignorados, pendentes e parcelas. Não adicionar
-ECharts só para preencher um espaço visual.
+A visão geral usa os agregados existentes `get_overview` e `generate_chart`,
+com período completo por moeda. Chart nativo Kumo com ECharts 6.1 carrega sob demanda;
+tabela alternativa preserva valores exatos e continua disponível quando o chunk
+falha. Categoria usa Meter relativo com texto explícito, sem sugerir cota.
+[Contratos, políticas e custo dos chunks](kumo/dados-e-evidencias.md).
 
 Auditoria distingue requisições, ferramentas, falhas, cancelamentos, bytes e
 modelos declarados. Bytes não são tokens nem custo de IA. A escala diária de
@@ -99,3 +102,14 @@ inclui testes, build e runtime local. A revisão visual cobre desktop/celular,
 expansões, formulários e estados; resultados e limites ficam em `design-qa.md`.
 Não interpretar um build, uma captura sintética ou HTTP 200 como OAuth, Pluggy,
 produção ou acessibilidade completa validados.
+
+## Estilos e QA
+
+CSS de documento, páginas públicas e landing em `src/web/styles/`; nenhum estilo
+JSX authored inline. O build combina o standalone 2.14 com o CSS oficial de
+componentes do pacote, removendo somente o import do binding já presente. Isso
+repõe o CSS de DatePicker ausente no standalone, sem reconstruir seu calendário.
+Popover do calendário limita a largura à viewport; datas continuam civis/pt-BR.
+
+[Galeria atual](kumo/capturas/README.md), [revisão 03](kumo/revisao-critica-03.md)
+e [QA](../design-qa.md) registram telas, estados, grade e limites da aprovação.

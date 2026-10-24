@@ -29,6 +29,7 @@
     "@phosphor-icons/react": "2.1.10",
     "big.js": "7.0.1",
     "drizzle-orm": "0.45.4",
+    "echarts": "6.1.0",
     "hono": "4.13.13",
     "ky": "2.2.0",
     "lossless-json": "4.3.1",

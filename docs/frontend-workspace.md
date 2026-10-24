@@ -1,13 +1,13 @@
 # Páginas da instalação
 
-O painel usa a identidade padrão escura do Kumo 2.14.0, com fonte do sistema,
-conteúdo em 14 px, ação primária e foco da biblioteca. A Sidebar real permanece
+O painel usa a identidade padrão escura do Kumo 2.14.0, com Inter local,
+conteúdo/controles em 16 px e metadados em 14 px, ação primária e foco da biblioteca. A Sidebar real permanece
 no desktop; até 760 px usa seu menu modal. A navegação pública tem seus próprios
 links. [DESIGN.md](../DESIGN.md) e o [guia](design-system.md) governam a composição.
 
 | Página | Conteúdo |
 | --- | --- |
-| `/account` | Contas, saldos e titulares em LayerCard/Collapsible |
+| `/account` | Resumo completo por período/moeda, categorias, série mensal, recentes e contas/cartões |
 | `/account/transactions` | Table, filtros GET, Dialog de detalhes e parcelas |
 | `/account/rules` | Condições, categoria, prioridade, preview e edição |
 | `/account/groups` | Grupos de planejamento, orçamento, categorias e etiquetas |
@@ -41,7 +41,8 @@ fechamento e navegação. Salvar regra afeta próximas importações, sem reclas
 histórico. Excluir exige confirmação e preserva os vínculos financeiros. Grupo
 Pessoal não oferece exclusão. Nome de cliente/modelo MCP continua declarado.
 
-Visão geral começa pelas contas. Conexões concentra configuração, primeira
+Visão geral começa pelo resumo financeiro do período. Saldos importados são
+estoques da última observação, separados dos movimentos mensais e da dívida do cartão. Conexões concentra configuração, primeira
 importação, consulta parcial e recuperação. Fases e erros permanecem visíveis.
 Autorizações precedem métricas na auditoria. Banner conserva erros/parcialidade;
 Toasty confirma gravações concluídas. Importação usa Loader sem percentagem fictícia.
@@ -65,7 +66,8 @@ e atualização explícita. Consultar a página não inicia sincronização.
 
 Todas as páginas exigem sessão. Catálogo e histórico são leituras autenticadas;
 a consulta financeira usa POST com origem, JSON e CSRF validados, permitindo
-somente `get_accounts` e `get_transactions`. Nenhuma credencial é devolvida.
+as leituras de contas/transações, `get_overview` e `generate_chart` restrito a
+`groupBy=month`. A allowlist não admite mutações. Nenhuma credencial é devolvida.
 
 `tests/integration/workspace.test.ts` cobre histórico, replay, falha, migração,
 titularidade, autenticação, CSRF, bloqueio de mutações e paginação cronológica
@@ -74,3 +76,15 @@ usa apenas dados fictícios locais; evidências da navegação e filtros ficam e
 Publicação, migração remota e validação com Pluggy/OAuth reais não foram executadas.
 
 O [guia de componentes](design-system.md) define a composição das páginas. Cabeçalhos, filtros, métricas, atualização e skeleton são compartilhados. A [auditoria](mcp-audit.md) explica identidade, volume, retenção e limites.
+
+## Demo pública
+
+`/demo` e `/demo/transactions` são assets públicos sem sessão e sem consulta à
+API financeira privada. Compartilham WorkspaceFrame, SidebarFrame,
+FinancialDashboard e TransactionList. Ledger sintético de maio a outubro 2026,
+BRL e USD separados, mês/moeda/conta/busca por GET e Dialog de detalhes.
+A busca filtra o conjunto sintético inteiro. A landing oferece Demo no header e CTA.
+Nenhum botão de conexão, edição ou revogação existe nessa navegação.
+
+[Dados e evidências](kumo/dados-e-evidencias.md) registra agregações completas,
+tratamento de dados ausentes, dependência ECharts e distinção local/publicado.

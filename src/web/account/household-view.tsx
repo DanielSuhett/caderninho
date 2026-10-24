@@ -147,7 +147,9 @@ export function HouseholdPanel({
                 <strong>{profile.name}</strong>
                 <span className="muted">
                   {snapshot.people.find((p) => p.id === profile.personId)?.name}{" "}
-                  · {profile.connectionCount} conexões · {profileLabel(profile)}
+                  · {profile.connectionCount}{" "}
+                  {profile.connectionCount === 1 ? "conexão" : "conexões"} ·{" "}
+                  {profileLabel(profile)}
                 </span>
               </>
             }
@@ -216,6 +218,7 @@ export function HouseholdPanel({
             />
 
             <Select
+              className="w-full"
               defaultValue={snapshot.people[0]?.id ?? ""}
               id="profile-person-new"
               items={[

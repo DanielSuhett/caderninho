@@ -6,13 +6,16 @@ Hanken pelos componentes e tokens padrão do Kumo 2.14.0. O nome do produto
 
 ## Fundação
 
-Tema escuro padrão do Kumo (`data-mode="dark"`), fonte do sistema de `--font-sans`, superfícies
+Tema escuro padrão do Kumo (`data-mode="dark"`), Inter variável local em `--font-sans`, superfícies
 `kumo-canvas`, `kumo-base` e `kumo-elevated`. Ação primária azul do Kumo,
 seleção neutra, texto e estados semânticos da biblioteca. Os aliases CSS do
 produto apontam aos tokens efetivos; não criam uma segunda paleta.
 
-Texto de conteúdo e controles em 14 px; títulos em 28/20/16 px, sentence case,
-peso máximo 600 e tracking original. Dinheiro exato e moeda sempre visíveis.
+Texto de conteúdo e controles em 16 px; metadados em 14 px; títulos em 28/20/16 px, sentence case,
+peso máximo 600 e tracking original. Métricas financeiras em 32 px no desktop e 26 px no celular, com moeda subordinada e algarismos tabulares. Dinheiro exato e moeda sempre visíveis.
+A preferência explícita do usuário por Inter e conteúdo maior prevalece sobre
+a regra de 14 px da skill kumo-design. Contraste reforçado pelos tokens semânticos
+compartilhados com a biblioteca; links de contexto neutros e sublinhados.
 Espaços de layout: 4, 8, 12, 16, 24 e 32 px. Componentes conservam seus raios,
 sombras, foco, hover e estados. Não combinar borda com sombra de elevação.
 Não aplicar overrides genéricos por `data-kumo-component`.
@@ -47,7 +50,9 @@ pendentes, futuras e ignoradas continuam explícitas.
 Meter representa consumo com denominador conhecido. Nas estimativas do free
 tier, o preenchimento laranja continua representando consumo, com período,
 cota e estimativa identificados. Importação Pluggy mostra fase e contas reais,
-sem porcentagem global inventada. Charts exigem agregação completa e política
+sem porcentagem global inventada. A demo pública em `/demo` e `/demo/transactions` usa somente um conjunto fictício
+local; compartilha os componentes reais do aplicativo. Não consulta nem altera
+contas, credenciais ou autorizações reais. Charts exigem agregação completa e política
 explícita de período, moeda, escopo, transferências, ignorados e parcelas.
 
 Auditoria distingue requisições, ferramentas, erros, bytes e modelos declarados.
@@ -65,3 +70,14 @@ produção ou comportamento de um host MCP.
 Plano e evidências: [migração](docs/kumo/plano.md), [inventário](docs/kumo/inventario.md)
 e `design-qa.md`. Catálogo de marcas bancárias continua auxiliar e não permite
 inferir instituição por nome de conta, pessoa ou saldo.
+
+## Conferência de composição
+
+Grade opt-in: `?grid=1` no painel/demo e `#layout-grid` nas páginas públicas.
+12 colunas e gutters de 24 px no desktop; 4 colunas e 16 px no celular; baseline 8 px.
+A grade confere eixos de conteúdo e margens; o padding interno dos componentes
+continua pertencendo ao Kumo. As capturas sem grade são a apresentação do produto.
+
+Não incluir controles que só abrem conteúdo vazio, IDs na leitura financeira
+inicial ou ações secundárias dominantes. A aprovação visual é limitada aos
+estados realmente vistos e registrada por página na revisão crítica.

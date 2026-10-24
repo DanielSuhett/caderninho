@@ -123,32 +123,33 @@ export function BackofficeDialog({
       open={open}
     >
       <LayerDialog.Content size={presentation === "editor" ? "lg" : "base"}>
-        <LayerDialog.Title>{title}</LayerDialog.Title>
+        <LayerDialog.Title>
+          <span className="text-xl">{title}</span>
+        </LayerDialog.Title>
         <LayerDialog.Body>
           {!!discard && (
             <div ref={discardNotice}>
               <Banner
-                action={
-                  <div className="record-actions">
-                    <UiButton
-                      onClick={continueEditing}
-                      type="button"
-                      variant="secondary"
-                    >
-                      Continuar editando
-                    </UiButton>
-                    <UiButton
-                      onClick={close}
-                      tone="danger"
-                      type="button"
-                    >
-                      Descartar alterações
-                    </UiButton>
-                  </div>
-                }
-                title="Descartar as alterações ainda não salvas?"
+                description="Suas alterações ainda não foram salvas."
+                title="Descartar as alterações?"
                 variant="alert"
               />
+              <div className="draft-actions">
+                <UiButton
+                  onClick={continueEditing}
+                  type="button"
+                  variant="secondary"
+                >
+                  Continuar editando
+                </UiButton>
+                <UiButton
+                  onClick={close}
+                  type="button"
+                  variant="destructive"
+                >
+                  Descartar alterações
+                </UiButton>
+              </div>
             </div>
           )}
           <div

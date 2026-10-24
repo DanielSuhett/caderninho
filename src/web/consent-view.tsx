@@ -48,6 +48,7 @@ export function Consent({
           name="decision"
           size="lg"
           value="approve"
+          variant="primary"
         >
           Autorizar
         </UiButton>

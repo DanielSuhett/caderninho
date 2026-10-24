@@ -1,23 +1,63 @@
-# Capturas intermediárias — rodada 1
+# Capturas atuais — rodada crítica 03
 
-Estas imagens registram a migração de componentes; **não representam aprovação
-de polimento**. O usuário reabriu a revisão. Consultar design-qa.md e a rodada
-crítica por página. APIs sintéticas, nenhum dado privado.
+24/10/2026. Screenshots do código compilado, com dados sintéticos.
+Desktop 1541×863; celular emulado 391×845. Não são imagens geradas por IA.
+[Revisão por página](../revisao-critica-03.md), [QA](../../../design-qa.md) e
+[galeria com todas as imagens](../galeria.md).
 
-| Página | Desktop | Celular |
-| --- | --- | --- |
-| Visão geral | [captura](visao-geral-desktop.jpg) | [captura](visao-geral-celular.jpg) |
-| Transações | [captura](transacoes-desktop.jpg) | [captura](transacoes-celular.jpg) |
-| Regras | [captura](regras-desktop.jpg) | [captura](regras-celular.jpg) |
-| Grupos | [captura](grupos-desktop.jpg) | [captura](grupos-celular.jpg) |
-| Sincronizações | [captura](sincronizacoes-desktop.jpg) | Rejeitada: escala/corte; recapturar |
-| Conexões | [captura](conexoes-desktop.jpg) | [captura](conexoes-celular.jpg) |
-| Auditoria MCP | [captura](auditoria-desktop.jpg) | [captura](auditoria-celular.jpg) |
-| Referência | [captura](referencia-desktop.jpg) | [captura](referencia-celular.jpg) |
-| Landing | [captura](landing-desktop.jpg) | [captura](landing-celular.jpg) |
-| Acesso | [captura](acesso-desktop.jpg) | [captura](acesso-celular.jpg) |
-| Consentimento | [captura](consentimento-desktop.jpg) | [captura](consentimento-celular.jpg) |
-| 404 | [captura](404-desktop.jpg) | [captura](404-celular.jpg) |
+## Páginas atuais
 
-Estados adicionais estão nos arquivos nomeados por conta, parcelas, filtros, calendário e grupo.
-A captura 404 usa o componente servido pelo fixture; o arquivo estático é verificado separadamente.
+| Página e rota | Desktop | Celular | Grade desktop / celular |
+| --- | --- | --- | --- |
+| Visão geral · `/account` | [imagem](rodada-03/final-visao-geral-desktop.jpg) | [imagem](rodada-03/final-visao-geral-mobile.jpg) | [12 colunas](rodada-03/grade-visao-geral-desktop.jpg) / [4 colunas](rodada-03/grade-visao-geral-mobile.jpg) |
+| Transações · `/account/transactions` | [imagem](rodada-03/final-transacoes-desktop.jpg) | [imagem](rodada-03/final-transacoes-mobile.jpg) | [12 colunas](rodada-03/grade-transacoes-desktop.jpg) / [4 colunas](rodada-03/grade-transacoes-mobile.jpg) |
+| Regras · `/account/rules` | [imagem](rodada-03/final-regras-desktop.jpg) | [imagem](rodada-03/final-regras-mobile.jpg) | [12 colunas](rodada-03/grade-regras-desktop.jpg) / [4 colunas](rodada-03/grade-regras-mobile.jpg) |
+| Grupos · `/account/groups` | [imagem](rodada-03/final-grupos-desktop.jpg) | [imagem](rodada-03/final-grupos-mobile.jpg) | [12 colunas](rodada-03/grade-grupos-desktop.jpg) / [4 colunas](rodada-03/grade-grupos-mobile.jpg) |
+| Sincronizações · `/account/sync` | [imagem](rodada-03/final-sincronizacoes-desktop.jpg) | [imagem](rodada-03/final-sincronizacoes-mobile.jpg) | [12 colunas](rodada-03/grade-sincronizacoes-desktop.jpg) / [4 colunas](rodada-03/grade-sincronizacoes-mobile.jpg) |
+| Conexões · `/account/connections` | [imagem](rodada-03/final-conexoes-desktop.jpg) | [imagem](rodada-03/final-conexoes-mobile.jpg) | [12 colunas](rodada-03/grade-conexoes-desktop.jpg) / [4 colunas](rodada-03/grade-conexoes-mobile.jpg) |
+| Auditoria MCP · `/account/audit` | [imagem](rodada-03/final-auditoria-desktop.jpg) | [imagem](rodada-03/final-auditoria-mobile.jpg) | [12 colunas](rodada-03/grade-auditoria-desktop.jpg) / [4 colunas](rodada-03/grade-auditoria-mobile.jpg) |
+| Referência visual · `/account/design-system` | [imagem](rodada-03/final-referencia-desktop.jpg) | [imagem](rodada-03/final-referencia-mobile.jpg) | [12 colunas](rodada-03/grade-referencia-desktop.jpg) / [4 colunas](rodada-03/grade-referencia-mobile.jpg) |
+| Landing · `/` | [imagem](rodada-03/final-landing-desktop.jpg) | [imagem](rodada-03/final-landing-mobile.jpg) | [12 colunas](rodada-03/grade-landing-desktop.jpg) / [4 colunas](rodada-03/grade-landing-mobile.jpg) |
+| Acesso · `/account/login` | [imagem](rodada-03/final-acesso-desktop.jpg) | [imagem](rodada-03/final-acesso-mobile.jpg) | [12 colunas](rodada-03/grade-acesso-desktop.jpg) / [4 colunas](rodada-03/grade-acesso-mobile.jpg) |
+| Consentimento · `/authorize` | [imagem](rodada-03/final-consentimento-desktop-confirmado.jpg) | [imagem](rodada-03/final-consentimento-mobile.jpg) | [12 colunas](rodada-03/grade-consentimento-desktop.jpg) / [4 colunas](rodada-03/grade-consentimento-mobile.jpg) |
+| 404 · `/pagina-inexistente` | [imagem](rodada-03/final-404-desktop.jpg) | [imagem](rodada-03/final-404-mobile.jpg) | [12 colunas](rodada-03/grade-404-desktop.jpg) / [4 colunas](rodada-03/grade-404-mobile.jpg) |
+| Demo pública · `/demo?month=2026-10` | [imagem](rodada-03/final-demo-desktop.jpg) | [imagem](rodada-03/final-demo-mobile.jpg) | [12 colunas](rodada-03/grade-demo-desktop.jpg) / [4 colunas](rodada-03/grade-demo-mobile.jpg) |
+| Demo de Transações · `/demo/transactions?month=2026-10` | [imagem](rodada-03/final-demo-transacoes-desktop-confirmado.jpg) | [imagem](rodada-03/final-demo-transacoes-mobile.jpg) | [12 colunas](rodada-03/grade-demo-transacoes-desktop.jpg) / [4 colunas](rodada-03/grade-demo-transacoes-mobile.jpg) |
+
+## Estados abertos e recuperação
+
+As páginas privadas usam APIs fictícias em 8799. A demo/landing final também
+foram abertas no Worker local 8801 sem sessão. Estado privado parcial deliberado;
+essas capturas não representam a versão publicada nem dados pessoais.
+
+| Área | Estados e capturas aceitos |
+| --- | --- |
+| Visão geral | [Cálculo](rodada-03/visao-geral-calculo-mobile.jpg), [conta](rodada-03/visao-geral-contas-mobile.jpg), [primeiro banco](rodada-03/visao-geral-primeiro-banco-mobile.jpg), [falha da série](rodada-03/visao-geral-serie-erro-mobile-final.jpg), [fallback exato](rodada-03/visao-geral-grafico-fallback-mobile.jpg) |
+| Transações | [Filtros](rodada-03/transacoes-filtros-mobile.jpg), [calendário corrigido](rodada-03/transacoes-calendario-mobile-final.jpg), [intervalo](rodada-03/transacoes-calendario-selecao-mobile.jpg), [parcelas](rodada-03/transacoes-parcelas-mobile.jpg), [erro](rodada-03/transacoes-erro-mobile.jpg), [vazio](rodada-03/transacoes-vazio-mobile.jpg), [carregamento](rodada-03/transacoes-carregamento-mobile.jpg) |
+| Regras/grupos | [Regra expandida](rodada-03/regra-expandida-mobile.jpg), [editor](rodada-03/regra-editor-mobile.jpg), [rascunho corrigido](rodada-03/regra-rascunho-mobile-corrigido.jpg), [exclusão](rodada-03/regra-exclusao-mobile.jpg), [editor de grupo](rodada-03/grupo-editor-mobile.jpg), [etiquetas](rodada-03/grupos-etiquetas-mobile.jpg) |
+| Operação | [Histórico](rodada-03/sincronizacao-expandida-mobile.jpg), [gerenciar](rodada-03/conexoes-gerenciar-mobile-corrigido.jpg), [pessoas](rodada-03/conexoes-pessoas-mobile-completo.jpg), [MCP](rodada-03/conexoes-mcp-mobile-corrigido.jpg), [falha](rodada-03/conexoes-falha-detalhe-mobile.jpg) |
+| Auditoria | [Métricas](rodada-03/auditoria-metricas-mobile.jpg), [modelos/clientes](rodada-03/auditoria-inferior-mobile-corrigida.jpg), [requisições](rodada-03/auditoria-requisicoes-mobile.jpg), [confirmação](rodada-03/auditoria-confirmacao-mobile-estavel.jpg) |
+| Referência/acesso | [Controles](rodada-03/referencia-controles-mobile-final.jpg), [feedback](rodada-03/referencia-feedback-mobile.jpg), [erro e recuperação](rodada-03/acesso-erro-recuperacao-mobile.jpg) |
+| Demo | [Busca aplicada](rodada-03/demo-busca-mobile.jpg), [detalhe](rodada-03/demo-detalhe-mobile-final.jpg), [referência sob demanda](rodada-03/demo-detalhe-referencia-mobile-final.jpg), [gráfico](rodada-03/demo-grafico-mobile.jpg), [valores exatos](rodada-03/demo-valores-exatos-mobile.jpg), [conta](rodada-03/demo-conta-expandida-mobile.jpg) |
+| Landing | [Desempenho](rodada-03/landing-desempenho-mobile-final.jpg), [método](rodada-03/landing-metodo-mobile-final.jpg), [CPU](rodada-03/landing-cpu-mobile-final.jpg), [método CPU](rodada-03/landing-cpu-metodo-mobile-final.jpg), [cotas](rodada-03/landing-cotas-mobile-final.jpg), [FAQ](rodada-03/landing-faq-mobile-final.jpg); [CPU desktop](rodada-03/landing-cpu-desktop-final.jpg), [premissas desktop](rodada-03/landing-cotas-desktop-final.jpg) |
+
+## Histórico e imagens rejeitadas
+
+Rodadas 1/2 são histórico, não prova do acabamento atual. O relatório 03 identifica
+as rejeições: demo inicial em skeleton; confirmação durante animação; calendário
+sem CSS ou Popover excedente; formulário de pessoas sobreposto; rascunho cortado;
+IDs expostos; headers transitórios e capturas públicas com recorte incorreto.
+
+Os seis arquivos iniciais `landing-*-mobile.jpg` abaixo da dobra e os arquivos
+`landing-{cpu,cpu-metodo,cotas,faq}-desktop-estavel.jpg` não demonstram as seções:
+o primeiro conjunto usou clip.y=0 com o documento rolado; o segundo coincidiu com
+manifest de assets do preview sendo reconstruído. Os `*-final.jpg` correspondentes
+foram abertos e aceitos. Os arquivos antigos ficam só como histórico de revisão.
+
+Calendário: `transacoes-calendario-mobile.jpg` é o defeito original;
+`transacoes-calendario-mobile-corrigido.jpg` ainda excedia a viewport; somente
+`transacoes-calendario-mobile-final.jpg` e `*-selecao-mobile.jpg` são aceitos.
+
+A 404 usa o componente local. O build também gera `dist/site/404.html`; não houve
+prova de comportamento publicado. Capturas estáticas não comprovam movimento,
+acessibilidade completa, Pluggy/OAuth reais ou operações em produção.

@@ -26,3 +26,31 @@
   display: block;
   overflow-wrap: anywhere;
 }
+
+.design-token[data-token="accent"] > span {
+  background: var(--accent);
+}
+.design-token[data-token="line"] > span {
+  background: var(--line);
+}
+.design-token[data-token="muted"] > span {
+  background: var(--muted);
+}
+.design-token[data-token="page"] > span {
+  background: var(--page);
+}
+.design-token[data-token="success-text"] > span {
+  background: var(--success-text);
+}
+.design-token[data-token="surface"] > span {
+  background: var(--surface);
+}
+.design-token[data-token="surface-hover"] > span {
+  background: var(--surface-hover);
+}
+.design-token[data-token="surface-raised"] > span {
+  background: var(--surface-raised);
+}
+.design-token[data-token="text"] > span {
+  background: var(--text);
+}

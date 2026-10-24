@@ -6,9 +6,9 @@ import {
   RulePreviewSchema,
 } from "../../contracts";
 import { tryCatch } from "../../shared";
+import { formatBalance } from "../money";
 import { UiButton } from "../ui";
 import type { createAccountApi } from "./account-api";
-import { formatBalance } from "./dashboard-view";
 
 export function RulePreview({
   api,

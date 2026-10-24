@@ -27,7 +27,14 @@ export function Document({
         <DesignHead />
         {head}
       </head>
-      <body>{children}</body>
+      <body>
+        <span
+          aria-hidden="true"
+          hidden
+          id="layout-grid"
+        />
+        {children}
+      </body>
     </html>
   );
 }

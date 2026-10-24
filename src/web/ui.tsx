@@ -9,7 +9,7 @@ interface DataAttributes {
 
 export function UiButton({
   tone = "normal",
-  variant = "primary",
+  variant = "secondary",
   ...props
 }: ComponentProps<typeof Button> &
   DataAttributes & { tone?: "normal" | "danger" }) {

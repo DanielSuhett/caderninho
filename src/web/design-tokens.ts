@@ -1,6 +1,6 @@
 // Product layout aliases; components use Kumo tokens directly.
 export const colorTokens = {
-  accent: "var(--color-kumo-brand)",
+  accent: "var(--text-color-kumo-link)",
   line: "var(--color-kumo-line)",
   muted: "var(--text-color-kumo-subtle)",
   page: "var(--color-kumo-canvas)",
