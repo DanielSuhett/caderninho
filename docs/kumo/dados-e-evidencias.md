@@ -1,6 +1,4 @@
-# Dados, dependências e evidência da interface
-
-24/10/2026. Implementação local em `codex/kumo-refactor`.
+# Dados e carregamento da interface
 
 ## Agregação financeira
 
@@ -42,7 +40,9 @@ operacionais, mas só leem esse conjunto fictício. Mês/moeda usam GET na visã
 geral; busca/mês/conta usam GET em Transações, com moeda em cada valor e sem
 conversão ou soma entre moedas. A lista não oferece seletor de moeda;
 a busca consulta todo o ledger sintético. A demo não importa a API privada do
-painel, não usa sessão nem executa edição, conexão ou autorização.
+painel nem usa sessão. Edições de regras e grupos ficam na memória da aba,
+como descrito no [contrato da demo](demo-interativa.md); não conecta bancos
+nem autoriza assistentes.
 
 A API financeira privada continua exigindo sessão, origem, JSON e CSRF. A allowlist
 foi ampliada somente com as duas leituras existentes acima, não com mutações.
@@ -63,52 +63,3 @@ sob demanda. Valores exatos e alternativa textual são independentes do canvas.
 O build combina o standalone e o CSS oficial de componentes da mesma versão,
 removendo apenas o import do binding já incluído; o standalone sozinho omitia
 os estilos de DatePicker. Nenhuma reconstrução CSS do calendário foi criada.
-
-| Chunk | Build bruto | Gzip estimado pelo Vite |
-| --- | ---: | ---: |
-| monthly-spending-chart |190,50 kB |66,29 kB |
-| Axis compartilhado |382,61 kB |129,69 kB |
-| core |8,95 kB |3,88 kB |
-
-São partes do carregamento do gráfico, além dos chunks compartilhados já usados
-pela UI. Não tratar 190,50 kB como custo total. Estes números são relatório de
-build, não medição de rede, Core Web Vitals ou desempenho em aparelho físico.
-A landing é SSR sem JavaScript obrigatório e não carrega o gráfico.
-
-## Tipografia, contraste e grade
-
-DOM observado: Inter, conteúdo/controles 16 px, metadados 14 px, h1 de 28 px;
-métricas 32 px desktop/26 px móvel. `document.fonts.status` estava `loaded`.
-Foreground padrão #f4f4f5, metadados #b3b3b8. Kumo neutro escuro com canvas
-OKLCH L 0,1/C 0, superfície L 0,17/C 0 e campo L 0,205/C 0.
-
-| Par amostrado | Razão WCAG calculada |
-| --- | ---: |
-| Texto principal / canvas |18,73:1 |
-| Texto principal / superfície |17,40:1 |
-| Metadado / superfície |9,16:1 |
-| Texto / campo |16,30:1 |
-
-A designer recomputou esses quatro pares a partir dos valores fornecidos. Não é
-uma auditoria completa de contraste/estados ou de acessibilidade. Laranja #f97316
-é a exceção semântica das barras públicas: consumo da cota; o texto mantém período,
-denominador e estimativa, incluindo 103% de CPU com barra saturada em 100%.
-
-As 14 páginas foram capturadas com e sem grade em desktop 1541×863 e emulação móvel
-391×845. A emulação solicitou 390×844; a extensão reportou um pixel adicional.
-Grade de 12/4 colunas, gutter 24/16 px, baseline 8 px. Não houve overflow horizontal do
-documento nas 28 verificações com grade. Isso não prova todos os breakpoints.
-
-## Limite da evidência
-
-As páginas privadas usam fixture visual em 8799 com dados sintéticos. A demo e a
-landing também foram abertas no Worker local 8801, sem sessão/credenciais reais;
-a busca GET da demo retornou 3 registros de mercado. Os testes de D1/Workflow são
-locais e separados das capturas. Confirmações destrutivas foram abertas e
-canceladas; não houve revogação real, OAuth de provedor, Pluggy real ou host MCP.
-
-A revisão de um agente no papel de designer crítica é qualitativa, com 8/10 por
-página nos estados listados. Não é aprovação de uma designer humana, pesquisa com
-usuários, validação de produção ou garantia de acessibilidade completa. O produto
-publicado permanece sem alteração, pois não houve push/deploy. A branch local
-contém a implementação revista; main foi usada só como base do trabalho.

@@ -90,4 +90,4 @@ provedor exibem a data de expiração nos detalhes; não são prova de acesso vi
 e revogação. Verifica UTF-8, erro de ferramenta em HTTP 200, headers forjados,
 modelo ausente, CSRF, isolamento da revogação, retenção e stream cancelado/com erro.
 O teste não comprova OAuth com ChatGPT/Claude, Pluggy real ou telemetria em produção.
-A revisão visual e a execução local estão em [design-polish-qa.md](design-polish-qa.md).
+A composição visual segue o [guia de componentes](design-system.md).

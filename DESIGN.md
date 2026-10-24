@@ -117,8 +117,8 @@ foco e contraste nos estados realmente usados, em desktop e celular.
 Captura local/sintética não comprova acessibilidade completa, OAuth, Pluggy,
 produção ou comportamento de um host MCP.
 
-Plano e evidências: [migração](docs/kumo/plano.md), [inventário](docs/kumo/inventario.md)
-e `design-qa.md`. Catálogo de marcas bancárias continua auxiliar e não permite
+Consulte o [guia de componentes](docs/design-system.md) para implementar e validar
+esses contratos. Catálogo de marcas bancárias continua auxiliar e não permite
 inferir instituição por nome de conta, pessoa ou saldo.
 
 ## Conferência de composição
@@ -129,5 +129,6 @@ A grade confere eixos de conteúdo e margens; o padding interno dos componentes
 continua pertencendo ao Kumo. As capturas sem grade são a apresentação do produto.
 
 Não incluir controles que só abrem conteúdo vazio, IDs na leitura financeira
-inicial ou ações secundárias dominantes. A aprovação visual é limitada aos
-estados realmente vistos e registrada por página na revisão crítica.
+inicial ou ações secundárias dominantes. A validação visual é limitada aos
+estados realmente vistos; revisar desktop, celular, teclado, foco e os dois
+temas antes de considerar uma alteração concluída.

@@ -2,8 +2,7 @@
 
 [DESIGN.md](../DESIGN.md) define os princípios e os temas claro e escuro do Kumo.
 A versão instalada é `@cloudflare/kumo` 2.14.0; a API desta versão prevalece
-sobre a documentação do site. [Inventário](kumo/inventario.md),
-[plano](kumo/plano.md) e [execução](kumo/execucao.md) registram o escopo.
+sobre a documentação do site.
 
 ## Fundação
 
@@ -81,14 +80,14 @@ linhas. Sidebar/Dialog/Collapsible mantêm transições nativas. O Collapsible
 recebe neutralização local de painel/caret em `prefers-reduced-motion: reduce`.
 O Flow tem uma sequência finita e pausável; textos não dependem da reprodução.
 Não usar `finish()` para cancelar animações infinitas ao mudar a preferência:
-`cancel()` devolve os elementos ao estado base. Evidências e limites em
+`cancel()` devolve os elementos ao estado base. Política de movimento em
 [motion](kumo/motion.md).
 
 Fluidez: páginas privadas lazy ignoram renders do polling com props idênticas;
 foco/hover da Sidebar antecipam módulos sem antecipar consultas. Conexões é
 carregada sob demanda. Grupos/valores/options do Chart conservam referência até
 os dados ou a moeda mudarem. A demo mantém o shell ao navegar por GET.
-[Evidências locais de desempenho](kumo/performance.md).
+[Decisões de desempenho](kumo/performance.md).
 
 O preview de regra consulta; salvar afeta as próximas importações, sem
 reclassificar histórico. Grupo Pessoal não pode ser excluído. Acesso MCP sempre
@@ -97,7 +96,7 @@ informa consequências e exige confirmação antes de revogar.
 O diagrama de regra acompanha os campos existentes; não é um segundo editor nem
 uma simulação de execução. Prioridade/pausa ficam fora das condições, e filtros
 globais antecedem todas as alternativas. Importação lazy visível e fallback
-textual preservam a consulta. [Contratos e evidências](kumo/rule-flow.md).
+textual preservam a consulta. [Contrato de composição](kumo/rule-flow.md).
 
 ## Dados financeiros e técnicos
 
@@ -112,7 +111,7 @@ A visão geral usa os agregados existentes `get_overview` e `generate_chart`,
 com período completo por moeda. Chart nativo Kumo com ECharts 6.1 carrega sob demanda;
 tabela alternativa preserva valores exatos e continua disponível quando o chunk
 falha. Categoria usa Meter relativo com texto explícito, sem sugerir cota.
-[Contratos, políticas e custo dos chunks](kumo/dados-e-evidencias.md).
+[Contratos e políticas dos dados](kumo/dados-e-evidencias.md).
 
 Auditoria distingue requisições, ferramentas, falhas, cancelamentos, bytes e
 modelos declarados. Bytes não são tokens nem custo de IA. A escala diária de
@@ -129,20 +128,20 @@ realce extenso depende de um caso real e avaliação do carregamento sob demanda
 
 `mise run check:quick` verifica tipos, imports, formato e lint. `mise run check`
 inclui testes, build e runtime local. A revisão visual cobre desktop/celular,
-expansões, formulários e estados; resultados e limites ficam em `design-qa.md`.
+expansões, formulários e estados nos dois temas.
 Não interpretar um build, uma captura sintética ou HTTP 200 como OAuth, Pluggy,
 produção ou acessibilidade completa validados.
 
 ## Estilos e QA
 
-Rodada 08: Table do ledger com superfície uniforme e reflow por container; a API
+Table do ledger com superfície uniforme e reflow por container; a API
 2.14 não oferece prop para desativar zebra, por isso a adaptação é restrita às
 linhas desse ledger. Dinheiro só quebra entre milhares; direção não se repete
 quando o sinal é inequívoco. Métricas da auditoria compartilham trilhas por
 subgrid e baseline, com 2×2 em espaço intermediário. Erro tem retry prioritário
-e outras recuperações em Collapsible. [Evidências e limites](kumo/polimento-08.md).
+e outras recuperações em Collapsible.
 
-Rodada 09: a demo reutiliza OrganizationView, RuleEditor, GroupEditor e a prévia
+A demo reutiliza OrganizationView, RuleEditor, GroupEditor e a prévia
 reais; nenhum segundo layout de Regras/Grupos. O adapter mantém mutações na
 memória da aba. Reaplicar é secundário a Nova regra e explica o alcance sobre
 todos os meses, ignorados e categorias preservadas. Grupo só ganha um Select
@@ -155,5 +154,12 @@ componentes do pacote, removendo somente o import do binding já presente. Isso
 repõe o CSS de DatePicker ausente no standalone, sem reconstruir seu calendário.
 Popover do calendário limita a largura à viewport; datas continuam civis/pt-BR.
 
-[Galeria atual](kumo/capturas/README.md), [revisão 03](kumo/revisao-critica-03.md)
-e [QA](../design-qa.md) registram telas, estados, grade e limites da aprovação.
+Ao atualizar o Kumo, revisar as adaptações da Sidebar 2.14: altura `100dvh`,
+`role=dialog`/`aria-modal`, conteúdo externo inert, ciclo de Tab e retorno ao
+Trigger. O gatilho externo usa `openMobile` em `aria-expanded`, pois o interno
+usa o estado desktop.
+
+Pendências de validação: executar movimento reduzido do SO e mudança ao vivo,
+ocultação real da aba, zoom nativo de 200% e leitor de tela; conferir contraste
+nos estados usados, inclusive marcadores com cores arbitrárias de categoria.
+Capturas sintéticas e reflow por viewport não encerram essas verificações.
