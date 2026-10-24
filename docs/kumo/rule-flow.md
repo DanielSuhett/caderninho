@@ -17,9 +17,10 @@ para Number. Datas civis conservam limites inclusivos. Descrições são literai
 referências ausentes são identificadas, sem virar “Todas”. Regras legadas sem
 filter continuam mostrando a condição de texto original.
 
-Ativa/pausada e prioridade ficam fora das condições. A primeira regra ativa que
+Ativa/pausada e prioridade ficam na linha da regra, fora do Flow. Grupo fica no
+contexto da consulta/editor. A primeira regra ativa que
 corresponder vence, da menor prioridade para a maior, com ID como desempate.
-Pausada informa que não será aplicada e conserva prioridade. Salvar afeta as
+Pausada informa no diagrama que não será aplicada e conserva prioridade na linha. Salvar afeta as
 próximas importações; não reclassifica o histórico. A prévia de correspondências
 continua distinta de uma garantia de qual regra vencerá.
 
@@ -65,3 +66,8 @@ inclui os testes existentes de regras e runtime local. A fixture não executa o
 motor real de prioridade: sua prévia sintética não é prova do resultado da regra.
 Sem produção, Pluggy/OAuth reais, avaliação completa de acessibilidade ou
 medição de FPS/INP/CLS.
+
+Rodada 08: ações antes do Flow, resumo com contagens absolutas, política global
+uma vez na página e resultado da prévia uma vez. Composição do editor memoizada
+por condições/categoria/ativação, sem reprocessar o Flow ao renomear. A quinta
+verificação de apresentação cobre contagens; [polimento e evidências](polimento-08.md).

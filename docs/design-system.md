@@ -127,6 +127,13 @@ produção ou acessibilidade completa validados.
 
 ## Estilos e QA
 
+Rodada 08: Table do ledger com superfície uniforme e reflow por container; a API
+2.14 não oferece prop para desativar zebra, por isso a adaptação é restrita às
+linhas desse ledger. Dinheiro só quebra entre milhares; direção não se repete
+quando o sinal é inequívoco. Métricas da auditoria compartilham trilhas por
+subgrid e baseline, com 2×2 em espaço intermediário. Erro tem retry prioritário
+e outras recuperações em Collapsible. [Evidências e limites](kumo/polimento-08.md).
+
 CSS de documento, páginas públicas e landing em `src/web/styles/`; nenhum estilo
 JSX authored inline. O build combina o standalone 2.14 com o CSS oficial de
 componentes do pacote, removendo somente o import do binding já presente. Isso

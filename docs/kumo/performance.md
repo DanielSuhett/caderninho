@@ -1,5 +1,8 @@
 # Fluidez React — rodada 06
 
+Rodada 08: [isolamento do Flow, lista de 50 registros, teclado e rede lenta](polimento-08.md).
+Evitar render do diagrama não foi convertido em promessa de latência/FPS.
+
 24/10/2026. Base comparada: `adabdb0`, na branch `codex/kumo-refactor`.
 Aplicada a skill oficial
 [vercel-react-best-practices](https://github.com/vercel-labs/agent-skills/tree/main/skills/react-best-practices),

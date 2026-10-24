@@ -107,6 +107,8 @@ export function WorkspaceFilters({
   showClear?: boolean;
 }) {
   const formId = useId();
+  const filters = new URLSearchParams(location.search);
+  filters.delete("grid");
   return (
     <div className="filter-toolbar">
       {leading}
@@ -139,9 +141,7 @@ export function WorkspaceFilters({
             </a>
           </form>
         </FilterDialog>
-        {(showClear ??
-          (activeCount > 0 ||
-            new URLSearchParams(location.search).size > 0)) && (
+        {(showClear ?? (activeCount > 0 || filters.size > 0)) && (
           <Toolbar.Link href={action}>Limpar</Toolbar.Link>
         )}
       </Toolbar>

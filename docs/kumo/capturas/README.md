@@ -1,4 +1,10 @@
-# Capturas — rodadas críticas 03 a 07
+# Capturas — rodadas críticas 03 a 08
+
+## Polimento atual — rodada 08
+
+[14 páginas, grades, estados e medições](rodada-08/README.md). Ledger, regras,
+alinhamento e recuperação/fluidez foram revisados com capturas atuais.
+[Relatório](../polimento-08.md) · [revisão independente](../revisao-critica-08-polimento.md).
 
 ## Composição das regras — rodada 07
 

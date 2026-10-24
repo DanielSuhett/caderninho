@@ -187,3 +187,12 @@ body:has(#layout-grid:target)::after {
     --qa-pad: 20px;
   }
 }
+
+.money-value {
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: normal;
+}
+.money-value > span,
+.money-value-whole {
+  white-space: nowrap;
+}

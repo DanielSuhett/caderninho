@@ -4,9 +4,11 @@ import {
   type ChangeEvent,
   type FormEvent,
   type MouseEvent,
+  memo,
   useCallback,
   useEffect,
   useId,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -81,20 +83,31 @@ export function RuleEditor({
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
-  const [previewStatus, setPreviewStatus] = useState("Complete as condições");
   const inFlight = useRef<AbortController | null>(null);
   const receipt = useRef({ key: "", payload: "" });
   const formId = useId();
   useEffect(() => () => inFlight.current?.abort(), []);
-  const draft = parseRuleDraft({
-    accountId: fields.legacyAccount || null,
-    alternatives,
-    csrf: snapshot.csrf,
-    currency: fields.currency,
-    direction: fields.legacyDirection || null,
-    spaceId,
-    text: fields.legacyText,
-  });
+  const draft = useMemo(
+    () =>
+      parseRuleDraft({
+        accountId: fields.legacyAccount || null,
+        alternatives,
+        csrf: snapshot.csrf,
+        currency: fields.currency,
+        direction: fields.legacyDirection || null,
+        spaceId,
+        text: fields.legacyText,
+      }),
+    [
+      alternatives,
+      fields.currency,
+      fields.legacyAccount,
+      fields.legacyDirection,
+      fields.legacyText,
+      snapshot.csrf,
+      spaceId,
+    ],
+  );
   const onField = useCallback((event: FieldEvent) => {
     const { name, value } = event.currentTarget;
     setDirty(true);
@@ -305,7 +318,7 @@ export function RuleEditor({
     <BackofficeDialog
       actionHint={
         <p className="muted">
-          <strong>{previewStatus}</strong> · Salvar não reclassifica o
+          Salvar vale para as próximas importações e não reclassifica o
           histórico.
         </p>
       }
@@ -374,7 +387,7 @@ export function RuleEditor({
           </div>
         </fieldset>
         <fieldset disabled={busy}>
-          <legend>Condições</legend>
+          <legend>Condições: todas por alternativa</legend>
           <div className="preset-actions">
             {rulePresets.map((preset) => (
               <UiButton
@@ -472,7 +485,7 @@ export function RuleEditor({
             >
               {index > 0 && <p className="condition-or">OU</p>}
               <div className="condition-heading">
-                <h3>Todas estas condições</h3>
+                <h3>Alternativa {index + 1}</h3>
                 {alternatives.length > 1 && (
                   <UiButton
                     data-alternative={alternative.id}
@@ -580,11 +593,10 @@ export function RuleEditor({
         <RuleDraftComposition
           accounts={accounts}
           catalog={catalog}
+          category={fields.category}
           draft={draft}
           enabled={enabled}
-          fields={fields}
           people={snapshot.people}
-          spaceId={spaceId}
         />
         {!!message && (
           <Banner
@@ -603,7 +615,6 @@ export function RuleEditor({
         accounts={accounts}
         api={api}
         input={open && draft.success ? draft.data : null}
-        onStatus={setPreviewStatus}
       />
     </BackofficeDialog>
   );
@@ -754,22 +765,20 @@ function DraftFeedback({
   );
 }
 
-function RuleDraftComposition({
+const RuleDraftComposition = memo(function RuleDraftDiagram({
   accounts,
+  category,
   catalog,
   draft,
   enabled,
-  fields,
   people,
-  spaceId,
 }: {
   accounts: { id: string; name: string; personName: string }[];
+  category: string;
   catalog: WorkspaceCatalog;
   draft: ReturnType<typeof parseRuleDraft>;
   enabled: boolean;
-  fields: { category: string; priority: string };
   people: PortalResponse["people"];
-  spaceId: string;
 }) {
   return (
     <DisclosureItem summary="Visualizar composição">
@@ -777,17 +786,10 @@ function RuleDraftComposition({
         <RuleComposition
           accounts={accounts}
           category={
-            catalog.categories.find(
-              (category) => category.id === fields.category,
-            )?.name ?? ""
+            catalog.categories.find((item) => item.id === category)?.name ?? ""
           }
           enabled={enabled}
-          group={
-            catalog.spaces.find((space) => space.id === spaceId)?.name ??
-            "Grupo não identificado"
-          }
           people={people}
-          priority={fields.priority}
           rule={draft.data}
         />
       ) : (
@@ -797,4 +799,4 @@ function RuleDraftComposition({
       )}
     </DisclosureItem>
   );
-}
+});

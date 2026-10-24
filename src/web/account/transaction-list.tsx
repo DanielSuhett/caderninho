@@ -13,6 +13,7 @@ import type {
   TransactionListSchema,
 } from "../../contracts";
 import { formatBalance } from "../money";
+import { MoneyValue } from "../money-value";
 import { UiButton } from "../ui";
 import { dayLabel } from "./workspace-resource";
 import { RecordReference } from "./workspace-ui";
@@ -30,9 +31,34 @@ function plural(count: number, singular: string, multiple: string) {
 }
 
 function amountLabel(row: Transaction) {
-  return row.amountMinor === null
-    ? "Valor indisponível"
-    : formatBalance(row.amountMinor, row.currency);
+  if (row.amountMinor === null) {
+    return `Valor indisponível · ${row.currency}`;
+  }
+  const label = formatBalance(row.amountMinor, row.currency);
+  return row.direction === "CREDIT" && BigInt(row.amountMinor) > 0n
+    ? `+${label}`
+    : label;
+}
+
+function TransactionAmount({
+  amount,
+  available,
+}: {
+  amount: string;
+  available: boolean;
+}) {
+  return available ? <MoneyValue value={amount} /> : <span>{amount}</span>;
+}
+
+function directionIsExplicit(row: Transaction) {
+  if (row.amountMinor === null) {
+    return false;
+  }
+  const amount = BigInt(row.amountMinor);
+  return (
+    (row.direction === "DEBIT" && amount < 0n) ||
+    (row.direction === "CREDIT" && amount > 0n)
+  );
 }
 
 export function TransactionList({
@@ -51,12 +77,21 @@ export function TransactionList({
   showAccount?: boolean;
 }) {
   return (
-    <LayerCard className="financial-surface">
+    <LayerCard className="financial-surface transaction-surface">
       <Table
         aria-label="Lançamentos"
         className="transaction-table"
         data-single-account={!showAccount}
+        layout="fixed"
       >
+        <colgroup>
+          <col className="transaction-description-column" />
+          {showAccount === true && (
+            <col className="transaction-account-column" />
+          )}
+          <col className="transaction-date-column" />
+          <col className="transaction-money-column" />
+        </colgroup>
         <Table.Header>
           <Table.Row>
             <Table.Head>Descrição</Table.Head>
@@ -123,7 +158,10 @@ function TransactionItem({
   );
   return (
     <LayerDialog.Root>
-      <Table.Row>
+      <Table.Row
+        className="transaction-row"
+        data-wide-amount={amount.length > 22}
+      >
         <Table.Cell data-label="Descrição">
           <LayerDialog.Trigger
             aria-label={`Ver detalhes de ${row.description || "Sem descrição"}`}
@@ -137,8 +175,8 @@ function TransactionItem({
           >
             {row.description || "Sem descrição"}
           </LayerDialog.Trigger>
-          <span className="table-secondary">{displayedCategory}</span>
-          <div className="transaction-states">
+          <div className="transaction-meta">
+            <span className="table-secondary">{displayedCategory}</span>
             {!!pendingLabel && <Badge variant="warning">{pendingLabel}</Badge>}
             {!!futureLabel && <Badge variant="info">{futureLabel}</Badge>}
             {!!row.ignored && <Badge variant="secondary">Ignorada</Badge>}
@@ -162,13 +200,22 @@ function TransactionItem({
           className="money-cell"
           data-label="Valor e moeda"
         >
-          <strong>{amount}</strong>
-          <span className="table-secondary">
+          <strong>
+            <TransactionAmount
+              amount={amount}
+              available={row.amountMinor !== null}
+            />
+          </strong>
+          <span
+            className={directionIsExplicit(row) ? "sr-only" : "table-secondary"}
+          >
             {row.direction === "DEBIT" ? "Saída" : "Entrada"}
-            {current !== null && total !== null
-              ? ` · Parcela ${current}/${total}`
-              : ""}
           </span>
+          {current !== null && total !== null && (
+            <span className="table-secondary">
+              Parcela {current}/{total}
+            </span>
+          )}
         </Table.Cell>
       </Table.Row>
       <LayerDialog.Content
@@ -208,7 +255,12 @@ export function TransactionDetailContent({
   return (
     <>
       <p className="transaction-dialog-amount">
-        <strong>{amountLabel(row)}</strong>
+        <strong>
+          <TransactionAmount
+            amount={amountLabel(row)}
+            available={row.amountMinor !== null}
+          />
+        </strong>
         <span>{row.direction === "DEBIT" ? "Saída" : "Entrada"}</span>
       </p>
       {row.ignored === true && (
@@ -287,7 +339,12 @@ function InstallmentSchedule({
               {item.installmentNumber}/{item.totalInstallments}
             </span>
             <time dateTime={item.date}>{dayLabel(item.date)}</time>
-            <strong>{amountLabel(item)}</strong>
+            <strong>
+              <TransactionAmount
+                amount={amountLabel(item)}
+                available={item.amountMinor !== null}
+              />
+            </strong>
             <span className="installment-states">
               {item.status === "PENDING"
                 ? "Pendente na origem"

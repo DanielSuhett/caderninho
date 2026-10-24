@@ -20,19 +20,17 @@ export function RuleComposition(
   const root = useRef<HTMLElement>(null);
   const [visible, setVisible] = useState(false);
   const [wide, setWide] = useState(false);
-  const { rule, accounts, people, group, category, enabled, priority } = props;
+  const { rule, accounts, people, category, enabled } = props;
   const model = useMemo(
     () =>
       buildRuleComposition({
         accounts,
         category,
         enabled,
-        group,
         people,
-        priority,
         rule,
       }),
-    [rule, accounts, people, group, category, enabled, priority],
+    [rule, accounts, people, category, enabled],
   );
   useEffect(() => {
     const element = root.current;
@@ -65,8 +63,8 @@ export function RuleComposition(
     >
       <p className="rule-flow-reading">
         {model.alternatives.length > 1
-          ? "Atenda a uma alternativa (OU), com todas as suas condições (E)."
-          : "Todas as condições devem corresponder."}
+          ? "No escopo, qualquer alternativa (OU)."
+          : "Todas as condições (E)."}
       </p>
       {visible ? (
         <Suspense fallback={fallback}>
@@ -78,12 +76,9 @@ export function RuleComposition(
       ) : (
         <StaticRuleComposition model={model} />
       )}
-      <p className="rule-flow-policy">
-        {model.enabled ? "Ativa" : "Pausada: não será aplicada"} · Prioridade{" "}
-        {model.priority || "a definir"}. A primeira regra ativa correspondente
-        vence, da menor prioridade para a maior. Salvar não reclassifica o
-        histórico.
-      </p>
+      {!model.enabled && (
+        <p className="rule-flow-policy">Pausada: não será aplicada.</p>
+      )}
     </section>
   );
 }

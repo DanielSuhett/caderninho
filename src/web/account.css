@@ -23,10 +23,12 @@
   white-space: normal;
 }
 .workspace-main {
+  position: relative;
   display: flex;
   flex: 1;
   flex-direction: column;
   min-width: 0;
+  min-height: 0;
   overflow-y: auto;
 }
 .workspace-content {
@@ -115,7 +117,7 @@
 .filter-toolbar {
   display: flex;
   flex-wrap: wrap;
-  gap: 16px;
+  gap: 12px;
   align-items: end;
   margin-bottom: 24px;
 }
@@ -248,9 +250,15 @@
 }
 .workspace-metrics {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px 16px;
   margin-block: 24px;
+}
+.workspace-metrics > div {
+  display: grid;
+  grid-template-rows: subgrid;
+  grid-row: span 2;
+  min-width: 0;
 }
 .workspace-metrics dt,
 .detail-list dt,
@@ -259,11 +267,34 @@
   color: var(--muted);
 }
 .workspace-metrics dd {
+  align-self: baseline;
   margin: 4px 0;
   font-size: 28px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   line-height: 1.2;
+}
+.resource-recovery-links {
+  display: grid;
+  gap: 12px;
+  padding-inline-start: 20px;
+  margin: 0;
+}
+.resource-error-content {
+  display: grid;
+  gap: 12px;
+  justify-items: start;
+}
+@media (max-width: 1100px) {
+  .workspace-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    row-gap: 8px;
+  }
+}
+@media (max-width: 760px) {
+  .account-start {
+    padding: 16px;
+  }
 }
 .workspace-metrics small {
   display: block;
@@ -384,13 +415,28 @@
 .transaction-table {
   width: 100%;
 }
+.transaction-surface {
+  container: ledger / inline-size;
+}
+.transaction-description-column {
+  width: 44%;
+}
+.transaction-account-column {
+  width: 20%;
+}
+.transaction-date-column {
+  width: 14%;
+}
+.transaction-money-column {
+  width: 22%;
+}
+.transaction-table[data-single-account="true"] .transaction-description-column {
+  width: 64%;
+}
 .transaction-table th,
 .transaction-table td {
   vertical-align: top;
   white-space: normal;
-}
-.transaction-table td:first-child {
-  width: 38%;
 }
 .transaction-open {
   max-width: 100%;
@@ -406,14 +452,29 @@
   margin-top: 4px;
   font-size: var(--type-meta);
 }
-.transaction-states {
+.transaction-meta {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
-  margin-top: 8px;
+  gap: 4px 8px;
+  align-items: center;
+  margin-top: 4px;
 }
-.transaction-states:empty {
-  display: none;
+.transaction-meta .table-secondary {
+  margin: 0;
+}
+/* Table 2.14 has no unstriped variant; keep this treatment local to the ledger. */
+.transaction-table .transaction-row {
+  --kumo-table-row-bg: var(--surface);
+
+  background: var(--surface);
+}
+.transaction-table .transaction-row + .transaction-row {
+  border-top: 1px solid var(--line);
+}
+.transaction-table .transaction-row:where(:hover, :focus-within) {
+  --kumo-table-row-bg: var(--surface-hover);
+
+  background: var(--surface-hover);
 }
 .money-heading,
 .money-cell {
@@ -624,58 +685,6 @@
   .connection-actions {
     flex-basis: auto;
     width: 100%;
-  }
-  .transaction-table,
-  .transaction-table tbody {
-    display: block;
-  }
-  .transaction-table thead {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-  }
-  .transaction-table tr {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, auto);
-    gap: 8px 16px;
-    padding: 16px;
-  }
-  .transaction-table td {
-    width: auto !important;
-    min-width: 0;
-    padding: 0;
-    overflow-wrap: anywhere;
-    border: 0;
-  }
-  .transaction-table td:first-child {
-    grid-column: 1;
-  }
-  .transaction-table td[data-label="Conta"] {
-    grid-row: 2;
-    grid-column: 1;
-    font-size: var(--type-meta);
-    color: var(--muted);
-  }
-  .transaction-table td[data-label="Data"] {
-    grid-row: 2;
-    grid-column: 2;
-    font-size: var(--type-meta);
-    color: var(--muted);
-    text-align: right;
-  }
-  .transaction-table[data-single-account="true"] td[data-label="Data"] {
-    grid-column: 1 / -1;
-    text-align: left;
-  }
-  .transaction-table .money-cell {
-    grid-row: 1;
-    grid-column: 2;
-    max-width: 160px;
-  }
-  .transaction-table tr + tr {
-    border-top: 1px solid var(--line);
   }
   .condition-row {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
@@ -1037,5 +1046,76 @@
   }
   .inline-fields > button {
     justify-self: start;
+  }
+}
+
+@container ledger (max-width: 700px) {
+  .transaction-table colgroup {
+    display: none;
+  }
+  .transaction-table,
+  .transaction-table tbody {
+    display: block;
+  }
+  .transaction-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+  .transaction-table tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, auto);
+    gap: 8px 12px;
+    padding: 12px 16px;
+  }
+  .transaction-table td {
+    width: auto !important;
+    min-width: 0;
+    padding: 0;
+    overflow-wrap: anywhere;
+    border: 0;
+  }
+  .transaction-table td:first-child {
+    grid-column: 1;
+  }
+  .transaction-table td[data-label="Conta"] {
+    grid-row: 2;
+    grid-column: 1;
+    font-size: var(--type-meta);
+    color: var(--muted);
+  }
+  .transaction-table td[data-label="Data"] {
+    grid-row: 2;
+    grid-column: 2;
+    font-size: var(--type-meta);
+    color: var(--muted);
+    text-align: right;
+  }
+  .transaction-table[data-single-account="true"] td[data-label="Data"] {
+    grid-column: 1 / -1;
+    text-align: left;
+  }
+  .transaction-table .money-cell {
+    grid-row: 1;
+    grid-column: 2;
+    max-width: 160px;
+  }
+  .transaction-row[data-wide-amount="true"] td:first-child {
+    grid-column: 1 / -1;
+  }
+  .transaction-row[data-wide-amount="true"] .money-cell {
+    grid-row: 2;
+    grid-column: 1 / -1;
+    max-width: none;
+    text-align: left;
+  }
+  .transaction-row[data-wide-amount="true"]
+    td:where([data-label="Conta"], [data-label="Data"]) {
+    grid-row: 3;
+  }
+  .transaction-table tr + tr {
+    border-top: 1px solid var(--line);
   }
 }

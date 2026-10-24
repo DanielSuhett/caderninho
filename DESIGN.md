@@ -47,6 +47,15 @@ barra discreta; opções avançadas ficam no Dialog. Moeda é informação de ca
 valor na lista, sem seletor de moeda. Nos agregados da visão geral, a escolha de
 moeda continua necessária para impedir somas incompatíveis.
 
+Ledger usa superfície uniforme, categoria e exceções na mesma faixa. Direção
+visível pode ser omitida quando o sinal da origem é inequívoco; continua acessível
+e no detalhe. Zero, indisponível e sinal divergente exigem direção visível. Nunca
+fabricar sinal de débito. Valores extensos quebram apenas entre milhares.
+
+Regras recolhidas mostram contagens absolutas de alternativas/condições. Ações
+vêm antes da composição; contexto, prioridade e políticas não se repetem no Flow.
+Erros oferecem uma recuperação principal, com alternativas sob demanda.
+
 ## Contratos preservados
 
 URLs, âncoras, nomes de campos e textos legais seguem os contratos existentes.

@@ -177,6 +177,10 @@ rejeitadas ficam identificadas como tais; a galeria final só aponta evidência 
 
 ## Polimento após as rodadas críticas
 
+Rodada 08 concluída para itens 2–5: ledger calmo, regras concisas, alinhamento
+com grade e estados/fluidez exercitados. [Mudanças e limites](polimento-08.md) e
+[revisão independente](revisao-critica-08-polimento.md).
+
 Inter local, tipos semânticos, tokens de contraste compartilhados, toolbars e
 resumos alinhados, Transações móvel compacta e Sidebar compartilhada com a demo.
 IDs financeiros foram movidos para RecordReference; descarte de rascunho separa

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { tryCatch } from "../../shared";
 import { UiButton } from "../ui";
+import { DisclosureItem } from "./disclosure-item";
 import { WorkspaceSkeleton } from "./workspace-ui";
 
 export function useResource<T>(
@@ -71,6 +72,7 @@ export function ResourceFeedback({
   }, [loading]);
   const first = new URLSearchParams(location.search);
   first.delete("cursor");
+  first.delete("grantCursor");
   if (loading && !data) {
     return showLoading ? <WorkspaceSkeleton /> : null;
   }
@@ -89,11 +91,11 @@ export function ResourceFeedback({
       <Banner
         className="feedback"
         description={
-          <>
+          <div className="resource-error-content">
             <p>
-              Não foi possível atualizar esta visão. Dados já exibidos podem
-              estar desatualizados. Confira os filtros, renove a sessão ou
-              reabra a lista se os dados mudaram durante a paginação.
+              {data
+                ? "Não foi possível atualizar esta visão. Os dados exibidos podem estar desatualizados."
+                : "Não foi possível carregar esta visão."}
             </p>
             <UiButton
               onClick={retry}
@@ -101,11 +103,23 @@ export function ResourceFeedback({
               variant="secondary"
             >
               Tentar novamente
-            </UiButton>{" "}
-            <a href={`${location.pathname}?${first}`}>Reabrir do início</a> ·{" "}
-            <a href={location.pathname}>Limpar todos os filtros</a> ·{" "}
-            <a href="/account/login">Entrar novamente</a>
-          </>
+            </UiButton>
+            <DisclosureItem summary="Outras opções de recuperação">
+              <ul className="resource-recovery-links">
+                <li>
+                  <a href={`${location.pathname}?${first}`}>
+                    Reabrir do início
+                  </a>
+                </li>
+                <li>
+                  <a href={location.pathname}>Limpar todos os filtros</a>
+                </li>
+                <li>
+                  <a href="/account/login">Entrar novamente</a>
+                </li>
+              </ul>
+            </DisclosureItem>
+          </div>
         }
         role="alert"
         variant="error"

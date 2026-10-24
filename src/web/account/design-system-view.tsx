@@ -117,7 +117,10 @@ export function DesignSystemView() {
               description="Um rótulo não substitui a identidade do registro."
               label="Apelido (opcional)"
             >
-              <Input placeholder="Ex.: Conta da casa" />
+              <Input
+                aria-label="Apelido (opcional)"
+                placeholder="Ex.: Conta da casa"
+              />
             </Field>
             <Input
               error="Confira este valor."

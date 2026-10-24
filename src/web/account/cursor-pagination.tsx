@@ -25,12 +25,17 @@ export function CursorPagination({
     },
     [next],
   );
+  if (!(count || first || next)) {
+    return null;
+  }
   const label = count === 1 ? singular : noun;
   return (
     <div className="pagination">
-      <span>
-        {count} {label} nesta página
-      </span>
+      {count > 0 && (
+        <span>
+          {count} {label} nesta página
+        </span>
+      )}
       {!!first && <Link href={first}>Voltar ao início</Link>}
       {!!next && (
         <Pagination

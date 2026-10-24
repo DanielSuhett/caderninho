@@ -4,6 +4,24 @@ final result: pass
 
 ## Resultado local em 24/10/2026
 
+### Rodada 08 — itens 2 a 5
+
+Transações com superfície uniforme, reflow por container e direção redundante
+removida com guardas financeiros. Regras com contagens absolutas, ações antes do
+Flow e menos contexto repetido. Auditoria com baseline/2×2, grade sem efeito no
+filtro, erro com recuperação sob demanda e bootstrap alinhado.
+
+14 páginas com/sem grade em desktop e celular; estados expandidos e larguras
+intermediárias em [polimento](docs/kumo/polimento-08.md) e
+[galeria 08](docs/kumo/capturas/rodada-08/README.md). Três edições do nome: 3→0
+atualizações estruturais do Flow, sem alegar ganho percentual de latência.
+Movimento reduzido simulado; reflow CSS equivalente, sem zoom nativo.
+`mise run check` passou: 51 Node, 108 integração/19 arquivos, build/dry-run e
+runtime local 10 mil/100 mil. Sem dependências novas, push, deploy ou merge.
+[Revisão independente](docs/kumo/revisao-critica-08-polimento.md).
+
+### Histórico da rodada 03
+
 Na rodada 03, revisão com 8/10 qualitativo em cada uma das 14 páginas, após três rodadas
 com agente independente no papel de designer crítica. Aprovação limitada às
 capturas e interações registradas; não é aprovação humana nem de produção.

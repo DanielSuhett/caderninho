@@ -100,8 +100,26 @@ test("pending, future and ignored records stay explicit; zero and unavailable mo
         categories: [],
         records: data.records,
       }),
-    ).includes("Valor indisponível"),
+    ).includes("Valor indisponível · BRL"),
   );
+});
+
+test("positive credits receive an explicit plus while conflicting source signs keep their own direction", () => {
+  const credit = render({ ...row, amountMinor: "12345", direction: "CREDIT" });
+  assert.ok(credit.includes("+123,45 BRL"));
+  assert.ok(credit.includes("Entrada"));
+  const conflictingCredit = render({
+    ...row,
+    amountMinor: "-12345",
+    direction: "CREDIT",
+  });
+  assert.ok(conflictingCredit.includes("−123,45 BRL"));
+  assert.ok(conflictingCredit.includes("Entrada"));
+  assert.equal(conflictingCredit.includes("+−"), false);
+  const zero = render({ ...row, amountMinor: "0", direction: "CREDIT" });
+  assert.ok(zero.includes("0,00 BRL"));
+  assert.ok(zero.includes("Entrada"));
+  assert.equal(zero.includes("+0,00"), false);
 });
 
 test("a grouped purchase identifies the displayed installment and retains source dates and pending installments in its disclosure", () => {

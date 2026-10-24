@@ -1,5 +1,10 @@
 # Componentes Kumo no Caderninho — 24/10/2026
 
+Atualização de execução: [rodada 08](polimento-08.md) registra Table sem zebra
+com exceção CSS localizada, Flow/Collapsible de regras, recuperação em Collapsible,
+nomes acessíveis e alinhamento das métricas. A classificação abaixo é a baseline
+histórica de diagnóstico, anterior à migração; não é o uso atual do pacote.
+
 Inventário de diagnóstico e referência visual, produzido antes da implementação. A nova exploração visual segue a autorização de abandonar a identidade anterior e adotar a aparência padrão do Kumo.
 
 ## Evidência e escopo
@@ -121,8 +126,8 @@ Field, Surface, MenuBar e DateRangePicker foram confirmados pela CLI/declaration
 ## Código cruzado
 
 - [Imports e adaptadores Kumo](/home/suhett/Work/caderninho/src/web/ui.tsx:1).
-- [Sidebar e navegação próprias](/home/suhett/Work/caderninho/src/web/account/workspace-view.tsx:122).
-- [Drawer próprio](/home/suhett/Work/caderninho/src/web/account/workspace-drawer.tsx:13) e [editor com rascunho](/home/suhett/Work/caderninho/src/web/account/backoffice-dialog.tsx:43).
+- [Sidebar Kumo e navegação](/home/suhett/Work/caderninho/src/web/account/workspace-shell.tsx:1).
+- [Dialog Kumo e editor com rascunho](/home/suhett/Work/caderninho/src/web/account/backoffice-dialog.tsx:1); drawer próprio removido na migração.
 - [Filtros de transações](/home/suhett/Work/caderninho/src/web/account/transactions-view.tsx:95), [tabelas MCP](/home/suhett/Work/caderninho/src/web/account/audit-view.tsx:365), [erro de recurso](/home/suhett/Work/caderninho/src/web/account/workspace-resource.tsx:86).
 - [Tokens atuais](/home/suhett/Work/caderninho/src/web/design-tokens.ts:1), [documentação Kumo oficial](https://kumo-ui.com/), [Sidebar](https://kumo-ui.com/components/sidebar/), [Table](https://kumo-ui.com/components/table/).
 

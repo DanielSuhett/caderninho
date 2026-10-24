@@ -56,8 +56,8 @@ export function RuleFlow({
           >
             <h4>
               {model.alternatives.length > 1
-                ? "Uma destas alternativas"
-                : "Todas estas condições"}
+                ? "Alternativas (OU)"
+                : "Condições (E)"}
             </h4>
             <RuleConditions alternatives={model.alternatives} />
           </Flow.Node>

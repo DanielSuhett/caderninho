@@ -55,11 +55,6 @@
 }
 .rule-flow-amount {
   display: block;
-  font-variant-numeric: tabular-nums;
-  overflow-wrap: normal;
-}
-.rule-flow-amount > span {
-  white-space: nowrap;
 }
 .rule-flow-or {
   padding-block: 12px;

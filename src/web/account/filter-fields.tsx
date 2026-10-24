@@ -39,6 +39,7 @@ export function SearchField({
         />
       </InputGroup.Addon>
       <InputGroup.Input
+        aria-label={label}
         {...props}
         type="search"
       />

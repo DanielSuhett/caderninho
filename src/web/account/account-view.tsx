@@ -307,7 +307,7 @@ export function AccountView() {
   const onRefresh = useCallback(() => refreshNow.current?.(), []);
   if (!snapshot) {
     return (
-      <div>
+      <div className="account-start">
         <p role="status">
           {readError
             ? "Não foi possível carregar sua instalação. Tente novamente ou entre com sua senha."

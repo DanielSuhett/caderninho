@@ -1,8 +1,5 @@
-import { Fragment } from "react";
-
+import { MoneyValue } from "../money-value";
 import type { RuleCompositionModel } from "./rule-presentation";
-
-const afterThousandsGroup = /(?<=\.)/u;
 
 function RuleConditionText({
   condition,
@@ -13,21 +10,11 @@ function RuleConditionText({
     return <span>{condition.label}</span>;
   }
   const prefix = condition.label.slice(0, -condition.amount.length);
-  let length = 0;
-  const groups = condition.amount.split(afterThousandsGroup).map((text) => {
-    length += text.length;
-    return { id: length, text };
-  });
   return (
     <span>
       {prefix}
       <span className="rule-flow-amount">
-        {groups.map((group) => (
-          <Fragment key={group.id}>
-            <span>{group.text}</span>
-            <wbr />
-          </Fragment>
-        ))}
+        <MoneyValue value={condition.amount} />
       </span>
     </span>
   );
@@ -100,8 +87,8 @@ export function StaticRuleComposition({
         <section className={ruleNodeClass}>
           <h4>
             {model.alternatives.length > 1
-              ? "Uma destas alternativas"
-              : "Todas estas condições"}
+              ? "Alternativas (OU)"
+              : "Condições (E)"}
           </h4>
           <RuleConditions alternatives={model.alternatives} />
         </section>
@@ -122,7 +109,7 @@ export function StaticRuleComposition({
               <h4>
                 {model.alternatives.length > 1
                   ? `Alternativa ${index + 1}`
-                  : "Todas estas condições"}
+                  : "Condições (E)"}
               </h4>
               <RuleConditions alternatives={[alternative]} />
             </section>

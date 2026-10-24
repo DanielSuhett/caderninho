@@ -12,9 +12,7 @@ const context = {
   ],
   category: "Mercado",
   enabled: true,
-  group: "Pessoal",
   people: [{ id: "owner", name: "Pessoa exemplo" }],
-  priority: "10",
 };
 
 test("legacy rule composition retains mandatory account and direction without inventing OR branches", () => {
@@ -28,7 +26,6 @@ test("legacy rule composition retains mandatory account and direction without in
     },
   });
   assert.deepEqual(model.scope, [
-    "Grupo: Pessoal",
     "Todas as moedas",
     "Conta é Conta principal · Pessoa exemplo",
     "Movimento é Saída",
@@ -67,7 +64,6 @@ test("OR branches preserve their AND conditions and cannot bypass global scope, 
     },
   });
   assert.deepEqual(model.scope, [
-    "Grupo: Pessoal",
     "Moeda: BRL",
     "Conta é Conta principal · Pessoa exemplo",
     "Movimento é Saída",
@@ -101,7 +97,6 @@ test("unknown references stay explicit and repeated conditions retain distinct p
   const model = buildRuleComposition({
     ...context,
     enabled: false,
-    priority: "",
     rule: {
       accountId: null,
       direction: null,
@@ -116,7 +111,6 @@ test("unknown references stay explicit and repeated conditions retain distinct p
     },
   });
   assert.equal(model.enabled, false);
-  assert.equal(model.priority, "");
   assert.equal(
     new Set(model.alternatives.map((alternative) => alternative.id)).size,
     2,
@@ -153,5 +147,43 @@ test("rule summaries preserve the original meaning of literal descriptions and d
       },
     }),
     "Entradas com “DEBIT”",
+  );
+});
+
+test("complex rule summaries report the absolute count across alternatives", () => {
+  assert.equal(
+    ruleSummary({
+      rule: {
+        accountId: null,
+        direction: null,
+        filter: {
+          alternatives: [
+            {
+              conditions: [
+                {
+                  field: "description",
+                  operator: "contains",
+                  value: "mercado",
+                },
+                { field: "amount", operator: "gte", value: "10000" },
+              ],
+            },
+            {
+              conditions: [
+                {
+                  field: "description",
+                  operator: "contains",
+                  value: "farmácia",
+                },
+                { field: "status", operator: "equals", value: "POSTED" },
+              ],
+            },
+          ],
+          currency: "BRL",
+        },
+        text: "",
+      },
+    }),
+    "2 alternativas · 4 condições",
   );
 });

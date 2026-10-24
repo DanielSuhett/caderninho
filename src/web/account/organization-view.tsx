@@ -18,7 +18,7 @@ import { UiButton } from "../ui";
 import type { createAccountApi } from "./account-api";
 import { navigateWorkspace } from "./account-navigation";
 import { DisclosureItem } from "./disclosure-item";
-import { QuerySearch, SearchField } from "./filter-fields";
+import { QuerySearch } from "./filter-fields";
 import { DeleteOrganizationItem, GroupEditor } from "./group-editor";
 import { RuleComposition } from "./rule-composition";
 import { RuleEditor } from "./rule-editor";
@@ -166,6 +166,7 @@ export function OrganizationView({
               page === "rules" && (
                 <QuerySearch
                   action="/account/rules"
+                  compact
                   label="Buscar regra"
                   name="q"
                   params={params}
@@ -175,21 +176,18 @@ export function OrganizationView({
           >
             <ScopeFields
               catalog={data}
+              compact
               params={params}
               person={false}
               snapshot={snapshot}
             />
             {page === "rules" && (
               <>
-                <div className="filter-wide">
-                  <SearchField
-                    defaultValue={params.get("q") ?? ""}
-                    label="Buscar regra"
-                    name="q"
-                    placeholder="Nome ou trecho da descrição"
-                    type="search"
-                  />
-                </div>
+                <input
+                  name="q"
+                  type="hidden"
+                  value={params.get("q") ?? ""}
+                />
                 <Select
                   defaultValue={params.get("enabled") ?? ""}
                   items={[
@@ -216,8 +214,6 @@ export function OrganizationView({
                       data.categories.find((c) => c.id === r.categoryId)
                         ?.name ?? "Categoria não identificada";
                     const context = ruleSummary({
-                      accounts: data.accounts,
-                      people: snapshot.people,
                       rule: r,
                     });
                     const href = ruleTransactionsHref(r, spaceId);
@@ -244,21 +240,19 @@ export function OrganizationView({
                           }
                         >
                           <div className="record-detail">
-                            <RuleComposition
-                              accounts={data.accounts}
-                              category={category}
-                              enabled={r.enabled}
-                              group={current?.name ?? "Grupo não identificado"}
-                              people={snapshot.people}
-                              priority={String(r.priority)}
-                              rule={r}
-                            />
                             <OrganizationActions
                               href={href}
                               item={r}
                               kind="rule"
                               linkLabel={linkLabel}
                               onOpen={openItem}
+                            />
+                            <RuleComposition
+                              accounts={data.accounts}
+                              category={category}
+                              enabled={r.enabled}
+                              people={snapshot.people}
+                              rule={r}
                             />
                             <RecordReference>
                               <div>
@@ -289,8 +283,9 @@ export function OrganizationView({
               )}
               <WorkspaceDetails title="Como as regras são aplicadas">
                 <p>
-                  Regras ativas classificam transações novas. Menor prioridade
-                  vence; o histórico é preservado.
+                  A primeira regra ativa correspondente vence: menor prioridade,
+                  com desempate pelo identificador. Salvar vale para as próximas
+                  importações e não reclassifica o histórico.
                 </p>
               </WorkspaceDetails>
             </>

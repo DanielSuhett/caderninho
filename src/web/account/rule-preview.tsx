@@ -14,12 +14,10 @@ export function RulePreview({
   api,
   input,
   accounts,
-  onStatus,
 }: {
   api: ReturnType<typeof createAccountApi>;
   input: RulePreviewInput | null;
   accounts: { id: string; name: string }[];
-  onStatus: (status: string) => void;
 }) {
   const [attempt, setAttempt] = useState(0);
   const key = input ? JSON.stringify({ attempt, input }) : "";
@@ -65,9 +63,6 @@ export function RulePreview({
       data.count === 1 ? "transação corresponde" : "transações correspondem";
     status = `${data.truncated ? "Pelo menos " : ""}${data.count} ${matches}`;
   }
-  useEffect(() => {
-    onStatus(status);
-  }, [onStatus, status]);
   return (
     <section
       aria-busy={!!key && !current}

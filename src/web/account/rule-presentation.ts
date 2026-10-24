@@ -18,7 +18,6 @@ export interface RuleCompositionModel {
   }[];
   category: string;
   enabled: boolean;
-  priority: string;
   scope: string[];
 }
 
@@ -83,23 +82,16 @@ export function buildRuleComposition({
   rule,
   accounts,
   people,
-  group,
   category,
   enabled,
-  priority,
 }: RuleContext & {
   rule: RuleSource;
-  group: string;
   category: string;
   enabled: boolean;
-  priority: string;
 }): RuleCompositionModel {
   const context = { accounts, people };
   const currency = rule.filter?.currency ?? null;
-  const scope = [
-    `Grupo: ${group}`,
-    currency ? `Moeda: ${currency}` : "Todas as moedas",
-  ];
+  const scope = [currency ? `Moeda: ${currency}` : "Todas as moedas"];
   const required: RuleCondition[] = [];
   if (rule.accountId) {
     required.push({
@@ -156,15 +148,11 @@ export function buildRuleComposition({
     }),
     category,
     enabled,
-    priority,
     scope,
   };
 }
 
-export function ruleSummary({
-  rule,
-  ...context
-}: RuleContext & { rule: RuleSource }) {
+export function ruleSummary({ rule }: { rule: RuleSource }) {
   if (!rule.filter) {
     return `Contém “${rule.text}”`;
   }
@@ -187,14 +175,12 @@ export function ruleSummary({
     }
     return `${movement} com “${description.value}”`;
   }
-  const [first] = conditions;
-  if (!first) {
+  if (!conditions.length) {
     return "Condições não disponíveis";
   }
   return [
     alternatives.length > 1 ? `${alternatives.length} alternativas` : "",
-    conditions.length > 1 ? `+ ${conditions.length - 1} condições` : "",
-    ruleConditionLabel(first, context, rule.filter.currency),
+    `${conditions.length} ${conditions.length === 1 ? "condição" : "condições"}`,
   ]
     .filter(Boolean)
     .join(" · ");

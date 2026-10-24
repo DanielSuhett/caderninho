@@ -79,6 +79,13 @@ e atualização explícita. Consultar a página não inicia sincronização.
 
 ## Segurança e validação
 
+O polimento 08 conserva contratos GET e mutações. Busca de Regras é compacta;
+filtro não repete o campo e preserva `q` oculto. Contagem complexa é absoluta,
+ações antecedem o Flow e grupo/prioridade não se repetem dentro dele. Draft usa
+dependências estáveis e composição memoizada; resultado da prévia aparece uma vez.
+Ledger adapta à largura do container e conserva direção visível em zero,
+nulo e sinal divergente. [Registro técnico/visual](kumo/polimento-08.md).
+
 Todas as páginas exigem sessão. Catálogo e histórico são leituras autenticadas;
 a consulta financeira usa POST com origem, JSON e CSRF validados, permitindo
 as leituras de contas/transações, `get_overview` e `generate_chart` restrito a

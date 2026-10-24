@@ -1,6 +1,10 @@
 # Galeria final — Caderninho com Kumo
 
 Capturas reais da implementação local, com dados fictícios. Desktop e celular.
+
+[Galeria atual da rodada 08:14 páginas/grades/estados](capturas/rodada-08/README.md) ·
+[revisão independente](revisao-critica-08-polimento.md). As imagens abaixo registram
+rodadas anteriores; o índice08 identifica o acabamento atual.
 [Revisão 03 por página](revisao-critica-03.md) · [revisão 04 de Transações](revisao-critica-04-transacoes.md) · [estados e grades](capturas/README.md).
 
 ## Visão geral
