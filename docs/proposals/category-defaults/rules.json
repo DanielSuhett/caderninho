@@ -1,0 +1,388 @@
+{
+  "version": 1,
+  "language": "pt-BR",
+  "normalization": "Unicode NFKD; remover marcas combinantes; casefold; converter + no termo plus; trocar demais caracteres que não sejam letras ou números por espaço; condensar espaços.",
+  "matching": "Frases inteiras contíguas, delimitadas por início/fim ou espaço no texto normalizado. Aplicar a mesma normalização aos termos e às exclusões.",
+  "policy": {
+    "mode": "suggest_category_only",
+    "only_when_uncategorized": true,
+    "preserve_original_description": true,
+    "private_rules_take_precedence": true,
+    "first_match_wins": true,
+    "skip_refunds_when_flagged": true,
+    "unknown_direction": "no_suggestion",
+    "skip_any": [
+      "estorno",
+      "reembolso",
+      "devolucao",
+      "refund",
+      "reversal",
+      "chargeback",
+      "cashback",
+      "cancelamento",
+      "fatura",
+      "pagamento de cartao",
+      "pagamento cartao",
+      "cartao de credito",
+      "emprestimo",
+      "financiamento",
+      "resgate",
+      "aplicacao",
+      "rendimento",
+      "rendimentos"
+    ]
+  },
+  "rules": [
+    {
+      "id": "delivery-uber-eats",
+      "category": "Lanches",
+      "direction": "debit",
+      "any": [
+        "uber eats",
+        "ubereats"
+      ]
+    },
+    {
+      "id": "delivery-99food",
+      "category": "Lanches",
+      "direction": "debit",
+      "any": [
+        "99 food",
+        "99food"
+      ]
+    },
+    {
+      "id": "delivery-ifood-rappi",
+      "category": "Lanches",
+      "direction": "debit",
+      "any": [
+        "ifood",
+        "rappi"
+      ],
+      "except": [
+        "mercado",
+        "market",
+        "clube",
+        "prime",
+        "assinatura",
+        "rappi bank",
+        "rappibank",
+        "rappicard",
+        "rappi card"
+      ]
+    },
+    {
+      "id": "corridas-uber",
+      "category": "Corridas",
+      "direction": "debit",
+      "any": [
+        "uber trip",
+        "uber trips",
+        "uber viagem",
+        "uber viagens"
+      ],
+      "except": [
+        "uber eats",
+        "ubereats",
+        "uber one"
+      ]
+    },
+    {
+      "id": "corridas-99pop",
+      "category": "Corridas",
+      "direction": "debit",
+      "any": [
+        "99pop",
+        "99 pop"
+      ],
+      "except": [
+        "99pay",
+        "99 pay",
+        "99food",
+        "99 food"
+      ]
+    },
+    {
+      "id": "compras-aliexpress",
+      "category": "Compras",
+      "direction": "debit",
+      "any": [
+        "aliexpress"
+      ]
+    },
+    {
+      "id": "compras-mercado-livre",
+      "category": "Compras",
+      "direction": "debit",
+      "any": [
+        "mercadolivre",
+        "mercado livre"
+      ],
+      "except": [
+        "mercado pago",
+        "mercadopago"
+      ]
+    },
+    {
+      "id": "compras-shopee",
+      "category": "Compras",
+      "direction": "debit",
+      "any": [
+        "shopee"
+      ],
+      "except": [
+        "shopeepay",
+        "shopee pay"
+      ]
+    },
+    {
+      "id": "compras-magalu",
+      "category": "Compras",
+      "direction": "debit",
+      "any": [
+        "magalu",
+        "magazine luiza"
+      ],
+      "except": [
+        "luizacred",
+        "luiza cred",
+        "magalupay",
+        "magalu pay",
+        "magalu seguros"
+      ]
+    },
+    {
+      "id": "compras-vestuario",
+      "category": "Compras",
+      "direction": "debit",
+      "any": [
+        "lojas renner",
+        "riachuelo",
+        "shein",
+        "lojas marisa"
+      ],
+      "except": [
+        "realize",
+        "midway",
+        "seguros"
+      ]
+    },
+    {
+      "id": "compras-eletronicos",
+      "category": "Compras",
+      "direction": "debit",
+      "any": [
+        "kabum",
+        "terabyte atacado"
+      ]
+    },
+    {
+      "id": "cuidados-boticario",
+      "category": "Cuidados Pessoais",
+      "direction": "debit",
+      "any": [
+        "oboticario",
+        "o boticario"
+      ]
+    },
+    {
+      "id": "cuidados-cabelo",
+      "category": "Cuidados Pessoais",
+      "direction": "debit",
+      "any": [
+        "barbearia",
+        "cabeleireiro"
+      ]
+    },
+    {
+      "id": "petshop",
+      "category": "Petshop",
+      "direction": "debit",
+      "any": [
+        "petshop",
+        "pet shop",
+        "petz"
+      ]
+    },
+    {
+      "id": "farmacia",
+      "category": "Farmácia",
+      "direction": "debit",
+      "any": [
+        "drogaria",
+        "farmacia",
+        "droga raia",
+        "drogasil"
+      ]
+    },
+    {
+      "id": "mercado",
+      "category": "Mercado",
+      "direction": "debit",
+      "any": [
+        "supermercado",
+        "hortifruti",
+        "carrefour",
+        "assai"
+      ],
+      "except": [
+        "banco",
+        "seguros"
+      ]
+    },
+    {
+      "id": "lanches-doces",
+      "category": "Lanches",
+      "direction": "debit",
+      "any": [
+        "cacau show",
+        "lindt"
+      ]
+    },
+    {
+      "id": "lanches-estabelecimentos",
+      "category": "Lanches",
+      "direction": "debit",
+      "any": [
+        "padaria",
+        "lanchonete",
+        "cafeteria",
+        "sorveteria"
+      ]
+    },
+    {
+      "id": "restaurantes-kfc",
+      "category": "Restaurantes",
+      "direction": "debit",
+      "any": [
+        "kfc"
+      ]
+    },
+    {
+      "id": "assinatura-netflix",
+      "category": "Assinaturas",
+      "direction": "debit",
+      "any": [
+        "netflix"
+      ]
+    },
+    {
+      "id": "assinatura-spotify",
+      "category": "Assinaturas",
+      "direction": "debit",
+      "any": [
+        "spotify"
+      ]
+    },
+    {
+      "id": "assinatura-disney-plus",
+      "category": "Assinaturas",
+      "direction": "debit",
+      "any": [
+        "disney plus",
+        "disneyplus"
+      ]
+    },
+    {
+      "id": "assinatura-youtube-premium",
+      "category": "Assinaturas",
+      "direction": "debit",
+      "any": [
+        "youtube premium"
+      ]
+    },
+    {
+      "id": "assinatura-google-one",
+      "category": "Assinaturas",
+      "direction": "debit",
+      "any": [
+        "google one"
+      ]
+    },
+    {
+      "id": "assinatura-claude",
+      "category": "Assinaturas",
+      "direction": "debit",
+      "any": [
+        "claude ai subscription"
+      ]
+    },
+    {
+      "id": "lazer-ticketmaster",
+      "category": "Lazer",
+      "direction": "debit",
+      "any": [
+        "ticketmaster"
+      ]
+    },
+    {
+      "id": "lazer-steam",
+      "category": "Lazer",
+      "direction": "debit",
+      "any": [
+        "steam purchase"
+      ]
+    },
+    {
+      "id": "estacionamento-pedagio",
+      "category": "Estacionamento e Pedágio",
+      "direction": "debit",
+      "any": [
+        "estacionamento",
+        "pedagio",
+        "digipare"
+      ]
+    },
+    {
+      "id": "academia-smart-fit",
+      "category": "Academia",
+      "direction": "debit",
+      "any": [
+        "smart fit",
+        "smartfit"
+      ]
+    },
+    {
+      "id": "educacao-cursos",
+      "category": "Educação Geral",
+      "direction": "debit",
+      "any": [
+        "udemy",
+        "alura"
+      ]
+    },
+    {
+      "id": "tributos",
+      "category": "Impostos e Taxas",
+      "direction": "debit",
+      "any": [
+        "iptu",
+        "ipva",
+        "darf",
+        "iof"
+      ]
+    },
+    {
+      "id": "salario",
+      "category": "Salário e Renda",
+      "direction": "credit",
+      "any": [
+        "pagamento de salario",
+        "credito de salario",
+        "credito salario",
+        "pgto salario",
+        "salary payment",
+        "payroll deposit"
+      ]
+    },
+    {
+      "id": "doacoes",
+      "category": "Doações",
+      "direction": "debit",
+      "any": [
+        "dizimo",
+        "doacao"
+      ]
+    }
+  ]
+}
