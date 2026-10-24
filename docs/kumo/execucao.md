@@ -82,7 +82,7 @@ no catálogo não justifica criar uma funcionalidade para encaixá-lo.
 | --- | --- |
 | SkeletonLine | Usado nos estados de recurso/rota em carregamento, sem barras CSS próprias. |
 | RefreshButton | Usado com Tooltip e estado disabled durante atualização. |
-| Flow | Sem grafo de dependências ou edição de fluxo; jornada atual não precisa de um diagrama. |
+| Flow | Adotado posteriormente para explicar uma consulta MCP na landing, sem transformar a jornada de instalação em grafo. Import granular lazy, canvas=false, controles de reprodução e fallback HTML. Ver [motion](motion.md). |
 | CodeHighlighted | Disponível em @cloudflare/kumo/code; sem configuração extensa atual que justifique Shiki. |
 | PoweredByCloudflare | Atribuição textual suficiente; não acrescentar marca do fornecedor ao produto. |
 | Slider | Export estilizado ausente na 2.14.0; não usar primitiva para valores financeiros exatos. |

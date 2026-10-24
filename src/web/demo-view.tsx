@@ -118,50 +118,52 @@ function Demo() {
           navigation={<DemoNavigation />}
           route={location.pathname + location.search}
         >
-          <p className="demo-notice">Demonstração · dados fictícios</p>
-          <WorkspaceHeading
-            {...(transactions && { description: monthLabel(month) })}
-            title={transactions ? "Transações" : "Visão geral"}
-          >
-            {!transactions && (
-              <div className="page-actions">
-                <PeriodPicker
-                  fromMonth="2026-05"
-                  month={month}
-                  onChange={changeMonth}
-                  toMonth="2026-10"
-                />
-                <Select
-                  items={[
-                    { label: "BRL", value: "BRL" },
-                    { label: "USD", value: "USD" },
-                  ]}
-                  label="Moeda"
-                  onValueChange={changeCurrency}
-                  value={currency}
-                />
-              </div>
+          <div className="workspace-page">
+            <p className="demo-notice">Demonstração · dados fictícios</p>
+            <WorkspaceHeading
+              {...(transactions && { description: monthLabel(month) })}
+              title={transactions ? "Transações" : "Visão geral"}
+            >
+              {!transactions && (
+                <div className="page-actions">
+                  <PeriodPicker
+                    fromMonth="2026-05"
+                    month={month}
+                    onChange={changeMonth}
+                    toMonth="2026-10"
+                  />
+                  <Select
+                    items={[
+                      { label: "BRL", value: "BRL" },
+                      { label: "USD", value: "USD" },
+                    ]}
+                    label="Moeda"
+                    onValueChange={changeCurrency}
+                    value={currency}
+                  />
+                </div>
+              )}
+            </WorkspaceHeading>
+            {transactions ? (
+              <DemoTransactions
+                month={month}
+                params={params}
+              />
+            ) : (
+              <FinancialDashboard
+                categories={demoCategories}
+                currency={currency}
+                monthly={demoMonthly(month)}
+                overview={demoOverview(month)}
+                people={demoPeople}
+                recentScope={`${currency} · últimos registros do mês`}
+                records={records
+                  .filter((row) => row.date <= demoReferenceDay)
+                  .slice(0, 6)}
+                transactionsHref={transactionsHref}
+              />
             )}
-          </WorkspaceHeading>
-          {transactions ? (
-            <DemoTransactions
-              month={month}
-              params={params}
-            />
-          ) : (
-            <FinancialDashboard
-              categories={demoCategories}
-              currency={currency}
-              monthly={demoMonthly(month)}
-              overview={demoOverview(month)}
-              people={demoPeople}
-              recentScope={`${currency} · últimos registros do mês`}
-              records={records
-                .filter((row) => row.date <= demoReferenceDay)
-                .slice(0, 6)}
-              transactionsHref={transactionsHref}
-            />
-          )}
+          </div>
         </WorkspaceFrame>
       </TooltipProvider>
     </KumoLocaleProvider>

@@ -1,4 +1,31 @@
-# Capturas — rodadas críticas 03 e 04
+# Capturas — rodadas críticas 03 a 05
+
+## Movimento e explicação MCP — rodada 05
+
+24/10/2026. [Política, verificações e limites](../motion.md) ·
+[revisão crítica](../revisao-critica-05-motion.md). Landing no Worker local 8801;
+painel e falha deliberada do chunk em fixture sintética 8799. Capturas estáticas
+documentam os estados; progressão, pausa e offsets foram observados em leituras
+temporais separadas do DOM, sem confundir imagens com gravação.
+
+| Estado | Captura aceita |
+| --- | --- |
+| Flow MCP desktop | [pausado revisado](rodada-05/mcp-desktop-revisado.jpg) / [reproduzindo](rodada-05/mcp-desktop-reproduzindo.jpg) |
+| Flow MCP móvel | [superior 391px](rodada-05/mcp-mobile-superior.jpg) / [inferior 391px](rodada-05/mcp-mobile-inferior.jpg) / [topo corrigido 320px](rodada-05/mcp-320-corrigido.jpg) |
+| Limite de orientação | [vertical 1090px](rodada-05/mcp-1090.jpg) / [horizontal 1101px](rodada-05/mcp-1100.jpg) |
+| Chunk opcional indisponível | [fallback HTML após 503](rodada-05/mcp-fallback-503.jpg) |
+| Painel amostrado | [Transações](rodada-05/transacoes-entrada-desktop.jpg) / [Dialog de filtros](rodada-05/filtros-desktop.jpg) / [regra expandida](rodada-05/regra-expandida-desktop.jpg) |
+
+`landing-antes.jpg` é baseline histórica em viewport diferente, sem comparação
+pixel a pixel. `mcp-desktop-pausado.jpg` registra a versão inicial rejeitada
+(corpo menor, último título quebrado e rótulo Ver tudo). `mcp-320.jpg` registra
+o corte rejeitado, substituído por `mcp-320-corrigido.jpg`. A captura corrigida
+de 320px não mostra os nós inferiores; os quatro foram conferidos por geometria.
+
+Larguras/alturas acima são CSS. A captura é redimensionada pela API: por exemplo,
+1440×900 CSS → 1425×891 pixels e 320×845 → 305×804. Sem nova revisão por grade das
+14 páginas. Movimento reduzido do SO não foi emulado; Sem animação é controle
+manual e não substitui essa verificação. Sem teste de produção/OAuth/host MCP.
 
 ## Atualização de Transações — rodada 04
 

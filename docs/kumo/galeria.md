@@ -73,6 +73,17 @@ Uma conta: contexto único, sem seletor nem coluna repetida. Rodada 04.
 
 `/`
 
+Rodada 05 acrescentou uma explicação MCP com Flow real e reprodução controlada.
+Estas são capturas de estados; [movimento e limites](motion.md).
+
+![Flow MCP desktop](capturas/rodada-05/mcp-desktop-reproduzindo.jpg)
+
+![Flow MCP celular — parte superior](capturas/rodada-05/mcp-mobile-superior.jpg)
+
+![Flow MCP celular — parte inferior](capturas/rodada-05/mcp-mobile-inferior.jpg)
+
+As imagens abaixo mostram o restante da landing na rodada 03, anterior à nova seção.
+
 ![Landing desktop](capturas/rodada-03/final-landing-desktop.jpg)
 
 ![Landing celular](capturas/rodada-03/final-landing-mobile.jpg)

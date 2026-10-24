@@ -37,6 +37,7 @@ e responsividade; não reconstrói Button, Select, Checkbox, Tooltip ou modal.
 | Cópia | ClipboardText para URL MCP e InlineCopyText para IDs, com rótulos em português |
 | Paginação | Pagination com total desconhecido; API só fornece cursor para avançar e URL de reinício |
 | Medidas | Meter apenas com denominador declarado; escala relativa na atividade não representa cota |
+| Explicação de consulta MCP | Flow real 2.14, quatro nós, horizontal/vertical; fallback HTML e carregamento sob demanda na landing |
 
 `UiButton` só mapeia `tone="danger"` para `destructive`. `UiField` usa o Field
 integrado do Input. `UiCheckbox` acrescenta estado inicial de formulário à API
@@ -64,6 +65,15 @@ Escape/fechar solicita descarte quando há edição. “Continuar editando” co
 os campos. Busy bloqueia fechamento e navegação; cancelamento não interrompe uma
 escrita de resultado incerto. Confirmação destrutiva começa em Cancelar.
 Roots permanecem montados ao fechar, permitindo a animação de saída do Kumo.
+
+Movimento: wrapper de página em 180 ms/6 px; hero em 400 ms e seções públicas
+em 280 ms, uma vez. Nenhum valor financeiro é interpolado e não há cascata de
+linhas. Sidebar/Dialog/Collapsible mantêm transições nativas. O Collapsible
+recebe neutralização local de painel/caret em `prefers-reduced-motion: reduce`.
+O Flow tem uma sequência finita e pausável; textos não dependem da reprodução.
+Não usar `finish()` para cancelar animações infinitas ao mudar a preferência:
+`cancel()` devolve os elementos ao estado base. Evidências e limites em
+[motion](kumo/motion.md).
 
 O preview de regra consulta; salvar afeta as próximas importações, sem
 reclassificar histórico. Grupo Pessoal não pode ser excluído. Acesso MCP sempre

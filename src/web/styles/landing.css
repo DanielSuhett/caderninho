@@ -106,6 +106,7 @@ footer p {
   color: var(--muted);
 }
 .install,
+.mcp-explanation,
 .performance,
 .free-tier,
 .faq {
@@ -121,15 +122,15 @@ footer p {
   margin-top: 20px;
   color: var(--muted);
 }
-ol {
+.install ol {
   padding-left: 24px;
   margin: 0;
   list-style: decimal;
 }
-li {
+.install li {
   padding: 0 0 24px 8px;
 }
-li:last-child {
+.install li:last-child {
   padding-bottom: 0;
 }
 .free-tier {
@@ -343,6 +344,173 @@ footer {
   }
 }
 
+/* Flow owns diagram layout and connectors; these styles compose its content. */
+.mcp-intro {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.mcp-intro > p,
+.mcp-preparation,
+.mcp-example span {
+  color: var(--muted);
+}
+.mcp-example {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: baseline;
+  margin-bottom: 24px;
+}
+.mcp-example span,
+.mcp-preparation,
+.mcp-caption {
+  font-size: var(--type-meta);
+}
+.mcp-preparation {
+  max-width: 88ch;
+  margin-top: 24px;
+}
+.mcp-flow-node {
+  width: 200px;
+  min-height: 144px;
+  padding: 12px 16px;
+}
+.mcp-flow-node h3 {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin: 0 0 8px;
+  line-height: 24px;
+}
+.mcp-flow-node h3 svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.mcp-flow-node p {
+  font-size: var(--type-body);
+  color: var(--muted);
+}
+.mcp-flow-node[data-active="true"] {
+  outline: 2px solid var(--color-kumo-focus);
+  outline-offset: 2px;
+}
+.mcp-flow-node[data-active="true"] h3 svg {
+  color: var(--color-kumo-focus);
+}
+.mcp-static-steps {
+  display: grid;
+  grid-template-columns: repeat(4, 200px);
+  gap: 64px;
+  justify-content: center;
+  padding: 8px 4px;
+  margin: 0;
+  list-style: none;
+}
+.mcp-flow[data-orientation="vertical"] .mcp-flow-node {
+  width: min(320px, calc(100vw - 64px));
+  min-height: 112px;
+}
+.mcp-diagram {
+  min-height: 160px;
+}
+.mcp-flow[data-orientation="vertical"] .mcp-diagram {
+  min-height: 656px;
+}
+.mcp-playback {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px 32px;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 36px;
+  margin-bottom: 24px;
+}
+.mcp-caption {
+  min-height: 63px;
+  margin: 24px 0 0;
+  color: var(--muted);
+}
+.mcp-step-count {
+  display: block;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+.mcp-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+  padding: 0;
+  margin: 0;
+  border: 0;
+}
+.mcp-controls button:first-child {
+  min-width: 132px;
+}
+.mcp-flow[data-playing="true"][data-step="1"] path[data-index="0"],
+.mcp-flow[data-playing="true"][data-step="2"] path[data-index="1"],
+.mcp-flow[data-playing="true"][data-step="3"] path[data-index="2"] {
+  stroke: var(--color-kumo-focus);
+  stroke-dasharray: 6 8;
+  animation: mcp-request 700ms linear infinite;
+}
+@keyframes mcp-request {
+  to {
+    stroke-dashoffset: -28;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .hero h1,
+  .hero .intro,
+  .hero .actions,
+  .hero .note {
+    animation: content-arrive 400ms var(--motion-ease-out) backwards;
+  }
+  .hero .intro {
+    animation-delay: 40ms;
+  }
+  .hero .actions {
+    animation-delay: 80ms;
+  }
+  .hero .note {
+    animation-delay: 120ms;
+  }
+}
+@media (max-width: 1099px) {
+  .mcp-static-steps {
+    grid-template-columns: minmax(0, 320px);
+  }
+  .mcp-static-steps .mcp-flow-node {
+    width: 100%;
+    min-height: 112px;
+  }
+}
+@media (max-width: 640px) {
+  .mcp-playback {
+    flex-direction: column;
+    gap: 12px;
+    align-items: start;
+    min-height: 69px;
+  }
+  .mcp-caption {
+    min-height: 84px;
+  }
+}
+@media (max-width: 360px) {
+  .mcp-playback {
+    min-height: 112px;
+  }
+  .mcp-controls {
+    flex-direction: column;
+    align-items: start;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mcp-flow path[data-index] {
+    animation: none;
+  }
+}
 .install li p {
   margin-top: 0;
 }

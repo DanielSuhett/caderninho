@@ -11,6 +11,32 @@ capturas e interações registradas; não é aprovação humana nem de produçã
 [galeria](docs/kumo/capturas/README.md) e
 [dados/contraste/bundle](docs/kumo/dados-e-evidencias.md).
 
+### Rodada 05 — movimento e explicação MCP
+
+Implementação de Flow nativo Kumo 2.14 na landing, com sequência finita de quatro
+etapas, pausa/continuação/repetição e Sem animação. Explicação HTML disponível
+antes do JavaScript e após falha do chunk. Hero/seções e wrapper do painel usam
+entradas curtas, sem interpolação financeira ou cascata de linhas.
+
+Vistos: Flow desktop pausado/reproduzindo/completo; móvel 391px; topo em 320px e
+geometria de todos os nós; orientação em 1090/1101px; fallback após 503 sintético;
+Transações privadas, Dialog de filtros e regra expandida. Progressão, conectores,
+pausa e suspensão fora da área foram observados em leituras temporais do DOM.
+Foi corrigido um corte de 15px dentro do Flow em 320px, que não aparecia como
+overflow do documento. Capturas iniciais rejeitadas estão identificadas.
+
+A designer crítica abriu 12 imagens e atribuiu 8/10 qualitativo à explicação MCP
+e às amostras do painel; isso não reaprova todas as páginas nem mede satisfação.
+Movimento reduzido do SO e ocultação de aba foram tratados/revisados no código,
+sem execução desses caminhos de runtime. Sem animação não substitui emulação da
+preferência do SO. Não houve nova revisão por grade de todas as páginas.
+
+`mise run check` final passou após as correções: 44 testes Node, 108 de integração,
+build/dry-run e runtime local 10k/100k, além de tipos/formato/lint. Sem mudanças de
+dependências, push ou deploy. [Evidência detalhada](docs/kumo/motion.md),
+[revisão crítica](docs/kumo/revisao-critica-05-motion.md) e
+[capturas](docs/kumo/capturas/README.md).
+
 ### Rodada 04 — correção do critério de Transações
 
 A avaliação anterior não encerrou o critério de calma solicitado pelo usuário.

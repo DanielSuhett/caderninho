@@ -71,7 +71,17 @@ consultáveis durante importação e falhas de atualização.
 ## Movimento e validação
 
 Usar as transições funcionais do Kumo, sem transição de cor, shimmer decorativo
-ou animação de valores monetários. Respeitar movimento reduzido. Revisar teclado,
+ou animação de valores monetários. Entrada do painel em 180 ms/6 px por navegação;
+sem cascata de linhas ou interpolação de números. A landing usa entrada de hero
+em 400 ms e revelação única de seções em 280 ms, sem bloquear a leitura.
+
+Flow explica uma consulta MCP à cópia sincronizada em quatro etapas de 2,4 s,
+com todos os textos sempre legíveis. Reproduz uma vez ao entrar, permite pausar,
+continuar, repetir e consultar sem animação. Suspende fora da tela/aba ativa e
+mantém a explicação estática se o chunk falhar. Pluggy e autorização inicial são
+preparação; verificar acesso e consultar o D1 pertencem à consulta. A resposta de
+IA fica no cliente. Movimento reduzido elimina reprodução automática e conectores
+animados; o esquema completo permanece disponível. Revisar teclado,
 foco e contraste nos estados realmente usados, em desktop e celular.
 Captura local/sintética não comprova acessibilidade completa, OAuth, Pluggy,
 produção ou comportamento de um host MCP.

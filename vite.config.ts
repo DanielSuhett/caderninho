@@ -41,7 +41,7 @@ function copyPortalAssets(): Plugin {
         recursive: true,
       });
       await Promise.all(
-        ["demo.js", "account.css"].map((name) =>
+        ["demo.js", "landing.js", "account.css"].map((name) =>
           copyFile(new URL(name, output), new URL(name, site)),
         ),
       );
@@ -113,6 +113,9 @@ export default defineConfig({
         ),
         demo: fileURLToPath(
           new URL("./src/web/demo-entry.ts", import.meta.url),
+        ),
+        landing: fileURLToPath(
+          new URL("./src/web/landing-entry.ts", import.meta.url),
         ),
       },
       output: {

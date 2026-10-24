@@ -189,12 +189,12 @@ export function WorkspaceView({
       }
       route={route}
     >
-      <Suspense
-        fallback={<WorkspaceSkeleton />}
+      <div
+        className="workspace-page"
         key={route}
       >
-        {content}
-      </Suspense>
+        <Suspense fallback={<WorkspaceSkeleton />}>{content}</Suspense>
+      </div>
     </WorkspaceFrame>
   );
 }

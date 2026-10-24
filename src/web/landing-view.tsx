@@ -1,6 +1,7 @@
 import { LayerCard, Meter } from "@cloudflare/kumo";
 
 import { Document } from "./document";
+import { McpStaticFlow } from "./mcp-steps";
 import { UiLink } from "./ui";
 
 const responseTiming = {
@@ -179,6 +180,30 @@ export function landingPage({
             <p className="note">
               Software gratuito. Cloudflare e Pluggy têm limites e custos
               próprios.
+            </p>
+          </section>
+          <section
+            aria-labelledby="mcp-title"
+            className="mcp-explanation"
+            id="como-funciona"
+          >
+            <div className="mcp-intro">
+              <h2 id="mcp-title">Uma consulta ao histórico, por dentro.</h2>
+              <p>
+                Da sua pergunta aos dados que ajudam seu assistente a responder.
+              </p>
+            </div>
+            <p className="mcp-example">
+              “Quanto gastei este mês?” <span>Exemplo ilustrativo</span>
+            </p>
+            <div id="mcp-flow">
+              <McpStaticFlow />
+            </div>
+            <p className="mcp-preparation">
+              A autorização do cliente e a sincronização pela Pluggy acontecem
+              antes. Cada consulta usa a cópia no D1, com a data e a cobertura
+              disponíveis. A resposta de IA fica a cargo do cliente que você
+              escolher.
             </p>
           </section>
           <section
@@ -553,6 +578,10 @@ export function landingPage({
           </a>
         </footer>
       </div>
+      <script
+        src="/landing.js"
+        type="module"
+      />
     </Document>
   );
 }

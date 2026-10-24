@@ -40,6 +40,20 @@
 .workspace-content:focus {
   outline: none;
 }
+.workspace-page {
+  min-width: 0;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .workspace-page {
+    animation: content-arrive var(--motion-enter) var(--motion-ease-out);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .disclosure-panel,
+  .disclosure-trigger svg {
+    transition: none;
+  }
+}
 .workspace-mobile-header {
   display: none;
 }

@@ -99,7 +99,7 @@ Condicional: **15**, Direto: **33**, Sem aplicação atual: **3**, Já usado: **
 | Item | Situação na 2.14.0 e aplicação | Evidência visual |
 | --- | --- | --- |
 | SkeletonLine | Disponível no export raiz e bundle Loader, apesar de não constar no `kumo ls`. Candidato direto para substituir skeleton local. | [documentação visual](https://kumo-ui.com/components/skeleton-line/) |
-| Flow | Disponível no export raiz/granular, fora do registro CLI. Diagrama pode explicar regras complexas, mas não há motivo atual para trocar uma jornada simples por grafo. | [documentação visual](https://kumo-ui.com/components/flow/) |
+| Flow | Usado na explicação de uma consulta MCP na landing, por solicitação posterior do usuário. Export granular 2.14 confirmado nos tipos/implementação; continua fora do registro CLI. Quatro nós com conectores nativos, canvas=false, animação finita e fallback HTML. | [documentação visual](https://kumo-ui.com/components/flow/) |
 | CodeHighlighted | Disponível em `@cloudflare/kumo/code`; usar para configuração MCP extensa se o ganho justificar Shiki/lazy load. Code simples também existe. | [documentação visual](https://kumo-ui.com/components/code-highlighted/) |
 | RefreshButton | Subcomponente exportado junto de Button. Pode substituir o botão de atualização próprio, preservando busy e nome acessível. | [família Button](https://kumo-ui.com/components/button/) |
 | PoweredByCloudflare | Export disponível; candidato apenas a atribuição/informação de infraestrutura pública, sem sugerir que a Cloudflare fornece o produto. | [família de marca](https://kumo-ui.com/components/cloudflare-logo/) |

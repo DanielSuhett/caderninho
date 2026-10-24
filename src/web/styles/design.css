@@ -19,6 +19,8 @@
     --type-body: 16px;
     --type-meta: 14px;
     --type-value: 32px;
+    --motion-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+    --motion-enter: 180ms;
     --page: var(--color-kumo-canvas);
     --surface: var(--color-kumo-base);
     --surface-raised: var(--color-kumo-elevated);
@@ -121,6 +123,17 @@
 }
 .feedback p {
   margin-block: 0;
+}
+
+@keyframes content-arrive {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* Opt-in review overlay. The public review overlay uses only a fragment and CSS. */
