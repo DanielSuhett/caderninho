@@ -1,8 +1,8 @@
 # Temas, significado financeiro e categorias
 
-24/10/2026. Implementação local com Kumo 2.14.0. A preferência do usuário por
+Kumo 2.14.0. A preferência do usuário por
 Inter e conteúdo/controles em 16 px prevalece sobre a regra de 14 px da skill;
-metadados mantêm 14 px. [Capturas](capturas/rodada-10/README.md).
+metadados mantêm 14 px.
 
 ## Dois temas, uma composição
 
@@ -64,19 +64,3 @@ O contrato GET, URLs, nomes dos campos e textos legais não muda. O catálogo
 atualiza os consumidores após a gravação pelo fluxo existente; na demo a edição
 continua temporária, até recarregar a aba. Não há sincronização em tempo real do
 catálogo entre abas independentes.
-
-## Evidência e limites
-
-As capturas documentam código compilado e dados sintéticos locais, com os estados
-explicitados no índice. A revisão independente dos primeiros 17 screenshots
-atribuiu 8,5/10 a Regras/Transações e 8/10 a Visão geral/editores. Essas notas são
-inferências qualitativas dos estados vistos, não testes de satisfação humana.
-
-A revisão complementar abriu 13 capturas da propagação das cores: resumo,
-transações, detalhe, regras, seletor e reflow em 320 px. Parecer qualitativo
-8,5/10, sem bloqueio concreto observado. Confirmou Mercado roxo nos usos e
-verde/vermelho financeiro independente da categoria; não validou contraste de
-cores arbitrárias futuras nem ampliou a cobertura para todas as páginas.
-
-As verificações locais não comprovam acessibilidade completa, produção, OAuth,
-Pluggy ou comportamento de um host MCP. Nenhuma dependência nova é necessária.

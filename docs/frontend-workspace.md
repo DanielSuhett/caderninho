@@ -43,6 +43,21 @@ indisponíveis continuam no contexto, contador e Limpar. Entre duas e oito conta
 Select; acima disso, Combobox pesquisável. A lista mantém a moeda em cada valor,
 sem seletor cambial ou total que misture moedas.
 
+A History API preserva shell, sessão e cliente API. Links continuam anchors;
+login, destinos externos, fragmentos, downloads, cliques modificados e POST
+mantêm navegação nativa. GET participa da navegação interna; popstate restaura
+Voltar/Avançar. A mudança fecha o menu móvel e transfere foco ao conteúdo.
+O cache de leitura usa a chave completa, 20 entradas e dez segundos na memória;
+atualização manual ignora cache. Escritas invalidam antes e depois da requisição,
+e leituras anteriores não repovoam o cache. Falhas não são armazenadas. Skeleton
+aparece após 150 ms. [Decisões de carregamento](kumo/performance.md).
+
+A confirmação do widget pede a primeira importação uma única vez, mesmo com
+callbacks repetidos após 24 horas. Durante a execução e com a aba visível, o
+monitor consulta a cada dois segundos; falhas aumentam o intervalo até 30 segundos
+e suspendem após cinco erros. Retorno à aba ou atualização manual reconcilia o
+estado. Ler status não inicia importação.
+
 ## Edição e operação
 
 Regras e grupos usam Dialog. Alterações não salvas exigem descarte; busy bloqueia
@@ -79,12 +94,12 @@ e atualização explícita. Consultar a página não inicia sincronização.
 
 ## Segurança e validação
 
-O polimento 08 conserva contratos GET e mutações. Busca de Regras é compacta;
+A interface conserva contratos GET e mutações. Busca de Regras é compacta;
 filtro não repete o campo e preserva `q` oculto. Contagem complexa é absoluta,
 ações antecedem o Flow e grupo/prioridade não se repetem dentro dele. Draft usa
 dependências estáveis e composição memoizada; resultado da prévia aparece uma vez.
 Ledger adapta à largura do container e conserva direção visível em zero,
-nulo e sinal divergente. [Registro técnico/visual](kumo/polimento-08.md).
+nulo e sinal divergente.
 
 Todas as páginas exigem sessão. Catálogo e histórico são leituras autenticadas;
 a consulta financeira usa POST com origem, JSON e CSRF validados, permitindo
@@ -94,7 +109,8 @@ as leituras de contas/transações, `get_overview` e `generate_chart` restrito a
 `tests/integration/workspace.test.ts` cobre histórico, replay, falha, migração,
 titularidade, autenticação, CSRF, bloqueio de mutações e paginação cronológica
 com valores acima do limite inteiro seguro de JavaScript. A revisão de navegador
-usa apenas dados fictícios locais; evidências da navegação e filtros ficam em [navigation-review.md](navigation-review.md).
+usa apenas dados fictícios locais. `navigation.test.ts` cobre destinos e
+Voltar/Avançar; `api.test.ts` cobre cache, invalidação e falhas.
 Publicação, migração remota e validação com Pluggy/OAuth reais não foram executadas.
 
 O [guia de componentes](design-system.md) define a composição das páginas. Cabeçalhos, filtros, métricas, atualização e skeleton são compartilhados. A [auditoria](mcp-audit.md) explica identidade, volume, retenção e limites.
@@ -124,7 +140,7 @@ documento. Voltar/Avançar conserva a URL como fonte do recorte. A navegação n
 intercepta a passagem entre demo pública e painel privado. Sidebar móvel fecha
 ao navegar e transfere foco ao conteúdo. No painel, páginas lazy recebem memo
 para ignorar polling sem novos dados; foco/hover antecipam somente o código da
-próxima página. [Medições e limites](kumo/performance.md).
+próxima página. [Decisões de desempenho](kumo/performance.md).
 
-[Dados e evidências](kumo/dados-e-evidencias.md) registra agregações completas,
+[Dados e carregamento](kumo/dados-e-evidencias.md) explica agregações completas,
 tratamento de dados ausentes, dependência ECharts e distinção local/publicado.
