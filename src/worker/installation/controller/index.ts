@@ -49,10 +49,12 @@ export function installationRoutes(access: Hono<PortalEnv>) {
     c.header("Cache-Control", "no-store");
     c.header("Referrer-Policy", "same-origin");
     c.header("X-Content-Type-Options", "nosniff");
-    c.header(
-      "Content-Security-Policy",
-      "default-src 'none'; font-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; frame-src https://connect.pluggy.ai; img-src 'self' data:; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
-    );
+    if (!c.res.headers.has("Content-Security-Policy")) {
+      c.header(
+        "Content-Security-Policy",
+        "default-src 'none'; font-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; frame-src https://connect.pluggy.ai; img-src 'self' data:; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
+      );
+    }
   });
   app.route("/", access);
   app.use("/account", sessionMiddleware);

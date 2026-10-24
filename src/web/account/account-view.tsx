@@ -6,6 +6,10 @@ import { sourceIdentity } from "../../domain";
 import { tryCatch } from "../../shared";
 import { UiButton } from "../ui";
 import { createAccountApi } from "./account-api";
+import {
+  accountFailureMessage,
+  type ManagementOutcome,
+} from "./account-feedback";
 import { useWorkspaceNavigation } from "./account-navigation";
 import { createConnectWidget } from "./connect-widget";
 import type { ConnectionActivity } from "./connection-journey";
@@ -250,36 +254,54 @@ export function AccountView() {
       });
       if (error && release()) {
         setActivity(null);
-        setMessage(
-          "Não foi possível abrir o Meu Pluggy. Confira as credenciais da instalação.",
-        );
+        setMessage(accountFailureMessage(error));
       }
     },
     [snapshot, command, api, widget],
   );
   const manage = useCallback(
-    async (input: HouseholdCommand) => {
+    async (input: HouseholdCommand): Promise<ManagementOutcome> => {
       const signal = lifetime.current?.signal;
       if (!signal || locked.current) {
-        return;
+        return {
+          message: "Aguarde a operação atual antes de continuar.",
+          ok: false,
+        };
       }
       locked.current = true;
       setBusy(true);
       setMessage("Validando e salvando…");
-      const { data: _data, error } = await tryCatch(async () => {
-        await api.manage(input, signal);
-        await refresh(signal);
-      });
+      const { data, error } = await tryCatch(() => api.manage(input, signal));
       if (signal.aborted) {
-        return;
+        return {
+          message: "A página foi fechada. Confira o cadastro ao retornar.",
+          ok: false,
+        };
       }
+      const { error: refreshError } = await tryCatch(() => refresh(signal));
       locked.current = false;
       setBusy(false);
-      setMessage(
-        error
-          ? "Não foi possível salvar. Confira os campos e as credenciais do perfil. Atualize o painel antes de repetir."
-          : "Alteração salva. Titulares e origens atualizados.",
-      );
+      if (error) {
+        const failureMessage = accountFailureMessage(error);
+        setMessage(failureMessage);
+        return { message: failureMessage, ok: false };
+      }
+      let savedMessage =
+        input.action === "create_profile"
+          ? ""
+          : "Alteração salva. Titulares e origens atualizados.";
+      if (refreshError) {
+        savedMessage =
+          "Cadastro salvo. Atualize a página para conferir a lista atualizada.";
+      }
+      setMessage(savedMessage);
+      return {
+        ok: true,
+        ...("id" in data && {
+          id: data.id,
+          ...(data.personId && { personId: data.personId }),
+        }),
+      };
     },
     [api, refresh],
   );
@@ -294,7 +316,7 @@ export function AccountView() {
     [command],
   );
   const onManage = useCallback(
-    (input: HouseholdCommand) => background(() => manage(input)),
+    (input: HouseholdCommand) => manage(input),
     [manage],
   );
   const onCancel = useCallback(
