@@ -34,6 +34,15 @@ Datas aceitam digitação e calendário range em português, sem conversão de f
 A tabela muda sua composição no celular, mantendo valor, moeda, conta, sentido e
 exceções. Dialog detalha origem, titular, datas, IDs e parcelas recebidas.
 
+Transações mostra busca compacta com InputGroup/Button nativos e Filtros. O
+catálogo completo do escopo determina escolhas, nunca só os registros da página:
+menos de duas contas oculta o seletor; uma conta conhecida em todas as linhas
+substitui a coluna repetida por contexto único. Pessoa/grupo de opção única também
+saem do formulário visível. Hidden conserva filtros GET; seleções antigas
+indisponíveis continuam no contexto, contador e Limpar. Entre duas e oito contas,
+Select; acima disso, Combobox pesquisável. A lista mantém a moeda em cada valor,
+sem seletor cambial ou total que misture moedas.
+
 ## Edição e operação
 
 Regras e grupos usam Dialog. Alterações não salvas exigem descarte; busy bloqueia
@@ -82,7 +91,10 @@ O [guia de componentes](design-system.md) define a composição das páginas. Ca
 `/demo` e `/demo/transactions` são assets públicos sem sessão e sem consulta à
 API financeira privada. Compartilham WorkspaceFrame, SidebarFrame,
 FinancialDashboard e TransactionList. Ledger sintético de maio a outubro 2026,
-BRL e USD separados, mês/moeda/conta/busca por GET e Dialog de detalhes.
+BRL e USD separados nos agregados da visão geral, com mês/moeda por GET.
+Transações reúne moedas com identificação em cada linha, sem soma/conversão, e
+usa mês/conta/busca por GET e Dialog de detalhes. Mês aparece junto ao título;
+Mês e Conta são editados em Filtros. As notas da consulta ficam sob demanda.
 A busca filtra o conjunto sintético inteiro. A landing oferece Demo no header e CTA.
 Nenhum botão de conexão, edição ou revogação existe nessa navegação.
 

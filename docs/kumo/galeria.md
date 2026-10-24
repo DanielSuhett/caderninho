@@ -1,7 +1,7 @@
 # Galeria final — Caderninho com Kumo
 
 Capturas reais da implementação local, com dados fictícios. Desktop e celular.
-[Revisão 8/10 por página](revisao-critica-03.md) · [estados e grades](capturas/README.md).
+[Revisão 03 por página](revisao-critica-03.md) · [revisão 04 de Transações](revisao-critica-04-transacoes.md) · [estados e grades](capturas/README.md).
 
 ## Visão geral
 
@@ -15,9 +15,11 @@ Capturas reais da implementação local, com dados fictícios. Desktop e celular
 
 `/account/transactions`
 
-![Transações desktop](capturas/rodada-03/final-transacoes-desktop.jpg)
+Uma conta: contexto único, sem seletor nem coluna repetida. Rodada 04.
 
-![Transações celular](capturas/rodada-03/final-transacoes-mobile.jpg)
+![Transações desktop](capturas/rodada-04/conta-unica-final-desktop.jpg)
+
+![Transações celular](capturas/rodada-04/conta-unica-final-mobile.jpg)
 
 ## Regras
 
@@ -111,6 +113,6 @@ Capturas reais da implementação local, com dados fictícios. Desktop e celular
 
 `/demo/transactions?month=2026-10`
 
-![Demo de Transações desktop](capturas/rodada-03/final-demo-transacoes-desktop-confirmado.jpg)
+![Demo de Transações desktop](capturas/rodada-04/demo-desktop-final.jpg)
 
-![Demo de Transações celular](capturas/rodada-03/final-demo-transacoes-mobile.jpg)
+![Demo de Transações celular](capturas/rodada-04/demo-mobile-final.jpg)

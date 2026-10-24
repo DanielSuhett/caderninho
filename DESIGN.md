@@ -38,6 +38,15 @@ preservando descoberta, contexto e consequências. IDs ficam em referência
 técnica recolhida. Estados de falha, parcialidade, pendência e exclusão não
 ficam escondidos em uma referência técnica.
 
+Controles correspondem a escolhas reais. Em Transações, uma conta no catálogo
+completo dispensa seletor; se todos os registros pertencem a ela, seu nome aparece
+uma vez no contexto, sem coluna repetida. Pessoa e grupo de opção única também
+dispensam seletores. O contrato GET continua preservado; escopos antigos ou
+indisponíveis permanecem identificáveis e removíveis. Busca e Filtros formam uma
+barra discreta; opções avançadas ficam no Dialog. Moeda é informação de cada
+valor na lista, sem seletor de moeda. Nos agregados da visão geral, a escolha de
+moeda continua necessária para impedir somas incompatíveis.
+
 ## Contratos preservados
 
 URLs, âncoras, nomes de campos e textos legais seguem os contratos existentes.

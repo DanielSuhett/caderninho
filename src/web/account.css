@@ -642,18 +642,22 @@
   .transaction-table td:first-child {
     grid-column: 1;
   }
-  .transaction-table td:nth-child(2) {
+  .transaction-table td[data-label="Conta"] {
     grid-row: 2;
     grid-column: 1;
     font-size: var(--type-meta);
     color: var(--muted);
   }
-  .transaction-table td:nth-child(3) {
+  .transaction-table td[data-label="Data"] {
     grid-row: 2;
     grid-column: 2;
     font-size: var(--type-meta);
     color: var(--muted);
     text-align: right;
+  }
+  .transaction-table[data-single-account="true"] td[data-label="Data"] {
+    grid-column: 1 / -1;
+    text-align: left;
   }
   .transaction-table .money-cell {
     grid-row: 1;
@@ -717,7 +721,7 @@
   gap: 8px;
   align-items: end;
   min-width: 0;
-  max-width: 480px;
+  max-width: 560px;
 }
 .query-search > div {
   flex: 1;
@@ -737,17 +741,14 @@
 .sidebar-installation {
   font-size: var(--type-meta);
 }
-.query-search {
-  max-width: 560px;
-}
-.query-search > div {
-  flex: 1;
-}
 .query-search label {
   font-size: var(--type-meta);
 }
-.query-search [type="submit"] {
+.query-search > [type="submit"] {
   height: 36px;
+}
+.query-search[data-compact="true"] {
+  flex-basis: 160px;
 }
 .filter-toolbar > [role="toolbar"] {
   align-self: end;
@@ -948,30 +949,14 @@
   }
 }
 .demo-notice {
-  margin-bottom: 32px;
-}
-.demo-transaction-filters {
-  display: grid;
-  grid-template-columns: minmax(160px, 480px) minmax(160px, 240px) auto;
-  gap: 16px;
-  align-items: end;
-  justify-content: start;
+  margin: 0 0 24px;
+  font-size: var(--type-meta);
+  color: var(--muted);
 }
 .query-context {
   margin: 16px 0 24px;
   font-size: var(--type-meta);
   color: var(--muted);
-}
-.demo-empty {
-  padding-block: 48px;
-}
-@media (max-width: 760px) {
-  .demo-transaction-filters {
-    grid-template-columns: 1fr auto;
-  }
-  .demo-transaction-filters > .demo-search {
-    grid-column: 1 / -1;
-  }
 }
 /* Metric values keep their digits together; currency has its own typographic role. */
 .metric-amount {

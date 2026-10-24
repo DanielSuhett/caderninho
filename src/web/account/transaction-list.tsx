@@ -41,23 +41,26 @@ export function TransactionList({
   categories,
   referenceDay,
   showOwner = true,
+  showAccount = true,
 }: {
   records: Array<Transaction | PortalTransaction>;
   accounts: Array<{ id: string; name: string }>;
   categories: Array<{ id: string; name: string }>;
   referenceDay?: string;
   showOwner?: boolean;
+  showAccount?: boolean;
 }) {
   return (
     <LayerCard className="financial-surface">
       <Table
         aria-label="Lançamentos"
         className="transaction-table"
+        data-single-account={!showAccount}
       >
         <Table.Header>
           <Table.Row>
             <Table.Head>Descrição</Table.Head>
-            <Table.Head>Conta</Table.Head>
+            {showAccount === true && <Table.Head>Conta</Table.Head>}
             <Table.Head>Data</Table.Head>
             <Table.Head className="money-heading">Valor e moeda</Table.Head>
           </Table.Row>
@@ -77,6 +80,7 @@ export function TransactionList({
               key={row.id}
               referenceDay={referenceDay}
               row={row}
+              showAccount={showAccount}
               showOwner={showOwner}
             />
           ))}
@@ -92,12 +96,14 @@ function TransactionItem({
   category,
   referenceDay,
   showOwner,
+  showAccount,
 }: {
   row: Transaction | PortalTransaction;
   account: string;
   category: string;
   referenceDay: string | undefined;
   showOwner: boolean;
+  showAccount: boolean;
 }) {
   const installments = "installments" in row ? row.installments : [];
   const total = "totalInstallments" in row ? row.totalInstallments : null;
@@ -138,12 +144,14 @@ function TransactionItem({
             {!!row.ignored && <Badge variant="secondary">Ignorada</Badge>}
           </div>
         </Table.Cell>
-        <Table.Cell data-label="Conta">
-          {account}
-          {showOwner === true && (
-            <span className="table-secondary">{row.personName}</span>
-          )}
-        </Table.Cell>
+        {showAccount === true && (
+          <Table.Cell data-label="Conta">
+            {account}
+            {showOwner === true && (
+              <span className="table-secondary">{row.personName}</span>
+            )}
+          </Table.Cell>
+        )}
         <Table.Cell data-label="Data">
           {firstKnown === true && (
             <span className="table-secondary">Primeira conhecida</span>

@@ -4,12 +4,42 @@ final result: pass
 
 ## Resultado local em 24/10/2026
 
-Revisão concluída com 8/10 qualitativo em cada uma das 14 páginas, após três rodadas
+Na rodada 03, revisão com 8/10 qualitativo em cada uma das 14 páginas, após três rodadas
 com agente independente no papel de designer crítica. Aprovação limitada às
 capturas e interações registradas; não é aprovação humana nem de produção.
 [Relatório por página](docs/kumo/revisao-critica-03.md),
 [galeria](docs/kumo/capturas/README.md) e
 [dados/contraste/bundle](docs/kumo/dados-e-evidencias.md).
+
+### Rodada 04 — correção do critério de Transações
+
+A avaliação anterior não encerrou o critério de calma solicitado pelo usuário.
+Esta rodada revê somente Transações privadas e demo: escolhas proporcionais ao
+catálogo completo, conta única sem seletor/coluna repetida, busca compacta com
+InputGroup/Button nativos, ausência de seletor de moeda e notas sob demanda.
+Moeda continua em cada valor; agregados da visão geral continuam separados por
+moeda. Não se atribui nova aprovação às outras páginas.
+
+Vistos: catálogo único, várias contas/Select aberto, conta fora do catálogo,
+filtro antigo indisponível e recuperação com Limpar, Dialog sem opções únicas,
+demo com BRL/USD identificados, busca aplicada e quebra em 320px. Desktop
+1440×900, móvel 391×845 e 320×845; grade 12/4 colunas recapturada em Transações.
+Busca por botão e Enter preservou GET; hidden accountId foi preservado ao aplicar.
+Fixture privada não aplica SQL real; essas exceções comprovam apresentação e
+navegação. Demo também consultada no Worker local 8801 sem sessão, com três
+resultados para mercado. [Revisão04](docs/kumo/revisao-critica-04-transacoes.md).
+
+A revisão independente atribuiu 8/10 qualitativo às duas superfícies de
+Transações nos estados vistos, sem P1/P2 visual identificado. Isso não valida
+satisfação humana nem amplia a cobertura para as demais páginas.
+
+Leitura qualitativa: menor competição entre controles e dados; lista de densidade
+moderada e variação baixa, com cor reservada a estados. No móvel 391 a primeira
+linha da demo passou de cerca de y345 a y265, sem reduzir fonte ou retirar estados.
+Posição observada não é medição de usabilidade. Movimento não foi reavaliado por
+imagens estáticas. `mise run check` foi repetido e passou no código desta rodada:
+44 testes Node, 108 de integração, build/dry-run e runtime 10k/100k. Permanece o
+aviso conhecido do Kumo sobre `@emotion/is-prop-valid` no runner de testes.
 
 ## Cinco superfícies verificadas
 

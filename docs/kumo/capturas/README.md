@@ -1,4 +1,30 @@
-# Capturas atuais — rodada crítica 03
+# Capturas — rodadas críticas 03 e 04
+
+## Atualização de Transações — rodada 04
+
+24/10/2026. Complemento após a correção de critério do usuário: controles só
+quando representam escolhas reais. [Revisão crítica](../revisao-critica-04-transacoes.md).
+As capturas 03 de Transações/demo de Transações abaixo são históricas e foram
+substituídas por esta rodada; as outras páginas não foram reavaliadas nesta rodada.
+
+| Estado | Captura |
+| --- | --- |
+| Uma conta, nome uma vez e sem coluna repetida | [desktop final](rodada-04/conta-unica-final-desktop.jpg) / [celular final](rodada-04/conta-unica-final-mobile.jpg) |
+| Filtros sem Conta/Grupo/Pessoa de opção única | [Dialog](rodada-04/conta-unica-filtros-mobile.jpg) |
+| Conta desconhecida ou filtro antigo | [conta ausente do catálogo](rodada-04/conta-desconhecida-desktop.jpg) / [filtro indisponível e Limpar](rodada-04/filtro-indisponivel-mobile.jpg) |
+| Demo, busca e Filtros compactos | [desktop final](rodada-04/demo-desktop-final.jpg) / [celular final](rodada-04/demo-mobile-final.jpg) / [busca aplicada](rodada-04/demo-busca-compacta-mobile.jpg) / [320px](rodada-04/demo-busca-320.jpg) |
+| Várias contas, Select e recuperação de parcialidade | [lista e link sublinhado](rodada-04/varias-contas-mobile.jpg) / [Select aberto](rodada-04/varias-contas-select-mobile.jpg) |
+| Alinhamentos de Transações | [grade desktop](rodada-04/grade-transacoes-desktop.jpg) / [grade celular](rodada-04/grade-transacoes-mobile.jpg) |
+
+Fixture privada local em 8799; dados sintéticos. A exceção deliberada de conta
+fora do catálogo comprova apresentação, não aplicação de filtros por SQL. GET
+preservou accountId oculto e Limpar removeu os IDs indisponíveis. Sem rolagem
+horizontal nas larguras inspecionadas. Demo final também aberta no Worker local
+8801 sem sessão; busca por Enter retornou três registros, preservando mês e
+texto no GET. O primeiro conjunto `*-native.jpg` da demo
+e `demo-busca-mobile.jpg` registra a etapa anterior à busca compacta.
+
+## Rodada 03 — demais páginas e histórico
 
 24/10/2026. Screenshots do código compilado, com dados sintéticos.
 Desktop 1541×863; celular emulado 391×845. Não são imagens geradas por IA.

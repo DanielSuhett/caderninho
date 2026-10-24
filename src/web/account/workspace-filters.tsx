@@ -7,21 +7,33 @@ export function ScopeFields({
   catalog,
   params,
   person = true,
+  compact = false,
 }: {
   snapshot: PortalResponse;
   catalog: WorkspaceCatalog;
   params: URLSearchParams;
   person?: boolean;
+  compact?: boolean;
 }) {
   return (
     <>
-      <Select
-        className="w-full"
-        defaultValue={params.get("space") ?? "personal"}
-        items={[...catalog.spaces.map((s) => ({ label: s.name, value: s.id }))]}
-        label="Grupo"
-        name="space"
-      />
+      {compact && catalog.spaces.length < 2 ? (
+        <input
+          name="space"
+          type="hidden"
+          value={params.get("space") ?? "personal"}
+        />
+      ) : (
+        <Select
+          className="w-full"
+          defaultValue={params.get("space") ?? "personal"}
+          items={[
+            ...catalog.spaces.map((s) => ({ label: s.name, value: s.id })),
+          ]}
+          label="Grupo"
+          name="space"
+        />
+      )}
       {person ? (
         <Select
           className="w-full"

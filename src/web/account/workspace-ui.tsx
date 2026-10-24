@@ -97,12 +97,14 @@ export function WorkspaceFilters({
   context,
   activeCount = 0,
   leading,
+  showClear,
 }: {
   action: string;
   children: ReactNode;
   context?: string;
   activeCount?: number;
   leading?: ReactNode;
+  showClear?: boolean;
 }) {
   const formId = useId();
   return (
@@ -137,7 +139,9 @@ export function WorkspaceFilters({
             </a>
           </form>
         </FilterDialog>
-        {(activeCount > 0 || new URLSearchParams(location.search).size > 0) && (
+        {(showClear ??
+          (activeCount > 0 ||
+            new URLSearchParams(location.search).size > 0)) && (
           <Toolbar.Link href={action}>Limpar</Toolbar.Link>
         )}
       </Toolbar>

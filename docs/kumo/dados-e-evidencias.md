@@ -38,7 +38,9 @@ IA ou percentual de importação foi inventado.
 `src/web/demo-data.ts` fornece um ledger determinístico de maio a outubro de 2026,
 com BRL/USD, bancos/cartão, estorno, transferências, sem classificação, pendência,
 futuro e ignorado. `/demo` e `/demo/transactions` compartilham os componentes
-operacionais, mas só leem esse conjunto fictício. Busca/mês/moeda/conta usam GET;
+operacionais, mas só leem esse conjunto fictício. Mês/moeda usam GET na visão
+geral; busca/mês/conta usam GET em Transações, com moeda em cada valor e sem
+conversão ou soma entre moedas. A lista não oferece seletor de moeda;
 a busca consulta todo o ledger sintético. A demo não importa a API privada do
 painel, não usa sessão nem executa edição, conexão ou autorização.
 

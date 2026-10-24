@@ -5,6 +5,7 @@ import {
   InputGroup,
   Loader,
   Popover,
+  Select,
 } from "@cloudflare/kumo";
 import { CalendarIcon, MagnifyingGlassIcon } from "@phosphor-icons/react";
 import {
@@ -51,16 +52,19 @@ export function QuerySearch({
   params,
   name,
   label,
+  compact = false,
 }: {
   action: string;
   params: URLSearchParams;
   name: "text" | "q";
   label: string;
+  compact?: boolean;
 }) {
   return (
     <form
       action={action}
       className="query-search"
+      data-compact={compact}
       method="get"
     >
       {[...params.entries()]
@@ -73,19 +77,42 @@ export function QuerySearch({
             value={value}
           />
         ))}
-      <SearchField
-        defaultValue={params.get(name) ?? ""}
-        label={label}
-        maxLength={240}
-        name={name}
-        placeholder="Ex.: mercado"
-      />
-      <UiButton
-        type="submit"
-        variant="secondary"
-      >
-        Buscar
-      </UiButton>
+      {compact ? (
+        <InputGroup>
+          <InputGroup.Input
+            aria-label={label}
+            defaultValue={params.get(name) ?? ""}
+            enterKeyHint="search"
+            maxLength={240}
+            name={name}
+            placeholder={label}
+            type="search"
+          />
+          <InputGroup.Addon align="end">
+            <InputGroup.Button
+              icon={MagnifyingGlassIcon}
+              tooltip="Buscar"
+              type="submit"
+            />
+          </InputGroup.Addon>
+        </InputGroup>
+      ) : (
+        <>
+          <SearchField
+            defaultValue={params.get(name) ?? ""}
+            label={label}
+            maxLength={240}
+            name={name}
+            placeholder="Ex.: mercado"
+          />
+          <UiButton
+            type="submit"
+            variant="secondary"
+          >
+            Buscar
+          </UiButton>
+        </>
+      )}
     </form>
   );
 }
@@ -93,6 +120,55 @@ export function QuerySearch({
 interface CatalogOption {
   label: string;
   value: string;
+}
+
+export function AccountFilter({
+  accounts,
+  value,
+  showOwner = false,
+}: {
+  accounts: Array<{ id: string; name: string; personName?: string }>;
+  value: string;
+  showOwner?: boolean;
+}) {
+  if (accounts.length < 2) {
+    return (
+      <input
+        name="accountId"
+        type="hidden"
+        value={value}
+      />
+    );
+  }
+  const items = [
+    { label: "Todas as contas", value: "" },
+    ...accounts.map((account) => ({
+      label:
+        showOwner && account.personName
+          ? `${account.name} · ${account.personName}`
+          : account.name,
+      value: account.id,
+    })),
+  ];
+  if (accounts.length <= 8) {
+    return (
+      <Select
+        className="w-full"
+        defaultValue={value}
+        items={items}
+        label="Conta"
+        name="accountId"
+      />
+    );
+  }
+  return (
+    <CatalogField
+      defaultValue={value}
+      items={items}
+      label="Conta"
+      name="accountId"
+    />
+  );
 }
 function optionLabel(item: CatalogOption) {
   return item.label;

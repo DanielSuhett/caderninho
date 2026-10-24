@@ -1,4 +1,4 @@
-import { Banner, Input, Select } from "@cloudflare/kumo";
+import { Banner, Input, Link, Select } from "@cloudflare/kumo";
 import { useCallback, useState } from "react";
 
 import {
@@ -11,7 +11,12 @@ import {
 import { UiCheckbox } from "../ui";
 import type { createAccountApi } from "./account-api";
 import { CursorPagination } from "./cursor-pagination";
-import { CatalogField, DateRangeFields, QuerySearch } from "./filter-fields";
+import {
+  AccountFilter,
+  CatalogField,
+  DateRangeFields,
+  QuerySearch,
+} from "./filter-fields";
 import { TransactionList } from "./transaction-list";
 import { EmptyView, ScopeFields } from "./workspace-filters";
 import { dayLabel, ResourceFeedback, useResource } from "./workspace-resource";
@@ -74,6 +79,15 @@ export function TransactionsView({
   );
   const resource = useResource(load);
   const { data } = resource;
+  const presentation = data
+    ? transactionFilterContext({
+        accounts: data.accounts,
+        catalog: data.catalog,
+        params,
+        records: data.result.data.records,
+        snapshot,
+      })
+    : null;
   const next = new URLSearchParams(params);
   if (data?.result.data.cursor) {
     next.set("cursor", data.result.data.cursor);
@@ -85,41 +99,28 @@ export function TransactionsView({
     <>
       <WorkspaceHeading title="Transações" />
       <ResourceFeedback {...resource} />
-      {!!data && (
+      {!!data && !!presentation && (
         <>
           <WorkspaceFilters
             action="/account/transactions"
-            activeCount={
-              [
-                "text",
-                "from",
-                "to",
-                "direction",
-                "accountId",
-                "categoryId",
-                "status",
-                "future",
-                "ignored",
-              ].filter((key) => params.get(key)).length
-            }
-            context={transactionFilterContext(
-              params,
-              snapshot,
-              data.catalog,
-              data.accounts,
-            )}
+            activeCount={presentation.activeCount}
+            context={presentation.context}
             leading={
               <QuerySearch
                 action="/account/transactions"
+                compact
                 label="Buscar descrição"
                 name="text"
                 params={params}
               />
             }
+            showClear={presentation.activeCount > 0 || spaceId !== "personal"}
           >
             <ScopeFields
               catalog={data.catalog}
+              compact
               params={params}
+              person={presentation.multiplePeople}
               snapshot={snapshot}
             />
             <div className="filter-wide">
@@ -147,17 +148,10 @@ export function TransactionsView({
                 label="Movimento"
                 name="direction"
               />
-              <CatalogField
-                defaultValue={params.get("accountId") ?? ""}
-                items={[
-                  { label: "Todas as contas", value: "" },
-                  ...data.accounts.map((a) => ({
-                    label: `${a.name} · ${a.personName}`,
-                    value: a.id,
-                  })),
-                ]}
-                label="Conta"
-                name="accountId"
+              <AccountFilter
+                accounts={data.accounts}
+                showOwner={presentation.multiplePeople}
+                value={params.get("accountId") ?? ""}
               />
               <CatalogField
                 defaultValue={params.get("categoryId") ?? ""}
@@ -202,7 +196,13 @@ export function TransactionsView({
               className="feedback"
               description={
                 <>
-                  Histórico parcial. <a href="/account/sync">Ver importações</a>
+                  Histórico parcial.{" "}
+                  <Link
+                    href="/account/sync"
+                    variant="current"
+                  >
+                    Ver importações
+                  </Link>
                 </>
               }
               variant="secondary"
@@ -214,13 +214,8 @@ export function TransactionsView({
               categories={data.catalog.categories}
               records={data.result.data.records}
               referenceDay={data.result.data.referenceDay}
-              showOwner={
-                !params.get("person") &&
-                (snapshot.people.length !== 1 ||
-                  data.accounts.some(
-                    (a) => a.personId !== snapshot.people.at(0)?.id,
-                  ))
-              }
+              showAccount={presentation.showAccount}
+              showOwner={!params.get("person") && presentation.multiplePeople}
             />
           ) : (
             <EmptyView title="Nenhuma transação neste recorte">
@@ -246,24 +241,108 @@ export function TransactionsView({
   );
 }
 
-function transactionFilterContext(
-  params: URLSearchParams,
-  snapshot: PortalResponse,
-  catalog: WorkspaceCatalog,
-  accounts: Array<{ personId: string }>,
-) {
+function transactionFilterContext({
+  params,
+  snapshot,
+  catalog,
+  accounts,
+  records,
+}: {
+  params: URLSearchParams;
+  snapshot: PortalResponse;
+  catalog: WorkspaceCatalog;
+  accounts: Array<{
+    id: string;
+    name: string;
+    personId: string;
+    personName: string;
+  }>;
+  records: Array<{ accountId: string }>;
+}) {
   const spaceId = params.get("space") || "personal";
-  const person = snapshot.people.find((p) => p.id === params.get("person"));
   const multiplePeople =
     snapshot.people.length !== 1 ||
     accounts.some((a) => a.personId !== snapshot.people.at(0)?.id);
-  return [
-    catalog.spaces.find((s) => s.id === spaceId)?.name ?? spaceId,
-    person?.name ?? (multiplePeople ? "Todas as pessoas" : ""),
+  const onlyAccount = accounts.length === 1 ? accounts.at(0) : undefined;
+  const showAccount =
+    !onlyAccount || records.some((row) => row.accountId !== onlyAccount.id);
+  const accountContext: string[] = [];
+  if (!showAccount && onlyAccount) {
+    accountContext.push(onlyAccount.name);
+    if (multiplePeople) {
+      accountContext.push(onlyAccount.personName);
+    }
+  }
+  const context = [
+    catalog.spaces.length > 1 || spaceId !== "personal"
+      ? (catalog.spaces.find((s) => s.id === spaceId)?.name ?? spaceId)
+      : "",
+    scopeLabel({
+      fallback: accountContext.join(" · "),
+      items: accounts,
+      missing: "Conta indisponível",
+      value: params.get("accountId"),
+    }),
+    scopeLabel({
+      fallback:
+        multiplePeople && !accountContext.length ? "Todas as pessoas" : "",
+      items: snapshot.people,
+      missing: "Pessoa indisponível",
+      value: params.get("person"),
+    }),
     params.get("future") === "on" ? "Futuros" : "",
     params.get("from") ? `Desde ${dayLabel(params.get("from") ?? "")}` : "",
     params.get("to") ? `Até ${dayLabel(params.get("to") ?? "")}` : "",
   ]
     .filter(Boolean)
     .join(" · ");
+  const activeCount = activeTransactionFilters(
+    params,
+    accounts,
+    snapshot.people,
+    showAccount,
+  );
+  return { activeCount, context, multiplePeople, showAccount };
+}
+
+function activeTransactionFilters(
+  params: URLSearchParams,
+  accounts: Array<{ id: string }>,
+  people: Array<{ id: string }>,
+  showAccount: boolean,
+) {
+  const filterKeys = [
+    "text",
+    "from",
+    "to",
+    "direction",
+    "categoryId",
+    "status",
+    "future",
+    "ignored",
+  ];
+  if (showAccount || params.get("accountId") !== accounts.at(0)?.id) {
+    filterKeys.push("accountId");
+  }
+  if (people.length !== 1 || params.get("person") !== people.at(0)?.id) {
+    filterKeys.push("person");
+  }
+  return filterKeys.filter((key) => params.get(key)).length;
+}
+
+function scopeLabel({
+  value,
+  items,
+  fallback,
+  missing,
+}: {
+  value: string | null;
+  items: Array<{ id: string; name: string }>;
+  fallback: string;
+  missing: string;
+}) {
+  if (!value) {
+    return fallback;
+  }
+  return items.find((item) => item.id === value)?.name ?? missing;
 }
