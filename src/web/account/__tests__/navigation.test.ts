@@ -30,6 +30,30 @@ await test("navigation only handles internal workspace destinations, retaining n
   }
 });
 
+await test("demo navigation keeps GET filters client-side without crossing the public and private shells", () => {
+  const current = new URL("https://example.test/demo?month=2026-10");
+  for (const path of [
+    "/demo?month=2026-09&currency=USD",
+    "/demo/",
+    "/demo/transactions?month=2026-10&text=mercado",
+    "/demo/transactions/?month=2026-10&accountId=checking",
+  ]) {
+    assert.equal(isWorkspaceUrl(new URL(path, current), current), true, path);
+  }
+  for (const path of [
+    "/account",
+    "/account/login",
+    "/",
+    "/demo#install-title",
+  ]) {
+    assert.equal(isWorkspaceUrl(new URL(path, current), current), false, path);
+  }
+  assert.equal(
+    isWorkspaceUrl(new URL("/demo", current), new URL("/account", current)),
+    false,
+  );
+});
+
 await test("read cache separates filters, expires after ten seconds and explicit refresh bypasses it", async () => {
   let clock = 0;
   let calls = 0;
@@ -94,4 +118,19 @@ await test("read cache does not retain failures and bounds retained queries to t
     "evicted",
   );
   assert.equal(await cache.read("20", () => Promise.resolve("unexpected")), 20);
+});
+
+await test("demo rules and groups keep their public route during client navigation", () => {
+  const current = new URL("https://example.test/demo?month=2026-10");
+  for (const path of [
+    "/demo/rules",
+    "/demo/rules/",
+    "/demo/groups",
+    "/demo/groups/",
+  ]) {
+    assert.equal(
+      isWorkspaceUrl(new URL(`${path}?space=personal`, current), current),
+      true,
+    );
+  }
 });

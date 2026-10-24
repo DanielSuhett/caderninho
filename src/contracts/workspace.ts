@@ -13,6 +13,11 @@ export const PortalQuerySchema = z
       planningDefinitions[2].schema.extend({
         tool: z.literal("get_transactions"),
       }),
+      planningDefinitions[3].schema.extend({ tool: z.literal("get_overview") }),
+      planningDefinitions[23].schema.extend({
+        groupBy: z.literal("month"),
+        tool: z.literal("generate_chart"),
+      }),
       planningDefinitions[2].schema
         .omit({ cardNumber: true, tagId: true })
         .extend({

@@ -1,11 +1,14 @@
+import { Banner, Input, Select, Switch } from "@cloudflare/kumo";
 import { PlusIcon, TrashIcon } from "@phosphor-icons/react";
 import {
   type ChangeEvent,
   type FormEvent,
   type MouseEvent,
+  memo,
   useCallback,
   useEffect,
   useId,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -17,8 +20,10 @@ import {
 } from "../../contracts";
 import { tryCatch } from "../../shared";
 import { UiButton } from "../ui";
-import type { createAccountApi } from "./account-api";
+import type { OrganizationApi } from "./account-api";
 import { BackofficeDialog } from "./backoffice-dialog";
+import { DisclosureItem } from "./disclosure-item";
+import { RuleComposition } from "./rule-composition";
 import {
   conditionDraft,
   conditionFields,
@@ -30,11 +35,19 @@ import {
 import { RulePreview } from "./rule-preview";
 
 type Rule = WorkspaceCatalog["rules"][number];
-type FieldEvent = ChangeEvent<HTMLInputElement | HTMLSelectElement>;
+type FieldEvent = ChangeEvent<HTMLInputElement>;
 function initialLegacyText(rule?: Rule) {
   return rule?.filter ? rule.text : "";
 }
+function initialCategory(rule: Rule | undefined, catalog: WorkspaceCatalog) {
+  return (
+    rule?.categoryId ??
+    catalog.categories.find((c) => c.kind === "expense")?.id ??
+    ""
+  );
+}
 export function RuleEditor({
+  open,
   api,
   snapshot,
   catalog,
@@ -44,7 +57,8 @@ export function RuleEditor({
   close,
   saved,
 }: {
-  api: ReturnType<typeof createAccountApi>;
+  open: boolean;
+  api: OrganizationApi;
   snapshot: PortalResponse;
   catalog: WorkspaceCatalog;
   accounts: { id: string; name: string; personName: string }[];
@@ -54,10 +68,7 @@ export function RuleEditor({
   saved: () => void;
 }) {
   const [fields, setFields] = useState({
-    category:
-      rule?.categoryId ??
-      catalog.categories.find((c) => c.kind === "expense")?.id ??
-      "",
+    category: initialCategory(rule, catalog),
     currency: rule?.filter?.currency ?? "",
     legacyAccount: rule?.accountId ?? "",
     legacyDirection: rule?.direction ?? "",
@@ -72,55 +83,87 @@ export function RuleEditor({
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
-  const [previewStatus, setPreviewStatus] = useState("Complete as condições");
   const inFlight = useRef<AbortController | null>(null);
   const receipt = useRef({ key: "", payload: "" });
   const formId = useId();
   useEffect(() => () => inFlight.current?.abort(), []);
-  const draft = parseRuleDraft({
-    accountId: fields.legacyAccount || null,
-    alternatives,
-    csrf: snapshot.csrf,
-    currency: fields.currency,
-    direction: fields.legacyDirection || null,
-    spaceId,
-    text: fields.legacyText,
-  });
+  const draft = useMemo(
+    () =>
+      parseRuleDraft({
+        accountId: fields.legacyAccount || null,
+        alternatives,
+        csrf: snapshot.csrf,
+        currency: fields.currency,
+        direction: fields.legacyDirection || null,
+        spaceId,
+        text: fields.legacyText,
+      }),
+    [
+      alternatives,
+      fields.currency,
+      fields.legacyAccount,
+      fields.legacyDirection,
+      fields.legacyText,
+      snapshot.csrf,
+      spaceId,
+    ],
+  );
   const onField = useCallback((event: FieldEvent) => {
     const { name, value } = event.currentTarget;
     setDirty(true);
     setFields((previous) => ({ ...previous, [name]: value }));
   }, []);
-  const onEnabled = useCallback((event: ChangeEvent<HTMLInputElement>) => {
+  const selectField = useCallback((name: string, value: string | null) => {
     setDirty(true);
-    setEnabled(event.currentTarget.checked);
+    setFields((previous) => ({ ...previous, [name]: value ?? "" }));
   }, []);
-  const onCondition = useCallback((event: FieldEvent) => {
-    const { value, dataset } = event.currentTarget;
-    const { alternative, condition, part } = dataset;
+  const onCategory = useCallback(
+    (value: string | null) => selectField("category", value),
+    [selectField],
+  );
+  const onCurrency = useCallback(
+    (value: string | null) => selectField("currency", value),
+    [selectField],
+  );
+  const onLegacyAccount = useCallback(
+    (value: string | null) => selectField("legacyAccount", value),
+    [selectField],
+  );
+  const onLegacyDirection = useCallback(
+    (value: string | null) => selectField("legacyDirection", value),
+    [selectField],
+  );
+  const onEnabled = useCallback((checked: boolean) => {
     setDirty(true);
-    setAlternatives((previous) =>
-      previous.map((a) =>
-        a.id === alternative
-          ? {
-              ...a,
-              conditions: a.conditions.map((c) => {
-                if (c.id !== condition) {
-                  return c;
-                }
-                if (part === "field") {
-                  return { ...conditionDraft(value), id: c.id };
-                }
-                if (part === "operator") {
-                  return { ...c, operator: value };
-                }
-                return { ...c, value };
-              }),
-            }
-          : a,
-      ),
-    );
+    setEnabled(checked);
   }, []);
+  const onCondition = useCallback(
+    (alternative: string, condition: string, part: string, value: string) => {
+      setDirty(true);
+      setAlternatives((previous) =>
+        previous.map((a) =>
+          a.id === alternative
+            ? {
+                ...a,
+                conditions: a.conditions.map((c) => {
+                  if (c.id !== condition) {
+                    return c;
+                  }
+                  if (part === "field") {
+                    return { ...conditionDraft(value), id: c.id };
+                  }
+                  if (part === "operator") {
+                    return { ...c, operator: value };
+                  }
+                  return { ...c, value };
+                }),
+              }
+            : a,
+        ),
+      );
+    },
+    [],
+  );
   const onPreset = useCallback((event: MouseEvent<HTMLButtonElement>) => {
     const preset = rulePresets.find(
       (p) => p.name === event.currentTarget.dataset.preset,
@@ -273,24 +316,22 @@ export function RuleEditor({
   }
   return (
     <BackofficeDialog
+      actionHint={
+        <p className="muted">
+          Salvar vale para as próximas importações e não reclassifica o
+          histórico.
+        </p>
+      }
       busy={busy}
       close={close}
       dirty={dirty}
-      footer={
-        <div className="editor-submit">
-          <small>
-            <strong className="preview-count">{previewStatus}</strong>Salvar não
-            reclassifica o histórico.
-          </small>
-          <UiButton
-            disabled={busy || !draft.success}
-            form={formId}
-            type="submit"
-          >
-            {submitLabel}
-          </UiButton>
-        </div>
-      }
+      open={open}
+      primaryAction={{
+        children: submitLabel,
+        disabled: !draft.success,
+        form: formId,
+        type: "submit",
+      }}
       title={rule ? "Editar regra" : "Nova regra"}
     >
       <form
@@ -303,59 +344,50 @@ export function RuleEditor({
         </p>
         <fieldset disabled={busy}>
           <legend className="sr-only">Identificação e classificação</legend>
-          <label>
-            Nome da regra
-            <input
-              maxLength={240}
-              name="name"
+          <Input
+            label="Nome da regra"
+            maxLength={240}
+            name="name"
+            onChange={onField}
+            required
+            value={fields.name}
+          />
+          <div className="editor-grid">
+            <Select
+              className="w-full"
+              items={[
+                ...catalog.categories.map((c) => ({
+                  label: c.name,
+                  value: c.id,
+                })),
+              ]}
+              label="Categoria"
+              name="category"
+              onValueChange={onCategory}
+              value={fields.category}
+            />
+            <Input
+              description={<small>Menor número vence.</small>}
+              label="Prioridade"
+              max={1000}
+              min={0}
+              name="priority"
               onChange={onField}
               required
-              value={fields.name}
+              type="number"
+              value={fields.priority}
             />
-          </label>
-          <div className="editor-grid">
-            <label>
-              Categoria
-              <select
-                name="category"
-                onChange={onField}
-                value={fields.category}
-              >
-                {catalog.categories.map((c) => (
-                  <option
-                    key={c.id}
-                    value={c.id}
-                  >
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Prioridade
-              <input
-                max={1000}
-                min={0}
-                name="priority"
-                onChange={onField}
-                required
-                type="number"
-                value={fields.priority}
-              />
-              <small>Menor número vence.</small>
-            </label>
           </div>
-          <label className="check-field">
-            <input
+          <div className="check-field">
+            <Switch
               checked={enabled}
-              onChange={onEnabled}
-              type="checkbox"
+              label="Regra ativa nas próximas importações"
+              onCheckedChange={onEnabled}
             />
-            Regra ativa nas próximas importações
-          </label>
+          </div>
         </fieldset>
         <fieldset disabled={busy}>
-          <legend>Condições</legend>
+          <legend>Condições: todas por alternativa</legend>
           <div className="preset-actions">
             {rulePresets.map((preset) => (
               <UiButton
@@ -370,15 +402,17 @@ export function RuleEditor({
             ))}
           </div>
           <p className="muted">Presets substituem as condições e usam BRL.</p>
-          <label>
-            Moeda das condições
-            <select
-              name="currency"
-              onChange={onField}
-              value={fields.currency}
-            >
-              <option value="">Todas as moedas</option>
-              {[
+          <Select
+            className="w-full"
+            description={
+              <small>
+                Obrigatória ao comparar valores. Valor absoluto não distingue
+                entrada de saída.
+              </small>
+            }
+            items={[
+              { label: "Todas as moedas", value: "" },
+              ...[
                 "BRL",
                 "USD",
                 "EUR",
@@ -391,60 +425,56 @@ export function RuleEditor({
                 "CLP",
                 "JPY",
                 "KWD",
-              ].map((value) => (
-                <option key={value}>{value}</option>
-              ))}
-            </select>
-            <small>
-              Obrigatória ao comparar valores. Valor absoluto não distingue
-              entrada de saída.
-            </small>
-          </label>
+              ].map((value) => ({ label: value, value })),
+            ]}
+            label="Moeda das condições"
+            name="currency"
+            onValueChange={onCurrency}
+            value={fields.currency}
+          />
           {!!(
             rule?.accountId ||
             rule?.direction ||
             (rule?.filter && rule.text)
           ) && (
             <div className="editor-grid">
-              <label>
-                Conta obrigatória
-                <select
-                  name="legacyAccount"
-                  onChange={onField}
-                  value={fields.legacyAccount}
-                >
-                  <option value="">Todas</option>
-                  {accounts.map((account) => (
-                    <option
-                      key={account.id}
-                      value={account.id}
-                    >
-                      {account.name} · {account.personName}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Movimento obrigatório
-                <select
-                  name="legacyDirection"
-                  onChange={onField}
-                  value={fields.legacyDirection}
-                >
-                  <option value="">Todos</option>
-                  <option value="DEBIT">Saída</option>
-                  <option value="CREDIT">Entrada</option>
-                </select>
-              </label>
+              <Select
+                className="w-full"
+                items={[
+                  { label: "Todas", value: "" },
+                  ...accounts.map((account) => ({
+                    label: (
+                      <>
+                        {account.name} · {account.personName}
+                      </>
+                    ),
+                    value: account.id,
+                  })),
+                ]}
+                label="Conta obrigatória"
+                name="legacyAccount"
+                onValueChange={onLegacyAccount}
+                value={fields.legacyAccount}
+              />
+              <Select
+                className="w-full"
+                items={[
+                  { label: "Todos", value: "" },
+                  { label: "Saída", value: "DEBIT" },
+                  { label: "Entrada", value: "CREDIT" },
+                ]}
+                label="Movimento obrigatório"
+                name="legacyDirection"
+                onValueChange={onLegacyDirection}
+                value={fields.legacyDirection}
+              />
               {!!(rule?.filter && rule.text) && (
-                <label>
-                  Descrição obrigatória
-                  <input
-                    name="legacyText"
-                    onChange={onField}
-                    value={fields.legacyText}
-                  />
-                </label>
+                <Input
+                  label="Descrição obrigatória"
+                  name="legacyText"
+                  onChange={onField}
+                  value={fields.legacyText}
+                />
               )}
             </div>
           )}
@@ -455,7 +485,7 @@ export function RuleEditor({
             >
               {index > 0 && <p className="condition-or">OU</p>}
               <div className="condition-heading">
-                <h3>Todas estas condições</h3>
+                <h3>Alternativa {index + 1}</h3>
                 {alternatives.length > 1 && (
                   <UiButton
                     data-alternative={alternative.id}
@@ -472,66 +502,58 @@ export function RuleEditor({
                   className="condition-row"
                   key={condition.id}
                 >
-                  <label>
-                    Campo
-                    <select
-                      data-alternative={alternative.id}
-                      data-condition={condition.id}
-                      data-part="field"
-                      onChange={onCondition}
-                      value={condition.field}
-                    >
-                      {conditionFields.map((field) => (
-                        <option
-                          key={field.value}
-                          value={field.value}
-                        >
-                          {field.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label>
-                    Operador
-                    <select
-                      data-alternative={alternative.id}
-                      data-condition={condition.id}
-                      data-part="operator"
-                      onChange={onCondition}
-                      value={condition.operator}
-                    >
-                      {condition.field === "description" ? (
-                        <>
-                          <option value="contains">contém</option>
-                          <option value="not_contains">não contém</option>
-                          <option value="equals">é igual a</option>
-                          <option value="starts_with">começa com</option>
-                        </>
-                      ) : (
-                        <>
-                          <option value="equals">é igual a</option>
-                          {["date", "amount"].includes(condition.field) && (
-                            <>
-                              <option value="gte">maior ou igual</option>
-                              <option value="lte">menor ou igual</option>
-                            </>
-                          )}
-                        </>
-                      )}
-                    </select>
-                  </label>
-                  <label htmlFor={`condition-${condition.id}`}>
-                    {condition.field === "amount"
-                      ? `Valor em ${fields.currency || "moeda a escolher"}`
-                      : "Valor"}
-                    <ConditionValue
-                      accounts={accounts}
-                      alternative={alternative.id}
-                      change={onCondition}
-                      condition={condition}
-                      snapshot={snapshot}
-                    />
-                  </label>
+                  <ConditionSelect
+                    alternative={alternative.id}
+                    change={onCondition}
+                    condition={condition.id}
+                    items={[
+                      ...conditionFields.map((field) => ({
+                        label: field.label,
+                        value: field.value,
+                      })),
+                    ]}
+                    label="Campo"
+                    part="field"
+                    value={condition.field}
+                  />
+                  <ConditionSelect
+                    alternative={alternative.id}
+                    change={onCondition}
+                    condition={condition.id}
+                    items={[
+                      ...(condition.field === "description"
+                        ? [
+                            { label: "contém", value: "contains" },
+                            { label: "não contém", value: "not_contains" },
+                            { label: "é igual a", value: "equals" },
+                            { label: "começa com", value: "starts_with" },
+                          ]
+                        : [
+                            { label: "é igual a", value: "equals" },
+                            ...(["date", "amount"].includes(condition.field)
+                              ? [
+                                  { label: "maior ou igual", value: "gte" },
+                                  { label: "menor ou igual", value: "lte" },
+                                ]
+                              : []),
+                          ]),
+                    ]}
+                    label="Operador"
+                    part="operator"
+                    value={condition.operator}
+                  />
+                  <ConditionValue
+                    accounts={accounts}
+                    alternative={alternative.id}
+                    change={onCondition}
+                    condition={condition}
+                    label={
+                      condition.field === "amount"
+                        ? `Valor em ${fields.currency || "moeda a escolher"}`
+                        : "Valor"
+                    }
+                    snapshot={snapshot}
+                  />
                   <UiButton
                     aria-label="Remover condição"
                     className="icon-button"
@@ -568,14 +590,21 @@ export function RuleEditor({
             Adicionar alternativa
           </UiButton>
         </fieldset>
+        <RuleDraftComposition
+          accounts={accounts}
+          catalog={catalog}
+          category={fields.category}
+          draft={draft}
+          enabled={enabled}
+          people={snapshot.people}
+        />
         {!!message && (
-          <p
-            className="notice"
-            data-tone="error"
+          <Banner
+            className="feedback"
+            description={message}
             role="alert"
-          >
-            {message}
-          </p>
+            variant="error"
+          />
         )}
       </form>
       <DraftFeedback
@@ -585,13 +614,46 @@ export function RuleEditor({
       <RulePreview
         accounts={accounts}
         api={api}
-        input={draft.success ? draft.data : null}
-        onStatus={setPreviewStatus}
+        input={open && draft.success ? draft.data : null}
       />
     </BackofficeDialog>
   );
 }
+function ConditionSelect({
+  alternative,
+  condition,
+  part,
+  change,
+  ...props
+}: {
+  alternative: string;
+  condition: string;
+  part: string;
+  change: (
+    alternative: string,
+    condition: string,
+    part: string,
+    value: string,
+  ) => void;
+  items: { label: string; value: string }[];
+  label: string;
+  value: string;
+}) {
+  const select = useCallback(
+    (value: string | null) => change(alternative, condition, part, value ?? ""),
+    [alternative, condition, part, change],
+  );
+  return (
+    <Select
+      className="w-full"
+      {...props}
+      onValueChange={select}
+    />
+  );
+}
+
 function ConditionValue({
+  label,
   alternative,
   condition,
   accounts,
@@ -602,8 +664,24 @@ function ConditionValue({
   condition: DraftCondition;
   accounts: { id: string; name: string; personName: string }[];
   snapshot: PortalResponse;
-  change: (event: FieldEvent) => void;
+  label: React.ReactNode;
+  change: (
+    alternative: string,
+    condition: string,
+    part: string,
+    value: string,
+  ) => void;
 }) {
+  const onInput = useCallback(
+    (event: FieldEvent) =>
+      change(alternative, condition.id, "value", event.currentTarget.value),
+    [alternative, condition.id, change],
+  );
+  const onSelect = useCallback(
+    (value: string | null) =>
+      change(alternative, condition.id, "value", value ?? ""),
+    [alternative, condition.id, change],
+  );
   const options: Record<string, { id: string; name: string }[]> = {
     accountId: accounts.map((account) => ({
       id: account.id,
@@ -622,36 +700,36 @@ function ConditionValue({
   const choices = options[condition.field];
   if (choices) {
     return (
-      <select
+      <Select
+        className="w-full"
         data-alternative={alternative}
         data-condition={condition.id}
         data-part="value"
         id={`condition-${condition.id}`}
-        onChange={change}
+        items={[
+          { label: "Selecione", value: "" },
+          ...choices.map((choice) => ({
+            label: choice.name,
+            value: choice.id,
+          })),
+        ]}
+        label={label}
+        onValueChange={onSelect}
         required
         value={condition.value}
-      >
-        <option value="">Selecione</option>
-        {choices.map((choice) => (
-          <option
-            key={choice.id}
-            value={choice.id}
-          >
-            {choice.name}
-          </option>
-        ))}
-      </select>
+      />
     );
   }
   return (
-    <input
+    <Input
       data-alternative={alternative}
       data-condition={condition.id}
       data-part="value"
       id={`condition-${condition.id}`}
       inputMode={condition.field === "amount" ? "decimal" : "text"}
+      label={label}
       maxLength={160}
-      onChange={change}
+      onChange={onInput}
       placeholder={
         condition.field === "amount" ? "Ex.: 150,00" : "Texto literal"
       }
@@ -678,12 +756,47 @@ function DraftFeedback({
     ? "Escolha uma moeda para comparar valores."
     : "Complete todas as condições com valores válidos para consultar e salvar.";
   return (
-    <p
-      className="notice"
-      data-tone="warning"
+    <Banner
+      className="feedback"
+      description={message}
       role="status"
-    >
-      {message}
-    </p>
+      variant="alert"
+    />
   );
 }
+
+const RuleDraftComposition = memo(function RuleDraftDiagram({
+  accounts,
+  category,
+  catalog,
+  draft,
+  enabled,
+  people,
+}: {
+  accounts: { id: string; name: string; personName: string }[];
+  category: string;
+  catalog: WorkspaceCatalog;
+  draft: ReturnType<typeof parseRuleDraft>;
+  enabled: boolean;
+  people: PortalResponse["people"];
+}) {
+  return (
+    <DisclosureItem summary="Visualizar composição">
+      {draft.success ? (
+        <RuleComposition
+          accounts={accounts}
+          category={
+            catalog.categories.find((item) => item.id === category)?.name ?? ""
+          }
+          enabled={enabled}
+          people={people}
+          rule={draft.data}
+        />
+      ) : (
+        <p className="muted">
+          Complete as condições para visualizar a composição.
+        </p>
+      )}
+    </DisclosureItem>
+  );
+});

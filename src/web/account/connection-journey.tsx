@@ -1,8 +1,10 @@
-import { CheckCircleIcon, CircleNotchIcon } from "@phosphor-icons/react";
+import { Banner, LayerCard, Link, Loader, Select } from "@cloudflare/kumo";
+import { CheckCircleIcon } from "@phosphor-icons/react";
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 
 import type { ConnectionInfo, PortalResponse } from "../../contracts";
 import { UiButton, UiLink } from "../ui";
+import { DisclosureItem } from "./disclosure-item";
 import { momentLabel } from "./workspace-resource";
 
 export interface ConnectionActivity {
@@ -40,6 +42,12 @@ function journeyTitle(
       registering: "Registrando primeira importação…",
       widget: "Autorize seu banco no Meu Pluggy",
     }[activity.stage];
+  }
+  if (
+    connection?.importStatus === "running" &&
+    connection.importCheckpoint?.phase
+  ) {
+    return phases[connection.importCheckpoint.phase];
   }
   if (connection?.importStatus) {
     return {
@@ -89,13 +97,17 @@ function OpeningJourney({
           : "Você escolhe o banco e autoriza a leitura na janela do Meu Pluggy."}
       </p>
       {!!delayed && activity.stage === "opening" && (
-        <p
-          className="notice"
-          data-tone="info"
-        >
-          O Meu Pluggy está demorando para abrir. Você pode fechar esta espera e
-          tentar novamente; isso não cancela uma autorização já enviada.
-        </p>
+        <Banner
+          className="feedback"
+          description={
+            <>
+              O Meu Pluggy está demorando para abrir. Você pode fechar esta
+              espera e tentar novamente; isso não cancela uma autorização já
+              enviada.
+            </>
+          }
+          variant="default"
+        />
       )}
       {activity.stage !== "registering" && (
         <UiButton
@@ -151,46 +163,49 @@ function ConnectProfile({
         className="journey-connect"
         onSubmit={submit}
       >
-        <label htmlFor="journey-profile">Perfil para conectar</label>
-        <select
+        <Select
+          className="w-full"
+          defaultValue={ready[0]?.id ?? ""}
           id="journey-profile"
+          items={[
+            ...ready.map((p) => ({
+              label: (
+                <>
+                  {p.name} ·{" "}
+                  {
+                    snapshot.people.find((person) => person.id === p.personId)
+                      ?.name
+                  }
+                </>
+              ),
+              value: p.id,
+            })),
+          ]}
+          label="Perfil para conectar"
           name="profileId"
-        >
-          {ready.map((p) => (
-            <option
-              key={p.id}
-              value={p.id}
-            >
-              {p.name} ·{" "}
-              {snapshot.people.find((person) => person.id === p.personId)?.name}
-            </option>
-          ))}
-        </select>
+        />
         <p className="muted">Perfil configurado</p>
-        <UiButton type="submit">Conectar Meu Pluggy</UiButton>
+        <UiButton
+          type="submit"
+          variant="primary"
+        >
+          Conectar Meu Pluggy
+        </UiButton>
         <p>
           Depois de autorizar, a primeira importação começa automaticamente.
         </p>
       </form>
-      <details>
-        <summary>Como funciona a conexão</summary>
+      <DisclosureItem summary={<>Como funciona a conexão</>}>
         <p>
           A autorização acontece no Meu Pluggy. O Caderninho importa uma cópia
           dos dados para esta instalação; você acompanha o pedido aqui, sem
           precisar iniciar uma segunda operação.
         </p>
-      </details>
+      </DisclosureItem>
     </>
   );
 }
-function ImportProgress({
-  connection,
-  observedAt,
-}: {
-  connection: ConnectionInfo;
-  observedAt: string | null;
-}) {
-  const phase = connection.importCheckpoint?.phase;
+function ImportProgress({ connection }: { connection: ConnectionInfo }) {
   const currentAccount = connection.importCheckpoint?.accountId;
   const accountName = currentAccount
     ? connection.accounts[currentAccount]?.name
@@ -198,38 +213,19 @@ function ImportProgress({
   const count = Object.keys(connection.accounts).length;
   return (
     <>
-      <div className="journey-phase">
-        <CircleNotchIcon
-          aria-hidden="true"
-          className="journey-spinner"
-          size={24}
-        />
-        <div>
-          <h3>
-            {connection.importStatus === "running" && phase
-              ? phases[phase]
-              : "Aguardando início da execução"}
-          </h3>
-          {!!accountName && <p>Recebendo dados de {accountName}.</p>}
-        </div>
-      </div>
-      <p className="muted">
-        Conexão registrada · {count}{" "}
-        {count === 1 ? "conta identificada" : "contas identificadas"}
+      <p className="journey-progress-context">
+        {!!accountName && `${accountName} · `}
+        {count} {count === 1 ? "conta identificada" : "contas identificadas"}
       </p>
-      {!!observedAt && (
-        <p className="journey-observed">
-          Consultado em {momentLabel(observedAt)}.
-        </p>
-      )}
-      <p
-        className="notice"
-        data-tone={connection.hasTransactions ? "warning" : "info"}
-      >
-        {connection.hasTransactions
-          ? "Dados parciais. A importação ainda está em andamento."
-          : "Aguardando os primeiros lançamentos. A importação ainda não foi concluída."}
-      </p>
+      <Banner
+        className="feedback"
+        description={
+          connection.hasTransactions
+            ? "Histórico parcial. Os dados já recebidos continuam disponíveis."
+            : "Aguardando os primeiros lançamentos. A importação ainda não foi concluída."
+        }
+        variant="secondary"
+      />
     </>
   );
 }
@@ -244,12 +240,11 @@ function ImportResult({ connection }: { connection: ConnectionInfo }) {
         <p>Nenhuma transação foi retornada nesta importação.</p>
       )}
       {connection.partial === true && (
-        <p
-          className="notice"
-          data-tone="warning"
-        >
-          Dados parciais nesta origem.
-        </p>
+        <Banner
+          className="feedback"
+          description={<>Dados parciais nesta origem.</>}
+          variant="alert"
+        />
       )}
     </>
   );
@@ -274,20 +269,19 @@ function ImportJourney({
         {connection.personName ?? "Eu"} ·{" "}
         {connection.profileName ?? "Pluggy principal"}
       </p>
-      {active === true && (
-        <ImportProgress
-          connection={connection}
-          observedAt={observedAt}
-        />
-      )}
+      {active === true && <ImportProgress connection={connection} />}
       {done && <ImportResult connection={connection} />}
-      {connection.importStatus === "failed" && (
-        <p
-          className="notice"
-          data-tone="error"
-        >
-          {importFailureMessage(connection.importError)}
+      {!!observedAt && (
+        <p className="journey-observed">
+          Consultado em {momentLabel(observedAt)}.
         </p>
+      )}
+      {connection.importStatus === "failed" && (
+        <Banner
+          className="feedback"
+          description={importFailureMessage(connection.importError)}
+          variant="error"
+        />
       )}
       {!connection.importStatus && (
         <p>
@@ -299,18 +293,18 @@ function ImportJourney({
         <div className="journey-result">
           <UiLink
             href={`/account/transactions?${new URLSearchParams({ ...(connection.personId && { person: connection.personId }) })}`}
+            variant="primary"
           >
             {partial ? "Ver transações disponíveis" : "Ver transações"}
           </UiLink>
-          {active === true && <p className="muted">A importação continua.</p>}
         </div>
       )}
-      <details className="journey-details">
-        <summary>Detalhes da importação</summary>
+      <DisclosureItem
+        className="journey-details"
+        summary={<>Detalhes da importação</>}
+      >
         <p>Consulta à cópia importada, não ao banco ao vivo.</p>
-        {!active && !!observedAt && (
-          <p>Estado consultado em {momentLabel(observedAt)}.</p>
-        )}
+        {!!observedAt && <p>Estado consultado em {momentLabel(observedAt)}.</p>}
         {done && (
           <>
             <p>Concluída em {momentLabel(connection.lastSuccessAt)}.</p>
@@ -329,7 +323,7 @@ function ImportJourney({
           .
         </p>
         {!!connection.importError && <p>Código: {connection.importError}.</p>}
-        <a href="/account/sync">Ver histórico de sincronizações</a>
+        <Link href="/account/sync">Ver histórico de sincronizações</Link>
         {!(active || done) && (
           <p>
             <UiButton
@@ -341,7 +335,7 @@ function ImportJourney({
             </UiButton>
           </p>
         )}
-      </details>
+      </DisclosureItem>
     </>
   );
 }
@@ -406,24 +400,26 @@ export function ConnectionJourney({
       />
     );
   }
-  const phase = connection?.importCheckpoint?.phase;
-  const announcement =
-    !activity && connection?.importStatus === "running" && phase
-      ? `${title}. ${phases[phase]}`
-      : title;
   return (
-    <section
+    <LayerCard
       aria-labelledby="connection-journey-heading"
       className="connection-journey"
+      render={<section />}
     >
       <p
         className="sr-only"
         role="status"
       >
-        {announcement}
+        {title}
       </p>
       <div className="journey-heading">
-        <h2 id="connection-journey-heading">{title}</h2>
+        <h2 id="connection-journey-heading">{title}</h2>{" "}
+        {active && !activity && (
+          <Loader
+            aria-label="Importação em andamento"
+            size="base"
+          />
+        )}
         {!activity && connection?.importStatus === "succeeded" && (
           <CheckCircleIcon
             aria-hidden="true"
@@ -431,31 +427,24 @@ export function ConnectionJourney({
             size={22}
           />
         )}
-        {active && !activity && (
-          <span
-            className="status-label"
-            data-tone="info"
-          >
-            {connection?.importStatus === "running"
-              ? "Em andamento"
-              : "Na fila"}
-          </span>
-        )}
       </div>
       {content}
       {readError === true && (
-        <div
-          className="notice"
-          data-tone="warning"
+        <Banner
+          className="feedback"
+          description={
+            <>
+              <p>
+                Não foi possível atualizar o estado. A última observação foi
+                mantida; isso não confirma falha da importação.
+              </p>
+              <a href="/account/login">Entrar novamente</a>
+            </>
+          }
           role="alert"
-        >
-          <p>
-            Não foi possível atualizar o estado. A última observação foi
-            mantida; isso não confirma falha da importação.
-          </p>
-          <a href="/account/login">Entrar novamente</a>
-        </div>
+          variant="alert"
+        />
       )}
-    </section>
+    </LayerCard>
   );
 }

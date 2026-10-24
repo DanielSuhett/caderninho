@@ -1,3 +1,4 @@
+import { Input, Select } from "@cloudflare/kumo";
 import { type FormEvent, useCallback, useState } from "react";
 
 import {
@@ -5,7 +6,8 @@ import {
   HouseholdCommandSchema,
   type PortalResponse,
 } from "../../contracts";
-import { UiButton } from "../ui";
+import { UiButton, UiCheckbox } from "../ui";
+import { DisclosureItem } from "./disclosure-item";
 export function HouseholdPanel({
   snapshot,
   busy,
@@ -98,11 +100,11 @@ export function HouseholdPanel({
             key={person.id}
             onSubmit={savePerson}
           >
-            <label htmlFor={`person-${person.id}`}>Nome da pessoa</label>
             <div className="inline-fields">
-              <input
+              <Input
                 defaultValue={person.name}
                 id={`person-${person.id}`}
+                label="Nome da pessoa"
                 maxLength={80}
                 name="name"
                 required
@@ -117,10 +119,10 @@ export function HouseholdPanel({
           </form>
         ))}
         <form onSubmit={savePerson}>
-          <label htmlFor="new-person">Adicionar pessoa</label>
           <div className="inline-fields">
-            <input
+            <Input
               id="new-person"
+              label="Adicionar pessoa"
               maxLength={80}
               name="name"
               placeholder="Como você a chama?"
@@ -137,17 +139,21 @@ export function HouseholdPanel({
       </div>
       <div className="profile-grid">
         {snapshot.profiles.map((profile) => (
-          <details
+          <DisclosureItem
             className="profile-editor"
             key={profile.id}
+            summary={
+              <>
+                <strong>{profile.name}</strong>
+                <span className="muted">
+                  {snapshot.people.find((p) => p.id === profile.personId)?.name}{" "}
+                  · {profile.connectionCount}{" "}
+                  {profile.connectionCount === 1 ? "conexão" : "conexões"} ·{" "}
+                  {profileLabel(profile)}
+                </span>
+              </>
+            }
           >
-            <summary>
-              <strong>{profile.name}</strong>
-              <span className="muted">
-                {snapshot.people.find((p) => p.id === profile.personId)?.name} ·{" "}
-                {profile.connectionCount} conexões · {profileLabel(profile)}
-              </span>
-            </summary>
             <form
               data-id={profile.id}
               onSubmit={saveProfile}
@@ -157,24 +163,22 @@ export function HouseholdPanel({
                 type="hidden"
                 value={profile.personId}
               />
-              <label htmlFor={`profile-name-${profile.id}`}>
-                Nome do perfil
-              </label>
-              <input
+
+              <Input
                 defaultValue={profile.name}
                 id={`profile-name-${profile.id}`}
+                label="Nome do perfil"
                 maxLength={80}
                 name="name"
                 required
               />
-              <label className="checkbox-label">
-                <input
+              <div className="checkbox-label">
+                <UiCheckbox
                   defaultChecked={profile.enabled}
+                  label="Permitir novas conexões e importações"
                   name="enabled"
-                  type="checkbox"
                 />
-                Permitir novas conexões e importações
-              </label>
+              </div>
               <p className="muted">
                 Para trocar o segredo, preencha os dois campos. Outra aplicação
                 exige um novo perfil.
@@ -190,36 +194,39 @@ export function HouseholdPanel({
                 Salvar perfil
               </UiButton>
             </form>
-          </details>
+          </DisclosureItem>
         ))}
-        <details className="profile-editor add-profile">
-          <summary>
-            Adicionar perfil Pluggy
-            <span className="muted">Conecte outra origem ou outra pessoa</span>
-          </summary>
+        <DisclosureItem
+          className="profile-editor add-profile"
+          summary={
+            <>
+              Adicionar perfil Pluggy
+              <span className="muted">
+                Conecte outra origem ou outra pessoa
+              </span>
+            </>
+          }
+        >
           <form onSubmit={saveProfile}>
-            <label htmlFor="profile-name-new">Nome do perfil</label>
-            <input
+            <Input
               id="profile-name-new"
+              label="Nome do perfil"
               maxLength={80}
               name="name"
               placeholder="Ex.: Pluggy da Ana"
               required
             />
-            <label htmlFor="profile-person-new">Titular padrão</label>
-            <select
+
+            <Select
+              className="w-full"
+              defaultValue={snapshot.people[0]?.id ?? ""}
               id="profile-person-new"
+              items={[
+                ...snapshot.people.map((p) => ({ label: p.name, value: p.id })),
+              ]}
+              label="Titular padrão"
               name="personId"
-            >
-              {snapshot.people.map((p) => (
-                <option
-                  key={p.id}
-                  value={p.id}
-                >
-                  {p.name}
-                </option>
-              ))}
-            </select>
+            />
             <input
               name="enabled"
               type="hidden"
@@ -240,7 +247,7 @@ export function HouseholdPanel({
               Validar e adicionar perfil
             </UiButton>
           </form>
-        </details>
+        </DisclosureItem>
       </div>
       <p className="muted">
         O Meu Pluggy gratuito permite até cinco conexões por titular. Adicionar
@@ -259,18 +266,19 @@ function CredentialFields({
 }) {
   return (
     <>
-      <label htmlFor={`client-${suffix}`}>Client ID</label>
-      <input
+      <Input
         autoComplete="off"
         id={`client-${suffix}`}
+        label="Client ID"
         maxLength={200}
         name="clientId"
         required={required}
       />
-      <label htmlFor={`secret-${suffix}`}>Client Secret</label>
-      <input
+
+      <Input
         autoComplete="new-password"
         id={`secret-${suffix}`}
+        label="Client Secret"
         maxLength={512}
         name="clientSecret"
         required={required}

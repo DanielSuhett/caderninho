@@ -1,0 +1,46 @@
+{
+  "boot": 1792845059105,
+  "commits": 11,
+  "fibers": 2359,
+  "editorRenders": 0,
+  "flowRenders": 0,
+  "requests": [
+    {
+      "path": "/api/account",
+      "start": 89.5,
+      "end": 799.1000000238419
+    },
+    {
+      "path": "/api/account/catalog",
+      "start": 1117.800000011921,
+      "end": 1820.9000000357628
+    },
+    {
+      "path": "/api/account/query",
+      "start": 1118.1000000238419,
+      "end": 1821.300000011921
+    },
+    {
+      "path": "/api/account/query",
+      "start": 1118.5,
+      "end": 1821.6000000238419
+    },
+    {
+      "path": "/api/account",
+      "start": 2801.7000000476837,
+      "end": 3507.5
+    }
+  ],
+  "longTasks": [],
+  "events": [],
+  "nextFrames": [],
+  "layouts": [
+    {
+      "value": 0.08529153917557672,
+      "recentInput": false
+    }
+  ],
+  "reducedMotion": false,
+  "visible": "visible",
+  "devicePixelRatio": 1.0000000074505806
+}

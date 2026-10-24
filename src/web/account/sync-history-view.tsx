@@ -1,7 +1,16 @@
+import {
+  Badge,
+  Banner,
+  InlineCopyText,
+  LayerCard,
+  Link,
+  Select,
+} from "@cloudflare/kumo";
 import { useCallback, useState } from "react";
 
 import type { PortalResponse } from "../../contracts";
 import type { createAccountApi } from "./account-api";
+import { CursorPagination } from "./cursor-pagination";
 import { DisclosureItem } from "./disclosure-item";
 import { EmptyView } from "./workspace-filters";
 import {
@@ -10,10 +19,10 @@ import {
   useResource,
 } from "./workspace-resource";
 import {
-  FilterDrawer,
   RecordReference,
   RefreshButton,
   WorkspaceDetails,
+  WorkspaceFilters,
   WorkspaceHeading,
 } from "./workspace-ui";
 
@@ -72,7 +81,7 @@ export function SyncHistoryView({
           onClick={resource.retry}
         />
       </WorkspaceHeading>
-      <FilterDrawer
+      <WorkspaceFilters
         action="/account/sync"
         activeCount={params.get("status") ? 1 : 0}
         context={
@@ -80,53 +89,41 @@ export function SyncHistoryView({
           "Todas as pessoas"
         }
       >
-        <label>
-          Pessoa
-          <select
-            defaultValue={params.get("person") ?? ""}
-            name="person"
-          >
-            <option value="">Todas as pessoas</option>
-            {snapshot.people.map((p) => (
-              <option
-                key={p.id}
-                value={p.id}
-              >
-                {p.name}
-              </option>
-            ))}
-          </select>
-        </label>
+        <Select
+          defaultValue={params.get("person") ?? ""}
+          items={[
+            { label: "Todas as pessoas", value: "" },
+            ...snapshot.people.map((p) => ({ label: p.name, value: p.id })),
+          ]}
+          label="Pessoa"
+          name="person"
+        />
         <input
           name="space"
           type="hidden"
           value={params.get("space") ?? "personal"}
         />
-        <label>
-          Estado
-          <select
-            defaultValue={params.get("status") ?? ""}
-            name="status"
-          >
-            <option value="">Todas as rodadas</option>
-            {Object.entries(statuses).map(([id, name]) => (
-              <option
-                key={id}
-                value={id}
-              >
-                {name}
-              </option>
-            ))}
-          </select>
-        </label>
-      </FilterDrawer>
+        <Select
+          defaultValue={params.get("status") ?? ""}
+          items={[
+            { label: "Todas as rodadas", value: "" },
+            ...Object.entries(statuses).map(([id, name]) => ({
+              label: name,
+              value: id,
+            })),
+          ]}
+          label="Estado"
+          name="status"
+        />
+      </WorkspaceFilters>
       <ResourceFeedback {...resource} />
       {!!data && (
         <>
           {data.records.length ? (
-            <ol
+            <LayerCard
               aria-label="Rodadas de sincronização"
               className="record-list"
+              render={<ol />}
             >
               {data.records.map((r) => (
                 <li key={r.id}>
@@ -136,9 +133,20 @@ export function SyncHistoryView({
                       <>
                         <span className="record-title">{r.profileName}</span>
                         <span className="record-value">
-                          <span className={`status-label run-${r.status}`}>
+                          <Badge
+                            variant={
+                              (
+                                {
+                                  failed: "error",
+                                  pending: "warning",
+                                  running: "info",
+                                  succeeded: "success",
+                                } as const
+                              )[r.status]
+                            }
+                          >
                             {statuses[r.status]}
-                          </span>
+                          </Badge>
                         </span>
                         <span className="record-context">{r.personName}</span>
                         <span className="record-meta">
@@ -179,14 +187,17 @@ export function SyncHistoryView({
                         </div>
                       </dl>
                       {!!r.error && (
-                        <p
-                          className="notice"
-                          data-tone="error"
-                        >
-                          Interrompida: <code>{r.error}</code>. As páginas
-                          confirmadas foram preservadas. Consulte o estado da
-                          conexão antes de tentar uma nova importação.
-                        </p>
+                        <Banner
+                          className="feedback"
+                          description={
+                            <>
+                              Interrompida: <code>{r.error}</code>. As páginas
+                              confirmadas foram preservadas. Consulte o estado
+                              da conexão antes de tentar uma nova importação.
+                            </>
+                          }
+                          variant="error"
+                        />
                       )}
                       {!!r.legacy && (
                         <p className="muted">
@@ -194,14 +205,21 @@ export function SyncHistoryView({
                           informações podem não estar disponíveis.
                         </p>
                       )}
-                      <a href="/account/connections">
+                      <Link href="/account/connections">
                         Ver conexões e atualização
-                      </a>
+                      </Link>
                       <RecordReference>
                         <div>
                           <dt>Rodada</dt>
                           <dd>
-                            <code>{r.id}</code>
+                            <InlineCopyText
+                              labels={{
+                                copied: "Identificador copiado",
+                                copyAction: "Copiar identificador",
+                              }}
+                            >
+                              {r.id}
+                            </InlineCopyText>
                           </dd>
                         </div>
                         <div>
@@ -215,27 +233,20 @@ export function SyncHistoryView({
                   </DisclosureItem>
                 </li>
               ))}
-            </ol>
+            </LayerCard>
           ) : (
             <EmptyView title="Nenhuma rodada neste recorte">
               As novas importações aparecerão aqui. Abra Conexões para solicitar
               uma importação.
             </EmptyView>
           )}
-          <div className="pagination">
-            <span>{data.records.length} rodadas nesta página</span>
-            {params.has("cursor") && (
-              <a href={`/account/sync?${first}`}>Voltar às mais recentes</a>
-            )}
-            {!!data.cursor && (
-              <a
-                className="page-next"
-                href={`/account/sync?${next}`}
-              >
-                Ver rodadas anteriores
-              </a>
-            )}
-          </div>
+          <CursorPagination
+            count={data.records.length}
+            first={params.has("cursor") ? `/account/sync?${first}` : null}
+            next={data.cursor ? `/account/sync?${next}` : null}
+            noun="rodadas"
+            singular="rodada"
+          />
           <WorkspaceDetails title="Sobre este histórico">
             {" "}
             <p className="muted">

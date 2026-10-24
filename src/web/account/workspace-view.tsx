@@ -1,34 +1,122 @@
+import { Sidebar } from "@cloudflare/kumo";
 import {
   ArrowsClockwiseIcon,
   BankIcon,
   FoldersIcon,
   HouseIcon,
   ListChecksIcon,
-  ListIcon,
   PaletteIcon,
   ReceiptIcon,
   ShieldCheckIcon,
   SignOutIcon,
 } from "@phosphor-icons/react";
-import { type ReactNode, useCallback } from "react";
+import {
+  type FocusEvent,
+  lazy,
+  type MouseEvent,
+  memo,
+  type ReactNode,
+  Suspense,
+  useCallback,
+} from "react";
 
 import type { PortalResponse } from "../../contracts";
-import { UiButton } from "../ui";
+import { tryCatch } from "../../shared";
 import type { createAccountApi } from "./account-api";
-import { AuditView } from "./audit-view";
-import { DesignSystemView } from "./design-system-view";
-import { OrganizationView } from "./organization-view";
-import { SyncHistoryView } from "./sync-history-view";
-import { TransactionsView } from "./transactions-view";
-import { WorkspaceDrawer } from "./workspace-drawer";
+import { WorkspacePageError } from "./workspace-page";
 import { scopedHref } from "./workspace-resource";
+import { SidebarFrame, WorkspaceFrame } from "./workspace-shell";
+import { WorkspaceSkeleton } from "./workspace-ui";
 
+const loadOverview = async () => {
+  const { data, error } = await tryCatch(() => import("./overview-view"));
+  if (error) {
+    return { default: WorkspacePageError };
+  }
+  return { default: data.OverviewView };
+};
+const loadAudit = async () => {
+  const { data, error } = await tryCatch(() => import("./audit-view"));
+  if (error) {
+    return { default: WorkspacePageError };
+  }
+  return { default: data.AuditView };
+};
+const loadDesignSystem = async () => {
+  const { data, error } = await tryCatch(() => import("./design-system-view"));
+  if (error) {
+    return { default: WorkspacePageError };
+  }
+  return { default: data.DesignSystemView };
+};
+const loadOrganization = async () => {
+  const { data, error } = await tryCatch(() => import("./organization-view"));
+  if (error) {
+    return { default: WorkspacePageError };
+  }
+  return { default: data.OrganizationView };
+};
+const loadSyncHistory = async () => {
+  const { data, error } = await tryCatch(() => import("./sync-history-view"));
+  if (error) {
+    return { default: WorkspacePageError };
+  }
+  return { default: data.SyncHistoryView };
+};
+const loadTransactions = async () => {
+  const { data, error } = await tryCatch(() => import("./transactions-view"));
+  if (error) {
+    return { default: WorkspacePageError };
+  }
+  return { default: data.TransactionsView };
+};
+const OverviewView = memo(
+  lazy<typeof import("./overview-view").OverviewView>(loadOverview),
+);
+const AuditView = memo(
+  lazy<typeof import("./audit-view").AuditView>(loadAudit),
+);
+const DesignSystemView = memo(
+  lazy<typeof import("./design-system-view").DesignSystemView>(
+    loadDesignSystem,
+  ),
+);
+const OrganizationView = memo(
+  lazy<typeof import("./organization-view").OrganizationView>(loadOrganization),
+);
+const SyncHistoryView = memo(
+  lazy<typeof import("./sync-history-view").SyncHistoryView>(loadSyncHistory),
+);
+const TransactionsView = memo(
+  lazy<typeof import("./transactions-view").TransactionsView>(loadTransactions),
+);
+const pageLoaders: Record<string, (() => Promise<unknown>) | undefined> = {
+  "/account": loadOverview,
+  "/account/audit": loadAudit,
+  "/account/connections": () => import("./dashboard-view"),
+  "/account/design-system": loadDesignSystem,
+  "/account/groups": loadOrganization,
+  "/account/rules": loadOrganization,
+  "/account/sync": loadSyncHistory,
+  "/account/transactions": loadTransactions,
+};
+
+function preloadPage(event: FocusEvent<HTMLElement> | MouseEvent<HTMLElement>) {
+  const href = event.currentTarget.getAttribute("href");
+  if (!href) {
+    return;
+  }
+  const path = new URL(href, location.href).pathname;
+  const load = pageLoaders[path];
+  if (load) {
+    // Warm code on intent only; queries still belong to the mounted page.
+    tryCatch(load).then(
+      ({ data: _data, error: _error }) => undefined,
+      () => undefined,
+    );
+  }
+}
 const pages = [
-  {
-    icon: ShieldCheckIcon,
-    name: "Auditoria MCP",
-    path: "/account/audit",
-  },
   {
     icon: HouseIcon,
     name: "Visão geral",
@@ -59,7 +147,9 @@ const pages = [
     name: "Conexões",
     path: "/account/connections",
   },
+  { icon: ShieldCheckIcon, name: "Auditoria MCP", path: "/account/audit" },
 ];
+
 export function WorkspaceView({
   children,
   api,
@@ -76,9 +166,22 @@ export function WorkspaceView({
   busy: boolean;
 }) {
   const path = location.pathname;
-  const params = new URLSearchParams(location.search);
   const logout = useCallback(() => command("logout"), [command]);
   let content = children;
+  if (
+    path === "/account" &&
+    snapshot.connections.some(
+      (connection) => connection.hasTransactions || connection.lastSuccessAt,
+    )
+  ) {
+    content = (
+      <OverviewView
+        api={api}
+        key={route}
+        snapshot={snapshot}
+      />
+    );
+  }
   if (path === "/account/transactions") {
     content = (
       <TransactionsView
@@ -119,103 +222,89 @@ export function WorkspaceView({
   if (path === "/account/design-system") {
     content = <DesignSystemView key={route} />;
   }
-  const navigation = (
-    <>
-      <nav
-        aria-label="Páginas do Caderninho"
-        className="workspace-nav"
-      >
-        {pages.map((p) => (
-          <a
-            aria-current={path === p.path ? "page" : undefined}
-            aria-label={p.name}
-            className="sidebar-control"
-            href={scopedHref(p.path, params)}
-            key={p.path}
-            title={p.name}
-          >
-            <p.icon
-              aria-hidden="true"
-              size={20}
-            />
-            <span className="nav-label">{p.name}</span>
-          </a>
-        ))}
-      </nav>
-      <div className="sidebar-session">
-        <a
-          aria-current={path === "/account/design-system" ? "page" : undefined}
-          aria-label="Referência visual"
-          className="sidebar-control design-reference-link"
-          href="/account/design-system"
-        >
-          <PaletteIcon
-            aria-hidden="true"
-            size={20}
-          />
-          <span className="nav-label">Referência visual</span>
-        </a>
-        <UiButton
-          aria-label="Sair"
-          className="sidebar-control"
-          disabled={busy}
-          onClick={logout}
-          type="button"
-          variant="secondary"
-        >
-          <SignOutIcon
-            aria-hidden="true"
-            size={20}
-          />
-          <span className="nav-label">Sair</span>
-        </UiButton>
-        <p>
-          Instalação privada
-          <br />
-          <small>
-            {snapshot.people.length}{" "}
-            {snapshot.people.length === 1 ? "pessoa" : "pessoas"} ·{" "}
-            {snapshot.connections.length}{" "}
-            {snapshot.connections.length === 1 ? "conexão" : "conexões"}
-          </small>
-        </p>
-      </div>
-    </>
-  );
   return (
-    <div className="workspace">
-      <a
-        className="skip-link"
-        href="#workspace-content"
-      >
-        Ir para o conteúdo
-      </a>
-      <aside className="workspace-sidebar">
-        <WorkspaceDrawer
-          className="sidebar-toggle"
-          side="left"
-          title="Navegação"
-          trigger={
-            <>
-              <ListIcon
-                aria-hidden="true"
-                size={20}
-              />
-              <span className="sr-only">Abrir navegação</span>
-            </>
-          }
-        >
-          {navigation}
-        </WorkspaceDrawer>
-        {navigation}
-      </aside>
+    <WorkspaceFrame
+      navigation={
+        <WorkspaceNavigation
+          busy={busy}
+          logout={logout}
+          snapshot={snapshot}
+        />
+      }
+      route={route}
+    >
       <div
-        className="workspace-content"
-        id="workspace-content"
-        tabIndex={-1}
+        className="workspace-page"
+        key={route}
       >
-        {content}
+        <Suspense fallback={<WorkspaceSkeleton />}>{content}</Suspense>
       </div>
-    </div>
+    </WorkspaceFrame>
+  );
+}
+
+function WorkspaceNavigation({
+  snapshot,
+  busy,
+  logout,
+}: {
+  snapshot: PortalResponse;
+  busy: boolean;
+  logout: () => void;
+}) {
+  const path = location.pathname;
+  const params = new URLSearchParams(location.search);
+  return (
+    <SidebarFrame
+      brandHref="/account"
+      footer={`${snapshot.people.length} ${snapshot.people.length === 1 ? "pessoa" : "pessoas"} · ${snapshot.connections.length} ${snapshot.connections.length === 1 ? "conexão" : "conexões"}`}
+    >
+      <Sidebar.Group>
+        <Sidebar.GroupLabel>Instalação pessoal</Sidebar.GroupLabel>
+        <nav aria-label="Páginas do Caderninho">
+          <Sidebar.Menu>
+            {pages.map((page) => (
+              <Sidebar.MenuButton
+                active={path === page.path}
+                aria-current={path === page.path ? "page" : undefined}
+                className="text-base"
+                href={scopedHref(page.path, params)}
+                icon={page.icon}
+                key={page.path}
+                onFocus={preloadPage}
+                onMouseEnter={preloadPage}
+                tooltip={page.name}
+              >
+                {page.name}
+              </Sidebar.MenuButton>
+            ))}
+          </Sidebar.Menu>
+        </nav>
+      </Sidebar.Group>
+      <Sidebar.Group>
+        <Sidebar.Menu>
+          <Sidebar.MenuButton
+            active={path === "/account/design-system"}
+            className="text-base"
+            href="/account/design-system"
+            icon={PaletteIcon}
+            onFocus={preloadPage}
+            onMouseEnter={preloadPage}
+            tooltip="Referência visual"
+          >
+            Referência visual
+          </Sidebar.MenuButton>
+          <Sidebar.MenuButton
+            className="text-base"
+            disabled={busy}
+            icon={SignOutIcon}
+            onClick={logout}
+            tooltip="Sair"
+          >
+            Sair
+          </Sidebar.MenuButton>
+        </Sidebar.Menu>
+      </Sidebar.Group>
+    </SidebarFrame>
   );
 }

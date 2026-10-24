@@ -14,6 +14,14 @@ const paths = new Set([
   "/account/sync",
   "/account/connections",
   "/account/design-system",
+  "/demo",
+  "/demo/",
+  "/demo/transactions",
+  "/demo/transactions/",
+  "/demo/rules",
+  "/demo/rules/",
+  "/demo/groups",
+  "/demo/groups/",
 ]);
 const navigationEvent = "caderninho:navigate";
 let navigationGuard: (() => boolean) | null = null;
@@ -29,6 +37,8 @@ export function guardWorkspaceNavigation(guard: () => boolean) {
 export function isWorkspaceUrl(destination: URL, current: URL) {
   return (
     destination.origin === current.origin &&
+    destination.pathname.startsWith("/demo") ===
+      current.pathname.startsWith("/demo") &&
     paths.has(destination.pathname) &&
     !destination.hash
   );
@@ -58,15 +68,7 @@ function subscribe(notify: () => void) {
     window.removeEventListener(navigationEvent, changed);
   };
 }
-function closePanels() {
-  for (const dialog of document.querySelectorAll("dialog[open]")) {
-    if (dialog instanceof HTMLDialogElement) {
-      dialog.close();
-    }
-  }
-}
 export function navigateWorkspace(url: URL) {
-  closePanels();
   if (url.pathname + url.search !== currentRoute()) {
     history.pushState(null, "", url.pathname + url.search);
   }
@@ -132,7 +134,7 @@ function submit(event: SubmitEvent) {
   navigateWorkspace(url);
 }
 
-export function useAccountNavigation() {
+export function useWorkspaceNavigation() {
   const route = useSyncExternalStore(subscribe, currentRoute, () => "/account");
   const previous = useRef(route);
   useEffect(() => {
@@ -148,11 +150,12 @@ export function useAccountNavigation() {
       return;
     }
     previous.current = route;
-    closePanels();
     document
       .querySelector<HTMLElement>("#workspace-content")
       ?.focus({ preventScroll: true });
-    window.scrollTo({ behavior: "instant", top: 0 });
+    document
+      .querySelector<HTMLElement>(".workspace-main")
+      ?.scrollTo({ behavior: "instant", top: 0 });
   }, [route]);
   return route;
 }

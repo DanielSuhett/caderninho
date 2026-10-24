@@ -1,3 +1,5 @@
+import { Banner } from "@cloudflare/kumo";
+
 import type { ConsentDetails } from "./consent.types";
 import { Portal } from "./portal-view";
 import { UiButton } from "./ui";
@@ -26,13 +28,16 @@ export function Consent({
         confirmações exigidas por cada ferramenta. Os resultados consultados
         serão enviados ao serviço autorizado.
       </p>
-      <p
-        className="notice"
-        data-tone="info"
-      >
-        Essa autorização não permite movimentar dinheiro nos bancos. Você pode
-        revogar o acesso pela Auditoria MCP.
-      </p>
+      <Banner
+        className="feedback"
+        description={
+          <>
+            Essa autorização não permite movimentar dinheiro nos bancos. Você
+            pode revogar o acesso pela Auditoria MCP.
+          </>
+        }
+        variant="default"
+      />
       <form method="post">
         <input
           name="handle"
@@ -43,6 +48,7 @@ export function Consent({
           name="decision"
           size="lg"
           value="approve"
+          variant="primary"
         >
           Autorizar
         </UiButton>

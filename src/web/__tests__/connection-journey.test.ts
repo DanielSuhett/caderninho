@@ -5,6 +5,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import type { ConnectionInfo, PortalResponse } from "../../contracts";
+import { connectionFixture, portalFixture } from "../../fixtures/workspace";
 import {
   ConnectionJourney,
   importFailureMessage,
@@ -16,45 +17,10 @@ const timePattern = /2026|13:06|Estado consultado|Consultado em/;
 const setupPattern = /Configurar ou reativar perfil|Conectar Meu Pluggy/;
 const phasePattern = /Importando transações/;
 const credentialPattern = /perfil|autorização/;
-const connection: ConnectionInfo = {
-  accounts: {
-    a: {
-      balanceMinor: null,
-      balanceObservedAt: null,
-      currency: "BRL",
-      name: "Conta exemplo",
-      type: "BANK",
-    },
-  },
-  hasTransactions: false,
-  id: "c",
-  importCheckpoint: { accountId: "a", phase: "transactions" },
-  importError: null,
-  importStatus: "running",
-  lastSuccessAt: null,
-  nextEligibleAt: null,
-  partial: true,
-  personName: "Pessoa exemplo",
-  profileName: "Perfil exemplo",
-};
+const connection = connectionFixture();
+
 function render(connections: ConnectionInfo[], configured = true) {
-  const snapshot: PortalResponse = {
-    configured,
-    connections,
-    csrf: "synthetic",
-    origin: "https://example.test",
-    people: [{ id: "self", name: "Pessoa exemplo" }],
-    profiles: [
-      {
-        configured,
-        connectionCount: connections.length,
-        enabled: true,
-        id: "default",
-        name: "Perfil exemplo",
-        personId: "self",
-      },
-    ],
-  };
+  const snapshot: PortalResponse = portalFixture({ configured, connections });
   return renderToStaticMarkup(
     createElement(ConnectionJourney, {
       activity: null,
@@ -74,9 +40,9 @@ test("identified accounts alone do not unlock a transaction CTA; published data 
   assert.ok(initial.includes("Aguardando os primeiros lançamentos"));
   assert.equal(initial.includes("Ver transações disponíveis"), false);
   const partial = render([{ ...connection, hasTransactions: true }]);
-  assert.ok(partial.includes("Dados parciais"));
+  assert.ok(partial.includes("Histórico parcial"));
   assert.ok(partial.includes("Ver transações disponíveis"));
-  assert.ok(partial.includes("A importação continua"));
+  assert.equal((partial.match(/Histórico parcial/g) ?? []).length, 1);
   assert.ok(partial.includes("Consultado em"));
   assert.ok(
     partial.indexOf("Consultado em") <

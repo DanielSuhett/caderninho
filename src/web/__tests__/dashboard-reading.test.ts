@@ -5,7 +5,9 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import type { PortalResponse } from "../../contracts";
+import { connectionFixture, portalFixture } from "../../fixtures/workspace";
 import { DashboardView } from "../account/dashboard-view";
+import { AccountBalances } from "../account/financial-dashboard";
 
 const previousLocation = Object.getOwnPropertyDescriptor(
   globalThis,
@@ -22,10 +24,9 @@ after(() => {
     Reflect.deleteProperty(globalThis, "location");
   }
 });
-const snapshot: PortalResponse = {
-  configured: true,
+const snapshot: PortalResponse = portalFixture({
   connections: [
-    {
+    connectionFixture({
       accounts: {
         card: {
           balanceMinor: "0",
@@ -38,31 +39,15 @@ const snapshot: PortalResponse = {
       hasTransactions: true,
       id: "synthetic",
       importCheckpoint: null,
-      importError: null,
       importStatus: "succeeded",
       lastSuccessAt: "2026-10-23T12:00:00Z",
-      nextEligibleAt: null,
       partial: false,
       personId: "self",
-      personName: "Pessoa exemplo",
       profileId: "default",
-      profileName: "Perfil exemplo",
-    },
+    }),
   ],
-  csrf: "synthetic",
-  origin: "https://example.test",
-  people: [{ id: "self", name: "Pessoa exemplo" }],
-  profiles: [
-    {
-      configured: true,
-      connectionCount: 1,
-      enabled: true,
-      id: "default",
-      name: "Perfil exemplo",
-      personId: "self",
-    },
-  ],
-};
+});
+
 function render(
   state: PortalResponse,
   section: "overview" | "connections" = "overview",
@@ -85,8 +70,26 @@ function render(
     }),
   );
 }
+function renderBalances(state: PortalResponse) {
+  return renderToStaticMarkup(
+    createElement(AccountBalances, {
+      accounts: state.connections.flatMap((connection) =>
+        Object.entries(connection.accounts).map(([id, account]) => ({
+          ...account,
+          hidden: false,
+          id,
+          manual: false,
+          personId: connection.personId ?? "self",
+        })),
+      ),
+      partial: state.connections.some((connection) => connection.partial),
+      people: state.people,
+      transactionsHref: "/account/transactions",
+    }),
+  );
+}
 test("the overview preserves zero card balances and their meaning without repeating a finished import", () => {
-  const html = render(snapshot);
+  const html = renderBalances(snapshot);
   assert.ok(html.includes("Cartão exemplo"));
   assert.ok(html.includes("0,00 BRL"));
   assert.ok(html.includes("Cartão · não é dinheiro disponível"));
@@ -95,7 +98,7 @@ test("the overview preserves zero card balances and their meaning without repeat
   assert.ok(render(snapshot, "connections").includes("Importação concluída"));
 });
 test("a partial or unrelated unconfigured profile does not block the saved accounts", () => {
-  const html = render({
+  const html = renderBalances({
     ...snapshot,
     configured: false,
     connections: snapshot.connections.map((connection) => ({
@@ -116,8 +119,8 @@ test("a partial or unrelated unconfigured profile does not block the saved accou
     ],
   });
   assert.ok(html.includes("Cartão exemplo"));
-  assert.ok(html.includes("Histórico parcial"));
-  assert.ok(html.includes('href="/account/connections"'));
+  assert.ok(html.includes("Dados parciais"));
+  assert.ok(html.includes('href="/account/transactions?accountId=card"'));
 });
 test("an installation without imported data still exposes the first connection action", () => {
   const html = render({ ...snapshot, connections: [] });
@@ -138,8 +141,10 @@ test("connections keep partial data consultable with one progress warning", () =
     "connections",
   );
   assert.ok(
-    html.includes("Dados parciais. A importação ainda está em andamento."),
+    html.includes(
+      "Histórico parcial. Os dados já recebidos continuam disponíveis.",
+    ),
   );
   assert.ok(html.includes("Ver transações disponíveis"));
-  assert.equal(html.includes("Histórico parcial"), false);
+  assert.equal((html.match(/Histórico parcial/g) ?? []).length, 1);
 });

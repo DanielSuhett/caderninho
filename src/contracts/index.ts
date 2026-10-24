@@ -6,6 +6,14 @@ export {
   AuditSelectionSchema,
   RevokeGrantSchema,
 } from "./audit";
+export type { FinancialOverview, FinancialSummary } from "./dashboard";
+export {
+  FinancialOverviewResponseSchema,
+  FinancialOverviewSchema,
+  FinancialSummarySchema,
+  MonthlySpendingResponseSchema,
+  MonthlySpendingSchema,
+} from "./dashboard";
 export {
   AggregateQuerySchema,
   ConnectionSelectionSchema,

@@ -1,5 +1,28 @@
 import type { PlanningTransaction, Rule } from "./planning.entity";
 
+type RuleTransaction = Pick<
+  PlanningTransaction,
+  | "accountId"
+  | "amountMinor"
+  | "currency"
+  | "date"
+  | "description"
+  | "direction"
+  | "personId"
+  | "status"
+>;
+
+export function activeRules<
+  T extends Pick<Rule, "enabled" | "priority" | "id">,
+>(rules: readonly T[]) {
+  return rules
+    .filter((rule) => rule.enabled)
+    .toSorted(
+      (a, b) =>
+        a.priority - b.priority || (a.id < b.id ? -1 : Number(a.id > b.id)),
+    );
+}
+
 export type RuleCondition =
   | {
       field: "description";
@@ -24,7 +47,7 @@ const capitals = /[A-Z]/g;
 // SQLite lower() is ASCII-only. Keep preview, explicit application and import identical.
 export const ruleText = (value: string) =>
   value.replace(capitals, (letter) => letter.toLowerCase());
-function conditionMatches(row: PlanningTransaction, condition: RuleCondition) {
+function conditionMatches(row: RuleTransaction, condition: RuleCondition) {
   if (condition.field === "amount") {
     if (row.amountMinor === null) {
       return false;
@@ -64,7 +87,7 @@ function conditionMatches(row: PlanningTransaction, condition: RuleCondition) {
   }
 }
 export function ruleMatches(
-  row: PlanningTransaction,
+  row: RuleTransaction,
   rule: Pick<Rule, "text" | "accountId" | "direction" | "filter">,
 ) {
   return (

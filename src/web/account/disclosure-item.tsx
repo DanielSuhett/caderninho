@@ -1,27 +1,38 @@
-import { CaretDownIcon } from "@phosphor-icons/react";
+import { Collapsible } from "@cloudflare/kumo";
 import type { ReactNode } from "react";
 
-// Keep links and actions in children: summary is one native keyboard target.
+// Actions stay in the panel; the complete summary is one keyboard target.
 export function DisclosureItem({
   summary,
   children,
   className = "",
+  open,
+  onOpenChange,
+  defaultOpen,
 }: {
   summary: ReactNode;
   children: ReactNode;
   className?: string;
+  open?: boolean;
+  defaultOpen?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
   return (
-    <details className={`disclosure-item ${className}`}>
-      <summary className="disclosure-summary">
-        {summary}
-        <CaretDownIcon
-          aria-hidden
-          className="disclosure-chevron"
-          size={16}
-        />
-      </summary>
-      {children}
-    </details>
+    <Collapsible.Root
+      {...(defaultOpen !== undefined && { defaultOpen })}
+      {...(open !== undefined && { open })}
+      {...(onOpenChange && { onOpenChange })}
+      className={`disclosure-item ${className}`}
+    >
+      <Collapsible.DefaultTrigger className="disclosure-trigger text-base">
+        <span className="disclosure-label">{summary}</span>
+      </Collapsible.DefaultTrigger>
+      <Collapsible.DefaultPanel
+        className="disclosure-panel"
+        keepMounted
+      >
+        {children}
+      </Collapsible.DefaultPanel>
+    </Collapsible.Root>
   );
 }

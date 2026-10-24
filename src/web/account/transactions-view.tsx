@@ -1,3 +1,4 @@
+import { Banner, Input, Link, Select } from "@cloudflare/kumo";
 import { useCallback, useState } from "react";
 
 import {
@@ -7,11 +8,19 @@ import {
   PortalTransactionListSchema,
   type WorkspaceCatalog,
 } from "../../contracts";
+import { UiCheckbox } from "../ui";
 import type { createAccountApi } from "./account-api";
+import { CursorPagination } from "./cursor-pagination";
+import {
+  AccountFilter,
+  CatalogField,
+  DateRangeFields,
+  QuerySearch,
+} from "./filter-fields";
 import { TransactionList } from "./transaction-list";
 import { EmptyView, ScopeFields } from "./workspace-filters";
-import { ResourceFeedback, useResource } from "./workspace-resource";
-import { FilterDrawer, WorkspaceHeading } from "./workspace-ui";
+import { dayLabel, ResourceFeedback, useResource } from "./workspace-resource";
+import { WorkspaceFilters, WorkspaceHeading } from "./workspace-ui";
 
 export function TransactionsView({
   api,
@@ -70,6 +79,15 @@ export function TransactionsView({
   );
   const resource = useResource(load);
   const { data } = resource;
+  const presentation = data
+    ? transactionFilterContext({
+        accounts: data.accounts,
+        catalog: data.catalog,
+        params,
+        records: data.result.data.records,
+        snapshot,
+      })
+    : null;
   const next = new URLSearchParams(params);
   if (data?.result.data.cursor) {
     next.set("cursor", data.result.data.cursor);
@@ -81,143 +99,114 @@ export function TransactionsView({
     <>
       <WorkspaceHeading title="Transações" />
       <ResourceFeedback {...resource} />
-      {!!data && (
+      {!!data && !!presentation && (
         <>
-          <FilterDrawer
+          <WorkspaceFilters
             action="/account/transactions"
-            activeCount={
-              [
-                "text",
-                "from",
-                "to",
-                "direction",
-                "accountId",
-                "categoryId",
-                "status",
-                "future",
-                "ignored",
-              ].filter((key) => params.get(key)).length
+            activeCount={presentation.activeCount}
+            context={presentation.context}
+            leading={
+              <QuerySearch
+                action="/account/transactions"
+                compact
+                label="Buscar descrição"
+                name="text"
+                params={params}
+              />
             }
-            context={transactionFilterContext(
-              params,
-              snapshot,
-              data.catalog,
-              data.accounts,
-            )}
+            showClear={presentation.activeCount > 0 || spaceId !== "personal"}
           >
             <ScopeFields
               catalog={data.catalog}
+              compact
               params={params}
+              person={presentation.multiplePeople}
               snapshot={snapshot}
             />
-            <label className="filter-wide">
-              Buscar descrição
-              <input
+            <div className="filter-wide">
+              <Input
                 defaultValue={params.get("text") ?? ""}
+                label="Buscar descrição"
                 maxLength={240}
                 name="text"
                 placeholder="Ex.: mercado, aluguel, salário"
                 type="search"
               />
-            </label>
-            <div className="advanced-filter-grid">
-              <label>
-                De
-                <input
-                  defaultValue={params.get("from") ?? ""}
-                  name="from"
-                  type="date"
-                />
-              </label>
-              <label>
-                Até
-                <input
-                  defaultValue={params.get("to") ?? ""}
-                  name="to"
-                  type="date"
-                />
-              </label>
-              <label>
-                Movimento
-                <select
-                  defaultValue={params.get("direction") ?? ""}
-                  name="direction"
-                >
-                  <option value="">Entradas e saídas</option>
-                  <option value="DEBIT">Saídas</option>
-                  <option value="CREDIT">Entradas</option>
-                </select>
-              </label>
-              <label>
-                Conta
-                <select
-                  defaultValue={params.get("accountId") ?? ""}
-                  name="accountId"
-                >
-                  <option value="">Todas as contas</option>
-                  {data.accounts.map((a) => (
-                    <option
-                      key={a.id}
-                      value={a.id}
-                    >
-                      {a.name} · {a.personName}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Categoria
-                <select
-                  defaultValue={params.get("categoryId") ?? ""}
-                  name="categoryId"
-                >
-                  <option value="">Todas as categorias</option>
-                  {data.catalog.categories.map((c) => (
-                    <option
-                      key={c.id}
-                      value={c.id}
-                    >
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Estado
-                <select
-                  defaultValue={params.get("status") ?? ""}
-                  name="status"
-                >
-                  <option value="">Todos</option>
-                  <option value="POSTED">Registradas na origem</option>
-                  <option value="PENDING">Pendentes na origem</option>
-                </select>
-              </label>
-              <label className="checkbox-label">
-                <input
-                  defaultChecked={future}
-                  name="future"
-                  type="checkbox"
-                />
-                Lançamentos futuros
-              </label>
-              <label className="checkbox-label">
-                <input
-                  defaultChecked={params.get("ignored") === "on"}
-                  name="ignored"
-                  type="checkbox"
-                />
-                Incluir ignoradas
-              </label>
             </div>
-          </FilterDrawer>
+            <div className="advanced-filter-grid">
+              <DateRangeFields
+                from={params.get("from") ?? ""}
+                to={params.get("to") ?? ""}
+              />
+              <Select
+                defaultValue={params.get("direction") ?? ""}
+                items={[
+                  { label: "Entradas e saídas", value: "" },
+                  { label: "Saídas", value: "DEBIT" },
+                  { label: "Entradas", value: "CREDIT" },
+                ]}
+                label="Movimento"
+                name="direction"
+              />
+              <AccountFilter
+                accounts={data.accounts}
+                showOwner={presentation.multiplePeople}
+                value={params.get("accountId") ?? ""}
+              />
+              <CatalogField
+                defaultValue={params.get("categoryId") ?? ""}
+                items={[
+                  { label: "Todas as categorias", value: "" },
+                  ...data.catalog.categories.map((c) => ({
+                    label: c.name,
+                    value: c.id,
+                  })),
+                ]}
+                label="Categoria"
+                name="categoryId"
+              />
+              <Select
+                defaultValue={params.get("status") ?? ""}
+                items={[
+                  { label: "Todos", value: "" },
+                  { label: "Registradas na origem", value: "POSTED" },
+                  { label: "Pendentes na origem", value: "PENDING" },
+                ]}
+                label="Estado"
+                name="status"
+              />
+              <div className="checkbox-label">
+                <UiCheckbox
+                  defaultChecked={future}
+                  label="Lançamentos futuros"
+                  name="future"
+                />
+              </div>
+              <div className="checkbox-label">
+                <UiCheckbox
+                  defaultChecked={params.get("ignored") === "on"}
+                  label="Incluir ignoradas"
+                  name="ignored"
+                />
+              </div>
+            </div>
+          </WorkspaceFilters>
           {!!data.result.partial && (
-            <p
-              className="notice"
-              data-tone="warning"
-            >
-              Histórico parcial. <a href="/account/sync">Ver importações</a>
-            </p>
+            <Banner
+              className="feedback"
+              description={
+                <>
+                  Histórico parcial.{" "}
+                  <Link
+                    href="/account/sync"
+                    variant="current"
+                  >
+                    Ver importações
+                  </Link>
+                </>
+              }
+              variant="secondary"
+            />
           )}
           {data.result.data.records.length ? (
             <TransactionList
@@ -225,13 +214,8 @@ export function TransactionsView({
               categories={data.catalog.categories}
               records={data.result.data.records}
               referenceDay={data.result.data.referenceDay}
-              showOwner={
-                !params.get("person") &&
-                (snapshot.people.length !== 1 ||
-                  data.accounts.some(
-                    (a) => a.personId !== snapshot.people.at(0)?.id,
-                  ))
-              }
+              showAccount={presentation.showAccount}
+              showOwner={!params.get("person") && presentation.multiplePeople}
             />
           ) : (
             <EmptyView title="Nenhuma transação neste recorte">
@@ -240,42 +224,125 @@ export function TransactionsView({
                 : "Altere os filtros ou importe suas conexões na página Conexões."}
             </EmptyView>
           )}
-          <div className="pagination">
-            <p>{data.result.data.records.length} nesta página</p>
-            {params.has("cursor") && (
-              <a href={`/account/transactions?${first}`}>Voltar ao início</a>
-            )}
-            {!!data.result.data.cursor && (
-              <a
-                className="page-next"
-                href={`/account/transactions?${next}`}
-              >
-                Próximas
-              </a>
-            )}
-          </div>
+          <CursorPagination
+            count={data.result.data.records.length}
+            first={
+              params.has("cursor") ? `/account/transactions?${first}` : null
+            }
+            next={
+              data.result.data.cursor ? `/account/transactions?${next}` : null
+            }
+            noun="transações"
+            singular="transação"
+          />
         </>
       )}
     </>
   );
 }
 
-function transactionFilterContext(
-  params: URLSearchParams,
-  snapshot: PortalResponse,
-  catalog: WorkspaceCatalog,
-  accounts: Array<{ personId: string }>,
-) {
+function transactionFilterContext({
+  params,
+  snapshot,
+  catalog,
+  accounts,
+  records,
+}: {
+  params: URLSearchParams;
+  snapshot: PortalResponse;
+  catalog: WorkspaceCatalog;
+  accounts: Array<{
+    id: string;
+    name: string;
+    personId: string;
+    personName: string;
+  }>;
+  records: Array<{ accountId: string }>;
+}) {
   const spaceId = params.get("space") || "personal";
-  const person = snapshot.people.find((p) => p.id === params.get("person"));
   const multiplePeople =
     snapshot.people.length !== 1 ||
     accounts.some((a) => a.personId !== snapshot.people.at(0)?.id);
-  return [
-    catalog.spaces.find((s) => s.id === spaceId)?.name ?? spaceId,
-    person?.name ?? (multiplePeople ? "Todas as pessoas" : ""),
+  const onlyAccount = accounts.length === 1 ? accounts.at(0) : undefined;
+  const showAccount =
+    !onlyAccount || records.some((row) => row.accountId !== onlyAccount.id);
+  const accountContext: string[] = [];
+  if (!showAccount && onlyAccount) {
+    accountContext.push(onlyAccount.name);
+    if (multiplePeople) {
+      accountContext.push(onlyAccount.personName);
+    }
+  }
+  const context = [
+    catalog.spaces.length > 1 || spaceId !== "personal"
+      ? (catalog.spaces.find((s) => s.id === spaceId)?.name ?? spaceId)
+      : "",
+    scopeLabel({
+      fallback: accountContext.join(" · "),
+      items: accounts,
+      missing: "Conta indisponível",
+      value: params.get("accountId"),
+    }),
+    scopeLabel({
+      fallback:
+        multiplePeople && !accountContext.length ? "Todas as pessoas" : "",
+      items: snapshot.people,
+      missing: "Pessoa indisponível",
+      value: params.get("person"),
+    }),
     params.get("future") === "on" ? "Futuros" : "",
+    params.get("from") ? `Desde ${dayLabel(params.get("from") ?? "")}` : "",
+    params.get("to") ? `Até ${dayLabel(params.get("to") ?? "")}` : "",
   ]
     .filter(Boolean)
     .join(" · ");
+  const activeCount = activeTransactionFilters(
+    params,
+    accounts,
+    snapshot.people,
+    showAccount,
+  );
+  return { activeCount, context, multiplePeople, showAccount };
+}
+
+function activeTransactionFilters(
+  params: URLSearchParams,
+  accounts: Array<{ id: string }>,
+  people: Array<{ id: string }>,
+  showAccount: boolean,
+) {
+  const filterKeys = [
+    "text",
+    "from",
+    "to",
+    "direction",
+    "categoryId",
+    "status",
+    "future",
+    "ignored",
+  ];
+  if (showAccount || params.get("accountId") !== accounts.at(0)?.id) {
+    filterKeys.push("accountId");
+  }
+  if (people.length !== 1 || params.get("person") !== people.at(0)?.id) {
+    filterKeys.push("person");
+  }
+  return filterKeys.filter((key) => params.get(key)).length;
+}
+
+function scopeLabel({
+  value,
+  items,
+  fallback,
+  missing,
+}: {
+  value: string | null;
+  items: Array<{ id: string; name: string }>;
+  fallback: string;
+  missing: string;
+}) {
+  if (!value) {
+    return fallback;
+  }
+  return items.find((item) => item.id === value)?.name ?? missing;
 }

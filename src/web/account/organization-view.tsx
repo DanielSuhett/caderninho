@@ -1,18 +1,28 @@
-import { type MouseEvent, useCallback, useState } from "react";
+import {
+  Badge,
+  DropdownMenu,
+  InlineCopyText,
+  LayerCard,
+  Select,
+  useKumoToastManager,
+} from "@cloudflare/kumo";
+import { type MouseEvent, type ReactNode, useCallback, useState } from "react";
 
 import {
   AccountListSchema,
   type PortalResponse,
   type WorkspaceCatalog,
 } from "../../contracts";
+import { formatBalance } from "../money";
 import { UiButton } from "../ui";
-import type { createAccountApi } from "./account-api";
+import type { OrganizationApi } from "./account-api";
 import { navigateWorkspace } from "./account-navigation";
-import { formatBalance } from "./dashboard-view";
 import { DisclosureItem } from "./disclosure-item";
+import { QuerySearch } from "./filter-fields";
 import { DeleteOrganizationItem, GroupEditor } from "./group-editor";
-import { conditionFields } from "./rule-draft";
+import { RuleComposition } from "./rule-composition";
 import { RuleEditor } from "./rule-editor";
+import { ruleSummary } from "./rule-presentation";
 import { EmptyView, ScopeFields } from "./workspace-filters";
 import {
   ResourceFeedback,
@@ -20,9 +30,9 @@ import {
   useResource,
 } from "./workspace-resource";
 import {
-  FilterDrawer,
   RecordReference,
   WorkspaceDetails,
+  WorkspaceFilters,
   WorkspaceHeading,
 } from "./workspace-ui";
 
@@ -40,19 +50,40 @@ export function OrganizationView({
   api,
   snapshot,
   page,
+  basePath = "/account",
+  actions,
+  notice,
 }: {
-  api: ReturnType<typeof createAccountApi>;
+  api: OrganizationApi;
   snapshot: PortalResponse;
   page: "rules" | "groups";
+  basePath?: "/account" | "/demo";
+  actions?: ReactNode;
+  notice?: ReactNode;
 }) {
   const [editor, setEditor] = useState<{
     kind: "rule" | "space";
     id?: string;
     remove?: boolean;
   } | null>(null);
-  const [notice, setNotice] = useState("");
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [editorSession, setEditorSession] = useState(0);
+  const { add: notify } = useKumoToastManager();
   const [params] = useState(() => new URLSearchParams(location.search));
   const spaceId = params.get("space") || "personal";
+  const activeCount =
+    {
+      groups: 0,
+      rules: [params.get("q"), params.get("enabled")].filter(Boolean).length,
+    }[page] + Number(spaceId !== "personal");
+  const monthField = (
+    <input
+      disabled={!params.has("month")}
+      name="month"
+      type="hidden"
+      value={params.get("month") ?? ""}
+    />
+  );
   const load = useCallback(
     async (signal: AbortSignal, fresh = false) => {
       const [catalog, accountList] = await Promise.all([
@@ -82,22 +113,25 @@ export function OrganizationView({
       (!params.get("enabled") || String(r.enabled) === params.get("enabled")),
   );
   const current = data?.spaces.find((s) => s.id === spaceId);
-  const closeEditor = useCallback(() => setEditor(null), []);
+  const closeEditor = useCallback(() => setEditorOpen(false), []);
   const saved = useCallback(() => {
-    setEditor(null);
-    setNotice("Alteração salva.");
+    setEditorOpen(false);
+    notify({ title: "Alteração salva.", variant: "success" });
     if (editor?.remove && editor.kind === "space" && editor.id === spaceId) {
-      navigateWorkspace(new URL("/account/groups", location.origin));
+      navigateWorkspace(new URL(`${basePath}/groups`, location.origin));
       return;
     }
     resource.retry();
-  }, [resource.retry, editor, spaceId]);
-  const newItem = useCallback(
-    () => setEditor({ kind: page === "rules" ? "rule" : "space" }),
-    [page],
-  );
-  const openItem = useCallback((event: MouseEvent<HTMLButtonElement>) => {
+  }, [resource.retry, editor, spaceId, notify, basePath]);
+  const newItem = useCallback(() => {
+    setEditor({ kind: page === "rules" ? "rule" : "space" });
+    setEditorSession((value) => value + 1);
+    setEditorOpen(true);
+  }, [page]);
+  const openItem = useCallback((event: MouseEvent<HTMLElement>) => {
     const { id, kind, remove } = event.currentTarget.dataset;
+    setEditorSession((value) => value + 1);
+    setEditorOpen(true);
     setEditor({
       kind: kind === "rule" ? "rule" : "space",
       ...(id && { id }),
@@ -107,139 +141,101 @@ export function OrganizationView({
   return (
     <>
       <WorkspaceHeading title={page === "rules" ? "Regras" : "Grupos"}>
-        <UiButton
-          disabled={!data}
-          onClick={newItem}
-          type="button"
-        >
-          {page === "rules" ? "Nova regra" : "Novo grupo"}
-        </UiButton>
+        <div className="page-actions">
+          {actions}
+          <UiButton
+            disabled={!data}
+            onClick={newItem}
+            type="button"
+            variant="primary"
+          >
+            {page === "rules" ? "Nova regra" : "Novo grupo"}
+          </UiButton>
+        </div>
       </WorkspaceHeading>
-      {!!notice && (
-        <p
-          className="notice"
-          role="status"
-        >
-          {notice}
-        </p>
+      {notice}
+      {!!data && (
+        <OrganizationEditors
+          api={api}
+          close={closeEditor}
+          data={data}
+          editor={editor}
+          open={editorOpen}
+          saved={saved}
+          session={editorSession}
+          snapshot={snapshot}
+          spaceId={spaceId}
+        />
       )}
-      {!!(editor && data) &&
-        (() => {
-          const rule = data.rules.find((row) => row.id === editor.id);
-          const space = data.spaces.find((row) => row.id === editor.id);
-          if (editor.remove) {
-            const item = editor.kind === "rule" ? rule : space;
-            return item ? (
-              <DeleteOrganizationItem
-                api={api}
-                close={closeEditor}
-                deleted={saved}
-                item={item}
-                kind={editor.kind}
-                snapshot={snapshot}
-                spaceId={editor.kind === "space" ? item.id : spaceId}
-              />
-            ) : null;
-          }
-          if (editor.kind === "space") {
-            return (
-              <GroupEditor
-                api={api}
-                snapshot={snapshot}
-                {...(space && { space })}
-                close={closeEditor}
-                saved={saved}
-              />
-            );
-          }
-          return (
-            <RuleEditor
-              accounts={data.accounts}
-              api={api}
-              catalog={data}
-              snapshot={snapshot}
-              spaceId={spaceId}
-              {...(rule && { rule })}
-              close={closeEditor}
-              saved={saved}
-            />
-          );
-        })()}
       <ResourceFeedback {...resource} />
       {!!data && (
         <>
-          <FilterDrawer
-            action={`/account/${page}`}
-            activeCount={
-              {
-                groups: 0,
-                rules: [params.get("q"), params.get("enabled")].filter(Boolean)
-                  .length,
-              }[page]
-            }
+          <WorkspaceFilters
+            action={`${basePath}/${page}`}
+            activeCount={activeCount}
             context={
               {
                 groups: `Categorias e etiquetas: ${current?.name ?? spaceId}`,
                 rules: current?.name ?? spaceId,
               }[page]
             }
+            leading={
+              page === "rules" && (
+                <QuerySearch
+                  action={`${basePath}/rules`}
+                  compact
+                  label="Buscar regra"
+                  name="q"
+                  params={params}
+                />
+              )
+            }
+            showClear={activeCount > 0}
           >
+            {monthField}
             <ScopeFields
               catalog={data}
+              compact
               params={params}
               person={false}
               snapshot={snapshot}
             />
             {page === "rules" && (
               <>
-                <label className="filter-wide">
-                  Buscar regra
-                  <input
-                    defaultValue={params.get("q") ?? ""}
-                    name="q"
-                    placeholder="Nome ou trecho da descrição"
-                    type="search"
-                  />
-                </label>
-                <label>
-                  Estado
-                  <select
-                    defaultValue={params.get("enabled") ?? ""}
-                    name="enabled"
-                  >
-                    <option value="">Todas as regras</option>
-                    <option value="true">Ativas</option>
-                    <option value="false">Pausadas</option>
-                  </select>
-                </label>
+                <input
+                  name="q"
+                  type="hidden"
+                  value={params.get("q") ?? ""}
+                />
+                <Select
+                  defaultValue={params.get("enabled") ?? ""}
+                  items={[
+                    { label: "Todas as regras", value: "" },
+                    { label: "Ativas", value: "true" },
+                    { label: "Pausadas", value: "false" },
+                  ]}
+                  label="Estado"
+                  name="enabled"
+                />
               </>
             )}
-          </FilterDrawer>
+          </WorkspaceFilters>
           {page === "rules" ? (
             <>
               {rules?.length ? (
-                <ul
+                <LayerCard
                   aria-label="Regras de classificação"
                   className="record-list"
+                  render={<ul />}
                 >
                   {rules.map((r) => {
                     const category =
                       data.categories.find((c) => c.id === r.categoryId)
                         ?.name ?? "Categoria não identificada";
-                    const account =
-                      data.accounts.find((item) => item.id === r.accountId)
-                        ?.name ?? "Todas as contas do grupo";
-                    const movement = movementLabel(r.direction);
-                    const accountLabel = account;
-                    const context = r.filter
-                      ? ruleConditionsText({
-                          accounts: data.accounts,
-                          brief: true,
-                          people: snapshot.people,
-                          rule: r,
-                        })
-                      : `Contém “${r.text}”`;
-                    const href = ruleTransactionsHref(r, spaceId);
+                    const context = ruleSummary({
+                      rule: r,
+                    });
+                    const href = ruleTransactionsHref(r, params, basePath);
                     const linkLabel = ruleLinkLabel(r);
                     return (
                       <li key={r.id}>
@@ -249,12 +245,9 @@ export function OrganizationView({
                             <>
                               <span className="record-title">{r.name}</span>
                               <span className="record-value">
-                                <span
-                                  className="status-label"
-                                  data-tone="neutral"
-                                >
+                                <Badge variant="secondary">
                                   {r.enabled ? "Ativa" : "Pausada"}
-                                </span>
+                                </Badge>
                               </span>
                               <span className="record-context rule-context">
                                 {context} → {category}
@@ -266,37 +259,6 @@ export function OrganizationView({
                           }
                         >
                           <div className="record-detail">
-                            <RuleConditions
-                              accounts={data.accounts}
-                              people={snapshot.people}
-                              rule={r}
-                            />
-                            <dl className="detail-list">
-                              <div hidden={!!r.filter}>
-                                <dt>Movimento</dt>
-                                <dd>{movement}</dd>
-                              </div>
-                              <div hidden={!!r.filter}>
-                                <dt>Conta</dt>
-                                <dd>{accountLabel}</dd>
-                              </div>
-                              {!!r.filter && (
-                                <div>
-                                  <dt>Moeda das condições</dt>
-                                  <dd>
-                                    {r.filter.currency ?? "Todas as moedas"}
-                                  </dd>
-                                </div>
-                              )}
-                              <div>
-                                <dt>Categoria</dt>
-                                <dd>{category}</dd>
-                              </div>
-                            </dl>
-                            <p className="muted">
-                              Classifica transações novas; o histórico é
-                              preservado.
-                            </p>
                             <OrganizationActions
                               href={href}
                               item={r}
@@ -304,11 +266,25 @@ export function OrganizationView({
                               linkLabel={linkLabel}
                               onOpen={openItem}
                             />
+                            <RuleComposition
+                              accounts={data.accounts}
+                              category={category}
+                              enabled={r.enabled}
+                              people={snapshot.people}
+                              rule={r}
+                            />
                             <RecordReference>
                               <div>
                                 <dt>Identificador da regra</dt>
                                 <dd>
-                                  <code>{r.id}</code>
+                                  <InlineCopyText
+                                    labels={{
+                                      copied: "Identificador copiado",
+                                      copyAction: "Copiar identificador",
+                                    }}
+                                  >
+                                    {r.id}
+                                  </InlineCopyText>
                                 </dd>
                               </div>
                             </RecordReference>
@@ -317,7 +293,7 @@ export function OrganizationView({
                       </li>
                     );
                   })}
-                </ul>
+                </LayerCard>
               ) : (
                 <EmptyView title="Nenhuma regra encontrada">
                   Use Nova regra para começar com um preset e conferir as
@@ -326,16 +302,18 @@ export function OrganizationView({
               )}
               <WorkspaceDetails title="Como as regras são aplicadas">
                 <p>
-                  Regras ativas classificam transações novas. Menor prioridade
-                  vence; o histórico é preservado.
+                  A primeira regra ativa correspondente vence: menor prioridade,
+                  com desempate pelo identificador. Salvar vale para as próximas
+                  importações e não reclassifica o histórico.
                 </p>
               </WorkspaceDetails>
             </>
           ) : (
             <>
-              <ul
+              <LayerCard
                 aria-label="Grupos"
                 className="record-list"
+                render={<ul />}
               >
                 {data.spaces.map((s) => (
                   <li key={s.id}>
@@ -366,8 +344,13 @@ export function OrganizationView({
                         </dl>
                         <OrganizationActions
                           href={scopedHref(
-                            "/account/transactions",
-                            new URLSearchParams({ space: s.id }),
+                            `${basePath}/transactions`,
+                            new URLSearchParams({
+                              space: s.id,
+                              ...(params.get("month") && {
+                                month: params.get("month") ?? "",
+                              }),
+                            }),
                           )}
                           item={s}
                           kind="space"
@@ -378,7 +361,14 @@ export function OrganizationView({
                           <div>
                             <dt>Identificador do grupo</dt>
                             <dd>
-                              <code>{s.id}</code>
+                              <InlineCopyText
+                                labels={{
+                                  copied: "Identificador copiado",
+                                  copyAction: "Copiar identificador",
+                                }}
+                              >
+                                {s.id}
+                              </InlineCopyText>
                             </dd>
                           </div>
                         </RecordReference>
@@ -386,8 +376,9 @@ export function OrganizationView({
                     </DisclosureItem>
                   </li>
                 ))}
-              </ul>
+              </LayerCard>
               <WorkspaceDetails
+                defaultOpen
                 hint={String(data.categories.length)}
                 title={`Categorias de ${current?.name ?? spaceId}`}
               >
@@ -418,6 +409,7 @@ export function OrganizationView({
                 )}
               </WorkspaceDetails>
               <WorkspaceDetails
+                defaultOpen
                 hint={String(data.tags.length)}
                 title="Etiquetas"
               >
@@ -441,6 +433,74 @@ export function OrganizationView({
   );
 }
 
+function OrganizationEditors({
+  api,
+  close,
+  data,
+  editor,
+  open,
+  saved,
+  session,
+  snapshot,
+  spaceId,
+}: {
+  api: OrganizationApi;
+  close: () => void;
+  data: WorkspaceCatalog & {
+    accounts: {
+      id: string;
+      name: string;
+      personId: string;
+      personName: string;
+    }[];
+  };
+  editor: { kind: "rule" | "space"; id?: string; remove?: boolean } | null;
+  open: boolean;
+  saved: () => void;
+  session: number;
+  snapshot: PortalResponse;
+  spaceId: string;
+}) {
+  const rule = data.rules.find((row) => row.id === editor?.id);
+  const space = data.spaces.find((row) => row.id === editor?.id);
+  return (
+    <>
+      <RuleEditor
+        accounts={data.accounts}
+        api={api}
+        catalog={data}
+        close={close}
+        key={`rule-${session}`}
+        open={open && editor?.kind === "rule" && !editor.remove}
+        {...(rule && { rule })}
+        saved={saved}
+        snapshot={snapshot}
+        spaceId={spaceId}
+      />
+      <GroupEditor
+        api={api}
+        close={close}
+        key={`group-${session}`}
+        open={open && editor?.kind === "space" && !editor.remove}
+        saved={saved}
+        snapshot={snapshot}
+        {...(space && { space })}
+      />
+      <DeleteOrganizationItem
+        api={api}
+        close={close}
+        deleted={saved}
+        item={(editor?.kind === "rule" ? rule : space) ?? { id: "", name: "" }}
+        key={`delete-${session}`}
+        kind={editor?.kind ?? "rule"}
+        open={open && !!editor?.remove}
+        snapshot={snapshot}
+        spaceId={editor?.kind === "space" ? (editor.id ?? spaceId) : spaceId}
+      />
+    </>
+  );
+}
+
 function OrganizationActions({
   item,
   kind,
@@ -452,45 +512,53 @@ function OrganizationActions({
   kind: "rule" | "space";
   href: string;
   linkLabel: string;
-  onOpen: (event: MouseEvent<HTMLButtonElement>) => void;
+  onOpen: (event: MouseEvent<HTMLElement>) => void;
 }) {
   const noun = kind === "rule" ? "regra" : "grupo";
   return (
     <div className="record-actions">
-      <a href={href}>{linkLabel}</a>
       <UiButton
         aria-label={`Editar ${noun} ${item.name}`}
         data-id={item.id}
         data-kind={kind}
         onClick={onOpen}
         type="button"
-        variant="ghost"
+        variant="secondary"
       >
         Editar
       </UiButton>
-      {(kind === "rule" || item.id !== "personal") && (
-        <UiButton
-          aria-label={`Excluir ${noun} ${item.name}`}
-          data-id={item.id}
-          data-kind={kind}
-          data-remove="true"
-          onClick={onOpen}
-          tone="danger"
-          type="button"
-          variant="ghost"
+      <DropdownMenu>
+        <DropdownMenu.Trigger
+          aria-label={`Mais ações de ${item.name}`}
+          render={
+            <UiButton
+              type="button"
+              variant="ghost"
+            />
+          }
         >
-          Excluir
-        </UiButton>
-      )}
+          Mais ações
+        </DropdownMenu.Trigger>
+        <DropdownMenu.Content>
+          <DropdownMenu.LinkItem href={href}>{linkLabel}</DropdownMenu.LinkItem>
+          {(kind === "rule" || item.id !== "personal") && (
+            <>
+              <DropdownMenu.Separator />
+              <DropdownMenu.Item
+                data-id={item.id}
+                data-kind={kind}
+                data-remove="true"
+                onClick={onOpen}
+                variant="danger"
+              >
+                Excluir {noun}
+              </DropdownMenu.Item>
+            </>
+          )}
+        </DropdownMenu.Content>
+      </DropdownMenu>
     </div>
   );
-}
-
-function movementLabel(direction: "DEBIT" | "CREDIT" | null) {
-  if (!direction) {
-    return "Entradas e saídas";
-  }
-  return direction === "DEBIT" ? "Saídas" : "Entradas";
 }
 
 function ruleTransactionsHref(
@@ -500,9 +568,13 @@ function ruleTransactionsHref(
     accountId: string | null;
     direction: string | null;
   },
-  spaceId: string,
+  scope: URLSearchParams,
+  basePath: string,
 ) {
-  const params = new URLSearchParams({ space: spaceId });
+  const params = new URLSearchParams({
+    space: scope.get("space") ?? "personal",
+    ...(scope.get("month") && { month: scope.get("month") ?? "" }),
+  });
   if (!rule.filter) {
     params.set("text", rule.text);
     if (rule.accountId) {
@@ -512,106 +584,9 @@ function ruleTransactionsHref(
       params.set("direction", rule.direction);
     }
   }
-  return `/account/transactions?${params}`;
+  return `${basePath}/transactions?${params}`;
 }
 
 function ruleLinkLabel(rule: { filter?: unknown }) {
   return rule.filter ? "Ver transações do grupo" : "Ver correspondências";
-}
-
-function ruleConditionsText({
-  rule,
-  accounts,
-  people,
-  brief = false,
-}: {
-  rule: WorkspaceCatalog["rules"][number];
-  accounts: { id: string; name: string; personName: string }[];
-  people: { id: string; name: string }[];
-  brief?: boolean;
-}) {
-  if (!rule.filter) {
-    return "";
-  }
-  const operators: Record<string, string> = {
-    contains: "contém",
-    equals: "é",
-    gte: "≥",
-    lte: "≤",
-    not_contains: "não contém",
-    starts_with: "começa com",
-  };
-  const values: Record<string, string> = {
-    CREDIT: "Entrada",
-    DEBIT: "Saída",
-    PENDING: "Pendente",
-    POSTED: "Confirmada",
-  };
-  function label(
-    condition: NonNullable<
-      typeof rule.filter
-    >["alternatives"][number]["conditions"][number],
-  ) {
-    let value = values[condition.value] ?? condition.value;
-    if (condition.field === "accountId") {
-      const account = accounts.find((row) => row.id === condition.value);
-      value = account
-        ? `${account.name} · ${account.personName}`
-        : "Conta não identificada";
-    }
-    if (condition.field === "personId") {
-      value =
-        people.find((row) => row.id === condition.value)?.name ??
-        "Pessoa não identificada";
-    }
-    if (condition.field === "amount") {
-      value = formatBalance(condition.value, rule.filter?.currency ?? "BRL");
-    }
-    const field =
-      conditionFields.find((row) => row.value === condition.field)?.label ??
-      condition.field;
-    return `${field} ${operators[condition.operator]} ${value}`;
-  }
-  if (brief) {
-    const { alternatives } = rule.filter;
-    const conditions = alternatives.flatMap((row) => row.conditions);
-    const description = conditions.find(
-      (c) => c.field === "description" && c.operator === "contains",
-    );
-    const direction = conditions.find(
-      (c) => c.field === "direction" && c.operator === "equals",
-    );
-    if (
-      alternatives.length === 1 &&
-      description &&
-      conditions.every((c) => c === description || c === direction)
-    ) {
-      const movement = direction
-        ? movementLabel(direction.value === "DEBIT" ? "DEBIT" : "CREDIT")
-        : "Transações";
-      return `${movement} com “${description.value}”`;
-    }
-    const [first] = conditions;
-    if (!first) {
-      return "Condições não disponíveis";
-    }
-    return [
-      alternatives.length > 1 ? `${alternatives.length} alternativas` : "",
-      conditions.length > 1 ? `+ ${conditions.length - 1} condições` : "",
-      label(first),
-    ]
-      .filter(Boolean)
-      .join(" · ");
-  }
-  return rule.filter.alternatives
-    .map(
-      (alternative, index) =>
-        `${index ? "OU: " : ""}${alternative.conditions.map(label).join(" · E ")}`,
-    )
-    .join("\n\n");
-}
-function RuleConditions(props: Parameters<typeof ruleConditionsText>[0]) {
-  const text =
-    ruleConditionsText(props) || `Descrição contém “${props.rule.text}”`;
-  return text ? <p className="rule-condition-summary">{text}</p> : null;
 }

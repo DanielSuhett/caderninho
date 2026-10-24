@@ -1,0 +1,131 @@
+{
+  "boot": 1792821782120,
+  "commits": 24,
+  "dashboardRenders": 1,
+  "requests": [
+    {
+      "path": "/api/account",
+      "start": 205.80000001192093,
+      "end": 222.69999998807907
+    },
+    {
+      "path": "/api/account/query",
+      "start": 551.1999999880791,
+      "end": 560.3000000119209
+    },
+    {
+      "path": "/api/account/query",
+      "start": 551.6000000238419,
+      "end": 565.1999999880791
+    },
+    {
+      "path": "/api/account/catalog",
+      "start": 551.9000000357628,
+      "end": 566
+    },
+    {
+      "path": "/api/account/query",
+      "start": 552,
+      "end": 568.6999999880791
+    },
+    {
+      "path": "/api/account",
+      "start": 2229.600000023842,
+      "end": 2232.5
+    },
+    {
+      "path": "/api/account",
+      "start": 4234.600000023842,
+      "end": 4242.300000011921
+    },
+    {
+      "path": "/api/account",
+      "start": 6245,
+      "end": 6255.199999988079
+    },
+    {
+      "path": "/api/account",
+      "start": 8257.5,
+      "end": 8259.699999988079
+    },
+    {
+      "path": "/api/account",
+      "start": 10262.5,
+      "end": 10266.300000011921
+    },
+    {
+      "path": "/api/account",
+      "start": 12269,
+      "end": 12273.699999988079
+    },
+    {
+      "path": "/api/account",
+      "start": 14276,
+      "end": 14279.600000023842
+    },
+    {
+      "path": "/api/account",
+      "start": 16280.699999988079,
+      "end": 16283.100000023842
+    },
+    {
+      "path": "/api/account",
+      "start": 18284.69999998808,
+      "end": 18287.69999998808
+    },
+    {
+      "path": "/api/account",
+      "start": 20289.19999998808,
+      "end": 20291.900000035763
+    },
+    {
+      "path": "/api/account",
+      "start": 22293.400000035763,
+      "end": 22296.600000023842
+    }
+  ],
+  "longTasks": [
+    {
+      "start": 142.80000001192093,
+      "duration": 52
+    }
+  ],
+  "events": [],
+  "resources": [
+    "/__perf.js",
+    "/account.js",
+    "/chunks/preload-helper-BLdHbfdN.js",
+    "/chunks/validation-DQdTx4Ah.js",
+    "/chunks/rolldown-runtime-COiEfhsA.js",
+    "/chunks/result-C4L43QRj.js",
+    "/chunks/mount-account-8sbeB6RC.js",
+    "/chunks/jsx-runtime-CWQoum3n.js",
+    "/chunks/ui-DHpd1GOW.js",
+    "/chunks/IconBase.es-UeNFWh-8.js",
+    "/chunks/Bank.es-Bcv_DcEA.js",
+    "/chunks/text-f1wxz183ckq7qtl7-CKaVOvLd.js",
+    "/chunks/account-tEcaSv2s.js",
+    "/chunks/CaretRight.es-Oe4h3BFD.js",
+    "/chunks/TooltipPopup-dm4y0hbdeylzp22y-DRCLgVfv.js",
+    "/chunks/ShieldCheck.es-CBlWEJN2.js",
+    "/chunks/toast-bzaothy2yrezh787-1H9RHhId.js",
+    "/chunks/createToastManager-onmoqrmr8zo02rif-D2396EF8.js",
+    "/chunks/contracts-Dnd9scUi.js",
+    "/chunks/client-Ba5Ak5xS.js",
+    "/chunks/workspace-resource-COdC3hVx.js",
+    "/chunks/overview-view-CBhAhXbK.js",
+    "/chunks/workspace-filters-0wxkvm7J.js",
+    "/chunks/select-futox5zqr3r80y9a-B65hjsDl.js",
+    "/chunks/period-picker-CvvdavDM.js",
+    "/chunks/CaretLeft.es-BoU70PAE.js",
+    "/chunks/meter-majprsslwmpbmkzg-B48ZxQq8.js",
+    "/chunks/stringifyLocale-bxsgxdnzaef2vcar-CkHjdQTJ.js",
+    "/chunks/table-yf8ul2e5nbemioi1-k8waGklT.js",
+    "/chunks/money-BxkvHdwQ.js",
+    "/chunks/transaction-list-BrhTi0s8.js",
+    "/chunks/financial-presentation-uyY--mzg.js",
+    "/chunks/monthly-spending-chart-YLwsykX2.js",
+    "/chunks/Axis-BFV9l-oj.js",
+    "/chunks/core-CFGQtl1R.js"
+  ]
+}

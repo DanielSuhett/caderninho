@@ -1,0 +1,248 @@
+{
+  "method": "Fiber changed since preceding commit and PerformedWork flag; structural approximation, not React Profiler",
+  "start": {
+    "boot": 1792844878729,
+    "commits": 48,
+    "fibers": 1437,
+    "editorRenders": 2,
+    "flowRenders": 2,
+    "requests": [
+      {
+        "path": "/api/account",
+        "start": 99,
+        "end": 101.29999995231628
+      },
+      {
+        "path": "/api/account/catalog",
+        "start": 407.39999997615814,
+        "end": 409.89999997615814
+      },
+      {
+        "path": "/api/account/query",
+        "start": 407.5999999642372,
+        "end": 410.2999999523163
+      },
+      {
+        "path": "/api/account/rule-preview",
+        "start": 1351.5,
+        "end": 1353.8999999761581
+      },
+      {
+        "path": "/api/account",
+        "start": 2102.699999988079,
+        "end": 2104.599999964237
+      },
+      {
+        "path": "/api/account",
+        "start": 4106.799999952316,
+        "end": 4108.899999976158
+      }
+    ],
+    "longTasks": [],
+    "events": [
+      {
+        "name": "click",
+        "duration": 16,
+        "delay": 0.20000004768371582
+      },
+      {
+        "name": "click",
+        "duration": 64,
+        "delay": 0.20000004768371582
+      },
+      {
+        "name": "click",
+        "duration": 48,
+        "delay": 0.3999999761581421
+      }
+    ],
+    "nextFrames": [
+      {
+        "name": "click",
+        "elapsed": 5.699999988079071,
+        "visible": "visible"
+      },
+      {
+        "name": "click",
+        "elapsed": 31,
+        "visible": "visible"
+      },
+      {
+        "name": "click",
+        "elapsed": 11.100000023841858,
+        "visible": "visible"
+      }
+    ],
+    "layouts": [
+      {
+        "value": 0.011811432282826608,
+        "recentInput": true
+      },
+      {
+        "value": 0.010725245459421781,
+        "recentInput": true
+      },
+      {
+        "value": 0.0077592437055540725,
+        "recentInput": true
+      },
+      {
+        "value": 0.013791622101972226,
+        "recentInput": true
+      },
+      {
+        "value": 0.00015210427974944135,
+        "recentInput": true
+      },
+      {
+        "value": 0.002356957498039981,
+        "recentInput": true
+      },
+      {
+        "value": 0.0001066217587470007,
+        "recentInput": true
+      },
+      {
+        "value": 0.0005000769547506387,
+        "recentInput": true
+      },
+      {
+        "value": 0.007489397477653291,
+        "recentInput": true
+      }
+    ],
+    "reducedMotion": false,
+    "visible": "visible",
+    "devicePixelRatio": 1.0000000074505806
+  },
+  "end": {
+    "boot": 1792844878729,
+    "commits": 55,
+    "fibers": 1437,
+    "editorRenders": 5,
+    "flowRenders": 2,
+    "requests": [
+      {
+        "path": "/api/account",
+        "start": 99,
+        "end": 101.29999995231628
+      },
+      {
+        "path": "/api/account/catalog",
+        "start": 407.39999997615814,
+        "end": 409.89999997615814
+      },
+      {
+        "path": "/api/account/query",
+        "start": 407.5999999642372,
+        "end": 410.2999999523163
+      },
+      {
+        "path": "/api/account/rule-preview",
+        "start": 1351.5,
+        "end": 1353.8999999761581
+      },
+      {
+        "path": "/api/account",
+        "start": 2102.699999988079,
+        "end": 2104.599999964237
+      },
+      {
+        "path": "/api/account",
+        "start": 4106.799999952316,
+        "end": 4108.899999976158
+      }
+    ],
+    "longTasks": [],
+    "events": [
+      {
+        "name": "click",
+        "duration": 16,
+        "delay": 0.20000004768371582
+      },
+      {
+        "name": "click",
+        "duration": 64,
+        "delay": 0.20000004768371582
+      },
+      {
+        "name": "click",
+        "duration": 48,
+        "delay": 0.3999999761581421
+      }
+    ],
+    "nextFrames": [
+      {
+        "name": "click",
+        "elapsed": 5.699999988079071,
+        "visible": "visible"
+      },
+      {
+        "name": "click",
+        "elapsed": 31,
+        "visible": "visible"
+      },
+      {
+        "name": "click",
+        "elapsed": 11.100000023841858,
+        "visible": "visible"
+      },
+      {
+        "name": "input",
+        "elapsed": 33.90000003576279,
+        "visible": "visible"
+      },
+      {
+        "name": "input",
+        "elapsed": 11.600000023841858,
+        "visible": "visible"
+      },
+      {
+        "name": "input",
+        "elapsed": 20.69999998807907,
+        "visible": "visible"
+      }
+    ],
+    "layouts": [
+      {
+        "value": 0.011811432282826608,
+        "recentInput": true
+      },
+      {
+        "value": 0.010725245459421781,
+        "recentInput": true
+      },
+      {
+        "value": 0.0077592437055540725,
+        "recentInput": true
+      },
+      {
+        "value": 0.013791622101972226,
+        "recentInput": true
+      },
+      {
+        "value": 0.00015210427974944135,
+        "recentInput": true
+      },
+      {
+        "value": 0.002356957498039981,
+        "recentInput": true
+      },
+      {
+        "value": 0.0001066217587470007,
+        "recentInput": true
+      },
+      {
+        "value": 0.0005000769547506387,
+        "recentInput": true
+      },
+      {
+        "value": 0.007489397477653291,
+        "recentInput": true
+      }
+    ],
+    "reducedMotion": false,
+    "visible": "visible",
+    "devicePixelRatio": 1.0000000074505806
+  }
+}

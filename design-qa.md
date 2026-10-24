@@ -1,164 +1,195 @@
-# QA de design: conectar, importar e consultar
+# QA visual — Kumo e demonstração pública
 
-final result: passed
+final result: pass
 
-23/10/2026 · Product Design / audit + design-qa · parecer independente pré-deploy.
+## Resultado local em 24/10/2026
 
-**Nenhum P0/P1/P2 acionável permanece no escopo local auditado.** Os três momentos
-implementados preservam a direção aprovada e a identidade atual. Os dois P2
-encontrados durante a revisão foram corrigidos e conferidos depois da mudança.
-Este resultado aprova o design observado; não certifica Pluggy/OAuth em produção,
-leitor de tela ou zoom real de 200%.
+### Rodada 09 — demo com regras e grupos
 
-## Achados corrigidos e evidência posterior
+Fixtures centralizadas para demo e três testes de UI, mantendo expectativas
+financeiras literais. As quatro páginas públicas reutilizam componentes reais;
+Regras/Grupos usam mutações na memória da aba, sem API privada.
+Salvar preserva o histórico; Reaplicar informa alcance e mudanças e atualiza
+o mesmo ledger usado em totais, séries e transações. Teste observado:
+4.393,81→3.337,20 BRL, com fluxo bancário inalterado em 6.057,89 BRL.
 
-| Achado da rodada 2 | Correção | Conferência posterior |
-| --- | --- | --- |
-| P2 — link isolado “Ver histórico de sincronizações” com altura de 19,37 px | Ação em `.journey-details` recebeu `inline-flex` e altura mínima de 44 px, preservando fonte e layout | `mobile-360-history-target-final.json`: altura 44 px, viewport 360 × 800, documento 345 px sem overflow. O link aparece nos detalhes da jornada; não exige uma nova peça visual. |
-| P2 — `UPSTREAM_TIMEOUT` orientava conferir perfil/autorização sem evidência de falha nessas configurações | Mensagem específica explica demora do provedor, preservação e próxima elegibilidade; código técnico fica nos detalhes. Causas conhecidas são diferenciadas e o caso desconhecido é neutro | `desktop-timeout-final.jpg` e `mobile-360-timeout-final.jpg`, abertos e comparados com a captura anterior no mesmo input. O texto corrigido não culpa credenciais. `timeout-final-state.json` confirma Workflow `failed`, `UPSTREAM_TIMEOUT` e três registros preservados. |
+Grupos isolados, categorias em português, contexto de grupo condicional,
+rascunho com proteção e reset. A primeira leva de captura responsiva foi
+rejeitada por escala/corte do pipeline e recapturada pelo método nativo.
+[Percursos e capturas](docs/kumo/capturas/rodada-09/README.md) ·
+[contrato e limites](docs/kumo/demo-interativa.md) ·
+[revisão independente](docs/kumo/revisao-critica-09-demo.md).
 
-P3 identificados também foram atendidos: mensagem genérica “Alteração salva.”
-retirada do acompanhamento e singular correto em “1 pessoa · 1 conexão”. O aviso
-geral de parcialidade que pode aparecer abaixo da jornada é redundância leve de
-contexto, sem novo bloqueio de uso; não exige outra rodada de correção.
+`mise run check`: 57 Node, 108 integração/19 arquivos, build/dry-run e runtime
+local 10 mil/100 mil. Sem dependências novas ou deploy.
 
-## Referências e versão avaliada
+### Rodada 08 — itens 2 a 5
 
-Fonte visual: `outputs/onboarding-plan-2026-10-23/visuals/conectar-v2.png`,
-`importar-v2.png` e `disponivel-v2.png`, aprovadas como direção de hierarquia.
-`DESIGN.md`, `docs/design-system.md` e tokens/componentes atuais prevalecem sobre
-gradiente, escala e efeitos aproximados do ImageGen.
+Transações com superfície uniforme, reflow por container e direção redundante
+removida com guardas financeiros. Regras com contagens absolutas, ações antes do
+Flow e menos contexto repetido. Auditoria com baseline/2×2, grade sem efeito no
+filtro, erro com recuperação sob demanda e bootstrap alinhado.
 
-Implementação: versão de trabalho local do repositório
-`/home/suhett/Work/caderninho`, a partir da base `26de722`. As capturas foram feitas
-no navegador pelo agente principal e abertas por esta designer. A designer
-inspecionou pixels e registros desta rodada, sem operar a sessão do navegador.
-O provedor/SDK são simulados explicitamente; Worker, D1 e Workflow são reais no
-runtime local. O frontproxy do harness adapta cookies para o navegador de teste;
-isso não foi apresentado como alteração ou prova dos cookies de produção.
+14 páginas com/sem grade em desktop e celular; estados expandidos e larguras
+intermediárias em [polimento](docs/kumo/polimento-08.md) e
+[galeria 08](docs/kumo/capturas/rodada-08/README.md). Três edições do nome: 3→0
+atualizações estruturais do Flow, sem alegar ganho percentual de latência.
+Movimento reduzido simulado; reflow CSS equivalente, sem zoom nativo.
+`mise run check` passou: 51 Node, 108 integração/19 arquivos, build/dry-run e
+runtime local 10 mil/100 mil. Sem dependências novas, push, deploy ou merge.
+[Revisão independente](docs/kumo/revisao-critica-08-polimento.md).
 
-## Comparações conjuntas e geometria
+### Histórico da rodada 03
 
-Os pares fonte/captura desktop foram abertos **juntos no mesmo input visual**,
-com rótulos e resolução original. A revisão não foi escrita apenas de memória,
-prompts, código ou nomes de arquivo.
+Na rodada 03, revisão com 8/10 qualitativo em cada uma das 14 páginas, após três rodadas
+com agente independente no papel de designer crítica. Aprovação limitada às
+capturas e interações registradas; não é aprovação humana nem de produção.
+[Relatório por página](docs/kumo/revisao-critica-03.md),
+[galeria](docs/kumo/capturas/README.md) e
+[dados/contraste/bundle](docs/kumo/dados-e-evidencias.md).
 
-| Momento | Fonte × implementação, mesma entrada visual | Resultado |
-| --- | --- | --- |
-| 1. Conectar | `conectar-v2.png` × `desktop-connect.png` | Um CTA principal; perfil configurado como texto auxiliar; consequência automática antes de autorizar; pessoas/perfis e MCP recolhidos. |
-| 2. Acompanhar importação | `importar-v2.png` × `desktop-import-v2.jpg` | Origem, fase atual, observação e parcialidade próximos; CTA disponível só com registros publicados. Sem filtros globais, percentual, ETA ou trilha de cinco fases. |
-| 3. Consultar | `disponivel-v2.png` × `desktop-complete.jpg` | Conclusão associada à origem e data, contas/cartões como contexto, leitura prioritária e MCP opcional. O título genérico “Importação concluída” é intencional para retornos. |
+### Rodada 07 — composição das regras
 
-Os três mocks e as capturas desktop válidas medem **1487 × 1058 pixels**. O
-capturador informou viewport CSS de 1487 × 1058; não houve reamostragem desses
-pares. Horários e dados são do cenário sintético e variam legitimamente em
-relação ao mock. A captura `desktop-connect.png` tem conteúdo JPEG apesar do
-sufixo PNG; isso foi registrado como formato de evidência, não defeito do produto.
+Flow real em regra expandida e rascunho sob Collapsible. Escopo obrigatório antes
+das alternativas OU/condições E, categoria depois; pausa e prioridade explícitas.
+Lista recolhida preservada. Carregamento visível sob demanda e alternativa HTML
+quando o módulo opcional falha. Sem dependências novas.
 
-No quadro integral em resolução original foi possível examinar cabeçalho,
-seletor, CTA, ícones, aviso e metadados com legibilidade. Não foi necessário outro
-recorte para esses componentes simples. Medições DOM complementaram a inspeção
-dos alvos e foco; screenshot sozinho não comprova essa geometria.
+Inspeção sintética de duas alternativas em desktop 1440/celular 391, máximo 4×8 em
+desktop 1440/celular 320, pausada, editor com preset e condição incompleta,
+continuidade/descarte de rascunho e falha 503 do módulo. O máximo foi corrigido
+após crítica: nós pelo topo e valor financeiro quebrado só entre milhares.
+Quatro testes novos preservam semântica e precisão de apresentação.
+Gate completo passou com 49 testes Node, 108 de integração e runtime local
+Workflow/D1 de 10 mil/100 mil registros. Sem push/deploy ou validação do provedor.
+[Método e limites](docs/kumo/rule-flow.md) · [capturas](docs/kumo/capturas/README.md).
 
-| Mobile/reflow | Viewport e densidade registrados | Raster e avaliação |
-| --- | --- | --- |
-| 360 | CSS 360 × 800; densidade próxima de 1; documento `clientWidth = scrollWidth = 345` | Exportações de viewport 345 × 766 px. Conectar, Importar, Conclusão, vazio e timeout abertos; nenhuma colisão/corte da UI nas capturas válidas. |
-| 390 solicitado | DOM efetivo 391 × 845 por arredondamento; densidade próxima de 1; documento `clientWidth = scrollWidth = 376` | Exportações 376 × 814 px. Três momentos abertos; reflow preserva fase, data, aviso e ações. |
-| Reflow equivalente | Pedido 744 × 529, efetivo 744 × 530; documento `clientWidth = scrollWidth = 729` | `reflow-200-equivalent.jpg`, 729 × 518 px. Demonstra layout em metade da largura desktop; **não é zoom real de 200%**. |
+### Rodada 06 — fluidez React
 
-A exportação IAB reduz o raster móvel. Essas imagens foram avaliadas como reflow,
-sem comparar sua tipografia em pixels com um desktop não normalizado. Não existe
-alvo mobile específico: a referência móvel é a adaptação da hierarquia aprovada
-ao shell compacto e ao contrato atual.
+Aplicados critérios da skill oficial vercel-react-best-practices ao projeto
+React/Vite. Entry da landing com dependências caiu de 35.144 para 3.059 bytes
+brutos; boot privado de 893.919 para 822.906. Shell da demo cresceu 3.589 bytes
+para evitar reloads. Não confundir esses recortes com tamanho do aplicativo todo.
 
-## Cinco superfícies de fidelidade
+Snapshot idêntico: antes 23 renders/23 leituras; depois 1 render inicial/12
+leituras. Tab até Transações antecipou o chunk sem novas consultas. Demo manteve
+o mesmo documento ao trocar mês, moeda, navegar, buscar por Enter e usar Voltar.
+Foram vistos detalhe de parcelas, configuração lazy e, no Worker local em
+391×845, navegação móvel com fechamento de Sidebar, foco no conteúdo e sem
+overflow horizontal. Não houve nova nota de designer nem auditoria das 14 páginas.
 
-| Superfície obrigatória | Avaliação |
+Gate completo passou: 45 testes Node, 108 de integração, build/dry-run e runtime
+10k/100k; check:quick repetido após o último ajuste. Nenhum FPS/INP de campo foi
+medido. Sem dependências novas ou deploy.
+[Método, tradeoffs e capturas](docs/kumo/performance.md).
+
+### Rodada 05 — movimento e explicação MCP
+
+Implementação de Flow nativo Kumo 2.14 na landing, com sequência finita de quatro
+etapas, pausa/continuação/repetição e Sem animação. Explicação HTML disponível
+antes do JavaScript e após falha do chunk. Hero/seções e wrapper do painel usam
+entradas curtas, sem interpolação financeira ou cascata de linhas.
+
+Vistos: Flow desktop pausado/reproduzindo/completo; móvel 391px; topo em 320px e
+geometria de todos os nós; orientação em 1090/1101px; fallback após 503 sintético;
+Transações privadas, Dialog de filtros e regra expandida. Progressão, conectores,
+pausa e suspensão fora da área foram observados em leituras temporais do DOM.
+Foi corrigido um corte de 15px dentro do Flow em 320px, que não aparecia como
+overflow do documento. Capturas iniciais rejeitadas estão identificadas.
+
+A designer crítica abriu 12 imagens e atribuiu 8/10 qualitativo à explicação MCP
+e às amostras do painel; isso não reaprova todas as páginas nem mede satisfação.
+Movimento reduzido do SO e ocultação de aba foram tratados/revisados no código,
+sem execução desses caminhos de runtime. Sem animação não substitui emulação da
+preferência do SO. Não houve nova revisão por grade de todas as páginas.
+
+`mise run check` final passou após as correções: 44 testes Node, 108 de integração,
+build/dry-run e runtime local 10k/100k, além de tipos/formato/lint. Sem mudanças de
+dependências, push ou deploy. [Evidência detalhada](docs/kumo/motion.md),
+[revisão crítica](docs/kumo/revisao-critica-05-motion.md) e
+[capturas](docs/kumo/capturas/README.md).
+
+### Rodada 04 — correção do critério de Transações
+
+A avaliação anterior não encerrou o critério de calma solicitado pelo usuário.
+Esta rodada revê somente Transações privadas e demo: escolhas proporcionais ao
+catálogo completo, conta única sem seletor/coluna repetida, busca compacta com
+InputGroup/Button nativos, ausência de seletor de moeda e notas sob demanda.
+Moeda continua em cada valor; agregados da visão geral continuam separados por
+moeda. Não se atribui nova aprovação às outras páginas.
+
+Vistos: catálogo único, várias contas/Select aberto, conta fora do catálogo,
+filtro antigo indisponível e recuperação com Limpar, Dialog sem opções únicas,
+demo com BRL/USD identificados, busca aplicada e quebra em 320px. Desktop
+1440×900, móvel 391×845 e 320×845; grade 12/4 colunas recapturada em Transações.
+Busca por botão e Enter preservou GET; hidden accountId foi preservado ao aplicar.
+Fixture privada não aplica SQL real; essas exceções comprovam apresentação e
+navegação. Demo também consultada no Worker local 8801 sem sessão, com três
+resultados para mercado. [Revisão04](docs/kumo/revisao-critica-04-transacoes.md).
+
+A revisão independente atribuiu 8/10 qualitativo às duas superfícies de
+Transações nos estados vistos, sem P1/P2 visual identificado. Isso não valida
+satisfação humana nem amplia a cobertura para as demais páginas.
+
+Leitura qualitativa: menor competição entre controles e dados; lista de densidade
+moderada e variação baixa, com cor reservada a estados. No móvel 391 a primeira
+linha da demo passou de cerca de y345 a y265, sem reduzir fonte ou retirar estados.
+Posição observada não é medição de usabilidade. Movimento não foi reavaliado por
+imagens estáticas. `mise run check` foi repetido e passou no código desta rodada:
+44 testes Node, 108 de integração, build/dry-run e runtime 10k/100k. Permanece o
+aviso conhecido do Kumo sobre `@emotion/is-prop-valid` no runner de testes.
+
+## Cinco superfícies verificadas
+
+| Superfície | Evidência atual |
 | --- | --- |
-| Fontes e tipografia | JSON DOM confirma `Hanken, sans-serif` e fonte `loaded`. Títulos, corpo e metadados usam escala operacional menor que o raster, intencionalmente conforme DESIGN.md. Quebras em 360/390 são legíveis; não há truncamento da fase/aviso/CTA nas capturas válidas. |
-| Espaço e layout | CTA e status mais próximos do topo que no mock, preservando compactação aprovada. Sidebar, disclosure e agrupamento existentes; alvos não diminuídos para ganhar densidade. Sem nova rota, hero ou wizard. |
-| Cores e tokens | Laranja sólido e texto escuro substituem corretamente o gradiente aproximado do raster. Avisos têm contorno uniforme; seleção sem faixa lateral; foco laranja independente. Estado também tem texto e não depende somente de cor. |
-| Imagens e ícones | Wordmark tipográfico e família de ícones consistentes. Não houve substituição da interface por screenshot, ilustração improvisada ou novos ativos decorativos. Variações do check do mock mantêm o significado explícito da conclusão. |
-| Copy e conteúdo | Configuração, registro, fase, observação, dado publicado, conclusão e falha são fatos distintos. “Conexão registrada” não sugere banco online. A consulta à cópia importada é explicada. Vazio legítimo não pede reconexão; timeout agora tem recuperação compatível. |
+| Tipografia | Inter local; conteúdo e controles 16 px, metadados 14 px, títulos 28/20px, métricas 32/26 px e moeda subordinada. Peso máximo 600 e tracking original. |
+| Espaço e alinhamento |14 páginas desktop/móvel com grade 12/4 colunas, gutter 24/16 px e baseline 8 px. Eixos de headings, toolbars, linhas, valores e chevrons inspecionados. Sem overflow horizontal nas larguras testadas. |
+| Cor e contraste | Neutros reforçados; quatro pares amostrados entre 9,16:1 e 18,73:1. Cor reservada a ação/estado; laranja de consumo público restaurado, com denominador/estimativa e 103% no texto. |
+| Imagens e ícones | Phosphor real e componentes Kumo compilados. Galeria de screenshots atuais, sem mockup apresentado como implementação. Capturas transitórias/sem CSS foram rejeitadas. |
+| Copy e conteúdo | Parcialidade, moeda, período, classificação, consequência e recuperação visíveis. IDs recolhidos; transações móveis compactas; categorias e referência descobertas. Textos legais preservados. |
 
-Refresh auxiliar no cabeçalho, escala menor, ausência dos ícones ilustrativos do
-aviso e título final genérico são diferenças esperadas do uso das peças reais.
-Não constituem drift acionável. A marca “Dados de exemplo” do mock não foi
-transportada como conteúdo fixo do produto.
+## Estados e interações
 
-## Estados e funcionamento observados
+Desktop 1541×863; móvel emulado 391×845. Cobertura detalhada na galeria e revisão 03.
+Overview: parcial, política aberta, categorias, série/tabela, recentes, contas,
+primeiro banco, falha da série e falha do chunk gráfico com alternativa exata.
+Transações: lista, vazio, erro, carregamento, busca, filtros, calendário pt-BR,
+intervalo civil 1–24 out, detalhe e parcelas pendentes/futuras. Regras/grupos:
+expandido, editor, rascunho, descarte/continuidade, exclusão e catálogo. Operação:
+importação ativa/falha, histórico expandido, perfis/pessoas, URL MCP, grants,
+atividade/requisições, modelos/bytes e confirmação de revogação cancelada.
+Público: hero, instalação, desempenho/método, CPU/cotas/premissas, FAQ, acesso
+normal/erro/recuperação, consentimento e 404. Demo: período/moeda, busca GET e detalhe.
 
-1. **Conectar/importar/consultar:** o agente principal percorreu o clique no botão
-   real, abriu o SDK simulado e recebeu o callback. `final-partial-state.json` e
-   `final-complete-state.json` registram a mesma execução `660b8876…`: `running`
-   com três transações → `succeeded`/finish com nove, uma chamada items e zero sync.
-   Foi possível consultar os registros publicados durante a execução. A designer
-   verificou as capturas e snapshots, sem atribuir a si o clique do navegador.
-2. **Vazio legítimo:** `desktop-empty-complete.jpg`, `mobile-360-empty-complete.jpg`
-   e `empty-complete-state.json` mostram `succeeded`, zero transações, uma chamada
-   items e zero sync. O catálogo de duas contas permanece distinto dos movimentos;
-   autorização não é descartada e não se pede conectar outra vez.
-3. **Timeout com parcialidade:** `timeout-final-state.json` registra a execução
-   `1934c002…` falha por `UPSTREAM_TIMEOUT`, preservando três registros. O capturador
-   informa atraso de 24 s do upstream de teste e retries reais do runtime, sem seed
-   do estado final. As capturas corrigidas mantêm o CTA parcial e não mostram sucesso.
-4. **Leitura indisponível e recuperação:** `desktop-initial-read-error.jpg` oferece
-   Tentar novamente; o capturador relata retorno sem novo login. Na perda posterior
-   de status, `read-error-dom.txt` e `mobile-360-read-error-viewport.jpg` mantêm
-   conclusão/CTA e explicam que falha de atualização não prova falha da importação.
-   `read-recovery.json` registra zero alerts e título “Importação concluída” após
-   nova leitura; a exportação de recuperação foi usada apenas como apoio de conteúdo.
-5. **Acesso e continuidade:** CTA e summary medem 44 px; o histórico foi remensurado
-   em 44 px. O JSON 360 e a captura de conclusão mostram foco laranja no CTA.
-   `navigation-keyboard.json` registra Escape fechando o drawer e texto do gatilho
-   “Abrir navegação”. Nenhuma navegação automática foi inferida da imagem estática;
-   o acompanhamento permaneceu em Conexões no fluxo exercitado pelo capturador.
+Sidebar móvel: foco inicial, cicloTab, Escape, retorno ao gatilho e bloqueio de
+navegação durante edição exercitados na migração. Roots de LayerDialog continuam
+montados. A rodada de polimento confirmou visualmente diálogos/ações completos,
+rascunho preservado e retorno de foco nos fluxos exercitados. Não extrapolar isso
+para conformidade total de acessibilidade ou todos os dispositivos.
 
-Console final: agente principal registrou ausência de warn/error antes do 503
-injetado. A resposta 503 controlada usada para testar recuperação é esperada e
-não foi tratada como erro JavaScript espontâneo. Não houve inspeção independente
-do console por esta designer.
+## Verificação técnica
 
-## Capturas rejeitadas e esclarecimento do corte
+`mise run check` final passou em 24/10/2026: tipos, formato, lint,44 testes Node,
+108 testes de integração em 19 arquivos, build/dry-run e runtime local Workflow/D1.
+Runtime cobriu 10 mil/100 mil registros, cliente desconectado, falha parcial,
+replay, recomeço e persistência após reiniciar. Agregados completos foram testados
+com mais de uma página, moedas separadas e dinheiro acima do inteiro seguro JS.
+A leitura por portal validou o envelope real do serviço e a rejeição por CSRF.
 
-`desktop-import.png` foi rejeitado por resize instável/corte; a referência válida
-é `desktop-import-v2.jpg`. `mobile-390-failed-partial.jpg` foi rejeitado porque
-contém desktop. `mobile-360-read-error-full.jpg` não foi usado para julgar geometria:
-a exportação full parecia cortar o lado direito.
+O runner Vitest/workerd ainda emite avisos da dependência opcional
+`@emotion/is-prop-valid` no pacote Kumo; todos os testes passaram. Não foi ocultado
+o diagnóstico nem instalada dependência só para silenciar o log.
 
-A recaptura válida `mobile-360-read-error-viewport.jpg` e JSON esclarecem o caso:
-viewport 360 × 800, documento e body com client/scroll de 345 px; o aviso começa
-em x84, tem largura 249,26 e termina em x333,26, dentro do documento. A imagem de
-viewport mostra texto/borda/foco íntegros. O aparente corte não foi atribuído ao
-produto. Exportações full auxiliares não sustentam alegação de fidelidade geométrica.
+## Inferências e limites
 
-## Histórico de comparação e decisão
+Variação visual baixa entre páginas e moderada entre papéis da informação;
+densidade moderada nas listas e maior quando detalhes técnicos estão abertos.
+Transações móvel usa nome/valor e conta/data em duas bandas. Dashboard é mais
+longo por comportar análises. Movimento parece baixo no uso observado e o gráfico
+não anima; screenshots estáticos não medem movimento. São inferências qualitativas.
 
-| Rodada | Achados, correção e evidência |
-| --- | --- |
-| 1 | Pares Conectar/Importar juntos e quatro mobile abertos, sem P0/P1/P2 nesses estados. Resultado blocked por cobertura ainda incompleta. Preservada em `design-qa-round-1.md`. |
-| 2 | Conclusão confrontada com o mock e métricas lidas. Dois P2: alvo 19,37 px e orientação inadequada para timeout. Resultado blocked; `design-qa-round-2.md`. |
-| 3 | Alvo corrigido/medido em 44 px, vazio e reflow conferidos. Código de timeout corrigido ainda sem recaptura; corte de exportação móvel a esclarecer. Resultado blocked; `design-qa-round-3.md`. |
-| Final | Timeout antes/depois abertos juntos; texto e dados preservados confirmados. Recaptura estável/DOM resolvem a dúvida de corte; recuperação remove aviso. Não restam P0/P1/P2 acionáveis. Resultado passed. |
-
-O QA antigo da raiz foi preservado em `design-qa-before-onboarding.md`; pertencia
-a outra entrega e seu resultado não foi reutilizado. Os arquivos desta tabela
-ficam em `outputs/onboarding-implementation-2026-10-23/`.
-
-## Verificação complementar e limites
-
-O log `.localdocs/onboarding-live/reviewed-check.log` foi lido: 32 testes Node,
-107 testes de integração e um teste de runtime nativo passaram, com cenários de
-10 mil/100 mil registros e persistência. Tipos/lint/formato e esses testes são
-verificação complementar; não substituem as comparações visuais acima nem provam
-desempenho/CPU em produção.
-
-Este parecer não comprova leitor de tela, zoom real de 200%, aparelho físico,
-Safari, novo OAuth em host MCP externo ou integração Pluggy real. A auditoria
-observa o runtime local com fronteiras sintéticas de provedor/SDK e cookies do
-harness adaptados. Ela não testa o 403 do botão Cloudflare nem autoriza concluir
-que a instalação pelo botão foi corrigida. Sessão/cookies de produção, consumo
-real de CPU e comportamento externo continuam provas separadas.
-
-Nenhuma mudança de produto ou deploy foi executado por esta designer. O resultado
-`passed` encerra a revisão de design do escopo local observado antes do deploy.
+Preview privado é sintético. Demo é ledger fictício isolado, também aberto no
+Worker local sem sessão. Sem push/deploy, OAuth/Pluggy reais, operações financeiras,
+revogação real ou validação em host MCP. A evidência de 404 visual usa o componente
+local; o build gera 404.html para o site, sem alegar comportamento publicado.

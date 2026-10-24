@@ -6,34 +6,24 @@ import { renderToStaticMarkup } from "react-dom/server";
 import type { z } from "zod/v4";
 
 import { PortalTransactionListSchema } from "../../contracts";
-import { TransactionList } from "../account/transaction-list";
+import { transactionFixture } from "../../fixtures/finance";
+import {
+  TransactionDetailContent,
+  TransactionList,
+} from "../account/transaction-list";
 
-const summaryPattern = /<summary[^>]*>(.*?)<\/summary>/s;
 type Transaction = z.infer<
   typeof PortalTransactionListSchema
 >["data"]["records"][number];
-const row: Transaction = {
+const row: Transaction = transactionFixture({
   accountId: "card",
   amountMinor: "12345",
-  anchorDate: "2026-10-10",
-  anchorKind: "transaction",
-  cardNumber: null,
   category: "groceries",
-  currency: "BRL",
-  date: "2026-10-10",
   description: "Compra no mercado",
-  direction: "DEBIT",
-  id: "synthetic-transaction",
-  ignored: false,
-  installmentNumber: null,
-  installments: [],
-  manual: false,
   personId: "self",
   personName: "Pessoa exemplo",
-  purchaseDate: null,
-  status: "POSTED",
-  totalInstallments: null,
-};
+});
+
 function render(record: typeof row, showOwner = false) {
   const { data } = PortalTransactionListSchema.parse({
     data: { cursor: null, records: [record], referenceDay: "2026-10-23" },
@@ -49,21 +39,26 @@ function render(record: typeof row, showOwner = false) {
     }),
   );
 }
-test("collapsed transactions keep exact source money and direction while supplementary data remains in the disclosure", () => {
+test("transaction rows keep exact source money, direction and category while identifiers remain in details", () => {
   const html = render(row);
-  const summary = html.match(summaryPattern)?.[1] ?? "";
+  const summary = html;
   assert.ok(summary.includes("123,45 BRL"));
   assert.ok(summary.includes("Saída"));
   assert.equal(summary.includes("−"), false);
-  assert.equal(summary.includes("Alimentação"), false);
+  assert.ok(summary.includes("Alimentação"));
   assert.equal(summary.includes("synthetic-transaction"), false);
   assert.equal(summary.includes("Pessoa exemplo"), false);
   assert.ok(html.includes("Alimentação"));
-  assert.ok(html.includes("Pessoa exemplo"));
-  assert.ok(html.includes("synthetic-transaction"));
-  assert.ok(
-    render(row, true).match(summaryPattern)?.[1]?.includes("Pessoa exemplo"),
+  const details = renderToStaticMarkup(
+    createElement(TransactionDetailContent, {
+      account: "Cartão exemplo",
+      category: "Alimentação",
+      row,
+    }),
   );
+  assert.ok(details.includes("Pessoa exemplo"));
+  assert.ok(details.includes("synthetic-transaction"));
+  assert.ok(render(row, true).includes("Pessoa exemplo"));
 });
 test("pending, future and ignored records stay explicit; zero and unavailable money are distinct", () => {
   const html = render({
@@ -74,7 +69,7 @@ test("pending, future and ignored records stay explicit; zero and unavailable mo
     ignored: true,
     status: "PENDING",
   });
-  const summary = html.match(summaryPattern)?.[1] ?? "";
+  const summary = html;
   for (const text of ["0,00 BRL", "Pendente", "Futura", "Ignorada"]) {
     assert.ok(summary.includes(text));
   }
@@ -93,12 +88,30 @@ test("pending, future and ignored records stay explicit; zero and unavailable mo
         categories: [],
         records: data.records,
       }),
-    ).includes("Valor indisponível"),
+    ).includes("Valor indisponível · BRL"),
   );
 });
 
+test("positive credits receive an explicit plus while conflicting source signs keep their own direction", () => {
+  const credit = render({ ...row, amountMinor: "12345", direction: "CREDIT" });
+  assert.ok(credit.includes("+123,45 BRL"));
+  assert.ok(credit.includes("Entrada"));
+  const conflictingCredit = render({
+    ...row,
+    amountMinor: "-12345",
+    direction: "CREDIT",
+  });
+  assert.ok(conflictingCredit.includes("−123,45 BRL"));
+  assert.ok(conflictingCredit.includes("Entrada"));
+  assert.equal(conflictingCredit.includes("+−"), false);
+  const zero = render({ ...row, amountMinor: "0", direction: "CREDIT" });
+  assert.ok(zero.includes("0,00 BRL"));
+  assert.ok(zero.includes("Entrada"));
+  assert.equal(zero.includes("+0,00"), false);
+});
+
 test("a grouped purchase identifies the displayed installment and retains source dates and pending installments in its disclosure", () => {
-  const html = render({
+  const purchase: Transaction = {
     ...row,
     anchorKind: "first_seen",
     installmentNumber: 2,
@@ -114,20 +127,29 @@ test("a grouped purchase identifies the displayed installment and retains source
       },
     ],
     totalInstallments: 4,
-  });
-  const summary = html.match(summaryPattern)?.[1] ?? "";
+  };
+  const html = render(purchase);
+  const details = renderToStaticMarkup(
+    createElement(TransactionDetailContent, {
+      account: "Cartão exemplo",
+      category: "Alimentação",
+      referenceDay: "2026-10-23",
+      row: purchase,
+    }),
+  );
+  const summary = html;
   for (const text of [
     "Parcela 2/4",
     "123,45 BRL",
-    "Primeira conhecida:",
+    "Primeira conhecida",
     "1 pendente",
     "1 futura",
   ]) {
     assert.ok(summary.includes(text));
   }
-  assert.ok(html.includes("Primeira parcela conhecida em"));
+  assert.ok(details.includes("Primeira parcela conhecida em"));
   assert.ok(
-    html.includes("O estado da origem não indica pagamento da fatura."),
+    details.includes("O estado da origem não indica pagamento da fatura."),
   );
-  assert.ok(html.includes("01/11/2099"));
+  assert.ok(details.includes("01/11/2099"));
 });

@@ -21,6 +21,7 @@ export function notFoundPage() {
           <UiLink
             href="/"
             size="lg"
+            variant="secondary"
           >
             Voltar ao Caderninho
           </UiLink>

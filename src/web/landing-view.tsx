@@ -1,4 +1,7 @@
+import { LayerCard, Meter } from "@cloudflare/kumo";
+
 import { Document } from "./document";
+import { McpStaticFlow } from "./mcp-steps";
 import { UiLink } from "./ui";
 
 const responseTiming = {
@@ -90,418 +93,10 @@ export function landingPage({
               />
             </>
           )}
-          <style>{`
-          .shell {
-            max-width: 1120px;
-            margin: auto;
-            padding: 0 32px;
-          }
-          header,
-          nav,
-          .actions,
-          footer {
-            display: flex;
-            align-items: center;
-            gap: 24px;
-          }
-          header {
-            justify-content: space-between;
-            min-height: 104px;
-          }
-          .brand {
-            font-size: 29px;
-            font-weight: 650;
-            letter-spacing: -0.055em;
-            text-decoration: none;
-          }
-          nav a,
-          footer a,
-          .skip {
-            display: inline-flex;
-            align-items: center;
-            min-height: 44px;
-          }
-          nav,
-          footer {
-            font-size: 15px;
-          }
-          .skip {
-            position: absolute;
-            left: 24px;
-            top: -100px;
-            padding: 8px 16px;
-            background: var(--surface);
-          }
-          .skip:focus {
-            top: 12px;
-          }
-          h1,
-          h2,
-          h3,
-          p {
-            margin: 0;
-          }
-          h1 {
-            font-size: clamp(44px, 6.5vw, 88px);
-            line-height: 1.02;
-            letter-spacing: -0.055em;
-            font-weight: 600;
-            margin: 0 auto 28px;
-            text-wrap: balance;
-          }
-          h2 {
-            font-size: clamp(29px, 3.3vw, 42px);
-            line-height: 1.13;
-            letter-spacing: -0.035em;
-            font-weight: 550;
-          }
-          h3 {
-            font-size: 21px;
-            font-weight: 550;
-            margin-bottom: 8px;
-          }
-          p {
-            max-width: 65ch;
-          }
-          .hero {
-            text-align: center;
-            padding: 64px 0 72px;
-          }
-          .intro {
-            font-size: 21px;
-            color: var(--muted);
-            max-width: 660px;
-            margin: auto;
-            text-wrap: balance;
-          }
-          .actions {
-            justify-content: center;
-            flex-wrap: wrap;
-            margin-top: 30px;
-          }
-          .note {
-            color: var(--muted);
-            font-size: 14px;
-            margin: 18px auto 0;
-          }
-          .install,
-          .performance,
-          .free-tier,
-          .faq {
-            border-top: 1px solid var(--line);
-            padding: 48px 0;
-          }
-          .install {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 64px;
-          }
-          .install p {
-            color: var(--muted);
-            margin-top: 20px;
-          }
-          ol {
-            list-style: decimal;
-            padding-left: 24px;
-            margin: 0;
-          }
-          li {
-            padding: 0 0 24px 8px;
-          }
-          li:last-child {
-            padding-bottom: 0;
-          }
-          .install li p {
-            margin-top: 0;
-          }
-          .free-tier {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 32px 64px;
-          }
-          .performance {
-            display: grid;
-            grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-            gap: 32px 64px;
-          }
-          .performance-copy > p {
-            margin-top: 20px;
-            color: var(--muted);
-          }
-          .response-timing {
-            margin-top: 28px;
-          }
-          .response-timing strong {
-            display: block;
-            font-size: clamp(40px, 5vw, 56px);
-            line-height: 1.1;
-            font-weight: 600;
-            letter-spacing: -0.045em;
-            font-variant-numeric: tabular-nums;
-          }
-          .response-timing span {
-            display: block;
-            margin-top: 8px;
-            font-size: 14px;
-            color: var(--muted);
-          }
-          .response-comparison {
-            min-width: 0;
-            margin: 0;
-            padding: 24px;
-            border: 1px solid var(--line);
-            border-radius: 10px;
-            background: var(--surface);
-          }
-          .response-comparison figcaption {
-            margin-bottom: 24px;
-            font-size: 18px;
-            font-weight: 550;
-            text-wrap: balance;
-          }
-          .response-chart-note {
-            margin: -12px 0 24px;
-            font-size: 13px;
-            color: var(--muted);
-          }
-          .response-label {
-            display: flex;
-            align-items: baseline;
-            justify-content: space-between;
-            flex-wrap: wrap;
-            gap: 4px 16px;
-          }
-          .response-label strong {
-            font-size: 22px;
-            font-weight: 600;
-            font-variant-numeric: tabular-nums;
-          }
-          .response-local .response-label {
-            color: var(--accent);
-          }
-          .response-track {
-            height: 18px;
-            margin: 12px 0 8px;
-            background: var(--page);
-            border-radius: 3px;
-            overflow: hidden;
-          }
-          .response-bar {
-            height: 100%;
-            background: var(--muted);
-          }
-          .response-local .response-bar {
-            background: var(--accent);
-          }
-          .response-axis {
-            display: flex;
-            justify-content: space-between;
-            margin-top: 24px;
-            padding-top: 12px;
-            border-top: 1px solid var(--line);
-            font-size: 13px;
-            font-variant-numeric: tabular-nums;
-            color: var(--muted);
-          }
-          .response-sample > p {
-            font-size: 14px;
-            color: var(--muted);
-          }
-          .response-sample + .response-sample {
-            margin-top: 24px;
-            padding-top: 24px;
-            border-top: 1px solid var(--line);
-          }
-          .response-method {
-            grid-column: 1 / -1;
-            max-width: none;
-            padding-top: 16px;
-            border-top: 1px solid var(--line);
-            font-size: 14px;
-            color: var(--muted);
-          }
-          .response-method a {
-            color: var(--accent);
-          }
-          .free-tier-copy > p {
-            margin-top: 20px;
-            color: var(--muted);
-          }
-          .free-tier-copy .eyebrow {
-            margin: 0 0 12px;
-            color: var(--accent);
-            font-size: 14px;
-            font-weight: 650;
-          }
-          .cpu-chart {
-            min-width: 0;
-            margin: 0;
-            padding: 24px;
-            border: 1px solid var(--line);
-            border-radius: 10px;
-            background: var(--surface);
-          }
-          .cpu-chart figcaption {
-            margin-bottom: 28px;
-            font-size: 15px;
-            color: var(--muted);
-          }
-          .cpu-sample + .cpu-sample {
-            margin-top: 24px;
-          }
-          .cpu-label {
-            display: flex;
-            align-items: baseline;
-            justify-content: space-between;
-            flex-wrap: wrap;
-            gap: 4px 16px;
-            margin-bottom: 10px;
-            font-size: 16px;
-          }
-          .cpu-value {
-            font-size: 22px;
-            font-weight: 600;
-            font-variant-numeric: tabular-nums;
-          }
-          .cpu-chart meter {
-            display: block;
-            width: 100%;
-            height: 12px;
-            appearance: none;
-            border: 0;
-            border-radius: 3px;
-            background: var(--page);
-            overflow: hidden;
-          }
-          .cpu-chart meter::-webkit-meter-bar {
-            height: 12px;
-            border: 0;
-            border-radius: 3px;
-            background: var(--page);
-          }
-          .cpu-chart meter::-webkit-meter-optimum-value {
-            min-width: 0;
-            background: var(--accent);
-          }
-          .cpu-chart meter::-moz-meter-bar {
-            min-width: 0;
-            background: var(--accent);
-          }
-          .cpu-scale {
-            display: flex;
-            justify-content: space-between;
-            margin-top: 12px;
-            font-size: 13px;
-            font-variant-numeric: tabular-nums;
-            color: var(--muted);
-          }
-          .cpu-reference {
-            padding-top: 20px;
-            margin-top: 20px;
-            border-top: 1px solid var(--line);
-            font-size: 14px;
-          }
-          .cpu-reference a {
-            color: var(--accent);
-          }
-          .cpu-method {
-            grid-column: 1 / -1;
-            margin: 0;
-            padding-top: 16px;
-            border-top: 1px solid var(--line);
-            font-size: 14px;
-            color: var(--muted);
-          }
-          .cpu-method strong {
-            color: var(--text);
-            font-weight: 550;
-          }
-          .quota-heading,
-          .quota-method {
-            grid-column: 1 / -1;
-          }
-          .quota-heading > p {
-            margin-top: 12px;
-            color: var(--muted);
-          }
-          .measurement-notes {
-            grid-column: 1 / -1;
-            padding: 0;
-            border: 0;
-          }
-          .measurement-notes > summary {
-            min-height: 44px;
-            font-size: 15px;
-            color: var(--accent);
-          }
-          .measurement-notes p {
-            font-size: 14px;
-          }
-          .measurement-notes a {
-            color: var(--accent);
-          }
-          .quota-count {
-            margin-top: 8px;
-            font-size: 14px;
-            font-variant-numeric: tabular-nums;
-            color: var(--muted);
-          }
-          .quota-method {
-            font-size: 14px;
-            color: var(--muted);
-          }
-          details {
-            border-bottom: 1px solid var(--line);
-            padding: 16px 0;
-          }
-          summary {
-            cursor: pointer;
-            min-height: 48px;
-            align-content: center;
-            font-size: 19px;
-            font-weight: 550;
-          }
-          details p {
-            margin: 12px 0;
-            color: var(--muted);
-          }
-          footer {
-            flex-wrap: wrap;
-            border-top: 1px solid var(--line);
-            padding: 24px 0 40px;
-            color: var(--muted);
-          }
-          footer p {
-            margin-right: auto;
-          }
-          @media (max-width: 640px) {
-            .shell {
-              padding: 0 20px;
-            }
-            header {
-              align-items: flex-start;
-              flex-direction: column;
-              gap: 8px;
-              padding-top: 24px;
-            }
-            nav {
-              flex-wrap: wrap;
-              gap: 20px;
-            }
-            .hero {
-              padding: 48px 0;
-            }
-            .intro {
-              font-size: 19px;
-            }
-            .install,
-            .performance,
-            .free-tier {
-              grid-template-columns: 1fr;
-              gap: 32px;
-            }
-          }
-        `}</style>
+          <link
+            href="/landing.css"
+            rel="stylesheet"
+          />
         </>
       }
       title="Caderninho · MCP financeiro pessoal"
@@ -519,13 +114,36 @@ export function landingPage({
             className="brand"
             href="/"
           >
-            caderninho.
+            Caderninho
           </a>
           <nav aria-label="Navegação principal">
-            <a href="#desempenho">Desempenho</a>
-            <a href="#free-tier">Free tier</a>
-            <a href="https://github.com/DanielSuhett/caderninho">Código</a>
-            {!publicSite && <a href="/account">Entrar nesta instância</a>}
+            <a href="/demo?month=2026-10">Demo</a>
+            <a
+              className="nav-secondary"
+              href="#desempenho"
+            >
+              Desempenho
+            </a>
+            <a
+              className="nav-secondary"
+              href="#free-tier"
+            >
+              Free tier
+            </a>
+            <a
+              className="nav-secondary"
+              href="https://github.com/DanielSuhett/caderninho"
+            >
+              Código
+            </a>
+            {!publicSite && (
+              <a
+                aria-label="Entrar nesta instância"
+                href="/account"
+              >
+                Entrar
+              </a>
+            )}
           </nav>
         </header>
         <main id="conteudo">
@@ -547,14 +165,45 @@ export function landingPage({
               <UiLink
                 href="https://deploy.workers.cloudflare.com/?url=https://github.com/DanielSuhett/caderninho"
                 size="lg"
+                variant="primary"
               >
                 Instalar na minha Cloudflare
               </UiLink>
-              {!publicSite && <a href="/account">Abrir meu painel</a>}
+              <UiLink
+                href="/demo?month=2026-10"
+                size="lg"
+                variant="secondary"
+              >
+                Explorar demonstração
+              </UiLink>
             </div>
             <p className="note">
               Software gratuito. Cloudflare e Pluggy têm limites e custos
               próprios.
+            </p>
+          </section>
+          <section
+            aria-labelledby="mcp-title"
+            className="mcp-explanation"
+            id="como-funciona"
+          >
+            <div className="mcp-intro">
+              <h2 id="mcp-title">Uma consulta ao histórico, por dentro.</h2>
+              <p>
+                Da sua pergunta aos dados que ajudam seu assistente a responder.
+              </p>
+            </div>
+            <p className="mcp-example">
+              “Quanto gastei este mês?” <span>Exemplo ilustrativo</span>
+            </p>
+            <div id="mcp-flow">
+              <McpStaticFlow />
+            </div>
+            <p className="mcp-preparation">
+              A autorização do cliente e a sincronização pela Pluggy acontecem
+              antes. Cada consulta usa a cópia no D1, com a data e a cobertura
+              disponíveis. A resposta de IA fica a cargo do cliente que você
+              escolher.
             </p>
           </section>
           <section
@@ -620,9 +269,10 @@ export function landingPage({
                 informa a data e a parcialidade dos dados.
               </p>
             </div>
-            <figure
+            <LayerCard
               aria-describedby="response-method"
               className="response-comparison"
+              render={<figure />}
             >
               <figcaption>
                 “Qual é o total de débitos do meu histórico?”
@@ -631,40 +281,28 @@ export function landingPage({
                 Tempo até o total · escala linear · menor é melhor
               </p>
               <div className="response-sample response-local">
-                <div className="response-label">
-                  <span>Caderninho · MCP local</span>
-                  <strong>{responseTiming.measuredMcpMs} ms</strong>
-                </div>
-                <div
-                  aria-hidden="true"
-                  className="response-track"
-                >
-                  <div
-                    className="response-bar"
-                    style={{
-                      width: `${(responseTiming.measuredMcpMs / estimatedDirectMs) * 100}%`,
-                    }}
-                  />
-                </div>
+                <Meter
+                  aria-valuetext={`${responseTiming.measuredMcpMs} milissegundos medidos; referência estimada de ${estimatedDirectMs} milissegundos`}
+                  customValue={`${responseTiming.measuredMcpMs} ms`}
+                  label="Caderninho · MCP local"
+                  max={estimatedDirectMs}
+                  min={0}
+                  value={responseTiming.measuredMcpMs}
+                />
                 <p>
                   1 chamada MCP, depois de sincronizar. A barra fica próxima de
                   zero nesta escala.
                 </p>
               </div>
               <div className="response-sample">
-                <div className="response-label">
-                  <span>Busca direta na Pluggy</span>
-                  <strong>{estimatedDirectMs / 1000} s estimados</strong>
-                </div>
-                <div
-                  aria-hidden="true"
-                  className="response-track"
-                >
-                  <div
-                    className="response-bar"
-                    style={{ width: "100%" }}
-                  />
-                </div>
+                <Meter
+                  aria-valuetext={`${estimatedDirectMs / 1000} segundos estimados; limite da escala de comparação`}
+                  customValue={`${estimatedDirectMs / 1000} s estimados`}
+                  label="Busca direta na Pluggy"
+                  max={estimatedDirectMs}
+                  min={0}
+                  value={estimatedDirectMs}
+                />
                 <p>
                   {pageCount} páginas sequenciais ×{" "}
                   {responseTiming.assumedPageMs} ms por página, para reler o
@@ -679,7 +317,7 @@ export function landingPage({
                 <span>{estimatedDirectMs / 2000} s</span>
                 <span>{estimatedDirectMs / 1000} s</span>
               </div>
-            </figure>
+            </LayerCard>
             <details className="measurement-notes">
               <summary>Ver método e referências de desempenho</summary>
               <p
@@ -721,45 +359,40 @@ export function landingPage({
                 processamento.
               </p>
             </div>
-            <figure
+            <LayerCard
               aria-describedby="cpu-method"
               className="cpu-chart"
+              render={<figure />}
             >
               <figcaption>
                 CPU time · benchmark local ·{" "}
                 <time dateTime="2026-10-23">23 out 2026</time>
               </figcaption>
               <div className="cpu-sample">
-                <div className="cpu-label">
-                  <span id="cpu-personal-label">347 transações por página</span>
-                  <span className="cpu-value">7,9 ms</span>
-                </div>
-                <meter
+                <Meter
                   aria-describedby="cpu-method cpu-reference"
-                  aria-labelledby="cpu-personal-label"
                   aria-valuetext="7,9 milissegundos de CPU no benchmark local; escala de 0 a 10 milissegundos"
+                  customValue="7,9 ms"
+                  id="cpu-personal-label"
+                  indicatorClassName="quota-consumption"
+                  label="347 transações por página"
                   max={10}
                   min={0}
                   value={7.920_82}
-                >
-                  7,9 de 10 ms
-                </meter>
+                />
               </div>
               <div className="cpu-sample">
-                <div className="cpu-label">
-                  <span id="cpu-full-label">500 transações por página</span>
-                  <span className="cpu-value">10,3 ms · 103%</span>
-                </div>
-                <meter
+                <Meter
                   aria-describedby="cpu-method cpu-reference"
-                  aria-labelledby="cpu-full-label"
                   aria-valuetext="10,3 milissegundos de CPU no benchmark local, 103% da referência de 10 milissegundos"
+                  customValue="10,3 ms · 103%"
+                  id="cpu-full-label"
+                  indicatorClassName="quota-consumption"
+                  label="500 transações por página"
                   max={10}
                   min={0}
-                  value={10.253_88}
-                >
-                  10,3 de 10 ms
-                </meter>
+                  value={10}
+                />
               </div>
               <div
                 aria-hidden="true"
@@ -777,7 +410,7 @@ export function landingPage({
                 página de 500 ultrapassou a referência no ensaio local. CPU em
                 produção ainda em validação.
               </p>
-            </figure>
+            </LayerCard>
             <details className="measurement-notes">
               <summary>Ver método e limites de CPU</summary>
               <p
@@ -811,10 +444,11 @@ export function landingPage({
               </p>
             </div>
             {quotaServices.map((service) => (
-              <figure
+              <LayerCard
                 aria-describedby="quota-method quota-scenario"
                 className="cpu-chart"
                 key={service.id}
+                render={<figure />}
               >
                 <figcaption>
                   {service.name} · uso em {projectionDays} dias
@@ -830,20 +464,17 @@ export function landingPage({
                       className="cpu-sample"
                       key={metric.id}
                     >
-                      <div className="cpu-label">
-                        <span id={`${metric.id}-label`}>{metric.label}</span>
-                        <span className="cpu-value">{percentage}</span>
-                      </div>
-                      <meter
+                      <Meter
                         aria-describedby="quota-method quota-scenario"
-                        aria-labelledby={`${metric.id}-label`}
                         aria-valuetext={`${percentage} da referência mensal equivalente; ${usedLabel} de ${quotaLabel} ${service.unit} em ${projectionDays} dias`}
+                        customValue={percentage}
+                        id={`${metric.id}-label`}
+                        indicatorClassName="quota-consumption"
+                        label={metric.label}
                         max={quota}
                         min={0}
                         value={used}
-                      >
-                        {percentage} da referência mensal equivalente
-                      </meter>
+                      />
                       <p className="quota-count">
                         {usedLabel} de {quotaLabel} {service.unit}
                       </p>
@@ -858,7 +489,7 @@ export function landingPage({
                   <span>50%</span>
                   <span>100%</span>
                 </div>
-              </figure>
+              </LayerCard>
             ))}
             <div className="quota-heading">
               <p>
@@ -889,7 +520,7 @@ export function landingPage({
                 aplicações na conta aumentam o consumo. Projeção baseada na
                 simulação de 22 out 2026.
               </p>
-              <p>
+              <p className="quota-sources">
                 {quotaServices.map((service) => (
                   <a
                     href={service.source}
@@ -947,6 +578,10 @@ export function landingPage({
           </a>
         </footer>
       </div>
+      <script
+        src="/landing.js"
+        type="module"
+      />
     </Document>
   );
 }
