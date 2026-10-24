@@ -1,7 +1,7 @@
 import type { PlanningCommand, PortalTransactionQuery } from "../../contracts";
 import { planningDefinitions } from "../../contracts";
 import { hash, tryCatch } from "../../shared";
-import type { PlanningRepository } from "./entity";
+import type { PlanningRepository, PlanningSnapshot } from "./entity";
 import { planningMutation } from "./mutations.service";
 import { portalTransactions } from "./portal-transactions.service";
 import { planningQuery } from "./queries.service";
@@ -48,6 +48,17 @@ export function createPlanningService(
       revision: snapshot.revision,
     };
   }
+  function query(input: PlanningCommand, snapshot: PlanningSnapshot) {
+    if (input.tool === "preview_rule_import") {
+      return planningMutation(input, {
+        now: now().toISOString(),
+        repository,
+        snapshot,
+        state: structuredClone(snapshot.state),
+      });
+    }
+    return planningQuery(input, snapshot, repository, now());
+  }
   return {
     async execute(input: PlanningCommand): Promise<unknown> {
       if (input.tool === "preview_rule") {
@@ -70,7 +81,7 @@ export function createPlanningService(
       }
       const snapshot = await repository.read();
       if (reads.has(input.tool)) {
-        const result = await planningQuery(input, snapshot, repository, now());
+        const result = await query(input, snapshot);
         if ((await repository.revision()) !== snapshot.revision) {
           throw new Error("RESTART_REQUIRED");
         }

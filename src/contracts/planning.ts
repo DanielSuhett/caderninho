@@ -1,7 +1,8 @@
 import { z } from "zod/v4";
 
 import { CategoryColorSchema, CategoryIconSchema } from "../domain";
-import { RuleFilterSchema, RulePreviewQuerySchema } from "./rules";
+import { RuleImportFields } from "./rule-import";
+import { RuleFieldsSchema, RulePreviewQuerySchema } from "./rules";
 
 const id = z.string().min(1).max(160);
 const text = z.string().trim().min(1).max(240);
@@ -105,16 +106,7 @@ const goalFields = {
   targetDate: day.nullable().default(null),
   targetMinor: amount,
 };
-const ruleFields = {
-  accountId: id.nullable().default(null),
-  categoryId: id,
-  direction: direction.nullable().default(null),
-  enabled: z.boolean().default(true),
-  filter: RuleFilterSchema.nullable().default(null),
-  name: text,
-  priority: z.number().int().min(0).max(1000).default(100),
-  text: z.string().trim().max(240).default(""),
-};
+const ruleFields = RuleFieldsSchema.shape;
 
 export const planningDefinitions = [
   {
@@ -641,7 +633,8 @@ export const planningDefinitions = [
     schema: z.object({ ...mutation, ...ruleFields }).strict(),
   },
   {
-    description: "Atualizar regra; prioridade menor vence.",
+    description:
+      "Atualizar regra pessoal; pessoais precedem pacotes, depois menor prioridade vence.",
     name: "update_rule",
     readOnly: false,
     schema: z.object({ ...mutation, id, ...ruleFields }).strict(),
@@ -993,6 +986,26 @@ export const planningDefinitions = [
     readOnly: true,
     schema: RulePreviewQuerySchema,
   },
+  {
+    description:
+      "Conferir importação de JSON de regras compostas, categorias e duplicatas, sem gravar. Retorna revisão para confirmação.",
+    name: "preview_rule_import",
+    readOnly: true,
+    schema: z.object({ ...RuleImportFields, spaceId: id }).strict(),
+  },
+  {
+    description:
+      "Importar JSON de regras compostas atomicamente no espaço confirmado. Preserva regras pessoais e duplicatas; exige a revisão da prévia. Não reaplica histórico.",
+    name: "import_rules",
+    readOnly: false,
+    schema: z
+      .object({
+        ...mutation,
+        ...RuleImportFields,
+        revision: z.number().int().nonnegative(),
+      })
+      .strict(),
+  },
 ] as const;
 export const PlanningCommandSchema = z.discriminatedUnion("tool", [
   planningDefinitions[94].schema.extend({
@@ -1201,6 +1214,10 @@ export const PlanningCommandSchema = z.discriminatedUnion("tool", [
     tool: z.literal("set_notification_preference"),
   }),
   planningDefinitions[89].schema.extend({ tool: z.literal("delete_space") }),
+  planningDefinitions[96].schema.extend({
+    tool: z.literal("preview_rule_import"),
+  }),
+  planningDefinitions[97].schema.extend({ tool: z.literal("import_rules") }),
 ]);
 export type PlanningCommand = z.infer<typeof PlanningCommandSchema>;
 

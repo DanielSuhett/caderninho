@@ -24,6 +24,7 @@ import { QuerySearch } from "./filter-fields";
 import { DeleteOrganizationItem, GroupEditor } from "./group-editor";
 import { RuleComposition } from "./rule-composition";
 import { RuleEditor } from "./rule-editor";
+import { RuleImporter } from "./rule-importer";
 import { ruleSummary } from "./rule-presentation";
 import { EmptyView, ScopeFields } from "./workspace-filters";
 import {
@@ -63,6 +64,7 @@ export function OrganizationView({
     id?: string;
     remove?: boolean;
   } | null>(null);
+  const [importing, setImporting] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
   const [editorSession, setEditorSession] = useState(0);
   const { add: notify } = useKumoToastManager();
@@ -120,6 +122,13 @@ export function OrganizationView({
     }
     resource.retry();
   }, [resource.retry, editor, spaceId, notify, basePath]);
+  const openImport = useCallback(() => setImporting(true), []);
+  const closeImport = useCallback(() => setImporting(false), []);
+  const importSaved = useCallback(() => {
+    setImporting(false);
+    notify({ title: "Regras importadas.", variant: "success" });
+    resource.retry();
+  }, [notify, resource.retry]);
   const newItem = useCallback(() => {
     setEditor({ kind: page === "rules" ? "rule" : "space" });
     setEditorSession((value) => value + 1);
@@ -140,6 +149,15 @@ export function OrganizationView({
       <WorkspaceHeading title={page === "rules" ? "Regras" : "Grupos"}>
         <div className="page-actions">
           {actions}
+          {page === "rules" && basePath === "/account" && (
+            <UiButton
+              disabled={!data}
+              onClick={openImport}
+              type="button"
+            >
+              Importar regras
+            </UiButton>
+          )}
           <UiButton
             disabled={!data}
             onClick={newItem}
@@ -151,6 +169,18 @@ export function OrganizationView({
         </div>
       </WorkspaceHeading>
       {notice}
+      {importing && !!data && (
+        <RuleImporter
+          accounts={data.accounts}
+          api={api}
+          catalog={data}
+          close={closeImport}
+          csrf={snapshot.csrf}
+          people={snapshot.people}
+          saved={importSaved}
+          spaceId={spaceId}
+        />
+      )}
       {!!data && (
         <OrganizationEditors
           api={api}
@@ -256,7 +286,12 @@ export function OrganizationView({
                                 />
                               </span>
                               <span className="record-meta">
-                                <span>Prioridade {r.priority}</span>
+                                <span>
+                                  {r.pack
+                                    ? `Importada (${r.pack.id}) · `
+                                    : "Pessoal · "}
+                                  Prioridade {r.priority}
+                                </span>
                               </span>
                             </>
                           }
@@ -306,7 +341,8 @@ export function OrganizationView({
               )}
               <WorkspaceDetails title="Como as regras são aplicadas">
                 <p>
-                  A primeira regra ativa correspondente vence: menor prioridade,
+                  Regras pessoais vêm antes dos pacotes. Dentro de cada grupo, a
+                  primeira regra ativa correspondente vence: menor prioridade,
                   com desempate pelo identificador. Salvar vale para as próximas
                   importações e não reclassifica o histórico.
                 </p>

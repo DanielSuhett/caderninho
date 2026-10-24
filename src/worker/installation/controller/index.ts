@@ -12,6 +12,7 @@ import {
   PortalMutationSchema,
   PortalQuerySchema,
   RevokeGrantSchema,
+  RULE_IMPORT_MAX_BYTES,
   RulePreviewSchema,
   SyncActionSchema,
   SyncHistorySelectionSchema,
@@ -76,8 +77,9 @@ export function installationRoutes(access: Hono<PortalEnv>) {
     request: Request,
     csrf: string,
     schema: z.ZodType<T>,
+    maximum = 32_768,
   ) => {
-    const input = schema.parse(await boundedJson(request, 32_768));
+    const input = schema.parse(await boundedJson(request, maximum));
     if (input.csrf !== csrf) {
       throw new Error("SESSION_REQUIRED");
     }
@@ -121,6 +123,7 @@ export function installationRoutes(access: Hono<PortalEnv>) {
       c.req.raw,
       c.get("session").csrf,
       PortalQuerySchema,
+      RULE_IMPORT_MAX_BYTES + 16_384,
     );
     const service = planningService(c.env);
     if (input.query.tool === "get_portal_transactions") {
@@ -133,6 +136,7 @@ export function installationRoutes(access: Hono<PortalEnv>) {
       c.req.raw,
       c.get("session").csrf,
       PortalMutationSchema,
+      RULE_IMPORT_MAX_BYTES + 16_384,
     );
     return c.json(await planningService(c.env).execute(input.command));
   });
@@ -141,6 +145,7 @@ export function installationRoutes(access: Hono<PortalEnv>) {
       c.req.raw,
       c.get("session").csrf,
       RulePreviewSchema,
+      RULE_IMPORT_MAX_BYTES,
     );
     return c.json(await rulePreview(c.env, input));
   });

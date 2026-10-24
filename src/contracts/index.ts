@@ -49,6 +49,13 @@ export {
   PortalResponseSchema,
   SyncActionSchema,
 } from "./portal-contract";
+export type { RuleImportPackage, RuleImportResult } from "./rule-import";
+export {
+  RULE_IMPORT_MAX_BYTES,
+  RULE_IMPORT_MAX_RULES,
+  RuleImportPackageSchema,
+  RuleImportResultSchema,
+} from "./rule-import";
 export type {
   RulePreviewInput,
   RulePreviewQuery,

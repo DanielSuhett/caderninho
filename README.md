@@ -34,6 +34,7 @@ inclui prévia de regras, compras parceladas e edição de categorias e grupos.
 A importação lê contas, transações,
 faturas, investimentos e empréstimos disponíveis na Pluggy. Categorias, tags,
 regras, orçamento, metas, recorrências e lançamentos manuais ficam no D1.
+A [importação de regras JSON](docs/rule-packs.md) oferece prévia, confirmação e categorias locais na interface; o JSON Brasil fica disponível como exemplo externo.
 Edições locais preservam os registros bancários. Escritas exigem confirmação e
 chave de idempotência; o MCP não realiza pagamentos bancários.
 

@@ -83,6 +83,18 @@ export const RuleFilterSchema = z
       });
     }
   });
+export const RuleFieldsSchema = z
+  .object({
+    accountId: z.string().min(1).max(160).nullable().default(null),
+    categoryId: z.string().min(1).max(160),
+    direction: z.enum(["DEBIT", "CREDIT"]).nullable().default(null),
+    enabled: z.boolean().default(true),
+    filter: RuleFilterSchema.nullable().default(null),
+    name: z.string().trim().min(1).max(240),
+    priority: z.number().int().min(0).max(1000).default(100),
+    text: z.string().trim().max(240).default(""),
+  })
+  .strict();
 export const RulePreviewQuerySchema = z
   .object({
     accountId: value.nullable().default(null),

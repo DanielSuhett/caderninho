@@ -17,11 +17,11 @@ não afirma paridade de assinatura com tools privadas ou habilitadas por plano.
 A Pluggy fornece contas, transações, faturas, investimentos e empréstimos, com
 cobertura dependente da instituição/conexão. Planejamento e edição são locais.
 As quatro tools `caderninho_*` continuam disponíveis com seus contratos originais.
-As 96 tools adicionais usam a visão efetiva, com sobreposições e dados manuais.
+As 98 tools adicionais usam a visão efetiva, com sobreposições e dados manuais.
 
 A extensão de [backoffice](backoffice.md) acrescentou `delete_space` e condições
 compostas em regras. O catálogo também inclui grupos de categorias,
-`preview_rule` e `get_transaction_purchases`.
+`preview_rule`, `get_transaction_purchases` e [importação de regras JSON](rule-packs.md).
 
 ## Pessoas e perfis Pluggy
 
@@ -51,7 +51,7 @@ coletas Pluggy nem alteram a admissão de uma importação a cada 24 horas.
 ## Decisões financeiras
 
 - **Origem preservada:** exclusões de transações são tombstones locais. Reimportar
-  não desfaz edições. Regras novas afetam novas transações; `apply_rules` reaplica
+  não desfaz edições. Regras pessoais precedem defaults; defaults preservam categorias editadas localmente. Regras novas afetam novas transações; `apply_rules` reaplica
   explicitamente um período. Excluir regra não desfaz suas classificações.
   Regras ignoram caixa em A–Z; caracteres acentuados são literais. Importação e
   reaplicação seguem a mesma comparação e desempate por ID.
@@ -198,8 +198,10 @@ espaço não chegam ao commit.
 | `update_category_group` | Editar nome, ícone e cor do agrupador. |
 | `delete_category_group` | Remover agrupador preservando categorias e transações; as categorias ficam sem grupo. |
 | `create_rule` | Criar regra determinística, textual ou composta; salvar não reaplica o histórico. |
-| `update_rule` | Atualizar regra; prioridade menor vence. |
+| `update_rule` | Atualizar regra; pessoais precedem pacotes, depois menor prioridade vence. |
 | `delete_rule` | Excluir regra sem reverter classificações já aplicadas. |
+| `preview_rule_import` | Conferir JSON genérico, categorias e duplicatas sem gravar; retorna revisão. |
+| `import_rules` | Importar atomicamente o JSON confirmado com revisão e idempotência; não reclassifica histórico. |
 | `apply_rules` | Aplicar regras sincronicamente a até 500 transações; operação atômica. |
 | `create_goal` | Criar meta financeira. |
 | `update_goal` | Atualizar meta financeira. |
