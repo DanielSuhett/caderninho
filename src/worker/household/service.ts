@@ -15,7 +15,7 @@ export function createHouseholdService(dependencies: {
 }) {
   const { repository, vault } = dependencies;
   async function credentials(
-    input: ProfileInput,
+    input: Pick<ProfileInput, "clientId" | "clientSecret">,
     existing: PluggyProfile | undefined,
     profiles: PluggyProfile[],
   ) {
@@ -85,6 +85,32 @@ export function createHouseholdService(dependencies: {
     });
     return { id };
   }
+  async function createProfile(
+    input: Extract<HouseholdCommand, { action: "create_profile" }>,
+    state: Awaited<ReturnType<HouseholdRepository["read"]>>,
+  ) {
+    const owner = input.person;
+    const person =
+      "name" in owner
+        ? { id: crypto.randomUUID(), name: owner.name }
+        : state.people.find((p) => p.id === owner.id);
+    if (!person) {
+      throw new Error("NOT_FOUND");
+    }
+    const secret = await credentials(input, undefined, state.profiles);
+    const id = crypto.randomUUID();
+    await repository.profile(
+      {
+        ...secret,
+        enabled: true,
+        id,
+        name: input.name,
+        personId: person.id,
+      },
+      "name" in input.person ? person : undefined,
+    );
+    return { id, personId: person.id };
+  }
   return {
     async catalog() {
       const state = await repository.read();
@@ -105,6 +131,9 @@ export function createHouseholdService(dependencies: {
     },
     async execute(input: HouseholdCommand) {
       const state = await repository.read();
+      if (input.action === "create_profile") {
+        return createProfile(input, state);
+      }
       if (input.action === "save_person") {
         if (input.id && !state.people.some((p) => p.id === input.id)) {
           throw new Error("NOT_FOUND");

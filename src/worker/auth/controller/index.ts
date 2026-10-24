@@ -3,6 +3,7 @@ import { Hono } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { z } from "zod/v4";
 
+import { AccountFailureCodeSchema } from "../../../contracts";
 import { tryCatch } from "../../../shared";
 import { accessPage, consentPage, renderPage } from "../../../web";
 import type { Bindings } from "../../bindings";
@@ -60,7 +61,7 @@ export function oauth(api: McpHandler, origin: string) {
     consent.headers.set("Referrer-Policy", "same-origin");
     consent.headers.set(
       "Content-Security-Policy",
-      "default-src 'none'; font-src 'self'; style-src 'self' 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
+      `default-src 'none'; font-src 'self'; style-src 'self' 'unsafe-inline'; form-action 'self' ${new URL(auth.redirectUri).origin}; frame-ancestors 'none'; base-uri 'none'`,
     );
     return new Response(renderPage(consentPage(details, consent.handle)), {
       headers: consent.headers,
@@ -144,12 +145,19 @@ export function authenticatedFetch(
       );
       if (error) {
         markFailure(error, { phase: SpanName.authentication });
-        const status = failureStatus(error);
+        const code = AccountFailureCodeSchema.safeParse(error.message);
+        const status =
+          code.success && code.data === "UPSTREAM_AUTH"
+            ? 400
+            : failureStatus(error);
         span.annotate({ status });
         return Response.json(
           { error: "AUTHENTICATION_OR_REQUEST_FAILED" },
           {
-            headers: { "Cache-Control": "no-store" },
+            headers: {
+              "Cache-Control": "no-store",
+              ...(code.success && { "X-Caderninho-Error": code.data }),
+            },
             status,
           },
         );

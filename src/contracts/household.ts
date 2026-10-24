@@ -5,6 +5,16 @@ const name = z.string().trim().min(1).max(80);
 export const HouseholdCommandSchema = z.discriminatedUnion("action", [
   z
     .object({
+      action: z.literal("create_profile"),
+      clientId: z.string().trim().min(1).max(200),
+      clientSecret: z.string().trim().min(1).max(512),
+      csrf: z.string(),
+      name,
+      person: z.union([z.object({ id }).strict(), z.object({ name }).strict()]),
+    })
+    .strict(),
+  z
+    .object({
       action: z.literal("save_person"),
       csrf: z.string(),
       id: id.optional(),
@@ -37,6 +47,10 @@ export const HouseholdCommandSchema = z.discriminatedUnion("action", [
     ),
 ]);
 export type HouseholdCommand = z.infer<typeof HouseholdCommandSchema>;
+export const HouseholdResultSchema = z.union([
+  z.object({ id, personId: id.optional() }),
+  z.object({ ok: z.literal(true) }),
+]);
 export const HouseholdCatalogSchema = z.object({
   people: z.array(z.object({ id, name })),
   profiles: z.array(

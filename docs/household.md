@@ -6,11 +6,13 @@ Agora ela pode reunir fontes de várias pessoas. Identificação de titularidade
 
 ## Organizar no dashboard
 
-1. Em **Pessoas e perfis Pluggy**, renomeie “Eu” e adicione as outras pessoas.
-2. Abra **Adicionar perfil Pluggy**, escolha o titular padrão, informe um nome e
-   o Client ID/Client Secret daquela aplicação. O servidor valida antes de salvar.
-3. Em **Conexões e atualização**, selecione o perfil e use **Conectar Meu Pluggy**.
-   Cada pessoa autoriza suas instituições no fluxo do provedor.
+1. Em **Conexões**, use **Adicionar conexão**. Escolha o titular ou adicione outra
+   pessoa no próprio wizard, independentemente do filtro herdado na página.
+2. Escolha uma conta Pluggy já cadastrada para esse titular ou informe o nome,
+   Client ID e Client Secret de outra aplicação. O servidor valida antes de salvar;
+   uma nova pessoa e seu perfil são confirmados no mesmo batch D1.
+3. Use **Abrir Meu Pluggy**. Cada pessoa autoriza suas instituições no fluxo do
+   provedor. O perfil validado permanece disponível se a janela for fechada.
 4. Use **Importar esta visão**. Os botões de pessoas filtram contas e conexões;
    “Todos” reúne os titulares sem somar moedas ou tratar limite/cartão como saldo.
 5. Para corrigir um titular, expanda **Alterar titular** na conexão. Todo o histórico
@@ -23,6 +25,16 @@ preservando páginas já publicadas. Reativar respeita a janela original de 24h.
 Para trocar a aplicação (Client ID), crie outro perfil: a identidade de um perfil
 que já recebeu credenciais não pode ser alterada. Não há exclusão de histórico,
 pessoas ou perfis nesta interface.
+
+Falhas de validação aparecem junto ao formulário, com foco no aviso e orientação
+específica para credenciais recusadas, aplicação já cadastrada ou indisponibilidade.
+Os campos permanecem preenchidos quando o cadastro é rejeitado. Uma falha ao
+atualizar a lista depois de salvar é informada como cadastro salvo; não solicita
+que o usuário recrie a pessoa ou o perfil.
+
+No frontend, `use-connection-wizard.ts` controla etapas, validação e envio;
+`connection-wizard-view.tsx` contém somente a apresentação. A edição de perfis
+usa `use-household-editor.ts`, separada do layout em `household-view.tsx`.
 
 ## O limite do provedor
 
@@ -89,7 +101,8 @@ Credenciais cadastradas pelo painel ficam somente no KV do servidor, sob o prefi
 `pluggy-credentials:`, separado das chaves OAuth. D1 guarda referência aleatória e
 hash do Client ID. GET do painel, status MCP e logs não devolvem o segredo nem a
 referência. Formulários exigem sessão, origem e CSRF; o segredo não fica em estado
-React nem em armazenamento do navegador. Campos são limpos ao enviar.
+React nem em armazenamento do navegador. Campos de credenciais são limpos
+depois de um salvamento confirmado, preservados no DOM quando houver rejeição.
 
 O [KV é criptografado em repouso e em trânsito pela Cloudflare](https://developers.cloudflare.com/kv/reference/data-security/).
 Não há criptografia adicional com chave própria da aplicação. Quem administra o
