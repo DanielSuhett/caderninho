@@ -20,7 +20,9 @@ import { HouseholdPanel } from "./household-view";
 import { dayLabel } from "./workspace-resource";
 import {
   FilterDrawer,
+  RecordReference,
   RefreshButton,
+  WorkspaceDetails,
   WorkspaceHeading,
   WorkspaceMetrics,
 } from "./workspace-ui";
@@ -32,6 +34,9 @@ const importLabels = {
   succeeded: "Atualizada",
 };
 function timestamp(value: string | null) {
+  if (value?.length === 10) {
+    return dayLabel(value);
+  }
   return value
     ? new Date(value).toLocaleString("pt-BR")
     : "Ainda não importada";
@@ -50,6 +55,33 @@ export function formatBalance(value: string | null, currency: string) {
   const whole = scale ? digits.slice(0, -scale) : digits;
   const fraction = scale ? `,${digits.slice(-scale)}` : "";
   return `${negative ? "−" : ""}${BigInt(whole).toLocaleString("pt-BR")}${fraction} ${currency}`;
+}
+function DashboardMessage({
+  message,
+  readError,
+  partial,
+}: {
+  message: string;
+  readError: boolean;
+  partial: boolean;
+}) {
+  return (
+    <p
+      aria-live="polite"
+      className="dashboard-message"
+      role="status"
+    >
+      {message ||
+        (readError &&
+          "Não foi possível atualizar o status. Os dados salvos continuam disponíveis.") ||
+        (partial ? (
+          <>
+            Histórico parcial.{" "}
+            <a href="/account/connections">Conferir conexões</a>.
+          </>
+        ) : null)}
+    </p>
+  );
 }
 export function DashboardView(props: {
   snapshot: PortalResponse;
@@ -183,11 +215,6 @@ export function DashboardView(props: {
   return (
     <div className="finance-dashboard">
       <WorkspaceHeading
-        description={
-          props.section === "overview"
-            ? "Contas e cartões, com titular e origem identificados."
-            : "Conecte seu banco e acompanhe a importação."
-        }
         title={props.section === "overview" ? "Visão geral" : "Conexões"}
       >
         <RefreshButton
@@ -196,23 +223,26 @@ export function DashboardView(props: {
           onClick={props.refresh}
         />
       </WorkspaceHeading>
-      <ConnectionJourney
-        activity={props.activity}
-        cancel={props.cancel}
-        connect={openConnection}
-        manage={openManagement}
-        observedAt={props.observedAt}
-        readError={props.readError}
-        snapshot={snapshot}
-      />
+      {(props.section === "connections" || !hasResult) && (
+        <ConnectionJourney
+          activity={props.activity}
+          cancel={props.cancel}
+          connect={openConnection}
+          manage={openManagement}
+          observedAt={props.observedAt}
+          readError={props.readError}
+          snapshot={snapshot}
+        />
+      )}
       {hasResult && (props.section === "overview" || managementOpen) && (
         <FilterDrawer
           action={
             props.section === "overview" ? "/account" : "/account/connections"
           }
-          summary={[
-            `Pessoa: ${snapshot.people.find((p) => p.id === personId)?.name ?? "Todas"}`,
-          ]}
+          context={
+            snapshot.people.find((p) => p.id === personId)?.name ??
+            "Todas as pessoas"
+          }
         >
           <label>
             Pessoa
@@ -240,34 +270,23 @@ export function DashboardView(props: {
           />
         </FilterDrawer>
       )}
-      <p
-        aria-live="polite"
-        className="dashboard-message"
-        role="status"
-      >
-        {props.message ||
-          (visible.some((c) => c.partial)
-            ? "Há conexões com dados parciais. Confira a situação abaixo antes de analisar totais."
-            : "")}
-      </p>
+      <DashboardMessage
+        message={props.message}
+        partial={props.section === "overview" && visible.some((c) => c.partial)}
+        readError={props.section === "overview" && hasResult && props.readError}
+      />
       {props.section === "overview" && hasResult && (
         <>
-          <WorkspaceMetrics
-            items={[
-              {
-                label: "Pessoas nesta visão",
-                value: personId ? 1 : snapshot.people.length,
-              },
-              { label: "Conexões bancárias", value: visible.length },
-              { label: "Contas e cartões importados", value: accounts.length },
-            ]}
-          />
-
-          <section aria-labelledby="accounts-heading">
-            <div className="section-heading">
-              <h2 id="accounts-heading">Contas e cartões</h2>
-              <a href="/account/connections">Gerenciar pessoas e perfis</a>
-            </div>
+          <section
+            aria-labelledby="accounts-heading"
+            className="account-section"
+          >
+            <h2
+              className="sr-only"
+              id="accounts-heading"
+            >
+              Contas e cartões
+            </h2>
             {!accounts.length && (
               <div className="empty-state">
                 <h3>Suas contas aparecem aqui após a importação.</h3>
@@ -299,13 +318,13 @@ export function DashboardView(props: {
                         <span className="record-value">
                           {formatBalance(a.balanceMinor, a.currency)}
                         </span>
-                        <span className="record-context">{a.personName}</span>
+                        {!personId && snapshot.people.length > 1 && (
+                          <span className="record-context">{a.personName}</span>
+                        )}
                         <span className="record-meta">
-                          <span>
-                            {a.type === "CREDIT"
-                              ? "Cartão · não é dinheiro disponível"
-                              : "Conta · saldo informado"}
-                          </span>
+                          {a.type === "CREDIT" && (
+                            <span>Cartão · não é dinheiro disponível</span>
+                          )}
                           <span>
                             {a.balanceObservedAt
                               ? `Saldo em ${dayLabel(a.balanceObservedAt)}`
@@ -332,24 +351,41 @@ export function DashboardView(props: {
                           <dt>Saldo observado em</dt>
                           <dd>{timestamp(a.balanceObservedAt)}</dd>
                         </div>
-                        <div>
-                          <dt>Identificador da conta</dt>
-                          <dd>
-                            <code>{a.id}</code>
-                          </dd>
-                        </div>
                       </dl>
                       <a
                         href={`/account/transactions?${new URLSearchParams({ accountId: a.id, ...(personId && { person: personId }), space: new URLSearchParams(location.search).get("space") ?? "personal" })}`}
                       >
                         Ver transações desta conta
                       </a>
+                      <RecordReference>
+                        <div>
+                          <dt>Identificador da conta</dt>
+                          <dd>
+                            <code>{a.id}</code>
+                          </dd>
+                        </div>
+                      </RecordReference>
                     </div>
                   </DisclosureItem>
                 </li>
               ))}
             </ul>
           </section>
+          <WorkspaceDetails title="Resumo da instalação">
+            <WorkspaceMetrics
+              items={[
+                {
+                  label: "Pessoas nesta visão",
+                  value: personId ? 1 : snapshot.people.length,
+                },
+                { label: "Conexões bancárias", value: visible.length },
+                {
+                  label: "Contas e cartões importados",
+                  value: accounts.length,
+                },
+              ]}
+            />
+          </WorkspaceDetails>
         </>
       )}
       {props.section === "connections" && (
@@ -359,7 +395,7 @@ export function DashboardView(props: {
             onToggle={toggleManagement}
             open={managementOpen}
           >
-            <summary>Pessoas, perfis e outras conexões</summary>
+            <summary>Gerenciar conexões e perfis</summary>
             <section aria-labelledby="connections-heading">
               <div className="section-heading">
                 <h2
@@ -536,9 +572,7 @@ export function DashboardView(props: {
           <details className="journey-assistants">
             <summary>Conectar meu assistente MCP</summary>
             <p>
-              Use a URL abaixo no ChatGPT ou Claude. Peça consultas por pessoa
-              ou uma visão conjunta. Quem autorizar o assistente dará acesso aos
-              dados de toda a instalação.
+              Autorizar um assistente dá acesso aos dados de toda a instalação.
             </p>
             <code className="mcp-address">{snapshot.origin}/mcp</code>
             <UiButton

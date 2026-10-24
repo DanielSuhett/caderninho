@@ -12,7 +12,7 @@ import {
 } from "../account/connection-journey";
 
 const announcementPattern = /<p class="sr-only" role="status">(.*?)<\/p>/;
-const timePattern = /2026|13:06|Estado consultado/;
+const timePattern = /2026|13:06|Estado consultado|Consultado em/;
 const setupPattern = /Configurar ou reativar perfil|Conectar Meu Pluggy/;
 const phasePattern = /Importando transações/;
 const credentialPattern = /perfil|autorização/;
@@ -77,6 +77,11 @@ test("identified accounts alone do not unlock a transaction CTA; published data 
   assert.ok(partial.includes("Dados parciais"));
   assert.ok(partial.includes("Ver transações disponíveis"));
   assert.ok(partial.includes("A importação continua"));
+  assert.ok(partial.includes("Consultado em"));
+  assert.ok(
+    partial.indexOf("Consultado em") <
+      partial.indexOf("Detalhes da importação"),
+  );
   const announcement = partial.match(announcementPattern)?.[1];
   assert.match(announcement ?? "", phasePattern);
   assert.doesNotMatch(announcement ?? "", timePattern);

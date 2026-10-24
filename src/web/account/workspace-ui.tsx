@@ -5,6 +5,7 @@ import {
 import { type ReactNode, useId } from "react";
 
 import { UiButton } from "../ui";
+import { DisclosureItem } from "./disclosure-item";
 import { WorkspaceDrawer } from "./workspace-drawer";
 
 export function WorkspaceHeading({
@@ -91,11 +92,13 @@ export function WorkspaceSkeleton() {
 export function FilterDrawer({
   action,
   children,
-  summary,
+  context,
+  activeCount = 0,
 }: {
   action: string;
   children: ReactNode;
-  summary: string[];
+  context?: string;
+  activeCount?: number;
 }) {
   const formId = useId();
   return (
@@ -116,11 +119,10 @@ export function FilterDrawer({
               aria-hidden="true"
               size={20}
             />
-            Filtros
+            Filtros{activeCount > 0 ? ` · ${activeCount}` : ""}
           </>
         }
       >
-        <p className="muted">As alterações só valem depois de aplicar.</p>
         <form
           action={action}
           className="workspace-filters"
@@ -128,23 +130,51 @@ export function FilterDrawer({
           method="get"
         >
           {children}
+          <a
+            className="filter-clear"
+            href={action}
+          >
+            Limpar filtros
+          </a>
         </form>
       </WorkspaceDrawer>
-      <ul
-        aria-label="Recorte aplicado"
-        className="applied-filters"
-      >
-        {summary.map((value) => (
-          <li key={value}>{value}</li>
-        ))}
-      </ul>
-      <a
-        className="filter-clear"
-        href={action}
-      >
-        Limpar filtros
-      </a>
+      {!!context && <p className="filter-context">{context}</p>}
     </div>
+  );
+}
+
+export function RecordReference({ children }: { children: ReactNode }) {
+  return (
+    <DisclosureItem
+      className="record-reference"
+      summary="Referência técnica"
+    >
+      <dl className="detail-list">{children}</dl>
+    </DisclosureItem>
+  );
+}
+
+export function WorkspaceDetails({
+  title,
+  children,
+  hint,
+}: {
+  title: string;
+  children: ReactNode;
+  hint?: string;
+}) {
+  return (
+    <DisclosureItem
+      className="workspace-details"
+      summary={
+        <>
+          <h2 className="workspace-details-title">{title}</h2>
+          {!!hint && <span className="workspace-details-hint">{hint}</span>}
+        </>
+      }
+    >
+      <div className="workspace-details-body">{children}</div>
+    </DisclosureItem>
   );
 }
 export function WorkspaceMetrics({

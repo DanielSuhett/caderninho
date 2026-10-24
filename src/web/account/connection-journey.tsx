@@ -217,9 +217,11 @@ function ImportProgress({
         Conexão registrada · {count}{" "}
         {count === 1 ? "conta identificada" : "contas identificadas"}
       </p>
-      <p className="journey-observed">
-        Estado consultado em {momentLabel(observedAt)}.
-      </p>
+      {!!observedAt && (
+        <p className="journey-observed">
+          Consultado em {momentLabel(observedAt)}.
+        </p>
+      )}
       <p
         className="notice"
         data-tone={connection.hasTransactions ? "warning" : "info"}
@@ -232,34 +234,21 @@ function ImportProgress({
   );
 }
 function ImportResult({ connection }: { connection: ConnectionInfo }) {
-  const accounts = Object.entries(connection.accounts);
+  const count = Object.keys(connection.accounts).length;
   return (
     <>
-      <p className="muted">
-        Concluída em {momentLabel(connection.lastSuccessAt)}.
-      </p>
       <p>
-        {accounts.length}{" "}
-        {accounts.length === 1 ? "conta importada" : "contas importadas"}
+        {count} {count === 1 ? "conta importada" : "contas importadas"}
       </p>
-      <ul className="journey-accounts">
-        {accounts.map(([id, a]) => (
-          <li key={id}>{a.name}</li>
-        ))}
-      </ul>
       {!connection.hasTransactions && (
-        <p>
-          Nenhuma transação foi retornada nesta importação. A autorização
-          continua registrada; confira as contas e os detalhes da origem.
-        </p>
+        <p>Nenhuma transação foi retornada nesta importação.</p>
       )}
       {connection.partial === true && (
         <p
           className="notice"
           data-tone="warning"
         >
-          Há dados parciais nesta origem. Confira a cobertura antes de analisar
-          totais.
+          Dados parciais nesta origem.
         </p>
       )}
     </>
@@ -313,19 +302,25 @@ function ImportJourney({
           >
             {partial ? "Ver transações disponíveis" : "Ver transações"}
           </UiLink>
-          <p className="muted">
-            {active
-              ? "Você pode continuar usando o painel. A importação continua."
-              : "Consulta à cópia importada, não ao banco ao vivo."}
-          </p>
+          {active === true && <p className="muted">A importação continua.</p>}
         </div>
       )}
       <details className="journey-details">
         <summary>Detalhes da importação</summary>
-        <p>
-          O estado é o último confirmado nesta instalação. Não representa uma
-          consulta bancária ao vivo.
-        </p>
+        <p>Consulta à cópia importada, não ao banco ao vivo.</p>
+        {!active && !!observedAt && (
+          <p>Estado consultado em {momentLabel(observedAt)}.</p>
+        )}
+        {done && (
+          <>
+            <p>Concluída em {momentLabel(connection.lastSuccessAt)}.</p>
+            <ul className="journey-accounts">
+              {Object.entries(connection.accounts).map(([id, a]) => (
+                <li key={id}>{a.name}</li>
+              ))}
+            </ul>
+          </>
+        )}
         <p>
           Próxima elegibilidade:{" "}
           {connection.nextEligibleAt

@@ -89,10 +89,7 @@ export function HouseholdPanel({
           </h2>
         </div>
       </div>
-      <p>
-        Cada conexão tem um titular. Os perfis guardam as credenciais usadas
-        para buscar os dados; os espaços organizam seu planejamento.
-      </p>
+      <p>Pessoa é o titular. Perfil identifica a aplicação Pluggy.</p>
       <p role="alert">{issue}</p>
       <div className="people-editor">
         {snapshot.people.map((person) => (
@@ -179,8 +176,8 @@ export function HouseholdPanel({
                 Permitir novas conexões e importações
               </label>
               <p className="muted">
-                Para trocar o segredo, preencha os dois campos abaixo. O Client
-                ID deve ser o mesmo. Para outra aplicação, adicione um perfil.
+                Para trocar o segredo, preencha os dois campos. Outra aplicação
+                exige um novo perfil.
               </p>
               <CredentialFields
                 required={false}

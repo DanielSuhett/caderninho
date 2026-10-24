@@ -19,7 +19,12 @@ import {
   scopedHref,
   useResource,
 } from "./workspace-resource";
-import { FilterDrawer, WorkspaceHeading } from "./workspace-ui";
+import {
+  FilterDrawer,
+  RecordReference,
+  WorkspaceDetails,
+  WorkspaceHeading,
+} from "./workspace-ui";
 
 const groupTypes = {
   business: "Profissional",
@@ -80,7 +85,7 @@ export function OrganizationView({
   const closeEditor = useCallback(() => setEditor(null), []);
   const saved = useCallback(() => {
     setEditor(null);
-    setNotice("Alteração salva. O histórico financeiro foi preservado.");
+    setNotice("Alteração salva.");
     if (editor?.remove && editor.kind === "space" && editor.id === spaceId) {
       navigateWorkspace(new URL("/account/groups", location.origin));
       return;
@@ -101,14 +106,7 @@ export function OrganizationView({
   }, []);
   return (
     <>
-      <WorkspaceHeading
-        description={
-          page === "rules"
-            ? "Classificação por condições, com prévia antes de salvar."
-            : "Espaços para organizar o dinheiro. A titularidade continua ligada à pessoa."
-        }
-        title={page === "rules" ? "Regras" : "Grupos"}
-      >
+      <WorkspaceHeading title={page === "rules" ? "Regras" : "Grupos"}>
         <UiButton
           disabled={!data}
           onClick={newItem}
@@ -172,11 +170,19 @@ export function OrganizationView({
         <>
           <FilterDrawer
             action={`/account/${page}`}
-            summary={organizationFilterSummary(
-              params,
-              current?.name ?? spaceId,
-              page,
-            )}
+            activeCount={
+              {
+                groups: 0,
+                rules: [params.get("q"), params.get("enabled")].filter(Boolean)
+                  .length,
+              }[page]
+            }
+            context={
+              {
+                groups: `Categorias e etiquetas: ${current?.name ?? spaceId}`,
+                rules: current?.name ?? spaceId,
+              }[page]
+            }
           >
             <ScopeFields
               catalog={data}
@@ -211,17 +217,6 @@ export function OrganizationView({
           </FilterDrawer>
           {page === "rules" ? (
             <>
-              <div className="results-heading">
-                <h2>Regras de {current?.name}</h2>
-                <span>
-                  {rules?.length ?? 0} regras · menor prioridade primeiro
-                </span>
-              </div>
-              <p className="muted">
-                As regras pertencem ao grupo e podem abranger várias pessoas.
-                Salvar não reclassifica transações existentes. Regras ativas
-                valem nas próximas importações.
-              </p>
               {rules?.length ? (
                 <ul
                   aria-label="Regras de classificação"
@@ -237,7 +232,12 @@ export function OrganizationView({
                     const movement = movementLabel(r.direction);
                     const accountLabel = account;
                     const context = r.filter
-                      ? `${r.filter.alternatives.length} alternativa(s) de condições`
+                      ? ruleConditionsText({
+                          accounts: data.accounts,
+                          brief: true,
+                          people: snapshot.people,
+                          rule: r,
+                        })
                       : `Contém “${r.text}”`;
                     const href = ruleTransactionsHref(r, spaceId);
                     const linkLabel = ruleLinkLabel(r);
@@ -256,47 +256,16 @@ export function OrganizationView({
                                   {r.enabled ? "Ativa" : "Pausada"}
                                 </span>
                               </span>
-                              <span className="record-context">
-                                {context} · {category}
+                              <span className="record-context rule-context">
+                                {context} → {category}
                               </span>
                               <span className="record-meta">
                                 <span>Prioridade {r.priority}</span>
-                                <RuleScope
-                                  account={accountLabel}
-                                  movement={movement}
-                                  rule={r}
-                                />
                               </span>
                             </>
                           }
                         >
                           <div className="record-detail">
-                            <div className="record-actions">
-                              <UiButton
-                                data-id={r.id}
-                                data-kind="rule"
-                                onClick={openItem}
-                                type="button"
-                                variant="secondary"
-                              >
-                                Editar regra
-                              </UiButton>
-                              <UiButton
-                                data-id={r.id}
-                                data-kind="rule"
-                                data-remove="true"
-                                onClick={openItem}
-                                tone="danger"
-                                type="button"
-                                variant="secondary"
-                              >
-                                Excluir regra
-                              </UiButton>
-                            </div>
-                            <p>
-                              Quando as condições da regra corresponderem,
-                              classificar como <strong>{category}</strong>.
-                            </p>
                             <RuleConditions
                               accounts={data.accounts}
                               people={snapshot.people}
@@ -311,18 +280,38 @@ export function OrganizationView({
                                 <dt>Conta</dt>
                                 <dd>{accountLabel}</dd>
                               </div>
+                              {!!r.filter && (
+                                <div>
+                                  <dt>Moeda das condições</dt>
+                                  <dd>
+                                    {r.filter.currency ?? "Todas as moedas"}
+                                  </dd>
+                                </div>
+                              )}
                               <div>
                                 <dt>Categoria</dt>
                                 <dd>{category}</dd>
                               </div>
+                            </dl>
+                            <p className="muted">
+                              Classifica transações novas; o histórico é
+                              preservado.
+                            </p>
+                            <OrganizationActions
+                              href={href}
+                              item={r}
+                              kind="rule"
+                              linkLabel={linkLabel}
+                              onOpen={openItem}
+                            />
+                            <RecordReference>
                               <div>
                                 <dt>Identificador da regra</dt>
                                 <dd>
                                   <code>{r.id}</code>
                                 </dd>
                               </div>
-                            </dl>
-                            <a href={href}>{linkLabel}</a>
+                            </RecordReference>
                           </div>
                         </DisclosureItem>
                       </li>
@@ -335,13 +324,15 @@ export function OrganizationView({
                   transações correspondentes.
                 </EmptyView>
               )}
+              <WorkspaceDetails title="Como as regras são aplicadas">
+                <p>
+                  Regras ativas classificam transações novas. Menor prioridade
+                  vence; o histórico é preservado.
+                </p>
+              </WorkspaceDetails>
             </>
           ) : (
             <>
-              <div className="results-heading">
-                <h2>Seus grupos</h2>
-                <span>{data.spaces.length} espaços de planejamento</span>
-              </div>
               <ul
                 aria-label="Grupos"
                 className="record-list"
@@ -353,89 +344,53 @@ export function OrganizationView({
                       summary={
                         <>
                           <span className="record-title">{s.name}</span>
-                          <span className="record-value">
-                            <span
-                              className="status-label"
-                              data-tone="neutral"
-                            >
-                              {groupTypes[s.type]}
-                            </span>
-                          </span>
+                          <span className="record-value">{s.currency}</span>
                           <span className="record-context">
                             {s.budgetEnabled
                               ? `Orçamento: ${s.monthlyBudgetMinor === null ? "valor não definido" : formatBalance(s.monthlyBudgetMinor, s.currency)}`
-                              : "Orçamento desativado"}
-                          </span>
-                          <span className="record-meta">
-                            <span>{s.currency}</span>
-                            <span>Mês começa no dia {s.monthStartDay}</span>
+                              : "Sem orçamento"}
                           </span>
                         </>
                       }
                     >
                       <div className="record-detail">
-                        <div className="record-actions">
-                          <UiButton
-                            data-id={s.id}
-                            data-kind="space"
-                            onClick={openItem}
-                            type="button"
-                            variant="secondary"
-                          >
-                            Editar grupo
-                          </UiButton>
-                          <UiButton
-                            data-id={s.id}
-                            data-kind="space"
-                            data-remove="true"
-                            onClick={openItem}
-                            tone="danger"
-                            type="button"
-                            variant="secondary"
-                          >
-                            Excluir grupo
-                          </UiButton>
-                        </div>
                         <dl className="detail-list">
                           <div>
-                            <dt>Moeda do grupo</dt>
-                            <dd>{s.currency}</dd>
+                            <dt>Tipo</dt>
+                            <dd>{groupTypes[s.type]}</dd>
                           </div>
                           <div>
                             <dt>Início do mês</dt>
                             <dd>Dia {s.monthStartDay}</dd>
                           </div>
-                          <div>
-                            <dt>Orçamento</dt>
-                            <dd>
-                              {s.budgetEnabled ? "Ativado" : "Desativado"}
-                            </dd>
-                          </div>
+                        </dl>
+                        <OrganizationActions
+                          href={scopedHref(
+                            "/account/transactions",
+                            new URLSearchParams({ space: s.id }),
+                          )}
+                          item={s}
+                          kind="space"
+                          linkLabel={"Ver transações"}
+                          onOpen={openItem}
+                        />
+                        <RecordReference>
                           <div>
                             <dt>Identificador do grupo</dt>
                             <dd>
                               <code>{s.id}</code>
                             </dd>
                           </div>
-                        </dl>
-                        <a
-                          href={scopedHref(
-                            "/account/transactions",
-                            new URLSearchParams({ space: s.id }),
-                          )}
-                        >
-                          Ver transações de {s.name}
-                        </a>
+                        </RecordReference>
                       </div>
                     </DisclosureItem>
                   </li>
                 ))}
               </ul>
-              <section aria-labelledby="categories-title">
-                <div className="results-heading">
-                  <h2 id="categories-title">Categorias de {current?.name}</h2>
-                  <span>{data.categories.length} categorias</span>
-                </div>
+              <WorkspaceDetails
+                hint={String(data.categories.length)}
+                title={`Categorias de ${current?.name ?? spaceId}`}
+              >
                 {data.categories.length ? (
                   <ul className="category-list">
                     {data.categories.map((c) => (
@@ -461,13 +416,11 @@ export function OrganizationView({
                 ) : (
                   <p>Nenhuma categoria neste grupo.</p>
                 )}
-              </section>
-              <section aria-labelledby="tags-title">
-                <h2 id="tags-title">Etiquetas</h2>
-                <p>
-                  Marcadores adicionais para pesquisar lançamentos sem mudar sua
-                  categoria.
-                </p>
+              </WorkspaceDetails>
+              <WorkspaceDetails
+                hint={String(data.tags.length)}
+                title="Etiquetas"
+              >
                 {data.tags.length ? (
                   <ul className="tag-list">
                     {data.tags.map((t) => (
@@ -479,7 +432,7 @@ export function OrganizationView({
                     Nenhuma etiqueta cadastrada neste grupo.
                   </p>
                 )}
-              </section>
+              </WorkspaceDetails>
             </>
           )}
         </>
@@ -488,31 +441,56 @@ export function OrganizationView({
   );
 }
 
+function OrganizationActions({
+  item,
+  kind,
+  href,
+  linkLabel,
+  onOpen,
+}: {
+  item: { id: string; name: string };
+  kind: "rule" | "space";
+  href: string;
+  linkLabel: string;
+  onOpen: (event: MouseEvent<HTMLButtonElement>) => void;
+}) {
+  const noun = kind === "rule" ? "regra" : "grupo";
+  return (
+    <div className="record-actions">
+      <a href={href}>{linkLabel}</a>
+      <UiButton
+        aria-label={`Editar ${noun} ${item.name}`}
+        data-id={item.id}
+        data-kind={kind}
+        onClick={onOpen}
+        type="button"
+        variant="ghost"
+      >
+        Editar
+      </UiButton>
+      {(kind === "rule" || item.id !== "personal") && (
+        <UiButton
+          aria-label={`Excluir ${noun} ${item.name}`}
+          data-id={item.id}
+          data-kind={kind}
+          data-remove="true"
+          onClick={onOpen}
+          tone="danger"
+          type="button"
+          variant="ghost"
+        >
+          Excluir
+        </UiButton>
+      )}
+    </div>
+  );
+}
+
 function movementLabel(direction: "DEBIT" | "CREDIT" | null) {
   if (!direction) {
     return "Entradas e saídas";
   }
   return direction === "DEBIT" ? "Saídas" : "Entradas";
-}
-
-function organizationFilterSummary(
-  params: URLSearchParams,
-  group: string,
-  page: "rules" | "groups",
-) {
-  const summary = [`Grupo: ${group}`];
-  if (page === "groups") {
-    return summary;
-  }
-  const search = params.get("q");
-  if (search) {
-    summary.push(`Busca: ${search}`);
-  }
-  const enabled = params.get("enabled");
-  if (enabled) {
-    summary.push(enabled === "true" ? "Ativas" : "Pausadas");
-  }
-  return summary;
 }
 
 function ruleTransactionsHref(
@@ -538,41 +516,22 @@ function ruleTransactionsHref(
 }
 
 function ruleLinkLabel(rule: { filter?: unknown }) {
-  return rule.filter
-    ? "Ver todas as transações do grupo"
-    : "Ver lançamentos com esta condição";
+  return rule.filter ? "Ver transações do grupo" : "Ver correspondências";
 }
 
-function RuleScope({
-  rule,
-  movement,
-  account,
-}: {
-  rule: WorkspaceCatalog["rules"][number];
-  movement: string;
-  account: string;
-}) {
-  if (rule.filter) {
-    return <span>{rule.filter.currency ?? "Todas as moedas"}</span>;
-  }
-  return (
-    <>
-      <span>{movement}</span>
-      <span>{account}</span>
-    </>
-  );
-}
-function RuleConditions({
+function ruleConditionsText({
   rule,
   accounts,
   people,
+  brief = false,
 }: {
   rule: WorkspaceCatalog["rules"][number];
   accounts: { id: string; name: string; personName: string }[];
   people: { id: string; name: string }[];
+  brief?: boolean;
 }) {
   if (!rule.filter) {
-    return null;
+    return "";
   }
   const operators: Record<string, string> = {
     contains: "contém",
@@ -613,14 +572,46 @@ function RuleConditions({
       condition.field;
     return `${field} ${operators[condition.operator]} ${value}`;
   }
-  return (
-    <p className="rule-condition-summary">
-      {rule.filter.alternatives
-        .map(
-          (alternative, index) =>
-            `${index ? "OU: " : "Todas: "}${alternative.conditions.map(label).join(" · E ")}`,
-        )
-        .join("\n\n")}
-    </p>
-  );
+  if (brief) {
+    const { alternatives } = rule.filter;
+    const conditions = alternatives.flatMap((row) => row.conditions);
+    const description = conditions.find(
+      (c) => c.field === "description" && c.operator === "contains",
+    );
+    const direction = conditions.find(
+      (c) => c.field === "direction" && c.operator === "equals",
+    );
+    if (
+      alternatives.length === 1 &&
+      description &&
+      conditions.every((c) => c === description || c === direction)
+    ) {
+      const movement = direction
+        ? movementLabel(direction.value === "DEBIT" ? "DEBIT" : "CREDIT")
+        : "Transações";
+      return `${movement} com “${description.value}”`;
+    }
+    const [first] = conditions;
+    if (!first) {
+      return "Condições não disponíveis";
+    }
+    return [
+      alternatives.length > 1 ? `${alternatives.length} alternativas` : "",
+      conditions.length > 1 ? `+ ${conditions.length - 1} condições` : "",
+      label(first),
+    ]
+      .filter(Boolean)
+      .join(" · ");
+  }
+  return rule.filter.alternatives
+    .map(
+      (alternative, index) =>
+        `${index ? "OU: " : ""}${alternative.conditions.map(label).join(" · E ")}`,
+    )
+    .join("\n\n");
+}
+function RuleConditions(props: Parameters<typeof ruleConditionsText>[0]) {
+  const text =
+    ruleConditionsText(props) || `Descrição contém “${props.rule.text}”`;
+  return text ? <p className="rule-condition-summary">{text}</p> : null;
 }

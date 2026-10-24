@@ -9,7 +9,13 @@ import {
   ResourceFeedback,
   useResource,
 } from "./workspace-resource";
-import { FilterDrawer, RefreshButton, WorkspaceHeading } from "./workspace-ui";
+import {
+  FilterDrawer,
+  RecordReference,
+  RefreshButton,
+  WorkspaceDetails,
+  WorkspaceHeading,
+} from "./workspace-ui";
 
 const statuses = {
   failed: "Falhou",
@@ -59,18 +65,20 @@ export function SyncHistoryView({
   first.delete("cursor");
   return (
     <>
-      <WorkspaceHeading
-        description="Rodadas, etapas confirmadas e falhas. O titular é o registrado no início."
-        title="Sincronizações"
-      />
+      <WorkspaceHeading title="Sincronizações">
+        <RefreshButton
+          disabled={resource.loading}
+          label="Atualizar histórico"
+          onClick={resource.retry}
+        />
+      </WorkspaceHeading>
       <FilterDrawer
         action="/account/sync"
-        summary={[
-          `Pessoa: ${snapshot.people.find((p) => p.id === params.get("person"))?.name ?? "Todas"}`,
-          Object.entries(statuses).find(
-            ([id]) => id === params.get("status"),
-          )?.[1] ?? "Todas as rodadas",
-        ]}
+        activeCount={params.get("status") ? 1 : 0}
+        context={
+          snapshot.people.find((p) => p.id === params.get("person"))?.name ??
+          "Todas as pessoas"
+        }
       >
         <label>
           Pessoa
@@ -112,20 +120,6 @@ export function SyncHistoryView({
           </select>
         </label>
       </FilterDrawer>
-      <div className="results-heading">
-        <h2>Rodadas registradas</h2>
-        <RefreshButton
-          disabled={resource.loading}
-          label="Atualizar histórico"
-          onClick={resource.retry}
-        />
-      </div>
-      <p className="muted">
-        Histórico disponível a partir desta versão. A última rodada de cada
-        conexão anterior foi recuperada quando existia; rodadas mais antigas não
-        podem ser reconstruídas. Sincronizações abrangem a conexão inteira,
-        independentemente do grupo.
-      </p>
       <ResourceFeedback {...resource} />
       {!!data && (
         <>
@@ -151,8 +145,7 @@ export function SyncHistoryView({
                           <time dateTime={r.admittedAt}>
                             Início {momentLabel(r.admittedAt)}
                           </time>
-                          {(r.status === "running" ||
-                            r.status === "pending") && (
+                          {r.status === "running" && (
                             <span>
                               {r.phase
                                 ? (phases[r.phase] ?? r.phase)
@@ -160,11 +153,8 @@ export function SyncHistoryView({
                             </span>
                           )}
                           {!!r.error && (
-                            <span data-tone="error">
-                              Interrompida · páginas confirmadas preservadas
-                            </span>
+                            <span data-tone="error">Dados preservados</span>
                           )}
-                          {!!r.legacy && <span>Registro recuperado</span>}
                         </span>
                       </>
                     }
@@ -187,18 +177,6 @@ export function SyncHistoryView({
                           <dt>Encerramento</dt>
                           <dd>{finishLabel(r.finishedAt, r.status)}</dd>
                         </div>
-                        <div>
-                          <dt>Rodada</dt>
-                          <dd>
-                            <code>{r.id}</code>
-                          </dd>
-                        </div>
-                        <div>
-                          <dt>Conexão</dt>
-                          <dd>
-                            <code>{r.connectionId}</code>
-                          </dd>
-                        </div>
                       </dl>
                       {!!r.error && (
                         <p
@@ -219,6 +197,20 @@ export function SyncHistoryView({
                       <a href="/account/connections">
                         Ver conexões e atualização
                       </a>
+                      <RecordReference>
+                        <div>
+                          <dt>Rodada</dt>
+                          <dd>
+                            <code>{r.id}</code>
+                          </dd>
+                        </div>
+                        <div>
+                          <dt>Conexão</dt>
+                          <dd>
+                            <code>{r.connectionId}</code>
+                          </dd>
+                        </div>
+                      </RecordReference>
                     </div>
                   </DisclosureItem>
                 </li>
@@ -244,6 +236,15 @@ export function SyncHistoryView({
               </a>
             )}
           </div>
+          <WorkspaceDetails title="Sobre este histórico">
+            {" "}
+            <p className="muted">
+              Histórico disponível a partir desta versão. A última rodada de
+              cada conexão anterior foi recuperada quando existia; rodadas mais
+              antigas não podem ser reconstruídas. Sincronizações abrangem a
+              conexão inteira, independentemente do grupo.
+            </p>
+          </WorkspaceDetails>
         </>
       )}
     </>

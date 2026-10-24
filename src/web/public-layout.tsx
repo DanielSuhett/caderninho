@@ -148,6 +148,7 @@ export function PublicLayout({
                 </a>
                 <UiLink
                   href="/account"
+                  size="lg"
                   variant="secondary"
                 >
                   Entrar

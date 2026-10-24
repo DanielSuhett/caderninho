@@ -10,7 +10,7 @@ import {
 import type { createAccountApi } from "./account-api";
 import { TransactionList } from "./transaction-list";
 import { EmptyView, ScopeFields } from "./workspace-filters";
-import { dayLabel, ResourceFeedback, useResource } from "./workspace-resource";
+import { ResourceFeedback, useResource } from "./workspace-resource";
 import { FilterDrawer, WorkspaceHeading } from "./workspace-ui";
 
 export function TransactionsView({
@@ -77,24 +77,28 @@ export function TransactionsView({
   const first = new URLSearchParams(params);
   first.delete("cursor");
   const future = params.get("future") === "on";
-  const switched = new URLSearchParams(first);
-  if (future) {
-    switched.delete("future");
-  } else {
-    switched.set("future", "on");
-  }
   return (
     <>
-      <WorkspaceHeading
-        description="Lançamentos por titular, conta e categoria, na moeda de origem."
-        title="Transações"
-      />
+      <WorkspaceHeading title="Transações" />
       <ResourceFeedback {...resource} />
       {!!data && (
         <>
           <FilterDrawer
             action="/account/transactions"
-            summary={transactionFilterSummary(
+            activeCount={
+              [
+                "text",
+                "from",
+                "to",
+                "direction",
+                "accountId",
+                "categoryId",
+                "status",
+                "future",
+                "ignored",
+              ].filter((key) => params.get(key)).length
+            }
+            context={transactionFilterContext(
               params,
               snapshot,
               data.catalog,
@@ -191,6 +195,14 @@ export function TransactionsView({
               </label>
               <label className="checkbox-label">
                 <input
+                  defaultChecked={future}
+                  name="future"
+                  type="checkbox"
+                />
+                Lançamentos futuros
+              </label>
+              <label className="checkbox-label">
+                <input
                   defaultChecked={params.get("ignored") === "on"}
                   name="ignored"
                   type="checkbox"
@@ -204,28 +216,22 @@ export function TransactionsView({
               className="notice"
               data-tone="warning"
             >
-              Há dados parciais na instalação. Consulte as sincronizações antes
-              de interpretar este recorte como um histórico completo.
+              Histórico parcial. <a href="/account/sync">Ver importações</a>
             </p>
           )}
-          <div className="results-heading">
-            <h2>{future ? "Lançamentos futuros" : "Compras e lançamentos"}</h2>
-            <span>
-              {data.result.data.records.length} nesta página · por primeira data
-            </span>
-          </div>
-          <a
-            className="transaction-period-link"
-            href={`/account/transactions?${switched}`}
-          >
-            {future ? "Voltar ao histórico" : "Ver lançamentos futuros"}
-          </a>
           {data.result.data.records.length ? (
             <TransactionList
               accounts={data.accounts}
               categories={data.catalog.categories}
               records={data.result.data.records}
               referenceDay={data.result.data.referenceDay}
+              showOwner={
+                !params.get("person") &&
+                (snapshot.people.length !== 1 ||
+                  data.accounts.some(
+                    (a) => a.personId !== snapshot.people.at(0)?.id,
+                  ))
+              }
             />
           ) : (
             <EmptyView title="Nenhuma transação neste recorte">
@@ -235,7 +241,7 @@ export function TransactionsView({
             </EmptyView>
           )}
           <div className="pagination">
-            <p>Esta lista é paginada. Não representa um total financeiro.</p>
+            <p>{data.result.data.records.length} nesta página</p>
             {params.has("cursor") && (
               <a href={`/account/transactions?${first}`}>Voltar ao início</a>
             )}
@@ -244,7 +250,7 @@ export function TransactionsView({
                 className="page-next"
                 href={`/account/transactions?${next}`}
               >
-                Próximos 50 itens
+                Próximas
               </a>
             )}
           </div>
@@ -254,41 +260,22 @@ export function TransactionsView({
   );
 }
 
-function transactionFilterSummary(
+function transactionFilterContext(
   params: URLSearchParams,
   snapshot: PortalResponse,
   catalog: WorkspaceCatalog,
-  accounts: Array<{ id: string; name: string }>,
+  accounts: Array<{ personId: string }>,
 ) {
+  const spaceId = params.get("space") || "personal";
+  const person = snapshot.people.find((p) => p.id === params.get("person"));
+  const multiplePeople =
+    snapshot.people.length !== 1 ||
+    accounts.some((a) => a.personId !== snapshot.people.at(0)?.id);
   return [
-    ...(params.get("future") === "on" ? ["Lançamentos futuros"] : []),
-    `Grupo: ${catalog.spaces.find((s) => s.id === (params.get("space") || "personal"))?.name ?? (params.get("space") || "personal")}`,
-    `Pessoa: ${snapshot.people.find((p) => p.id === params.get("person"))?.name ?? "Todas"}`,
-    ...(params.get("text") ? [`Descrição: ${params.get("text")}`] : []),
-    ...(params.get("from")
-      ? [`De: ${dayLabel(params.get("from") ?? "")}`]
-      : []),
-    ...(params.get("to") ? [`Até: ${dayLabel(params.get("to") ?? "")}`] : []),
-    ...(params.get("direction")
-      ? [params.get("direction") === "DEBIT" ? "Saídas" : "Entradas"]
-      : []),
-    ...(params.get("accountId")
-      ? [
-          `Conta: ${accounts.find((a) => a.id === params.get("accountId"))?.name ?? params.get("accountId")}`,
-        ]
-      : []),
-    ...(params.get("categoryId")
-      ? [
-          `Categoria: ${catalog.categories.find((c) => c.id === params.get("categoryId"))?.name ?? params.get("categoryId")}`,
-        ]
-      : []),
-    ...(params.get("status")
-      ? [
-          params.get("status") === "PENDING"
-            ? "Pendentes na origem"
-            : "Registradas na origem",
-        ]
-      : []),
-    ...(params.get("ignored") === "on" ? ["Inclui ignoradas"] : []),
-  ];
+    catalog.spaces.find((s) => s.id === spaceId)?.name ?? spaceId,
+    person?.name ?? (multiplePeople ? "Todas as pessoas" : ""),
+    params.get("future") === "on" ? "Futuros" : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
 }
