@@ -18,6 +18,10 @@ const paths = new Set([
   "/demo/",
   "/demo/transactions",
   "/demo/transactions/",
+  "/demo/rules",
+  "/demo/rules/",
+  "/demo/groups",
+  "/demo/groups/",
 ]);
 const navigationEvent = "caderninho:navigate";
 let navigationGuard: (() => boolean) | null = null;

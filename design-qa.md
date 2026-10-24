@@ -4,6 +4,25 @@ final result: pass
 
 ## Resultado local em 24/10/2026
 
+### Rodada 09 — demo com regras e grupos
+
+Fixtures centralizadas para demo e três testes de UI, mantendo expectativas
+financeiras literais. As quatro páginas públicas reutilizam componentes reais;
+Regras/Grupos usam mutações na memória da aba, sem API privada.
+Salvar preserva o histórico; Reaplicar informa alcance e mudanças e atualiza
+o mesmo ledger usado em totais, séries e transações. Teste observado:
+4.393,81→3.337,20 BRL, com fluxo bancário inalterado em 6.057,89 BRL.
+
+Grupos isolados, categorias em português, contexto de grupo condicional,
+rascunho com proteção e reset. A primeira leva de captura responsiva foi
+rejeitada por escala/corte do pipeline e recapturada pelo método nativo.
+[Percursos e capturas](docs/kumo/capturas/rodada-09/README.md) ·
+[contrato e limites](docs/kumo/demo-interativa.md) ·
+[revisão independente](docs/kumo/revisao-critica-09-demo.md).
+
+`mise run check`: 57 Node, 108 integração/19 arquivos, build/dry-run e runtime
+local 10 mil/100 mil. Sem dependências novas ou deploy.
+
 ### Rodada 08 — itens 2 a 5
 
 Transações com superfície uniforme, reflow por container e direção redundante

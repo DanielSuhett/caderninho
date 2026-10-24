@@ -8,14 +8,14 @@ import {
 import { tryCatch } from "../../shared";
 import { formatBalance } from "../money";
 import { UiButton } from "../ui";
-import type { createAccountApi } from "./account-api";
+import type { OrganizationApi } from "./account-api";
 
 export function RulePreview({
   api,
   input,
   accounts,
 }: {
-  api: ReturnType<typeof createAccountApi>;
+  api: OrganizationApi;
   input: RulePreviewInput | null;
   accounts: { id: string; name: string }[];
 }) {

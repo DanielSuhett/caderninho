@@ -136,7 +136,7 @@ export function momentLabel(value: string | null) {
 }
 export function scopedHref(path: string, params: URLSearchParams) {
   const query = new URLSearchParams();
-  for (const key of ["person", "space"]) {
+  for (const key of ["person", "space", "month"]) {
     const value = params.get(key);
     if (value) {
       query.set(key, value);

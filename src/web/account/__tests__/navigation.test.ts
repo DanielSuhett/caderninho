@@ -119,3 +119,18 @@ await test("read cache does not retain failures and bounds retained queries to t
   );
   assert.equal(await cache.read("20", () => Promise.resolve("unexpected")), 20);
 });
+
+await test("demo rules and groups keep their public route during client navigation", () => {
+  const current = new URL("https://example.test/demo?month=2026-10");
+  for (const path of [
+    "/demo/rules",
+    "/demo/rules/",
+    "/demo/groups",
+    "/demo/groups/",
+  ]) {
+    assert.equal(
+      isWorkspaceUrl(new URL(`${path}?space=personal`, current), current),
+      true,
+    );
+  }
+});

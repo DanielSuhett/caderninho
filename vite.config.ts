@@ -24,16 +24,18 @@ function copyPortalAssets(): Plugin {
       await writeFile(new URL("404.html", site), renderPage(notFoundPage()));
       await Promise.all(
         [output, site].map(async (destination) => {
-          await mkdir(new URL("demo/transactions/", destination), {
-            recursive: true,
-          });
-          await writeFile(
-            new URL("demo/index.html", destination),
-            renderPage(demoPage()),
-          );
-          await writeFile(
-            new URL("demo/transactions/index.html", destination),
-            renderPage(demoPage()),
+          await Promise.all(
+            ["demo", "demo/transactions", "demo/rules", "demo/groups"].map(
+              async (path) => {
+                await mkdir(new URL(`${path}/`, destination), {
+                  recursive: true,
+                });
+                await writeFile(
+                  new URL(`${path}/index.html`, destination),
+                  renderPage(demoPage()),
+                );
+              },
+            ),
           );
         }),
       );

@@ -15,7 +15,7 @@ import {
   type WorkspaceCatalog,
 } from "../../contracts";
 import { tryCatch } from "../../shared";
-import type { createAccountApi } from "./account-api";
+import type { OrganizationApi } from "./account-api";
 import { BackofficeDialog } from "./backoffice-dialog";
 
 type Space = WorkspaceCatalog["spaces"][number];
@@ -28,7 +28,7 @@ export function GroupEditor({
   saved,
 }: {
   open: boolean;
-  api: ReturnType<typeof createAccountApi>;
+  api: OrganizationApi;
   snapshot: PortalResponse;
   space?: Space;
   close: () => void;
@@ -228,7 +228,7 @@ export function DeleteOrganizationItem({
   deleted,
 }: {
   open: boolean;
-  api: ReturnType<typeof createAccountApi>;
+  api: OrganizationApi;
   snapshot: PortalResponse;
   item: { id: string; name: string };
   kind: "rule" | "space";

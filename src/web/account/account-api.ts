@@ -15,6 +15,11 @@ import {
 import { httpClient, requestJson } from "../../shared";
 import { createReadCache } from "./read-cache";
 
+export type OrganizationApi = Pick<
+  ReturnType<typeof createAccountApi>,
+  "catalog" | "query" | "planning" | "previewRule"
+>;
+
 export function createAccountApi(
   origin: string,
   fetcher: typeof fetch = fetch,

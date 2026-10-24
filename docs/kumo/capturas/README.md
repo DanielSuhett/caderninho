@@ -1,4 +1,11 @@
-# Capturas — rodadas críticas 03 a 08
+# Capturas — rodadas críticas 03 a 09
+
+## Demo interativa — rodada 09
+
+[Quatro páginas, editores, reaplicação e grupos isolados](rodada-09/README.md).
+[Contrato e testes](../demo-interativa.md) ·
+[crítica independente](../revisao-critica-09-demo.md). Evidência local sintética;
+as outras páginas do produto mantêm a revisão histórica 08.
 
 ## Polimento atual — rodada 08
 

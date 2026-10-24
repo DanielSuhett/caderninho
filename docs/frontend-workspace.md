@@ -101,15 +101,23 @@ O [guia de componentes](design-system.md) define a composição das páginas. Ca
 
 ## Demo pública
 
-`/demo` e `/demo/transactions` são assets públicos sem sessão e sem consulta à
-API financeira privada. Compartilham WorkspaceFrame, SidebarFrame,
-FinancialDashboard e TransactionList. Ledger sintético de maio a outubro 2026,
+`/demo`, `/demo/transactions`, `/demo/rules` e `/demo/groups` são assets públicos
+sem autenticação e sem consulta à API financeira privada. Compartilham
+WorkspaceFrame, SidebarFrame, FinancialDashboard, TransactionList e
+OrganizationView com seus editores e prévia. Ledger sintético de maio a outubro 2026,
 BRL e USD separados nos agregados da visão geral, com mês/moeda por GET.
 Transações reúne moedas com identificação em cada linha, sem soma/conversão, e
 usa mês/conta/busca por GET e Dialog de detalhes. Mês aparece junto ao título;
 Mês e Conta são editados em Filtros. As notas da consulta ficam sob demanda.
 A busca filtra o conjunto sintético inteiro. A landing oferece Demo no header e CTA.
-Nenhum botão de conexão, edição ou revogação existe nessa navegação.
+Regras e grupos podem ser editados na memória da aba. Salvar preserva o histórico;
+Reaplicar regras usa o avaliador do domínio sobre todos os meses do grupo,
+exceto ignorados. Registros sem correspondência conservam a categoria. O botão
+Restaurar demo e o reload restauram os dados iniciais. Grupos novos ficam vazios,
+com três categorias em português; o seletor de grupo aparece quando há escolha.
+Fixtures de `src/fixtures` também alimentam testes; expectativas financeiras
+continuam literais e independentes. Não há conexão bancária ou revogação nesta
+navegação. [Semântica, testes e limites](kumo/demo-interativa.md).
 
 Mês/moeda, páginas e formulários GET da demo navegam no cliente sem recarregar o
 documento. Voltar/Avançar conserva a URL como fonte do recorte. A navegação não

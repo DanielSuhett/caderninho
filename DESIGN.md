@@ -68,8 +68,11 @@ pendentes, futuras e ignoradas continuam explícitas.
 Meter representa consumo com denominador conhecido. Nas estimativas do free
 tier, o preenchimento laranja continua representando consumo, com período,
 cota e estimativa identificados. Importação Pluggy mostra fase e contas reais,
-sem porcentagem global inventada. A demo pública em `/demo` e `/demo/transactions` usa somente um conjunto fictício
-local; compartilha os componentes reais do aplicativo. Não consulta nem altera
+sem porcentagem global inventada. A demo pública em `/demo`, `/demo/transactions`,
+`/demo/rules` e `/demo/groups` usa somente fixtures sintéticas compartilhadas
+com testes; compartilha os componentes reais do aplicativo. Edições de regras e
+grupos duram até recarregar a aba. Salvar uma regra não reclassifica o histórico;
+reaplicar exige uma ação explícita, com escopo e resultado visíveis. Não consulta nem altera
 contas, credenciais ou autorizações reais. Charts exigem agregação completa e política
 explícita de período, moeda, escopo, transferências, ignorados e parcelas.
 

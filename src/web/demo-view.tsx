@@ -2,16 +2,27 @@ import {
   KumoLocaleProvider,
   Select,
   Sidebar,
+  Toasty,
   TooltipProvider,
 } from "@cloudflare/kumo";
 import {
   ArrowSquareOutIcon,
+  FolderIcon,
   HouseIcon,
+  ListChecksIcon,
   ReceiptIcon,
 } from "@phosphor-icons/react";
-import { useCallback } from "react";
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { createRoot } from "react-dom/client";
 
+import { demoPeople, demoReferenceDay } from "../fixtures/finance";
+import { tryCatch } from "../shared";
 import {
   navigateWorkspace,
   useWorkspaceNavigation,
@@ -19,26 +30,44 @@ import {
 import { monthLabel } from "./account/dashboard-period";
 import { FinancialDashboard } from "./account/financial-dashboard";
 import { PeriodPicker } from "./account/period-picker";
+import { WorkspacePageError } from "./account/workspace-page";
 import { SidebarFrame, WorkspaceFrame } from "./account/workspace-shell";
-import { WorkspaceHeading } from "./account/workspace-ui";
+import { WorkspaceHeading, WorkspaceSkeleton } from "./account/workspace-ui";
 import {
-  demoCategories,
   demoMonthly,
   demoOverview,
-  demoPeople,
-  demoReferenceDay,
   demoTransactions,
   selectedDemoMonth,
 } from "./demo-data";
+import { createDemoSession } from "./demo-session";
 import { DemoTransactions } from "./demo-transactions";
-
+import { UiButton, UiLink } from "./ui";
 import "./account.css";
 
-function DemoNavigation() {
+const Organization = lazy(async () => {
+  const { data, error } = await tryCatch(() => import("./demo-organization"));
+  return { default: error ? WorkspacePageError : data.DemoOrganization };
+});
+const trailingSlash = /\/$/;
+const pages = [
+  { icon: HouseIcon, label: "Visão geral", path: "" },
+  { icon: ReceiptIcon, label: "Transações", path: "/transactions" },
+  { icon: ListChecksIcon, label: "Regras", path: "/rules" },
+  { icon: FolderIcon, label: "Grupos", path: "/groups" },
+];
+function DemoNavigation({
+  session,
+}: {
+  session: ReturnType<typeof createDemoSession>;
+}) {
   const params = new URLSearchParams(location.search);
+  const group = session
+    .spaces()
+    .find((space) => space.id === (params.get("space") ?? "personal"));
   const scope = new URLSearchParams({
-    currency: params.get("currency") === "USD" ? "USD" : "BRL",
+    currency: params.get("currency") ?? group?.currency ?? "BRL",
     month: selectedDemoMonth(params.get("month")),
+    ...(params.get("space") && { space: params.get("space") ?? "" }),
   });
   return (
     <SidebarFrame
@@ -49,24 +78,20 @@ function DemoNavigation() {
         <Sidebar.GroupLabel>Explore o Caderninho</Sidebar.GroupLabel>
         <nav aria-label="Páginas da demonstração">
           <Sidebar.Menu>
-            <Sidebar.MenuButton
-              active={
-                location.pathname === "/demo" || location.pathname === "/demo/"
-              }
-              className="text-base"
-              href={`/demo?${scope}`}
-              icon={HouseIcon}
-            >
-              Visão geral
-            </Sidebar.MenuButton>
-            <Sidebar.MenuButton
-              active={location.pathname.startsWith("/demo/transactions")}
-              className="text-base"
-              href={`/demo/transactions?month=${scope.get("month")}`}
-              icon={ReceiptIcon}
-            >
-              Transações
-            </Sidebar.MenuButton>
+            {pages.map((page) => (
+              <Sidebar.MenuButton
+                active={
+                  location.pathname.replace(trailingSlash, "") ===
+                  `/demo${page.path}`
+                }
+                className="text-base"
+                href={`/demo${page.path}?${scope}`}
+                icon={page.icon}
+                key={page.path}
+              >
+                {page.label}
+              </Sidebar.MenuButton>
+            ))}
           </Sidebar.Menu>
         </nav>
       </Sidebar.Group>
@@ -91,13 +116,27 @@ function DemoNavigation() {
     </SidebarFrame>
   );
 }
-function Demo() {
-  const route = useWorkspaceNavigation();
+function DemoFinancial({
+  session,
+  route,
+}: {
+  session: ReturnType<typeof createDemoSession>;
+  route: string;
+}) {
   const params = new URLSearchParams(location.search);
   const month = selectedDemoMonth(params.get("month"));
-  const currency = params.get("currency") === "USD" ? "USD" : "BRL";
-  const transactions = location.pathname.startsWith("/demo/transactions");
-  const records = demoTransactions({ currency, month });
+  const spaceId = params.get("space") ?? "personal";
+  const data = session.view(spaceId);
+  const spaces = session.spaces();
+  const currencies = [
+    ...new Set(["BRL", "USD", ...spaces.map((space) => space.currency)]),
+  ];
+  const requestedCurrency = params.get("currency") ?? "";
+  const currency = currencies.includes(requestedCurrency)
+    ? requestedCurrency
+    : (spaces.find((space) => space.id === spaceId)?.currency ?? "BRL");
+  const transactions = location.pathname.includes("/transactions");
+  const records = demoTransactions({ currency, data, month });
   const changeMonth = useCallback((value: string) => {
     const url = new URL(location.href);
     url.searchParams.set("month", value);
@@ -112,65 +151,161 @@ function Demo() {
     url.searchParams.delete("accountId");
     navigateWorkspace(url);
   }, []);
-  const transactionsHref = `/demo/transactions?${new URLSearchParams({ month })}`;
+  const changeSpace = useCallback(
+    (value: string | null) => {
+      if (!value) {
+        return;
+      }
+      const url = new URL(location.href);
+      url.searchParams.set("space", value);
+      const selected = session.spaces().find((space) => space.id === value);
+      if (selected) {
+        url.searchParams.set("currency", selected.currency);
+      }
+      for (const key of ["accountId", "text", "direction"]) {
+        url.searchParams.delete(key);
+      }
+      navigateWorkspace(url);
+    },
+    [session],
+  );
+  const scope = new URLSearchParams({ month, space: spaceId });
+  return (
+    <>
+      <WorkspaceHeading
+        title={transactions ? "Transações" : "Visão geral"}
+        {...(transactions && { description: monthLabel(month) })}
+      >
+        <div className="page-actions">
+          {(spaces.length > 1 || spaceId !== "personal") && (
+            <Select
+              items={spaces.map((space) => ({
+                label: space.name,
+                value: space.id,
+              }))}
+              label="Grupo"
+              onValueChange={changeSpace}
+              value={spaceId}
+            />
+          )}
+          {!transactions && (
+            <>
+              <PeriodPicker
+                fromMonth="2026-05"
+                month={month}
+                onChange={changeMonth}
+                toMonth="2026-10"
+              />
+              <Select
+                items={currencies.map((value) => ({ label: value, value }))}
+                label="Moeda"
+                onValueChange={changeCurrency}
+                value={currency}
+              />
+            </>
+          )}
+        </div>
+      </WorkspaceHeading>
+      {transactions ? (
+        <DemoTransactions
+          data={data}
+          key={route}
+          month={month}
+          params={params}
+        />
+      ) : (
+        <FinancialDashboard
+          categories={data.categories}
+          currency={currency}
+          monthly={demoMonthly(month, data)}
+          overview={demoOverview(month, data)}
+          people={demoPeople}
+          recentScope={`${currency} · últimos registros do mês`}
+          records={records
+            .filter((row) => row.date <= demoReferenceDay)
+            .slice(0, 6)}
+          rulesHref={`/demo/rules?${scope}`}
+          transactionsHref={`/demo/transactions?${scope}`}
+        />
+      )}
+    </>
+  );
+}
+function Demo() {
+  const route = useWorkspaceNavigation();
+  const [session] = useState(createDemoSession);
+  useSyncExternalStore(session.subscribe, session.revision, session.revision);
+  const [resetVersion, setResetVersion] = useState(0);
+  const reset = useCallback(() => {
+    session.reset();
+    setResetVersion((value) => value + 1);
+    navigateWorkspace(new URL("/demo?month=2026-10", location.origin));
+  }, [session]);
+  const organization =
+    location.pathname.includes("/rules") ||
+    location.pathname.includes("/groups");
+  const params = new URLSearchParams(location.search);
+  const unavailable = !session
+    .spaces()
+    .some((space) => space.id === (params.get("space") ?? "personal"));
   return (
     <KumoLocaleProvider
       translations={{ layerDialog: { cancel: "Cancelar", close: "Fechar" } }}
     >
       <TooltipProvider>
-        <WorkspaceFrame
-          footer="Demonstração pública. Nenhuma conta real ou conexão bancária é utilizada."
-          navigation={<DemoNavigation />}
-          route={route}
-        >
-          <div className="workspace-page">
-            <p className="demo-notice">Demonstração · dados fictícios</p>
-            <WorkspaceHeading
-              {...(transactions && { description: monthLabel(month) })}
-              title={transactions ? "Transações" : "Visão geral"}
-            >
-              {!transactions && (
-                <div className="page-actions">
-                  <PeriodPicker
-                    fromMonth="2026-05"
-                    month={month}
-                    onChange={changeMonth}
-                    toMonth="2026-10"
-                  />
-                  <Select
-                    items={[
-                      { label: "BRL", value: "BRL" },
-                      { label: "USD", value: "USD" },
-                    ]}
-                    label="Moeda"
-                    onValueChange={changeCurrency}
-                    value={currency}
-                  />
-                </div>
+        <Toasty>
+          <WorkspaceFrame
+            footer="Demonstração pública. Nenhuma conta real ou conexão bancária é utilizada."
+            navigation={<DemoNavigation session={session} />}
+            route={route}
+          >
+            <div className="workspace-page">
+              <div className="demo-toolbar">
+                <p className="demo-notice">
+                  Dados fictícios · alterações até recarregar esta aba
+                </p>
+                <UiButton
+                  onClick={reset}
+                  type="button"
+                  variant="ghost"
+                >
+                  Restaurar demo
+                </UiButton>
+              </div>
+              {unavailable && (
+                <>
+                  <WorkspaceHeading title="Grupo indisponível nesta sessão" />
+                  <p>
+                    Ao recarregar a aba, os grupos criados na demo são
+                    removidos. Os dados iniciais continuam disponíveis.
+                  </p>
+                  <UiLink
+                    href={`/demo?month=${selectedDemoMonth(params.get("month"))}`}
+                  >
+                    Abrir grupo Pessoal
+                  </UiLink>
+                </>
               )}
-            </WorkspaceHeading>
-            {transactions ? (
-              <DemoTransactions
-                key={route}
-                month={month}
-                params={params}
-              />
-            ) : (
-              <FinancialDashboard
-                categories={demoCategories}
-                currency={currency}
-                monthly={demoMonthly(month)}
-                overview={demoOverview(month)}
-                people={demoPeople}
-                recentScope={`${currency} · últimos registros do mês`}
-                records={records
-                  .filter((row) => row.date <= demoReferenceDay)
-                  .slice(0, 6)}
-                transactionsHref={transactionsHref}
-              />
-            )}
-          </div>
-        </WorkspaceFrame>
+              {!unavailable && organization && (
+                <Suspense fallback={<WorkspaceSkeleton />}>
+                  <Organization
+                    key={`${route}:${resetVersion}`}
+                    page={
+                      location.pathname.includes("/rules") ? "rules" : "groups"
+                    }
+                    session={session}
+                  />
+                </Suspense>
+              )}
+              {!(unavailable || organization) && (
+                <DemoFinancial
+                  route={route}
+                  session={session}
+                />
+              )}
+            </div>
+          </WorkspaceFrame>
+        </Toasty>
       </TooltipProvider>
     </KumoLocaleProvider>
   );

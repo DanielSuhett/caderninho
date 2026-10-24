@@ -71,3 +71,8 @@ Rodada 08: ações antes do Flow, resumo com contagens absolutas, política glob
 uma vez na página e resultado da prévia uma vez. Composição do editor memoizada
 por condições/categoria/ativação, sem reprocessar o Flow ao renomear. A quinta
 verificação de apresentação cobre contagens; [polimento e evidências](polimento-08.md).
+
+Rodada 09: `/demo/rules` reutiliza esta composição e o editor real, com fixtures
+compartilhadas e mutações em memória. Salvar e reaplicar são ações separadas;
+reaplicação local usa `ruleMatches` e a ordenação `activeRules` do domínio.
+Ela não executa importações ou mutações privadas. [Contrato da demo](demo-interativa.md).

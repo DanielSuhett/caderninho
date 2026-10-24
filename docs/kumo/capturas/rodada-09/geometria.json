@@ -1,0 +1,82 @@
+[
+  {
+    "page": "visao-geral",
+    "size": "desktop",
+    "font": "16px",
+    "grid": "true",
+    "h1": "28px",
+    "height": 1000,
+    "scrollWidth": 1440,
+    "width": 1440
+  },
+  {
+    "page": "visao-geral",
+    "size": "mobile",
+    "font": "16px",
+    "grid": "true",
+    "h1": "28px",
+    "height": 843,
+    "scrollWidth": 390,
+    "width": 390
+  },
+  {
+    "page": "transacoes",
+    "size": "desktop",
+    "font": "16px",
+    "grid": "true",
+    "h1": "28px",
+    "height": 1000,
+    "scrollWidth": 1440,
+    "width": 1440
+  },
+  {
+    "page": "transacoes",
+    "size": "mobile",
+    "font": "16px",
+    "grid": "true",
+    "h1": "28px",
+    "height": 843,
+    "scrollWidth": 390,
+    "width": 390
+  },
+  {
+    "page": "regras",
+    "size": "desktop",
+    "font": "16px",
+    "grid": "true",
+    "h1": "28px",
+    "height": 1000,
+    "scrollWidth": 1440,
+    "width": 1440
+  },
+  {
+    "page": "regras",
+    "size": "mobile",
+    "font": "16px",
+    "grid": "true",
+    "h1": "28px",
+    "height": 843,
+    "scrollWidth": 390,
+    "width": 390
+  },
+  {
+    "page": "grupos",
+    "size": "desktop",
+    "font": "16px",
+    "grid": "true",
+    "h1": "28px",
+    "height": 1000,
+    "scrollWidth": 1440,
+    "width": 1440
+  },
+  {
+    "page": "grupos",
+    "size": "mobile",
+    "font": "16px",
+    "grid": "true",
+    "h1": "28px",
+    "height": 843,
+    "scrollWidth": 390,
+    "width": 390
+  }
+]

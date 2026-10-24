@@ -5,6 +5,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import type { PortalResponse } from "../../contracts";
+import { connectionFixture, portalFixture } from "../../fixtures/workspace";
 import { DashboardView } from "../account/dashboard-view";
 import { AccountBalances } from "../account/financial-dashboard";
 
@@ -23,10 +24,9 @@ after(() => {
     Reflect.deleteProperty(globalThis, "location");
   }
 });
-const snapshot: PortalResponse = {
-  configured: true,
+const snapshot: PortalResponse = portalFixture({
   connections: [
-    {
+    connectionFixture({
       accounts: {
         card: {
           balanceMinor: "0",
@@ -39,31 +39,15 @@ const snapshot: PortalResponse = {
       hasTransactions: true,
       id: "synthetic",
       importCheckpoint: null,
-      importError: null,
       importStatus: "succeeded",
       lastSuccessAt: "2026-10-23T12:00:00Z",
-      nextEligibleAt: null,
       partial: false,
       personId: "self",
-      personName: "Pessoa exemplo",
       profileId: "default",
-      profileName: "Perfil exemplo",
-    },
+    }),
   ],
-  csrf: "synthetic",
-  origin: "https://example.test",
-  people: [{ id: "self", name: "Pessoa exemplo" }],
-  profiles: [
-    {
-      configured: true,
-      connectionCount: 1,
-      enabled: true,
-      id: "default",
-      name: "Perfil exemplo",
-      personId: "self",
-    },
-  ],
-};
+});
+
 function render(
   state: PortalResponse,
   section: "overview" | "connections" = "overview",

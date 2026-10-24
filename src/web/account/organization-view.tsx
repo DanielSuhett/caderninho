@@ -6,7 +6,7 @@ import {
   Select,
   useKumoToastManager,
 } from "@cloudflare/kumo";
-import { type MouseEvent, useCallback, useState } from "react";
+import { type MouseEvent, type ReactNode, useCallback, useState } from "react";
 
 import {
   AccountListSchema,
@@ -15,7 +15,7 @@ import {
 } from "../../contracts";
 import { formatBalance } from "../money";
 import { UiButton } from "../ui";
-import type { createAccountApi } from "./account-api";
+import type { OrganizationApi } from "./account-api";
 import { navigateWorkspace } from "./account-navigation";
 import { DisclosureItem } from "./disclosure-item";
 import { QuerySearch } from "./filter-fields";
@@ -50,10 +50,16 @@ export function OrganizationView({
   api,
   snapshot,
   page,
+  basePath = "/account",
+  actions,
+  notice,
 }: {
-  api: ReturnType<typeof createAccountApi>;
+  api: OrganizationApi;
   snapshot: PortalResponse;
   page: "rules" | "groups";
+  basePath?: "/account" | "/demo";
+  actions?: ReactNode;
+  notice?: ReactNode;
 }) {
   const [editor, setEditor] = useState<{
     kind: "rule" | "space";
@@ -65,6 +71,19 @@ export function OrganizationView({
   const { add: notify } = useKumoToastManager();
   const [params] = useState(() => new URLSearchParams(location.search));
   const spaceId = params.get("space") || "personal";
+  const activeCount =
+    {
+      groups: 0,
+      rules: [params.get("q"), params.get("enabled")].filter(Boolean).length,
+    }[page] + Number(spaceId !== "personal");
+  const monthField = (
+    <input
+      disabled={!params.has("month")}
+      name="month"
+      type="hidden"
+      value={params.get("month") ?? ""}
+    />
+  );
   const load = useCallback(
     async (signal: AbortSignal, fresh = false) => {
       const [catalog, accountList] = await Promise.all([
@@ -99,11 +118,11 @@ export function OrganizationView({
     setEditorOpen(false);
     notify({ title: "Alteração salva.", variant: "success" });
     if (editor?.remove && editor.kind === "space" && editor.id === spaceId) {
-      navigateWorkspace(new URL("/account/groups", location.origin));
+      navigateWorkspace(new URL(`${basePath}/groups`, location.origin));
       return;
     }
     resource.retry();
-  }, [resource.retry, editor, spaceId, notify]);
+  }, [resource.retry, editor, spaceId, notify, basePath]);
   const newItem = useCallback(() => {
     setEditor({ kind: page === "rules" ? "rule" : "space" });
     setEditorSession((value) => value + 1);
@@ -122,15 +141,19 @@ export function OrganizationView({
   return (
     <>
       <WorkspaceHeading title={page === "rules" ? "Regras" : "Grupos"}>
-        <UiButton
-          disabled={!data}
-          onClick={newItem}
-          type="button"
-          variant="primary"
-        >
-          {page === "rules" ? "Nova regra" : "Novo grupo"}
-        </UiButton>
+        <div className="page-actions">
+          {actions}
+          <UiButton
+            disabled={!data}
+            onClick={newItem}
+            type="button"
+            variant="primary"
+          >
+            {page === "rules" ? "Nova regra" : "Novo grupo"}
+          </UiButton>
+        </div>
       </WorkspaceHeading>
+      {notice}
       {!!data && (
         <OrganizationEditors
           api={api}
@@ -148,14 +171,8 @@ export function OrganizationView({
       {!!data && (
         <>
           <WorkspaceFilters
-            action={`/account/${page}`}
-            activeCount={
-              {
-                groups: 0,
-                rules: [params.get("q"), params.get("enabled")].filter(Boolean)
-                  .length,
-              }[page]
-            }
+            action={`${basePath}/${page}`}
+            activeCount={activeCount}
             context={
               {
                 groups: `Categorias e etiquetas: ${current?.name ?? spaceId}`,
@@ -165,7 +182,7 @@ export function OrganizationView({
             leading={
               page === "rules" && (
                 <QuerySearch
-                  action="/account/rules"
+                  action={`${basePath}/rules`}
                   compact
                   label="Buscar regra"
                   name="q"
@@ -173,7 +190,9 @@ export function OrganizationView({
                 />
               )
             }
+            showClear={activeCount > 0}
           >
+            {monthField}
             <ScopeFields
               catalog={data}
               compact
@@ -216,7 +235,7 @@ export function OrganizationView({
                     const context = ruleSummary({
                       rule: r,
                     });
-                    const href = ruleTransactionsHref(r, spaceId);
+                    const href = ruleTransactionsHref(r, params, basePath);
                     const linkLabel = ruleLinkLabel(r);
                     return (
                       <li key={r.id}>
@@ -325,8 +344,13 @@ export function OrganizationView({
                         </dl>
                         <OrganizationActions
                           href={scopedHref(
-                            "/account/transactions",
-                            new URLSearchParams({ space: s.id }),
+                            `${basePath}/transactions`,
+                            new URLSearchParams({
+                              space: s.id,
+                              ...(params.get("month") && {
+                                month: params.get("month") ?? "",
+                              }),
+                            }),
                           )}
                           item={s}
                           kind="space"
@@ -420,7 +444,7 @@ function OrganizationEditors({
   snapshot,
   spaceId,
 }: {
-  api: ReturnType<typeof createAccountApi>;
+  api: OrganizationApi;
   close: () => void;
   data: WorkspaceCatalog & {
     accounts: {
@@ -544,9 +568,13 @@ function ruleTransactionsHref(
     accountId: string | null;
     direction: string | null;
   },
-  spaceId: string,
+  scope: URLSearchParams,
+  basePath: string,
 ) {
-  const params = new URLSearchParams({ space: spaceId });
+  const params = new URLSearchParams({
+    space: scope.get("space") ?? "personal",
+    ...(scope.get("month") && { month: scope.get("month") ?? "" }),
+  });
   if (!rule.filter) {
     params.set("text", rule.text);
     if (rule.accountId) {
@@ -556,7 +584,7 @@ function ruleTransactionsHref(
       params.set("direction", rule.direction);
     }
   }
-  return `/account/transactions?${params}`;
+  return `${basePath}/transactions?${params}`;
 }
 
 function ruleLinkLabel(rule: { filter?: unknown }) {

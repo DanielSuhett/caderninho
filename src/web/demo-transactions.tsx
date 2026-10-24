@@ -1,33 +1,39 @@
 import { Select } from "@cloudflare/kumo";
 
+import { demoReferenceDay } from "../fixtures/finance";
 import { monthLabel, shiftMonth } from "./account/dashboard-period";
 import { AccountFilter, QuerySearch } from "./account/filter-fields";
 import { TransactionList } from "./account/transaction-list";
 import { EmptyView } from "./account/workspace-filters";
 import { WorkspaceDetails, WorkspaceFilters } from "./account/workspace-ui";
-import {
-  demoAccounts,
-  demoCategories,
-  demoReferenceDay,
-  demoTransactions,
-} from "./demo-data";
+import { type DemoData, demoTransactions } from "./demo-data";
 
 export function DemoTransactions({
   month,
   params,
+  data,
 }: {
   month: string;
   params: URLSearchParams;
+  data: DemoData;
 }) {
   const accountId = params.get("accountId") ?? "";
   const text = params.get("text") ?? "";
-  const records = demoTransactions({ accountId, month, text });
+  const records = demoTransactions({
+    accountId,
+    data,
+    direction: params.get("direction") ?? "",
+    month,
+    text,
+  });
   const search = new URLSearchParams(params);
   search.delete("currency");
   search.set("month", month);
-  const action = `/demo/transactions?month=${month}`;
-  const activeCount = [text, accountId].filter(Boolean).length;
-  const account = demoAccounts.find((item) => item.id === accountId);
+  const action = `/demo/transactions?${new URLSearchParams({ month, ...(params.get("space") && { space: params.get("space") ?? "" }) })}`;
+  const activeCount = [text, accountId, params.get("direction")].filter(
+    Boolean,
+  ).length;
+  const account = data.accounts.find((item) => item.id === accountId);
   return (
     <>
       <WorkspaceFilters
@@ -45,6 +51,20 @@ export function DemoTransactions({
         }
         showClear={activeCount > 0}
       >
+        {!!params.get("space") && (
+          <input
+            name="space"
+            type="hidden"
+            value={params.get("space") ?? ""}
+          />
+        )}
+        {!!params.get("direction") && (
+          <input
+            name="direction"
+            type="hidden"
+            value={params.get("direction") ?? ""}
+          />
+        )}
         <Select
           className="w-full"
           defaultValue={month}
@@ -56,7 +76,7 @@ export function DemoTransactions({
           name="month"
         />
         <AccountFilter
-          accounts={demoAccounts}
+          accounts={data.accounts}
           value={accountId}
         />
         <input
@@ -67,20 +87,24 @@ export function DemoTransactions({
       </WorkspaceFilters>
       {records.length ? (
         <TransactionList
-          accounts={demoAccounts}
-          categories={demoCategories}
+          accounts={data.accounts}
+          categories={data.categories}
           records={records}
           referenceDay={demoReferenceDay}
           showOwner={false}
         />
       ) : (
         <EmptyView title="Nenhuma transação neste recorte">
-          Altere a busca ou os filtros para consultar outros lançamentos.
+          {data.accounts.length
+            ? "Altere a busca ou os filtros para consultar outros lançamentos."
+            : "Este grupo ainda não tem contas ou lançamentos fictícios."}
         </EmptyView>
       )}
-      <p className="query-context">
-        {records.length} {records.length === 1 ? "transação" : "transações"}
-      </p>
+      {!!records.length && (
+        <p className="query-context">
+          {records.length} {records.length === 1 ? "transação" : "transações"}
+        </p>
+      )}
       <WorkspaceDetails title="Sobre esta consulta">
         <p>
           Pendentes e futuras continuam visíveis. Ignoradas ficam fora desta

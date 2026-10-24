@@ -134,6 +134,13 @@ quando o sinal é inequívoco. Métricas da auditoria compartilham trilhas por
 subgrid e baseline, com 2×2 em espaço intermediário. Erro tem retry prioritário
 e outras recuperações em Collapsible. [Evidências e limites](kumo/polimento-08.md).
 
+Rodada 09: a demo reutiliza OrganizationView, RuleEditor, GroupEditor e a prévia
+reais; nenhum segundo layout de Regras/Grupos. O adapter mantém mutações na
+memória da aba. Reaplicar é secundário a Nova regra e explica o alcance sobre
+todos os meses, ignorados e categorias preservadas. Grupo só ganha um Select
+visível quando há mais de uma escolha ou um escopo não pessoal.
+[Contrato e limites](kumo/demo-interativa.md).
+
 CSS de documento, páginas públicas e landing em `src/web/styles/`; nenhum estilo
 JSX authored inline. O build combina o standalone 2.14 com o CSS oficial de
 componentes do pacote, removendo somente o import do binding já presente. Isso

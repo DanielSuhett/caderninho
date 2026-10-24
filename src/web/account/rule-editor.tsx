@@ -20,7 +20,7 @@ import {
 } from "../../contracts";
 import { tryCatch } from "../../shared";
 import { UiButton } from "../ui";
-import type { createAccountApi } from "./account-api";
+import type { OrganizationApi } from "./account-api";
 import { BackofficeDialog } from "./backoffice-dialog";
 import { DisclosureItem } from "./disclosure-item";
 import { RuleComposition } from "./rule-composition";
@@ -58,7 +58,7 @@ export function RuleEditor({
   saved,
 }: {
   open: boolean;
-  api: ReturnType<typeof createAccountApi>;
+  api: OrganizationApi;
   snapshot: PortalResponse;
   catalog: WorkspaceCatalog;
   accounts: { id: string; name: string; personName: string }[];

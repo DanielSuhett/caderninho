@@ -4,7 +4,13 @@ import type {
   PlanningState,
   TransactionEdit,
 } from "../../domain";
-import { localDay, monthDate, ruleMatches, sacSchedule } from "../../domain";
+import {
+  activeRules,
+  localDay,
+  monthDate,
+  ruleMatches,
+  sacSchedule,
+} from "../../domain";
 import { effectiveBills } from "./bills.service";
 import type { PlanningRepository, PlanningSnapshot } from "./entity";
 import {
@@ -379,12 +385,9 @@ export async function planningMutation(
     if ("targetSpaceId" in input) {
       found(state.spaces.find((s) => s.id === input.targetSpaceId));
     }
-    const rules = state.rules
-      .filter((r) => r.spaceId === input.spaceId && r.enabled)
-      .sort(
-        (a, b) =>
-          a.priority - b.priority || (a.id < b.id ? -1 : Number(a.id > b.id)),
-      );
+    const rules = activeRules(
+      state.rules.filter((r) => r.spaceId === input.spaceId),
+    );
     function changeRow(row: import("../../domain").PlanningTransaction) {
       const patch = edit(row.id, row.accountId);
       switch (input.tool) {

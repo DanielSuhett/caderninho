@@ -6,6 +6,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import type { z } from "zod/v4";
 
 import { PortalTransactionListSchema } from "../../contracts";
+import { transactionFixture } from "../../fixtures/finance";
 import {
   TransactionDetailContent,
   TransactionList,
@@ -14,28 +15,15 @@ import {
 type Transaction = z.infer<
   typeof PortalTransactionListSchema
 >["data"]["records"][number];
-const row: Transaction = {
+const row: Transaction = transactionFixture({
   accountId: "card",
   amountMinor: "12345",
-  anchorDate: "2026-10-10",
-  anchorKind: "transaction",
-  cardNumber: null,
   category: "groceries",
-  currency: "BRL",
-  date: "2026-10-10",
   description: "Compra no mercado",
-  direction: "DEBIT",
-  id: "synthetic-transaction",
-  ignored: false,
-  installmentNumber: null,
-  installments: [],
-  manual: false,
   personId: "self",
   personName: "Pessoa exemplo",
-  purchaseDate: null,
-  status: "POSTED",
-  totalInstallments: null,
-};
+});
+
 function render(record: typeof row, showOwner = false) {
   const { data } = PortalTransactionListSchema.parse({
     data: { cursor: null, records: [record], referenceDay: "2026-10-23" },

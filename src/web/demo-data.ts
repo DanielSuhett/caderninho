@@ -1,262 +1,45 @@
-import type { z } from "zod/v4";
-
-import type {
-  FinancialOverview,
-  FinancialSummary,
-  PortalTransactionListSchema,
-} from "../contracts";
+import type { FinancialOverview, FinancialSummary } from "../contracts";
+import {
+  type DemoRecord,
+  demoAccounts,
+  demoCategories,
+  demoLedger,
+  demoReferenceDay,
+} from "../fixtures/finance";
 import {
   monthPeriod,
   selectedMonth,
   shiftMonth,
 } from "./account/dashboard-period";
-
-export const demoReferenceDay = "2026-10-24";
+export interface DemoData {
+  accounts: FinancialOverview["accounts"];
+  categories: typeof demoCategories;
+  records: DemoRecord[];
+}
+export const initialDemoData: DemoData = {
+  accounts: demoAccounts,
+  categories: demoCategories,
+  records: demoLedger,
+};
 export function selectedDemoMonth(value: string | null) {
   const month = selectedMonth(value, demoReferenceDay);
   return month >= "2026-05" && month <= "2026-10" ? month : "2026-10";
 }
-export const demoPeople = [{ id: "demo-person", name: "Pessoa de exemplo" }];
-export const demoCategories = [
-  { id: "salary", kind: "income", name: "Trabalho" },
-  { id: "home", kind: "expense", name: "Moradia" },
-  { id: "market", kind: "expense", name: "Mercado" },
-  { id: "food", kind: "expense", name: "Alimentação" },
-  { id: "transport", kind: "expense", name: "Transporte" },
-  { id: "health", kind: "expense", name: "Saúde" },
-  { id: "tools", kind: "expense", name: "Software" },
-  { id: "transfer", kind: "transfer", name: "Transferência entre contas" },
-];
-export const demoAccounts: FinancialOverview["accounts"] = [
-  {
-    balanceMinor: "1042586",
-    balanceObservedAt: "2026-10-24",
-    currency: "BRL",
-    hidden: false,
-    id: "demo-bank",
-    manual: false,
-    name: "Conta principal",
-    personId: "demo-person",
-    type: "BANK",
-  },
-  {
-    balanceMinor: "2500000",
-    balanceObservedAt: "2026-10-24",
-    currency: "BRL",
-    hidden: false,
-    id: "demo-reserve",
-    manual: false,
-    name: "Reserva",
-    personId: "demo-person",
-    type: "BANK",
-  },
-  {
-    balanceMinor: "-238760",
-    balanceObservedAt: "2026-10-24",
-    currency: "BRL",
-    hidden: false,
-    id: "demo-card",
-    manual: false,
-    name: "Cartão pessoal",
-    personId: "demo-person",
-    type: "CREDIT",
-  },
-  {
-    balanceMinor: "184050",
-    balanceObservedAt: "2026-10-24",
-    currency: "USD",
-    hidden: false,
-    id: "demo-usd",
-    manual: false,
-    name: "Conta internacional",
-    personId: "demo-person",
-    type: "BANK",
-  },
-];
-type DemoRecord = z.infer<
-  typeof PortalTransactionListSchema
->["data"]["records"][number] & { amountMinor: string };
-function transaction({
-  month,
-  day,
-  description,
-  amountMinor,
-  category,
-  accountId = "demo-bank",
-  status = "POSTED",
-  ignored = false,
-}: {
-  month: string;
-  day: number;
-  description: string;
-  amountMinor: string;
-  category: string | null;
-  accountId?: string;
-  status?: DemoRecord["status"];
-  ignored?: boolean;
-}): DemoRecord {
-  const date = `${month}-${day.toString().padStart(2, "0")}`;
-  return {
-    accountId,
-    amountMinor,
-    anchorDate: date,
-    anchorKind: "transaction",
-    cardNumber: null,
-    category,
-    currency: accountId === "demo-usd" ? "USD" : "BRL",
-    date,
-    description,
-    direction: BigInt(amountMinor) < 0n ? "DEBIT" : "CREDIT",
-    id: `${month}-${day}-${description}`,
-    ignored,
-    installmentNumber: null,
-    installments: [],
-    manual: false,
-    personId: "demo-person",
-    personName: "Pessoa de exemplo",
-    purchaseDate: null,
-    status,
-    totalInstallments: null,
-  };
+function hasAmount(
+  row: DemoRecord,
+): row is DemoRecord & { amountMinor: string } {
+  return row.amountMinor !== null;
 }
-// Synthetic ledger only. Each aggregate is derived from this entire ledger, independently of the visible list.
-export const demoLedger = [0, 1, 2, 3, 4, 5].flatMap((index) => {
-  const month = shiftMonth("2026-05", index);
-  const market = (63980n + BigInt(index) * 1841n).toString();
-  return [
-    {
-      amountMinor: "980000",
-      category: "salary",
-      day: 2,
-      description: "Salário",
-    },
-    {
-      amountMinor: "-245000",
-      category: "home",
-      day: 3,
-      description: "Aluguel",
-    },
-    {
-      amountMinor: `-${market}`,
-      category: "market",
-      day: 5,
-      description: "Mercado da semana",
-    },
-    {
-      amountMinor: "-42800",
-      category: "health",
-      day: 7,
-      description: "Plano de saúde",
-    },
-    {
-      accountId: "demo-card",
-      amountMinor: "-7850",
-      category: "food",
-      day: 9,
-      description: "Restaurante do bairro",
-    },
-    {
-      accountId: "demo-card",
-      amountMinor: "-2890",
-      category: "transport",
-      day: 10,
-      description: "Transporte por aplicativo",
-    },
-    {
-      accountId: "demo-card",
-      amountMinor: "-14900",
-      category: "tools",
-      day: 12,
-      description: "Ferramentas de desenvolvimento",
-    },
-    {
-      amountMinor: "-120000",
-      category: "transfer",
-      day: 13,
-      description: "Reserva mensal",
-    },
-    {
-      accountId: "demo-reserve",
-      amountMinor: "120000",
-      category: "transfer",
-      day: 13,
-      description: "Reserva recebida",
-    },
-    {
-      amountMinor: "-32476",
-      category: "market",
-      day: 16,
-      description: "Mercado e feira",
-    },
-    {
-      amountMinor: "1250",
-      category: "market",
-      day: 18,
-      description: "Estorno de mercado",
-    },
-    {
-      accountId: "demo-card",
-      amountMinor: "-8640",
-      category: "food",
-      day: 20,
-      description: "Café e almoço",
-    },
-    {
-      accountId: "demo-card",
-      amountMinor: "-12890",
-      category: "health",
-      day: 21,
-      description: "Farmácia",
-    },
-    {
-      amountMinor: "18000",
-      category: null,
-      day: 22,
-      description: "Transferência recebida",
-    },
-    {
-      accountId: "demo-usd",
-      amountMinor: "-2400",
-      category: "tools",
-      day: 23,
-      description: "Serviço internacional",
-    },
-    {
-      amountMinor: "-4500",
-      category: "food",
-      day: 19,
-      description: "Registro ignorado de exemplo",
-      ignored: true,
-    },
-  ]
-    .map((row) => transaction({ ...row, month }))
-    .concat([
-      transaction({
-        accountId: "demo-card",
-        amountMinor: "-8990",
-        category: "market",
-        day: 24,
-        description: "Compra em processamento",
-        month,
-        status: "PENDING",
-      }),
-      transaction({
-        accountId: "demo-card",
-        amountMinor: "-15900",
-        category: "tools",
-        day: 27,
-        description: "Parcela prevista",
-        month,
-        status: "PENDING",
-      }),
-    ]);
-});
+function totalAmount(value: bigint, unknown: number) {
+  return unknown ? null : value.toString();
+}
 function summarize(
   from: string,
   to: string,
   groupBy: "category" | "month",
+  data: DemoData,
 ): FinancialSummary {
-  const rows = demoLedger.filter(
+  const rows = data.records.filter(
     (row) =>
       row.date >= from &&
       row.date <= to &&
@@ -273,10 +56,16 @@ function summarize(
     let income = 0n;
     let expense = 0n;
     let flow = 0n;
-    let unclassifiedCount = 0;
-    for (const row of same) {
+    const unclassifiedCount = same.filter(
+      (row) =>
+        !data.categories.some((category) => category.id === row.category),
+    ).length;
+    const unknownAmountCount = same.filter(
+      (row) => row.amountMinor === null,
+    ).length;
+    for (const row of same.filter(hasAmount)) {
       const amount = BigInt(row.amountMinor);
-      const kind = demoCategories.find(
+      const kind = data.categories.find(
         (category) => category.id === row.category,
       )?.kind;
       if (kind === "income") {
@@ -290,27 +79,24 @@ function summarize(
         const previous = groups.get(key)?.amount ?? 0n;
         groups.set(key, { amount: previous - amount, currency, group });
       }
-      if (!kind) {
-        unclassifiedCount += 1;
-      }
       if (
-        demoAccounts.find((account) => account.id === row.accountId)?.type ===
+        data.accounts.find((account) => account.id === row.accountId)?.type ===
         "BANK"
       ) {
         flow += amount;
       }
     }
     return {
-      cashFlowMinor: flow.toString(),
+      cashFlowMinor: totalAmount(flow, unknownAmountCount),
       count: same.length,
       currency,
-      expenseMinor: expense.toString(),
-      incomeMinor: income.toString(),
+      expenseMinor: totalAmount(expense, unknownAmountCount),
+      incomeMinor: totalAmount(income, unknownAmountCount),
       knownCashFlowMinor: flow.toString(),
       knownExpenseMinor: expense.toString(),
       knownIncomeMinor: income.toString(),
       unclassifiedCount,
-      unknownAmountCount: 0,
+      unknownAmountCount,
     };
   });
   return {
@@ -327,15 +113,22 @@ function summarize(
     totals,
   };
 }
-export function demoOverview(month: string): FinancialOverview {
+export function demoOverview(
+  month: string,
+  data: DemoData = initialDemoData,
+): FinancialOverview {
   const { from, to } = monthPeriod(month);
-  return { ...summarize(from, to, "category"), accounts: demoAccounts };
+  return { ...summarize(from, to, "category", data), accounts: data.accounts };
 }
-export function demoMonthly(month: string): FinancialSummary {
+export function demoMonthly(
+  month: string,
+  data: DemoData = initialDemoData,
+): FinancialSummary {
   return summarize(
     `${shiftMonth(month, -5)}-01`,
     monthPeriod(month).to,
     "month",
+    data,
   );
 }
 export function demoTransactions({
@@ -344,15 +137,19 @@ export function demoTransactions({
   accountId = "",
   currency = "",
   includeIgnored = false,
+  data = initialDemoData,
+  direction = "",
 }: {
   month: string;
   text?: string;
   accountId?: string;
   currency?: string;
   includeIgnored?: boolean;
+  data?: DemoData;
+  direction?: string;
 }) {
   const { from, to } = monthPeriod(month);
-  return demoLedger
+  return data.records
     .filter(
       (row) =>
         row.date >= from &&
@@ -362,6 +159,7 @@ export function demoTransactions({
             .toLocaleLowerCase("pt-BR")
             .includes(text.toLocaleLowerCase("pt-BR"))) &&
         (!accountId || row.accountId === accountId) &&
+        (!direction || row.direction === direction) &&
         (!currency || row.currency === currency) &&
         (includeIgnored || !row.ignored),
     )
