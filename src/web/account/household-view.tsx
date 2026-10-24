@@ -1,13 +1,13 @@
-import { Input, Select } from "@cloudflare/kumo";
-import { type FormEvent, useCallback, useState } from "react";
+import { Banner, Input } from "@cloudflare/kumo";
 
-import {
-  type HouseholdCommand,
-  HouseholdCommandSchema,
-  type PortalResponse,
-} from "../../contracts";
+import type { HouseholdCommand, PortalResponse } from "../../contracts";
 import { UiButton, UiCheckbox } from "../ui";
+import type { ManagementOutcome } from "./account-feedback";
 import { DisclosureItem } from "./disclosure-item";
+import {
+  type HouseholdEditorModel,
+  useHouseholdEditor,
+} from "./use-household-editor";
 export function HouseholdPanel({
   snapshot,
   busy,
@@ -15,66 +15,9 @@ export function HouseholdPanel({
 }: {
   snapshot: PortalResponse;
   busy: boolean;
-  manage: (input: HouseholdCommand) => void;
+  manage: (input: HouseholdCommand) => Promise<ManagementOutcome>;
 }) {
-  const [issue, setIssue] = useState("");
-  const submit = useCallback(
-    (value: unknown) => {
-      const result = HouseholdCommandSchema.safeParse(value);
-      if (!result.success) {
-        setIssue(
-          "Preencha o nome e informe Client ID e Client Secret juntos para alterar credenciais.",
-        );
-        return false;
-      }
-      setIssue("");
-      manage(result.data);
-      return true;
-    },
-    [manage],
-  );
-  const savePerson = useCallback(
-    (event: FormEvent<HTMLFormElement>) => {
-      event.preventDefault();
-      const form = event.currentTarget;
-      const values = new FormData(form);
-      if (
-        submit({
-          action: "save_person",
-          csrf: snapshot.csrf,
-          name: values.get("name"),
-          ...(form.dataset.id && { id: form.dataset.id }),
-        }) &&
-        !form.dataset.id
-      ) {
-        form.reset();
-      }
-    },
-    [snapshot.csrf, submit],
-  );
-  const saveProfile = useCallback(
-    (event: FormEvent<HTMLFormElement>) => {
-      event.preventDefault();
-      const form = event.currentTarget;
-      const values = new FormData(form);
-      const input = {
-        action: "save_profile",
-        csrf: snapshot.csrf,
-        ...(form.dataset.id && { id: form.dataset.id }),
-        enabled: values.get("enabled") === "on",
-        name: values.get("name"),
-        personId: values.get("personId"),
-        ...(values.get("clientId") && { clientId: values.get("clientId") }),
-        ...(values.get("clientSecret") && {
-          clientSecret: values.get("clientSecret"),
-        }),
-      };
-      if (submit(input)) {
-        form.reset();
-      }
-    },
-    [snapshot.csrf, submit],
-  );
+  const editor = useHouseholdEditor({ csrf: snapshot.csrf, manage });
 
   return (
     <section
@@ -91,14 +34,16 @@ export function HouseholdPanel({
           </h2>
         </div>
       </div>
-      <p>Pessoa é o titular. Perfil identifica a aplicação Pluggy.</p>
-      <p role="alert">{issue}</p>
+      <p>
+        Edite os nomes ou atualize as credenciais das contas já cadastradas.
+        Para incluir outra pessoa e conta Pluggy, use “Adicionar conexão”.
+      </p>
       <div className="people-editor">
         {snapshot.people.map((person) => (
           <form
             data-id={person.id}
             key={person.id}
-            onSubmit={savePerson}
+            onSubmit={editor.savePerson}
           >
             <div className="inline-fields">
               <Input
@@ -116,26 +61,12 @@ export function HouseholdPanel({
                 Salvar nome
               </UiButton>
             </div>
+            <HouseholdFeedback
+              editor={editor}
+              target={person.id}
+            />
           </form>
         ))}
-        <form onSubmit={savePerson}>
-          <div className="inline-fields">
-            <Input
-              id="new-person"
-              label="Adicionar pessoa"
-              maxLength={80}
-              name="name"
-              placeholder="Como você a chama?"
-              required
-            />
-            <UiButton
-              disabled={busy}
-              type="submit"
-            >
-              Adicionar pessoa
-            </UiButton>
-          </div>
-        </form>
       </div>
       <div className="profile-grid">
         {snapshot.profiles.map((profile) => (
@@ -156,7 +87,7 @@ export function HouseholdPanel({
           >
             <form
               data-id={profile.id}
-              onSubmit={saveProfile}
+              onSubmit={editor.saveProfile}
             >
               <input
                 name="personId"
@@ -193,61 +124,13 @@ export function HouseholdPanel({
               >
                 Salvar perfil
               </UiButton>
+              <HouseholdFeedback
+                editor={editor}
+                target={profile.id}
+              />
             </form>
           </DisclosureItem>
         ))}
-        <DisclosureItem
-          className="profile-editor add-profile"
-          summary={
-            <>
-              Adicionar perfil Pluggy
-              <span className="muted">
-                Conecte outra origem ou outra pessoa
-              </span>
-            </>
-          }
-        >
-          <form onSubmit={saveProfile}>
-            <Input
-              id="profile-name-new"
-              label="Nome do perfil"
-              maxLength={80}
-              name="name"
-              placeholder="Ex.: Pluggy da Ana"
-              required
-            />
-
-            <Select
-              className="w-full"
-              defaultValue={snapshot.people[0]?.id ?? ""}
-              id="profile-person-new"
-              items={[
-                ...snapshot.people.map((p) => ({ label: p.name, value: p.id })),
-              ]}
-              label="Titular padrão"
-              name="personId"
-            />
-            <input
-              name="enabled"
-              type="hidden"
-              value="on"
-            />
-            <CredentialFields
-              required
-              suffix="new"
-            />
-            <p className="muted">
-              As credenciais são verificadas e guardadas somente no servidor.
-              Não serão exibidas de volta.
-            </p>
-            <UiButton
-              disabled={busy}
-              type="submit"
-            >
-              Validar e adicionar perfil
-            </UiButton>
-          </form>
-        </DisclosureItem>
       </div>
       <p className="muted">
         O Meu Pluggy gratuito permite até cinco conexões por titular. Adicionar
@@ -295,4 +178,28 @@ function profileLabel(profile: { enabled: boolean; configured: boolean }) {
   return profile.configured
     ? "Pronto para conectar"
     : "Configure as credenciais";
+}
+
+function HouseholdFeedback({
+  editor,
+  target,
+}: {
+  editor: HouseholdEditorModel;
+  target: string;
+}) {
+  if (editor.feedback.target !== target || !editor.feedback.message) {
+    return null;
+  }
+  return (
+    <div
+      ref={editor.notice}
+      tabIndex={-1}
+    >
+      <Banner
+        description={editor.feedback.message}
+        role={editor.feedback.ok ? "status" : "alert"}
+        variant={editor.feedback.ok ? "default" : "error"}
+      />
+    </div>
+  );
 }

@@ -34,8 +34,90 @@ import { env } from "cloudflare:workers";
 
 beforeEach(setup);
 afterEach(() => vi.unstubAllGlobals());
+test("connection setup creates its owner with the validated profile and exposes the new ID", async () => {
+  provider();
+  const app = fixture();
+  const cookie = cookies(await login(app));
+  const response = await command(app, cookie, "manage", {
+    action: "create_profile",
+    clientId: "second",
+    clientSecret: "synthetic-private-secret",
+    name: "Pluggy Ana",
+    person: { name: "Ana" },
+  });
+  assert.equal(response.status, 200);
+  const profileId = identify(await response.json());
+  const state = await createHouseholdRepository(app.config.DB).read();
+  const profile = state.profiles.find((p) => p.id === profileId);
+  assert.ok(profile);
+  assert.equal(
+    state.people.find((p) => p.id === profile.personId)?.name,
+    "Ana",
+  );
+  assert.ok(profile.credentialRef);
+  assert.equal(state.people.length, 2);
+  assert.equal(state.profiles.length, 2);
+});
+
+test("rejected setup credentials report a safe cause and leave no owner or profile behind", async () => {
+  mockNetwork(
+    async () => new Response("private provider failure", { status: 401 }),
+  );
+  const app = fixture();
+  const cookie = cookies(await login(app));
+  const response = await command(app, cookie, "manage", {
+    action: "create_profile",
+    clientId: "invalid-synthetic-client",
+    clientSecret: "invalid-synthetic-secret",
+    name: "Pluggy Ana",
+    person: { name: "Ana" },
+  });
+  assert.equal(response.status, 400);
+  assert.equal(response.headers.get("X-Caderninho-Error"), "UPSTREAM_AUTH");
+  assert.equal(
+    (await response.text()).includes("private provider failure"),
+    false,
+  );
+  const state = await createHouseholdRepository(app.config.DB).read();
+  assert.equal(state.people.length, 1);
+  assert.equal(state.profiles.length, 1);
+  assert.deepEqual(
+    (await app.config.OAUTH_KV.list({ prefix: "pluggy-credentials:" })).keys,
+    [],
+  );
+});
+
 const identify = (value: unknown) =>
   z.object({ id: z.string() }).parse(value).id;
+test("creating an owner and profile rolls back both when a concurrent application conflicts", async () => {
+  const repository = createHouseholdRepository(env.DB);
+  const profile = {
+    clientFingerprint: "synthetic-application",
+    credentialRef: null,
+    enabled: true,
+    id: "existing-profile",
+    name: "Existing",
+    personId: "self",
+  };
+  await repository.profile(profile);
+  await assert.rejects(
+    repository.profile(
+      {
+        ...profile,
+        id: "conflicting-profile",
+        personId: "new-person",
+      },
+      { id: "new-person", name: "Ana" },
+    ),
+  );
+  const state = await repository.read();
+  assert.equal(state.people.length, 1);
+  assert.equal(state.profiles.length, 2);
+  assert.equal(
+    state.profiles.some((p) => p.id === "conflicting-profile"),
+    false,
+  );
+});
 function services() {
   const repository = createHouseholdRepository(env.DB);
   const vault = createCredentialVault(env.OAUTH_KV);

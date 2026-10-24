@@ -3,12 +3,14 @@ import { type FormEvent, type MouseEvent, useCallback, useState } from "react";
 
 import type { HouseholdCommand, PortalResponse } from "../../contracts";
 import { UiButton } from "../ui";
+import type { ManagementOutcome } from "./account-feedback";
 import { BackofficeDialog } from "./backoffice-dialog";
 import {
   type ConnectionActivity,
   ConnectionJourney,
   importFailureMessage,
 } from "./connection-journey";
+import { ConnectionWizard } from "./connection-wizard";
 import { DisclosureItem } from "./disclosure-item";
 import { HouseholdPanel } from "./household-view";
 import { dayLabel } from "./workspace-resource";
@@ -77,7 +79,7 @@ export function DashboardView(props: {
   personId: string;
   connect: (profileId: string, id?: string) => void;
   command: (action: string, ids?: string[]) => void;
-  manage: (input: HouseholdCommand) => void;
+  manage: (input: HouseholdCommand) => Promise<ManagementOutcome>;
 }) {
   const {
     snapshot,
@@ -94,54 +96,33 @@ export function DashboardView(props: {
     command("disconnect-assistants");
     setRevokeAll(false);
   }, [command]);
-  const [managementOpen, setManagementOpen] = useState(!snapshot.configured);
+  const [managementOpen, setManagementOpen] = useState(
+    props.section === "connections",
+  );
+  const [wizardOpen, setWizardOpen] = useState(!snapshot.configured);
+  const startWizard = useCallback(() => setWizardOpen(true), []);
+  const closeWizard = useCallback(() => setWizardOpen(false), []);
   const hasResult = snapshot.connections.some(
     (c) => c.hasTransactions || c.lastSuccessAt,
   );
-  const openManagement = useCallback(() => {
-    if (props.section === "overview") {
-      location.assign("/account/connections");
-      return;
-    }
-    setManagementOpen(true);
-    requestAnimationFrame(() =>
-      document
-        .getElementById(
-          snapshot.configured ? "connections-heading" : "household-heading",
-        )
-        ?.focus(),
-    );
-  }, [snapshot.configured, props.section]);
   const visible = snapshot.connections.filter(
     (c) => !personId || c.personId === personId,
   );
   const readyProfiles = new Set(
     snapshot.profiles.filter((p) => p.enabled && p.configured).map((p) => p.id),
   );
-  const enabled = snapshot.profiles.filter(
-    (p) => readyProfiles.has(p.id) && (!personId || p.personId === personId),
-  );
   const importable = visible.filter((c) =>
     readyProfiles.has(c.profileId ?? "default"),
   );
-  const connect = useCallback(
-    (event: FormEvent<HTMLFormElement>) => {
-      event.preventDefault();
-      openConnection(
-        String(new FormData(event.currentTarget).get("profileId")),
-      );
-    },
-    [openConnection],
-  );
   const assign = useCallback(
-    (event: FormEvent<HTMLFormElement>) => {
+    async (event: FormEvent<HTMLFormElement>) => {
       event.preventDefault();
       const form = event.currentTarget;
       const { id } = form.dataset;
       if (!id) {
         return;
       }
-      manage({
+      await manage({
         action: "assign_connection",
         connectionId: id,
         csrf: snapshot.csrf,
@@ -194,18 +175,41 @@ export function DashboardView(props: {
       <WorkspaceHeading
         title={props.section === "overview" ? "Visão geral" : "Conexões"}
       >
+        {props.section === "connections" && (
+          <UiButton
+            disabled={busy}
+            onClick={startWizard}
+            type="button"
+            variant="primary"
+          >
+            Adicionar conexão
+          </UiButton>
+        )}
         <RefreshButton
           disabled={busy}
           label="Atualizar status da importação"
           onClick={props.refresh}
         />
       </WorkspaceHeading>
-      {(props.section === "connections" || !hasResult) && (
+      {!!wizardOpen && (
+        <ConnectionWizard
+          activity={props.activity}
+          busy={busy}
+          cancel={props.cancel}
+          close={closeWizard}
+          connect={openConnection}
+          manage={manage}
+          message={props.message}
+          personId={personId}
+          snapshot={snapshot}
+        />
+      )}
+      {!wizardOpen && (props.section === "connections" || !hasResult) && (
         <ConnectionJourney
           activity={props.activity}
           cancel={props.cancel}
           connect={openConnection}
-          manage={openManagement}
+          manage={startWizard}
           observedAt={props.observedAt}
           readError={props.readError}
           snapshot={snapshot}
@@ -278,54 +282,6 @@ export function DashboardView(props: {
                     <>
                       Perfis pausados ou sem credenciais ficam fora desta
                       importação. Seus dados continuam visíveis.
-                    </>
-                  }
-                  variant="alert"
-                />
-              )}
-              <form
-                className="connect-form"
-                onSubmit={connect}
-              >
-                <div className="inline-fields">
-                  <Select
-                    className="w-full"
-                    defaultValue={enabled[0]?.id ?? ""}
-                    disabled={!enabled.length}
-                    id="connect-profile"
-                    items={[
-                      ...enabled.map((p) => ({
-                        label: (
-                          <>
-                            {p.name} ·{" "}
-                            {
-                              snapshot.people.find(
-                                (person) => person.id === p.personId,
-                              )?.name
-                            }
-                          </>
-                        ),
-                        value: p.id,
-                      })),
-                    ]}
-                    label="Conectar usando o perfil"
-                    name="profileId"
-                  />
-                  <UiButton
-                    disabled={busy || !enabled.length}
-                    type="submit"
-                  >
-                    Conectar Meu Pluggy
-                  </UiButton>
-                </div>
-              </form>
-              {!enabled.length && (
-                <Banner
-                  className="feedback"
-                  description={
-                    <>
-                      Adicione ou ative um perfil em “Pessoas e perfis Pluggy”
-                      para conectar.
                     </>
                   }
                   variant="alert"
@@ -434,11 +390,13 @@ export function DashboardView(props: {
                 ))}
               </div>
             </section>
-            <HouseholdPanel
-              busy={busy}
-              manage={props.manage}
-              snapshot={snapshot}
-            />
+            <DisclosureItem summary={<>Editar titulares e credenciais</>}>
+              <HouseholdPanel
+                busy={busy}
+                manage={props.manage}
+                snapshot={snapshot}
+              />
+            </DisclosureItem>
           </DisclosureItem>
           <DisclosureItem
             className="journey-assistants"

@@ -59,7 +59,7 @@ function render(
       cancel: () => undefined,
       command: () => undefined,
       connect: () => undefined,
-      manage: () => undefined,
+      manage: async () => ({ ok: true as const }),
       message: "",
       observedAt: null,
       personId: "",

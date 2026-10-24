@@ -4,7 +4,7 @@ export interface HouseholdRepository {
   bindDefault: (fingerprint: string) => Promise<void>;
   getProfile: (id: string) => Promise<PluggyProfile | undefined>;
   person: (person: Person) => Promise<void>;
-  profile: (profile: PluggyProfile) => Promise<void>;
+  profile: (profile: PluggyProfile, person?: Person) => Promise<void>;
   read: () => Promise<{
     people: Person[];
     profiles: PluggyProfile[];

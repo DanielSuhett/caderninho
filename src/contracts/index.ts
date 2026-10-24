@@ -20,7 +20,11 @@ export {
   TransactionQuerySchema,
 } from "./finance";
 export type { HouseholdCommand } from "./household";
-export { HouseholdCatalogSchema, HouseholdCommandSchema } from "./household";
+export {
+  HouseholdCatalogSchema,
+  HouseholdCommandSchema,
+  HouseholdResultSchema,
+} from "./household";
 export { PRODUCT_INSTRUCTIONS, ToolName, tools } from "./mcp-contract";
 export type { PlanningCommand } from "./planning";
 export {
@@ -35,9 +39,11 @@ export type {
   PortalResponse,
 } from "./portal.types";
 export { PortalIssue } from "./portal.types";
+export type { AccountFailureCode } from "./portal-contract";
 export {
   AccountActionSchema,
   AccountConnectTokenSchema,
+  AccountFailureCodeSchema,
   ConnectTokenActionSchema,
   ItemActionSchema,
   PortalResponseSchema,

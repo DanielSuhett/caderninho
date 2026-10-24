@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 
 import { afterEach, beforeEach, test, vi } from "vitest";
+import { z } from "zod/v4";
 
 import { PortalResponseSchema } from "../../src/contracts";
 import {
@@ -19,6 +20,57 @@ const loginCsrfPattern = /name="csrf" value="([^"]+)"/;
 const sessionPattern = /__Host-caderninho=/;
 beforeEach(setup);
 afterEach(() => vi.restoreAllMocks());
+test.each([
+  "https://chatgpt.com/connector_platform_oauth_redirect",
+  "http://localhost:8123/callback",
+])(
+  "OAuth consent permits its registered callback %s without widening the panel policy",
+  async (redirectUri) => {
+    const app = fixture();
+    const owner = cookies(await login(app));
+    const registered = await app.request("/oauth/register", {
+      body: JSON.stringify({
+        redirect_uris: [redirectUri],
+        token_endpoint_auth_method: "none",
+      }),
+      headers: { "Content-Type": "application/json" },
+      method: "POST",
+    });
+    const client = z
+      .object({ client_id: z.string() })
+      .parse(await registered.json());
+    const authorize = new URLSearchParams({
+      client_id: client.client_id,
+      code_challenge: "a".repeat(43),
+      code_challenge_method: "S256",
+      redirect_uri: redirectUri,
+      response_type: "code",
+      scope: "offline_access",
+    });
+    const consent = await app.request(`/authorize?${authorize}`, {
+      headers: { Cookie: owner },
+    });
+    assert.equal(consent.status, 200);
+    const policy = consent.headers.get("Content-Security-Policy");
+    assert.ok(policy);
+    assert.ok(
+      policy
+        .split("; ")
+        .includes(`form-action 'self' ${new URL(redirectUri).origin}`),
+    );
+    assert.ok(policy.includes("default-src 'none'"));
+    assert.equal(consent.headers.get("X-Content-Type-Options"), "nosniff");
+    const panel = await app.request("/account", {
+      headers: { Cookie: owner },
+    });
+    assert.ok(
+      panel.headers
+        .get("Content-Security-Policy")
+        ?.split("; ")
+        .includes("form-action 'self'"),
+    );
+  },
+);
 test("owner can sign in and open the private panel before D1 is initialized", async () => {
   await reset();
   const app = fixture();
