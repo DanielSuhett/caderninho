@@ -17,6 +17,38 @@ function save(
 ) {
   return session.api.planning(command, "synthetic", signal);
 }
+test("category appearance edits reach all demo consumers without reclassifying money or mutating shared fixtures", async () => {
+  const session = createDemoSession();
+  const original = structuredClone(session.view());
+  await save(session, {
+    color: "#7c3aed",
+    confirmed: true,
+    icon: "gift",
+    id: "market",
+    idempotency_key: "market-appearance",
+    spaceId: "personal",
+    tool: "update_category",
+  });
+  const data = session.view();
+  const category = data.categories.find((item) => item.id === "market");
+  const catalog = await session.api.catalog("personal", signal);
+  assert.equal(category?.color, "#7c3aed");
+  assert.equal(category?.icon, "gift");
+  assert.deepEqual(
+    catalog.categories.find((item) => item.id === "market"),
+    category,
+  );
+  assert.deepEqual(data.records, original.records);
+  assert.deepEqual(
+    demoOverview("2026-10", data),
+    demoOverview("2026-10", original),
+  );
+  assert.deepEqual(
+    demoMonthly("2026-10", data),
+    demoMonthly("2026-10", original),
+  );
+  assert.deepEqual(createDemoSession().view(), original);
+});
 test("demo saves a rule without changing history, explicitly reapplies it and updates the whole ledger and both financial views", async () => {
   const session = createDemoSession();
   const original = structuredClone(demoLedger);

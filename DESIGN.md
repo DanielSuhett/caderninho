@@ -6,10 +6,29 @@ Hanken pelos componentes e tokens padrão do Kumo 2.14.0. O nome do produto
 
 ## Fundação
 
-Tema escuro padrão do Kumo (`data-mode="dark"`), Inter variável local em `--font-sans`, superfícies
+Temas escuro e claro nativos do Kumo (`data-mode="dark"`/`"light"`), com escuro
+inicial e preferência local pelo alternador sol/lua. Inter variável local em `--font-sans`, superfícies
 `kumo-canvas`, `kumo-base` e `kumo-elevated`. Ação primária azul do Kumo,
 seleção neutra, texto e estados semânticos da biblioteca. Os aliases CSS do
 produto apontam aos tokens efetivos; não criam uma segunda paleta.
+
+Superfícies e hierarquia continuam monocromáticas. Verde identifica entradas,
+vermelho identifica saídas, usando success/danger do Kumo em cada tema. Na lista,
+a cor segue a direção da origem, nunca uma inferência pelo sinal. Zero,
+indisponível e ignorados permanecem neutros. O sinal e o texto continuam
+disponíveis. No resumo, receitas são verdes e despesas vermelhas; saldo e fluxo
+bancário conservam tratamento neutro. A série de despesas mensais também usa
+vermelho: linha, pontos e preenchimento discreto, com a cor semântica Attention
+do ChartPalette Kumo; eixos e grade permanecem neutros. Comparadores das regras usam Badge info,
+campos ficam discretos e valores têm peso médio, sem semântica de receita/despesa.
+
+A cor e o ícone cadastrados de cada categoria se repetem nos seus usos: barras
+do resumo, identificação nas transações/detalhes, resultado das regras e opções
+de categoria. São sinais discretos de identidade; nomes e valores permanecem
+neutros. Categorias desconhecidas ou compras com categorias variadas não herdam
+uma cor de outra categoria. A cor financeira do valor segue a direção da origem,
+independente da cor da categoria. Barras usam a cor cadastrada sem transformar
+volume observado em cota ou mudar a agregação.
 
 Texto de conteúdo e controles em 16 px; metadados em 14 px; títulos em 28/20/16 px, sentence case,
 peso máximo 600 e tracking original. Métricas financeiras em 32 px no desktop e 26 px no celular, com moeda subordinada e algarismos tabulares. Dinheiro exato e moeda sempre visíveis.

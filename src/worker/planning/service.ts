@@ -5,6 +5,7 @@ import type { PlanningRepository } from "./entity";
 import { planningMutation } from "./mutations.service";
 import { portalTransactions } from "./portal-transactions.service";
 import { planningQuery } from "./queries.service";
+import { previewRule } from "./rule-preview.service";
 
 const reads = new Set<string>(
   planningDefinitions.filter((d) => d.readOnly).map((d) => d.name),
@@ -35,8 +36,31 @@ export function createPlanningService(
     }
     throw input.error;
   }
+  async function purchases(input: PortalTransactionQuery) {
+    const snapshot = await repository.read();
+    const result = await portalTransactions(input, snapshot, repository, now());
+    if ((await repository.revision()) !== snapshot.revision) {
+      throw new Error("RESTART_REQUIRED");
+    }
+    return {
+      data: result,
+      partial: snapshot.partial,
+      revision: snapshot.revision,
+    };
+  }
   return {
     async execute(input: PlanningCommand): Promise<unknown> {
+      if (input.tool === "preview_rule") {
+        const result = await previewRule(repository, input);
+        return {
+          data: result,
+          partial: result.partial,
+          revision: result.revision,
+        };
+      }
+      if (input.tool === "get_transaction_purchases") {
+        return purchases({ ...input, tool: "get_portal_transactions" });
+      }
       const digest = await hash(input);
       if ("idempotency_key" in input) {
         const prior = await receipt(input.idempotency_key, digest);
@@ -86,22 +110,6 @@ export function createPlanningService(
       }
       return result;
     },
-    async portalTransactions(input: PortalTransactionQuery) {
-      const snapshot = await repository.read();
-      const result = await portalTransactions(
-        input,
-        snapshot,
-        repository,
-        now(),
-      );
-      if ((await repository.revision()) !== snapshot.revision) {
-        throw new Error("RESTART_REQUIRED");
-      }
-      return {
-        data: result,
-        partial: snapshot.partial,
-        revision: snapshot.revision,
-      };
-    },
+    portalTransactions: purchases,
   };
 }

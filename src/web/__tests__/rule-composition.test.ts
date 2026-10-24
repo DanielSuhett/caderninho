@@ -25,15 +25,22 @@ test("legacy rule composition retains mandatory account and direction without in
       text: "mercado",
     },
   });
-  assert.deepEqual(model.scope, [
-    "Todas as moedas",
-    "Conta é Conta principal · Pessoa exemplo",
-    "Movimento é Saída",
-  ]);
+  assert.deepEqual(
+    model.scope.map(({ field, operator, value }) => [field, operator, value]),
+    [
+      ["Moeda", null, "Todas as moedas"],
+      ["Conta", "é", "Conta principal · Pessoa exemplo"],
+      ["Movimento", "é", "Saída"],
+    ],
+  );
   assert.equal(model.alternatives.length, 1);
   assert.deepEqual(
-    model.alternatives[0]?.conditions.map((condition) => condition.label),
-    ["Descrição contém “mercado”"],
+    model.alternatives[0]?.conditions.map(({ field, operator, value }) => [
+      field,
+      operator,
+      value,
+    ]),
+    [["Descrição", "contém", "“mercado”"]],
   );
 });
 
@@ -63,29 +70,40 @@ test("OR branches preserve their AND conditions and cannot bypass global scope, 
       text: "loja",
     },
   });
-  assert.deepEqual(model.scope, [
-    "Moeda: BRL",
-    "Conta é Conta principal · Pessoa exemplo",
-    "Movimento é Saída",
-    "Descrição contém “loja”",
-  ]);
+  assert.deepEqual(
+    model.scope.map(({ field, operator, value }) => [field, operator, value]),
+    [
+      ["Moeda", null, "BRL"],
+      ["Conta", "é", "Conta principal · Pessoa exemplo"],
+      ["Movimento", "é", "Saída"],
+      ["Descrição", "contém", "“loja”"],
+    ],
+  );
   assert.deepEqual(
     model.alternatives.map((alternative) =>
-      alternative.conditions.map((condition) => condition.label),
+      alternative.conditions.map(({ field, operator, value }) => [
+        field,
+        operator,
+        value,
+      ]),
     ),
     [
       [
-        "Descrição contém “PENDING”",
-        "Valor absoluto ≥ 90.071.992.547.409,93 BRL",
+        ["Descrição", "contém", "“PENDING”"],
+        ["Valor absoluto", "≥", "90.071.992.547.409,93 BRL"],
       ],
-      ["Pessoa é Pessoa exemplo", "Data ≤ 24/10/2026"],
+      [
+        ["Pessoa", "é", "Pessoa exemplo"],
+        ["Data", "≤", "24/10/2026"],
+      ],
     ],
   );
   assert.equal(
-    model.alternatives[0]?.conditions[1]?.amount,
+    model.alternatives[0]?.conditions[1]?.value,
     "90.071.992.547.409,93 BRL",
   );
-  assert.equal(model.alternatives[0]?.conditions[0]?.amount, null);
+  assert.equal(model.alternatives[0]?.conditions[1]?.monetary, true);
+  assert.equal(model.alternatives[0]?.conditions[0]?.monetary, false);
 });
 
 test("unknown references stay explicit and repeated conditions retain distinct presentation identities", () => {
@@ -120,8 +138,8 @@ test("unknown references stay explicit and repeated conditions retain distinct p
     2,
   );
   assert.equal(
-    model.alternatives[0]?.conditions[0]?.label,
-    "Conta é Conta não identificada",
+    model.alternatives[0]?.conditions[0]?.value,
+    "Conta não identificada",
   );
 });
 

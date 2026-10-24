@@ -3,7 +3,12 @@ import { and, eq, exists, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import { IMPORT_INTERVAL } from "../../../domain";
 import { tryCatch } from "../../../shared";
 import { database, required } from "../../database";
-import { connectionOwners, connections, pluggyProfiles } from "../../schema";
+import {
+  connectionOwners,
+  connections,
+  pluggyProfiles,
+  transactions,
+} from "../../schema";
 import type { Admission, SyncRepository, SyncRun } from "../entity";
 import { publicationData } from "./publication.repository";
 
@@ -167,6 +172,21 @@ export function createSyncRepository(binding: D1Database): SyncRepository {
           };
         }),
       );
+    },
+    classificationPage(accountId, after) {
+      return db
+        .select()
+        .from(transactions)
+        .where(
+          and(
+            eq(transactions.accountId, accountId),
+            after
+              ? sql`(${transactions.date},${transactions.id})>(${after.date},${after.id})`
+              : undefined,
+          ),
+        )
+        .orderBy(transactions.date, transactions.id)
+        .limit(25);
     },
     async connectionAccounts(connectionId) {
       return required(

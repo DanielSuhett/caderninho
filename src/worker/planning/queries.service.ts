@@ -488,7 +488,10 @@ export async function planningQuery(
   ) {
     return {
       records: scoped(state.categories).filter(
-        (c) => input.include_hidden || !c.hidden,
+        (c) =>
+          (input.include_hidden || !c.hidden) &&
+          (input.groupId === undefined ||
+            (c.groupId ?? null) === input.groupId),
       ),
     };
   }
@@ -818,6 +821,8 @@ export async function planningQuery(
       return handleGetBills(command);
     case "get_categories":
       return handleGetCategories(command);
+    case "get_category_groups":
+      return { records: scoped(state.categoryGroups) };
     case "get_tags":
       return handleGetTags(command);
     case "get_rules":

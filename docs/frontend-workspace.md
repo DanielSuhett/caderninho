@@ -1,6 +1,6 @@
 # Páginas da instalação
 
-O painel usa a identidade padrão escura do Kumo 2.14.0, com Inter local,
+O painel usa os temas claro e escuro do Kumo 2.14.0, com preferência local, Inter local,
 conteúdo/controles em 16 px e metadados em 14 px, ação primária e foco da biblioteca. A Sidebar real permanece
 no desktop; até 760 px usa seu menu modal. A navegação pública tem seus próprios
 links. [DESIGN.md](../DESIGN.md) e o [guia](design-system.md) governam a composição.

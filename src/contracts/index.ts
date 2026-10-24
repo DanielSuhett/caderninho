@@ -43,10 +43,15 @@ export {
   PortalResponseSchema,
   SyncActionSchema,
 } from "./portal-contract";
-export type { RulePreviewInput, RulePreviewResult } from "./rules";
+export type {
+  RulePreviewInput,
+  RulePreviewQuery,
+  RulePreviewResult,
+} from "./rules";
 export {
   RuleConditionSchema,
   RuleFilterSchema,
+  RulePreviewQuerySchema,
   RulePreviewResultSchema,
   RulePreviewSchema,
 } from "./rules";

@@ -21,10 +21,12 @@ const sourceValues = {
   accountId: sql`excluded.account_id`,
   amountMinor: sql`excluded.amount_minor`,
   category: sql`excluded.category`,
+  classification: sql`NULL`,
   currency: sql`excluded.currency`,
   date: sql`excluded.date`,
   description: sql`excluded.description`,
   direction: sql`excluded.direction`,
+  identification: sql`excluded.identification`,
   status: sql`excluded.status`,
 };
 const sourceChanged = sql`
@@ -35,6 +37,7 @@ const sourceChanged = sql`
   ${transactions.date} IS NOT excluded.date OR
   ${transactions.description} IS NOT excluded.description OR
   ${transactions.direction} IS NOT excluded.direction OR
+  ${transactions.identification} IS NOT excluded.identification OR
   ${transactions.status} IS NOT excluded.status`;
 const sourceUpdate = {
   set: sourceValues,
@@ -44,6 +47,14 @@ const sourceUpdate = {
 export async function publicationData(db: Database, input: Publication) {
   const { run, now } = input;
   const edits: BatchItem<"sqlite">[] = [];
+  for (const row of input.classifications ?? []) {
+    edits.push(
+      db
+        .update(transactions)
+        .set({ classification: row.classification })
+        .where(eq(transactions.id, row.id)),
+    );
+  }
   edits.push(...productMetadata(db, input));
   if (input.accounts) {
     const prior = required(
@@ -117,6 +128,9 @@ export async function publicationData(db: Database, input: Publication) {
             category: sql<string | null>`json_extract(value,'$.category')`.as(
               "category",
             ),
+            classification: sql<
+              typeof transactions.$inferInsert.classification
+            >`NULL`.as("classification"),
             currency: sql<string>`json_extract(value,'$.currency')`.as(
               "currency",
             ),
@@ -128,6 +142,9 @@ export async function publicationData(db: Database, input: Publication) {
               "direction",
             ),
             id: sql<string>`json_extract(value,'$.id')`.as("id"),
+            identification: sql<
+              typeof transactions.$inferInsert.identification
+            >`json_extract(value,'$.identification')`.as("identification"),
             status: sql<string>`json_extract(value,'$.status')`.as("status"),
           })
           .from(sql`json_each(${json})`)

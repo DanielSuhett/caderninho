@@ -1,3 +1,4 @@
+import type { CategoryIcon } from "./category.entity";
 import type { AccountMetadata, TransactionProjection } from "./finance.entity";
 
 export interface Space {
@@ -53,13 +54,23 @@ export interface TransactionEdit {
   tagIds?: string[];
 }
 export interface Category {
+  color?: string;
+  groupId?: string | null;
   hidden: boolean;
+  icon?: CategoryIcon;
   id: string;
   kind: "income" | "expense" | "transfer";
   limitMinor: string | null;
   name: string;
   spaceId: string;
   system: boolean;
+}
+export interface CategoryGroup {
+  color: string;
+  icon: CategoryIcon;
+  id: string;
+  name: string;
+  spaceId: string;
 }
 export interface Tag {
   color: string;
@@ -214,6 +225,7 @@ export interface PlanningState {
   billPayments: BillPayment[];
   cards: CardSettings[];
   categories: Category[];
+  categoryGroups: CategoryGroup[];
   contributions: Contribution[];
   edits: TransactionEdit[];
   goals: Goal[];

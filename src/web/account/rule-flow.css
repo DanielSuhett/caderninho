@@ -55,6 +55,18 @@
 }
 .rule-flow-amount {
   display: block;
+  margin-top: 4px;
+}
+.rule-flow-field {
+  font-size: var(--type-meta);
+  color: var(--muted);
+}
+.rule-flow-operator {
+  vertical-align: baseline;
+}
+.rule-flow-value {
+  font-weight: 500;
+  color: var(--text);
 }
 .rule-flow-or {
   padding-block: 12px;

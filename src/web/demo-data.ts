@@ -1,4 +1,5 @@
 import type { FinancialOverview, FinancialSummary } from "../contracts";
+import { transactionMatchesText } from "../domain";
 import {
   type DemoRecord,
   demoAccounts,
@@ -154,10 +155,7 @@ export function demoTransactions({
       (row) =>
         row.date >= from &&
         row.date <= to &&
-        (!text ||
-          row.description
-            .toLocaleLowerCase("pt-BR")
-            .includes(text.toLocaleLowerCase("pt-BR"))) &&
+        (!text || transactionMatchesText(row, text)) &&
         (!accountId || row.accountId === accountId) &&
         (!direction || row.direction === direction) &&
         (!currency || row.currency === currency) &&

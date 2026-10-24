@@ -1,5 +1,10 @@
+import { z } from "zod/v4";
+
 import {
   assertPersonalConnector,
+  CLASSIFICATION_VERSION,
+  CLEF_MIN_CONFIDENCE,
+  classificationState,
   normalizeAccount,
   normalizeTransaction,
 } from "../../domain";
@@ -45,14 +50,15 @@ async function catalog(
     );
 }
 function afterTransactions(
-  source: ImportDependencies["source"],
+  dependencies: ImportDependencies,
 ): SyncRun["checkpoint"]["phase"] {
-  return source.products ? "investments" : "finish";
+  if (dependencies.source.products) {
+    return "investments";
+  }
+  return dependencies.classifier ? "classification" : "finish";
 }
-async function importAccounts(
-  { repository, source, now }: ImportDependencies,
-  run: SyncRun,
-) {
+async function importAccounts(dependencies: ImportDependencies, run: SyncRun) {
+  const { repository, source, now } = dependencies;
   const connection = await source.connection(run.connectionId);
   if (connection.id !== run.connectionId) {
     throw new Error("SOURCE_IDENTITY_MISMATCH");
@@ -66,16 +72,17 @@ async function importAccounts(
     next: {
       accountId: first?.id ?? null,
       cursor: null,
-      phase: first ? "transactions" : afterTransactions(source),
+      phase: first ? "transactions" : afterTransactions(dependencies),
     },
     now: now(),
     run,
   });
 }
 async function importTransactions(
-  { repository, source, now }: ImportDependencies,
+  dependencies: ImportDependencies,
   run: SyncRun,
 ) {
+  const { repository, source, now } = dependencies;
   const { accountId, cursor } = run.checkpoint;
   if (!accountId) {
     throw new Error("INVALID_CHECKPOINT");
@@ -104,15 +111,20 @@ async function importTransactions(
     next: {
       accountId: following,
       cursor: page.next,
-      phase: following ? "transactions" : afterTransactions(source),
+      phase: following ? "transactions" : afterTransactions(dependencies),
     },
     now: now(),
     run,
     transactions: prepared,
   });
 }
+function afterProducts(
+  classifier: ImportDependencies["classifier"],
+): SyncRun["checkpoint"]["phase"] {
+  return classifier ? "classification" : "finish";
+}
 async function importProducts(
-  { repository, source, now }: ImportDependencies,
+  { repository, source, now, classifier }: ImportDependencies,
   run: SyncRun,
 ) {
   const { phase } = run.checkpoint;
@@ -161,10 +173,109 @@ async function importProducts(
     next = {
       accountId: following ?? null,
       cursor: null,
-      phase: following ? "bills" : "finish",
+      phase: following ? "bills" : afterProducts(classifier),
     };
   }
   return repository.publish({ done: false, next, now: now(), products, run });
+}
+const ClassificationCursorSchema = z.object({
+  date: z.string(),
+  id: z.string(),
+});
+async function classifyPage(
+  page: import("../../domain").TransactionProjection[],
+  classifier: NonNullable<ImportDependencies["classifier"]>,
+) {
+  const classifications: NonNullable<
+    import("./entity").Publication["classifications"]
+  > = [];
+  const decisions = new Map<
+    string,
+    Awaited<ReturnType<NonNullable<ImportDependencies["classifier"]>>>
+  >();
+  const inputs = await Promise.all(
+    page.map(async (row) => {
+      const state = classificationState(row);
+      return { inputHash: await hash(state), row, state };
+    }),
+  );
+  // Sequential, bounded page: avoid issuing a burst of inference requests.
+  async function next(index: number): Promise<void> {
+    const input = inputs[index];
+    if (!input) {
+      return;
+    }
+    const { row, state, inputHash } = input;
+    if (
+      row.classification?.inputHash === inputHash &&
+      row.classification.version === CLASSIFICATION_VERSION
+    ) {
+      return next(index + 1);
+    }
+    if (!decisions.has(inputHash)) {
+      // AI is optional enrichment. Financial publication remains successful on
+      // inference failures; projection applies deterministic Pluggy rules.
+      const { data, error } = await tryCatch(() => classifier(state));
+      decisions.set(inputHash, error ? null : data);
+    }
+    const decision = decisions.get(inputHash);
+    if (decision && decision.confidence >= CLEF_MIN_CONFIDENCE) {
+      classifications.push({
+        classification: {
+          ...decision,
+          inputHash,
+          model: "clef-flash",
+          version: CLASSIFICATION_VERSION,
+        },
+        id: row.id,
+      });
+    }
+    return next(index + 1);
+  }
+  await next(0);
+  return classifications;
+}
+async function classifyTransactions(
+  { repository, classifier, now }: ImportDependencies,
+  run: SyncRun,
+) {
+  const accountIds = Object.keys(
+    await repository.connectionAccounts(run.connectionId),
+  ).sort();
+  const accountId = run.checkpoint.accountId ?? accountIds[0];
+  const classifications: NonNullable<
+    import("./entity").Publication["classifications"]
+  > = [];
+  let next: SyncRun["checkpoint"] = {
+    accountId: null,
+    cursor: null,
+    phase: "finish",
+  };
+  if (accountId && classifier) {
+    const after = run.checkpoint.cursor
+      ? ClassificationCursorSchema.parse(JSON.parse(run.checkpoint.cursor))
+      : null;
+    const page = await repository.classificationPage(accountId, after);
+    classifications.push(...(await classifyPage(page, classifier)));
+    const last = page.at(-1);
+    const following = accountIds.find((id) => id > accountId);
+    if (last) {
+      next = {
+        accountId,
+        cursor: JSON.stringify({ date: last.date, id: last.id }),
+        phase: "classification",
+      };
+    } else if (following) {
+      next = { accountId: following, cursor: null, phase: "classification" };
+    }
+  }
+  return repository.publish({
+    classifications,
+    done: false,
+    next,
+    now: now(),
+    run,
+  });
 }
 async function importPage(dependencies: ImportDependencies, run: SyncRun) {
   const { repository, now } = dependencies;
@@ -188,6 +299,8 @@ async function importPage(dependencies: ImportDependencies, run: SyncRun) {
       return importAccounts(dependencies, run);
     case "transactions":
       return importTransactions(dependencies, run);
+    case "classification":
+      return classifyTransactions(dependencies, run);
     case "investments":
     case "loans":
     case "bills":

@@ -2,6 +2,7 @@ import { LayerCard, Meter } from "@cloudflare/kumo";
 
 import { Document } from "./document";
 import { McpStaticFlow } from "./mcp-steps";
+import { ThemeToggle } from "./theme-toggle";
 import { UiLink } from "./ui";
 
 const responseTiming = {
@@ -117,6 +118,7 @@ export function landingPage({
             Caderninho
           </a>
           <nav aria-label="Navegação principal">
+            <ThemeToggle />
             <a href="/demo?month=2026-10">Demo</a>
             <a
               className="nav-secondary"

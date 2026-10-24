@@ -109,7 +109,7 @@ export function TransactionsView({
               <QuerySearch
                 action="/account/transactions"
                 compact
-                label="Buscar descrição"
+                label="Buscar transação"
                 name="text"
                 params={params}
               />
@@ -126,7 +126,7 @@ export function TransactionsView({
             <div className="filter-wide">
               <Input
                 defaultValue={params.get("text") ?? ""}
-                label="Buscar descrição"
+                label="Buscar transação"
                 maxLength={240}
                 name="text"
                 placeholder="Ex.: mercado, aluguel, salário"
@@ -157,10 +157,15 @@ export function TransactionsView({
                 defaultValue={params.get("categoryId") ?? ""}
                 items={[
                   { label: "Todas as categorias", value: "" },
-                  ...data.catalog.categories.map((c) => ({
-                    label: c.name,
-                    value: c.id,
-                  })),
+                  ...data.catalog.categories
+                    .filter(
+                      (c) => !c.hidden || c.id === params.get("categoryId"),
+                    )
+                    .map((c) => ({
+                      appearance: c,
+                      label: c.name,
+                      value: c.id,
+                    })),
                 ]}
                 label="Categoria"
                 name="categoryId"

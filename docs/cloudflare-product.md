@@ -19,13 +19,20 @@ reset automático em deploys posteriores. Não execute a migração em bancos an
 
 ## Dados e execução
 
-A origem conserva duas tabelas: connections (nove colunas) e transactions (nove).
+A origem conserva duas tabelas: connections (nove colunas) e transactions (onze).
 A migração aditiva 0002 acrescenta 21 tabelas de planejamento, metadados e recibos.
 Contas e saldos ficam no mapa JSON tipado da conexão; transações usam os IDs
 globais dos recursos Pluggy e campos financeiros concretos em SQL. Não são
-guardados payloads genéricos, documentos pessoais ou marcadores de
+guardados payloads genéricos ou marcadores de
 importação por transação. O histórico é alterado somente pela importação;
-categoria e descrição são as da origem.
+categoria e descrição são as da origem. A classificação derivada fica separada em `transactions.classification`; as regras de conversão e o Clef não sobrescrevem a categoria Pluggy.
+
+`transactions.identification` contém os dados tipados disponíveis para reconhecer
+o lançamento: estabelecimento/CNPJ/CNAE, participantes e documentos de pagamento,
+referências bancárias, descrição original, IDs/códigos, operação, cartão/boleto
+e datas da origem. O cartão conserva apenas o final de quatro dígitos. Os dados
+não entram nos logs e são expostos nas consultas autenticadas e nos detalhes da
+transação. Documentos ausentes, parciais ou mascarados são mantidos sem inferência.
 
 O ID, estado, admissão, sequência, checkpoint e erro da importação ficam na
 conexão, junto do último sucesso completo e do mapa de contas. A admissão
@@ -43,10 +50,13 @@ operações por conta própria. Não há lock durante rede nem expiração de ex
 Uma releitura integral por admissão substitui caminhos incrementais, webhooks e
 reconciliações separados. Importações atualizam o mesmo ID e acrescentam novos IDs.
 Registros idênticos não executam UPDATE. A publicação usa um parâmetro JSON
-transitório por página e `json_each` para inserir somente os nove campos, mantendo
+transitório por página e `json_each` para inserir os dez campos, mantendo
 o batch atômico com o checkpoint. Páginas cuja serialização excede 500 mil unidades
 UTF-16 usam parâmetros escalares por registro para respeitar o limite de 2 MB
-por string do D1. Não há nova coluna ou payload persistido.
+por string do D1. A identificação usa JSON próprio por transação, sem cópia do
+payload completo. Mudanças apenas nessa identificação também são importadas;
+reimportações idênticas continuam sem UPDATE. A migração 0008 preserva os dados
+existentes e recupera os metadados de cartão já disponíveis.
 A deduplicação compara hashes somente quando um ID se repete
 na mesma página; correções da origem e duplicatas conflitantes continuam verificadas.
 Ausência na origem preserva o histórico e sua elegibilidade nos totais objetivos.
@@ -278,7 +288,7 @@ os steps nativos, falhas/replay, 100 mil registros e reinício são uma prova se
 em `tests/integration/run-runtime.ts`. Nenhuma delas demonstra provedor ou host real.
 
 A inspeção de D1 preserva o contrato das duas tabelas de origem,
-nove colunas cada, cinco valores por conta e três no checkpoint. O comportamento
+nove colunas em connections e onze em transactions, cinco valores por conta e três no checkpoint. O comportamento
 financeiro é verificado por HTTP/MCP, não pela leitura de fontes ou configurações.
 Respostas/logs são conferidos com credenciais sintéticas, inclusive falha da origem;
 o harness verifica também os assets construídos. Cookies expirados/adulterados,

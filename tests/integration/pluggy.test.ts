@@ -3,6 +3,10 @@ import assert from "node:assert/strict";
 import { afterEach, beforeEach, test, vi } from "vitest";
 
 import { normalizeAccount, normalizeTransaction } from "../../src/domain";
+import {
+  transactionIdentification,
+  transactionIdentificationInput,
+} from "../../src/fixtures/transaction-identification";
 import { createPluggyAdapter } from "../../src/worker/pluggy";
 import { sourceUrl } from "../support";
 import { mockNetwork, syntheticJwt } from "../support/network";
@@ -81,12 +85,41 @@ test("official SDK preserves numeric lexemes and only reads concrete account/tra
     date: "2026-10-01T00:00:00.000Z",
     description: "Synthetic",
     id: "t",
+    merchant: { name: "Synthetic shop" },
+    paymentData: { payer: { documentNumber: { value: "11122233344" } } },
     status: "POSTED",
     type: "DEBIT",
+    updatedAt: "2026-10-02T00:00:00Z",
   });
   assert.equal(paths.filter((path) => path === "/auth").length, 1);
   assert.equal(paths.length, 4);
 });
+test("official SDK retains the complete allowlisted identification without opaque provider payloads", async () => {
+  mockNetwork((input) =>
+    Promise.resolve(
+      sourceUrl(input).pathname === "/auth"
+        ? Response.json({ apiKey: syntheticJwt() })
+        : Response.json({
+            next: null,
+            results: [
+              {
+                ...transaction(),
+                ...transactionIdentificationInput,
+                privateMetadata: "discard",
+              },
+            ],
+          }),
+    ),
+  );
+  const [row] = (await adapter().transactions("a", null)).records;
+  assert.ok(row);
+  assert.deepEqual(
+    normalizeTransaction(row, "a").identification,
+    transactionIdentification,
+  );
+  assert.equal(Object.hasOwn(row, "privateMetadata"), false);
+});
+
 test("missing/mismatched cursor scope and incomplete account listings cannot become complete collections", async () => {
   let response: object = { results: [transaction()] };
   mockNetwork((input) =>

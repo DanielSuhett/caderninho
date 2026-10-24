@@ -1,7 +1,11 @@
 import type { z } from "zod/v4";
 
-import type { PortalMutationSchema, WorkspaceCatalog } from "../contracts";
-import { activeRules, ruleMatches } from "../domain";
+import {
+  type PortalMutationSchema,
+  type WorkspaceCatalog,
+  WorkspaceCatalogSchema,
+} from "../contracts";
+import { activeRules, categoryCatalog, ruleMatches } from "../domain";
 import {
   type DemoRecord,
   demoAccounts,
@@ -50,6 +54,84 @@ function validateRule(command: RuleCommand, group: Group, data: DemoData) {
   }
 }
 
+function updateDemoCategory(
+  group: Group,
+  command: Extract<ParsedMutation, { tool: "update_category" }>,
+) {
+  const row = required(group.categories.find((item) => item.id === command.id));
+  if (
+    row.system &&
+    (command.name !== undefined || command.hidden !== undefined)
+  ) {
+    throw new Error("SYSTEM_CATEGORY");
+  }
+  if (command.groupId) {
+    required(group.categoryGroups.find((item) => item.id === command.groupId));
+  }
+  if (command.name !== undefined) {
+    row.name = command.name;
+  }
+  if (command.hidden !== undefined) {
+    row.hidden = command.hidden;
+  }
+  if (command.icon !== undefined) {
+    row.icon = command.icon;
+  }
+  if (command.color !== undefined) {
+    row.color = command.color;
+  }
+  if (command.groupId !== undefined) {
+    row.groupId = command.groupId;
+  }
+}
+
+function mutateCategoryCatalog(group: Group, command: ParsedMutation) {
+  switch (command.tool) {
+    case "create_category_group": {
+      group.categoryGroups.push({
+        color: command.color,
+        icon: command.icon,
+        id: `demo:${crypto.randomUUID()}`,
+        name: command.name,
+      });
+      return true;
+    }
+    case "update_category_group": {
+      const row = required(
+        group.categoryGroups.find((item) => item.id === command.id),
+      );
+      if (command.name !== undefined) {
+        row.name = command.name;
+      }
+      if (command.icon !== undefined) {
+        row.icon = command.icon;
+      }
+      if (command.color !== undefined) {
+        row.color = command.color;
+      }
+      return true;
+    }
+    case "delete_category_group": {
+      required(group.categoryGroups.find((item) => item.id === command.id));
+      for (const row of group.categories) {
+        if (row.groupId === command.id) {
+          row.groupId = null;
+        }
+      }
+      group.categoryGroups = group.categoryGroups.filter(
+        (item) => item.id !== command.id,
+      );
+      return true;
+    }
+    case "update_category": {
+      updateDemoCategory(group, command);
+      return true;
+    }
+    default:
+      return false;
+  }
+}
+
 function local<T>(signal: AbortSignal, operation: () => T): Promise<T> {
   return Promise.resolve().then(() => {
     signal.throwIfAborted();
@@ -87,6 +169,9 @@ export function createDemoSession({
   }
   function mutate(command: ParsedMutation) {
     const group = required(groups.get(command.spaceId));
+    if (mutateCategoryCatalog(group, command)) {
+      return;
+    }
     switch (command.tool) {
       case "create_rule":
       case "update_rule": {
@@ -140,23 +225,15 @@ export function createDemoSession({
             type,
           },
         ];
-        groups.set(id, {
-          categories: (["income", "expense", "transfer"] as const).map(
-            (kind) => ({
-              hidden: false,
-              id: `${id}:${kind}`,
-              kind,
-              limitMinor: null,
-              name: {
-                expense: "Despesas",
-                income: "Receitas",
-                transfer: "Transferências",
-              }[kind],
-            }),
-          ),
-          rules: [],
-          tags: [],
-        });
+        groups.set(
+          id,
+          WorkspaceCatalogSchema.parse({
+            ...categoryCatalog(id),
+            rules: [],
+            spaces: [],
+            tags: [],
+          }),
+        );
         break;
       }
       case "update_space": {

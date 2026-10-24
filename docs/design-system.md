@@ -1,6 +1,6 @@
 # Interface com Kumo
 
-[DESIGN.md](../DESIGN.md) define os princípios e o tema escuro padrão do Kumo.
+[DESIGN.md](../DESIGN.md) define os princípios e os temas claro e escuro do Kumo.
 A versão instalada é `@cloudflare/kumo` 2.14.0; a API desta versão prevalece
 sobre a documentação do site. [Inventário](kumo/inventario.md),
 [plano](kumo/plano.md) e [execução](kumo/execucao.md) registram o escopo.
@@ -8,10 +8,18 @@ sobre a documentação do site. [Inventário](kumo/inventario.md),
 ## Fundação
 
 `Document` carrega `kumo.css` standalone e declara `data-mode="dark"`.
-`DesignHead` carrega Inter local e `design.css`, com aliases de layout e regras de documento em `@layer base`:
+`DesignHead` carrega o bootstrap externo `/theme.js`, Inter local e `design.css`, com aliases de layout e regras de documento em `@layer base`:
 as classes de componentes Kumo mantêm prioridade. Não definir a cor global de
 `a`, fontes de controles ou seletores genéricos por `data-kumo-component`.
 Não há Hanken nem wordmark especial. O nome é Caderninho.
+
+O tema inicial é escuro; o alternador sol/lua aplica a preferência local em
+`data-mode` e salva `caderninho.theme`. O script é assíncrono, permitido pela CSP
+sem código inline; não garante ausência de um primeiro frame no tema inicial.
+Receitas/entradas e despesas/saídas usam success/danger da biblioteca, com sinal,
+moeda e direção preservados. Identidade de categoria usa a cor e o ícone do
+catálogo em barras, transações, regras e opções; nomes permanecem neutros.
+[Contrato dos temas e limites](kumo/temas-e-contraste.md).
 
 Conteúdo e controles têm 16 px; metadados, `--text-xs` e `--text-sm` têm 14 px.
 Inter local em `--font-sans` atende à preferência explícita do usuário, que

@@ -340,7 +340,7 @@ test("a fresh installation connects/reconnects the widget, imports cumulative pa
   }
 });
 
-test("the source tables retain eighteen columns alongside additive planning storage", async () => {
+test("the source tables retain financial columns and typed transaction identification alongside planning storage", async () => {
   const tables = await env.DB.prepare(
     "SELECT name FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' AND name!='d1_migrations' AND name IN ('connections','transactions') ORDER BY name",
   ).all<{ name: string }>();
@@ -371,11 +371,13 @@ test("the source tables retain eighteen columns alongside additive planning stor
     "account_id",
     "amount_minor",
     "category",
+    "classification",
     "currency",
     "date",
     "description",
     "direction",
     "id",
+    "identification",
     "status",
   ]);
   await collect(source([transaction()]));

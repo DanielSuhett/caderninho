@@ -14,6 +14,7 @@ export interface ConnectionActivity {
 const phases = {
   accounts: "Identificando contas",
   bills: "Importando faturas",
+  classification: "Classificando transações",
   finish: "Concluindo importação",
   investments: "Importando investimentos",
   loans: "Importando empréstimos",

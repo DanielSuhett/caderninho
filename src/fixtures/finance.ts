@@ -5,25 +5,35 @@ import type {
   PortalTransactionListSchema,
   WorkspaceCatalog,
 } from "../contracts";
-import { monthDate } from "../domain";
+import { WorkspaceCatalogSchema } from "../contracts";
+import { categoryCatalog, monthDate } from "../domain";
 export const demoReferenceDay = "2026-10-24";
 export const demoPeople = [{ id: "demo-person", name: "Pessoa de exemplo" }];
-const categories: Pick<
-  WorkspaceCatalog["categories"][number],
-  "id" | "kind" | "name"
->[] = [
-  { id: "salary", kind: "income", name: "Trabalho" },
-  { id: "home", kind: "expense", name: "Moradia" },
-  { id: "market", kind: "expense", name: "Mercado" },
-  { id: "food", kind: "expense", name: "Alimentação" },
-  { id: "transport", kind: "expense", name: "Transporte" },
-  { id: "health", kind: "expense", name: "Saúde" },
-  { id: "tools", kind: "expense", name: "Software" },
-  { id: "transfer", kind: "transfer", name: "Transferência entre contas" },
-];
-export const demoCategories: WorkspaceCatalog["categories"] = categories.map(
-  (category) => ({ ...category, hidden: false, limitMinor: null }),
-);
+const demoCategoryIds = new Map([
+  ["salario-renda", "salary"],
+  ["casa", "home"],
+  ["mercado", "market"],
+  ["restaurantes", "food"],
+  ["corridas", "transport"],
+  ["saude-geral", "health"],
+  ["assinaturas", "tools"],
+  ["transferencias", "transfer"],
+]);
+const fixedCatalog = categoryCatalog("personal");
+export const demoCategories: WorkspaceCatalog["categories"] =
+  WorkspaceCatalogSchema.parse({
+    ...fixedCatalog,
+    categories: fixedCatalog.categories.map((category) => ({
+      ...category,
+      id:
+        demoCategoryIds.get(category.id.split(":").at(-1) ?? "") ??
+        (category.id === "personal:transfer" ? "transfer" : category.id),
+    })),
+    rules: [],
+    spaces: [],
+    tags: [],
+  }).categories;
+export const demoCategoryGroups = fixedCatalog.categoryGroups;
 export const demoAccounts: FinancialOverview["accounts"] = [
   {
     balanceMinor: "1042586",
@@ -89,6 +99,7 @@ export function transactionFixture(
     description: "Compra de exemplo",
     direction: "DEBIT",
     id: "synthetic-transaction",
+    identification: null,
     ignored: false,
     installmentNumber: null,
     installments: [],
@@ -184,6 +195,17 @@ export const demoLedger = [0, 1, 2, 3, 4, 5].flatMap((index) => {
       category: "market",
       day: 16,
       description: "Mercado e feira",
+      identification: {
+        descriptionRaw: "COMPRA CARTAO MERCADO EXEMPLO",
+        merchant: {
+          businessName: "Comércio demonstrativo",
+          category: "Supermercado",
+          cnae: "4711302",
+          cnpj: "00.000.000/0001-91",
+          name: "Mercado de exemplo",
+        },
+        operationType: "CARTAO",
+      },
     },
     {
       amountMinor: "1250",

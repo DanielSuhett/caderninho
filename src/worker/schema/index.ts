@@ -15,6 +15,7 @@ import type {
   BillPayment,
   CardSettings,
   Category,
+  CategoryGroup,
   Checkpoint,
   Contribution,
   Goal,
@@ -28,8 +29,10 @@ import type {
   ScheduledPayment,
   Space,
   Tag,
+  TransactionClassification,
   TransactionDetails,
   TransactionEdit,
+  TransactionIdentification,
 } from "../../domain";
 export const connections = sqliteTable(
   "connections",
@@ -63,14 +66,28 @@ export const transactions = sqliteTable(
     accountId: text("account_id").notNull(),
     amountMinor: text("amount_minor"),
     category: text("category"),
+    classification: text("classification", {
+      mode: "json",
+    }).$type<TransactionClassification>(),
     currency: text("currency").notNull(),
     date: text("date").notNull(),
     description: text("description").notNull(),
     direction: text("direction").$type<"DEBIT" | "CREDIT">().notNull(),
     id: text("id").primaryKey(),
+    identification: text("identification", {
+      mode: "json",
+    }).$type<TransactionIdentification>(),
     status: text("status").$type<"PENDING" | "POSTED">().notNull(),
   },
   (t) => [
+    check(
+      "transaction_classification_json",
+      sql`${t.classification} IS NULL OR json_valid(${t.classification})`,
+    ),
+    check(
+      "transaction_identification_json",
+      sql`${t.identification} IS NULL OR json_valid(${t.identification})`,
+    ),
     index("transaction_date").on(t.date, t.accountId, t.id),
     index("transaction_account").on(t.accountId, t.date, t.id),
     index("transaction_status").on(t.status, t.date, t.accountId, t.id),
@@ -90,6 +107,10 @@ export const transactions = sqliteTable(
 
 export const planningSpaces = sqliteTable("planning_spaces", {
   data: text("data", { mode: "json" }).$type<Space>().notNull(),
+  id: text("id").primaryKey(),
+});
+export const planningCategoryGroups = sqliteTable("planning_category_groups", {
+  data: text("data", { mode: "json" }).$type<CategoryGroup>().notNull(),
   id: text("id").primaryKey(),
 });
 export const planningAccounts = sqliteTable("planning_accounts", {

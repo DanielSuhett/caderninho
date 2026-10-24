@@ -16,6 +16,14 @@ function copyPortalAssets(): Plugin {
       const site = new URL("dist/site/", root);
       await mkdir(output, { recursive: true });
       await mkdir(site, { recursive: true });
+      await Promise.all(
+        [output, site].map((destination) =>
+          copyFile(
+            new URL("src/web/theme-init.ts", root),
+            new URL("theme.js", destination),
+          ),
+        ),
+      );
       await writeFile(new URL("index.html", output), renderPage(landingPage()));
       await writeFile(
         new URL("index.html", site),

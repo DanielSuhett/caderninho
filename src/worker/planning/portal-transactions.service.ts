@@ -5,7 +5,12 @@ import {
   type PortalTransactionListSchema,
   type PortalTransactionQuery,
 } from "../../contracts";
-import { localDay, monthDate, type TransactionDetails } from "../../domain";
+import {
+  localDay,
+  monthDate,
+  type TransactionDetails,
+  transactionMatchesText,
+} from "../../domain";
 import { hash } from "../../shared";
 import type { PlanningRepository, PlanningSnapshot } from "./entity";
 import {
@@ -96,9 +101,7 @@ function matches(
       members.some((member) => member.status === input.status)) &&
     (!input.text ||
       members.some((member) =>
-        member.description
-          .toLocaleLowerCase()
-          .includes(input.text?.toLocaleLowerCase() ?? ""),
+        transactionMatchesText(member, input.text ?? ""),
       ))
   );
 }
@@ -112,11 +115,13 @@ function record(
     amountMinor: row.amountMinor,
     cardNumber: details?.cardNumber ?? null,
     category: row.category,
+    classification: row.classification ?? null,
     currency: row.currency,
     date: row.date,
     description: row.description,
     direction: row.direction,
     id: row.id,
+    identification: row.identification ?? null,
     ignored: row.ignored,
     installmentNumber: details?.installmentNumber ?? null,
     manual: row.manual,

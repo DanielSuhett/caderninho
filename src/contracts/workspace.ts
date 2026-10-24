@@ -1,6 +1,12 @@
 import { z } from "zod/v4";
 
-import { RunStatus } from "../domain";
+import {
+  CategoryColorSchema,
+  CategoryIconSchema,
+  RunStatus,
+  TransactionClassificationSchema,
+  TransactionIdentificationSchema,
+} from "../domain";
 import { planningDefinitions } from "./planning";
 import { RuleFilterSchema } from "./rules";
 
@@ -18,13 +24,9 @@ export const PortalQuerySchema = z
         groupBy: z.literal("month"),
         tool: z.literal("generate_chart"),
       }),
-      planningDefinitions[2].schema
-        .omit({ cardNumber: true, tagId: true })
-        .extend({
-          future: z.boolean().default(false),
-          order: z.literal("date_desc").default("date_desc"),
-          tool: z.literal("get_portal_transactions"),
-        }),
+      planningDefinitions[94].schema.extend({
+        tool: z.literal("get_portal_transactions"),
+      }),
     ]),
   })
   .strict();
@@ -56,9 +58,13 @@ const CategoryListSchema = z.object({
   data: z.object({
     records: z.array(
       named.extend({
+        color: CategoryColorSchema.default("#64748b"),
+        groupId: id.nullable().default(null),
         hidden: z.boolean(),
+        icon: CategoryIconSchema.default("shopping"),
         kind: z.enum(["income", "expense", "transfer"]),
         limitMinor: minor,
+        system: z.boolean().default(false),
       }),
     ),
   }),
@@ -90,11 +96,13 @@ const TransactionRecordSchema = z.object({
   accountId: id,
   amountMinor: minor,
   category: z.string().nullable(),
+  classification: TransactionClassificationSchema.nullish(),
   currency: z.string(),
   date: z.string(),
   description: z.string(),
   direction: z.enum(["DEBIT", "CREDIT"]),
   id,
+  identification: TransactionIdentificationSchema.nullish(),
   ignored: z.boolean(),
   manual: z.boolean(),
   personId: id,
@@ -168,6 +176,11 @@ export const CatalogSelectionSchema = z
   .strict();
 export const WorkspaceCatalogSchema = z.object({
   categories: CategoryListSchema.shape.data.shape.records,
+  categoryGroups: z
+    .array(
+      named.extend({ color: CategoryColorSchema, icon: CategoryIconSchema }),
+    )
+    .default([]),
   rules: RuleListSchema.shape.data.shape.records,
   spaces: SpaceListSchema.shape.data.shape.records,
   tags: TagListSchema.shape.data.shape.records,
@@ -177,6 +190,24 @@ export type WorkspaceCatalog = z.infer<typeof WorkspaceCatalogSchema>;
 export const PortalMutationSchema = z
   .object({
     command: z.discriminatedUnion("tool", [
+      planningDefinitions[52].schema.extend({
+        tool: z.literal("create_category"),
+      }),
+      planningDefinitions[53].schema.extend({
+        tool: z.literal("update_category"),
+      }),
+      planningDefinitions[54].schema.extend({
+        tool: z.literal("delete_category"),
+      }),
+      planningDefinitions[91].schema.extend({
+        tool: z.literal("create_category_group"),
+      }),
+      planningDefinitions[92].schema.extend({
+        tool: z.literal("update_category_group"),
+      }),
+      planningDefinitions[93].schema.extend({
+        tool: z.literal("delete_category_group"),
+      }),
       planningDefinitions[56].schema.extend({ tool: z.literal("create_rule") }),
       planningDefinitions[57].schema.extend({ tool: z.literal("update_rule") }),
       planningDefinitions[58].schema.extend({ tool: z.literal("delete_rule") }),

@@ -1,4 +1,4 @@
-import { accountingDay, assertMinor, minor } from "./exact";
+import { accountingDay, assertMinor, decimal, minor } from "./exact";
 import { Fault } from "./fault.entity";
 import type {
   AccountProjection,
@@ -9,6 +9,7 @@ import type {
   ProviderAccount,
   ProviderTransaction,
 } from "./provider.entity";
+import type { TransactionIdentification } from "./transaction.entity";
 
 export function normalizeMoney(value: MoneyInput, currency: string) {
   if (value === null || value === undefined) {
@@ -93,6 +94,111 @@ export function normalizeTransaction(
     description: source.description,
     direction: source.type,
     id: source.id,
+    identification: normalizeIdentification(source),
     status: source.status,
+  };
+}
+
+function normalizeIdentification(
+  source: ProviderTransaction,
+): TransactionIdentification | null {
+  const {
+    accountId: _accountId,
+    amount: _amount,
+    amountInAccountCurrency,
+    balance,
+    currencyCode,
+    date: _date,
+    description: _description,
+    id: _id,
+    status: _status,
+    type: _type,
+    creditCardMetadata: card,
+    paymentData: payment,
+    ...identification
+  } = source;
+  const result: TransactionIdentification = { ...identification };
+  if (source.date.length > 10) {
+    result.date = source.date;
+  }
+  // These amounts belong to the account currency, which may differ from the
+  // transaction currency. Preserve exact decimal units without inferring a scale.
+  if (amountInAccountCurrency !== undefined) {
+    result.amountInAccountCurrency = decimal(amountInAccountCurrency);
+  }
+  if (balance !== undefined) {
+    result.balance = decimal(balance);
+  }
+  if (card !== undefined) {
+    result.creditCardMetadata = normalizeCard(card, currencyCode);
+  }
+  if (payment !== undefined) {
+    result.paymentData = normalizePayment(payment, currencyCode);
+  }
+  return Object.keys(result).length ? result : null;
+}
+
+function normalizeCard(
+  card: ProviderTransaction["creditCardMetadata"],
+  currency: string,
+) {
+  if (!card) {
+    return null;
+  }
+  const { totalAmount, payeeMCC, ...fields } = card;
+  return {
+    ...fields,
+    ...(card.cardNumber !== undefined && {
+      cardNumber: card.cardNumber?.replace(/\D/g, "").slice(-4) || null,
+    }),
+    ...(payeeMCC !== undefined && {
+      payeeMCC: payeeMCC === null ? null : String(payeeMCC),
+    }),
+    ...(totalAmount !== undefined && {
+      totalAmountMinor: normalizeMoney(totalAmount, currency),
+    }),
+  };
+}
+
+function normalizePayment(
+  payment: ProviderTransaction["paymentData"],
+  currency: string,
+) {
+  if (!payment) {
+    return null;
+  }
+  const { boletoMetadata: boleto, ...fields } = payment;
+  return {
+    ...fields,
+    ...(boleto !== undefined && {
+      boletoMetadata: normalizeBoleto(boleto, currency),
+    }),
+  };
+}
+
+function normalizeBoleto(
+  boleto: import("./provider.entity").ProviderBoleto | null,
+  currency: string,
+) {
+  if (!boleto) {
+    return null;
+  }
+  return {
+    ...(boleto.barcode !== undefined && { barcode: boleto.barcode }),
+    ...(boleto.digitableLine !== undefined && {
+      digitableLine: boleto.digitableLine,
+    }),
+    ...(boleto.baseAmount !== undefined && {
+      baseAmountMinor: normalizeMoney(boleto.baseAmount, currency),
+    }),
+    ...(boleto.discountAmount !== undefined && {
+      discountAmountMinor: normalizeMoney(boleto.discountAmount, currency),
+    }),
+    ...(boleto.interestAmount !== undefined && {
+      interestAmountMinor: normalizeMoney(boleto.interestAmount, currency),
+    }),
+    ...(boleto.penaltyAmount !== undefined && {
+      penaltyAmountMinor: normalizeMoney(boleto.penaltyAmount, currency),
+    }),
   };
 }

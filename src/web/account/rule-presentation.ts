@@ -1,6 +1,7 @@
 import type { WorkspaceCatalog } from "../../contracts";
 import type { RuleCondition } from "../../domain";
 import { formatBalance } from "../money";
+import type { CategoryAppearance } from "./category-appearance";
 import { conditionFields } from "./rule-draft";
 
 export type RuleSource = Pick<
@@ -11,14 +12,21 @@ export interface RuleContext {
   accounts: { id: string; name: string; personName: string }[];
   people: { id: string; name: string }[];
 }
+export interface RuleTerm {
+  field: string;
+  monetary: boolean;
+  operator: string | null;
+  value: string;
+}
 export interface RuleCompositionModel {
   alternatives: {
     id: string;
-    conditions: { id: string; label: string; amount: string | null }[];
+    conditions: (RuleTerm & { id: string })[];
   }[];
   category: string;
+  categoryAppearance?: CategoryAppearance | undefined;
   enabled: boolean;
-  scope: string[];
+  scope: RuleTerm[];
 }
 
 function occurrenceKey(value: string, occurrences: Map<string, number>) {
@@ -41,11 +49,11 @@ const values: Record<string, string> = {
   POSTED: "Registrada na origem",
 };
 
-export function ruleConditionLabel(
+function presentCondition(
   condition: RuleCondition,
   context: RuleContext,
   currency: string | null,
-) {
+): RuleTerm {
   let { value } = condition;
   if (condition.field === "direction" || condition.field === "status") {
     value = values[condition.value] ?? condition.value;
@@ -75,7 +83,12 @@ export function ruleConditionLabel(
   const field =
     conditionFields.find((row) => row.value === condition.field)?.label ??
     condition.field;
-  return `${field} ${operators[condition.operator]} ${value}`;
+  return {
+    field,
+    monetary: condition.field === "amount" && !!currency,
+    operator: operators[condition.operator] ?? condition.operator,
+    value,
+  };
 }
 
 export function buildRuleComposition({
@@ -83,15 +96,24 @@ export function buildRuleComposition({
   accounts,
   people,
   category,
+  categoryAppearance,
   enabled,
 }: RuleContext & {
   rule: RuleSource;
   category: string;
+  categoryAppearance?: CategoryAppearance | undefined;
   enabled: boolean;
 }): RuleCompositionModel {
   const context = { accounts, people };
   const currency = rule.filter?.currency ?? null;
-  const scope = [currency ? `Moeda: ${currency}` : "Todas as moedas"];
+  const scope: RuleTerm[] = [
+    {
+      field: "Moeda",
+      monetary: false,
+      operator: null,
+      value: currency ?? "Todas as moedas",
+    },
+  ];
   const required: RuleCondition[] = [];
   if (rule.accountId) {
     required.push({
@@ -116,7 +138,7 @@ export function buildRuleComposition({
   }
   scope.push(
     ...required.map((condition) =>
-      ruleConditionLabel(condition, context, currency),
+      presentCondition(condition, context, currency),
     ),
   );
   const alternatives = rule.filter?.alternatives ?? [
@@ -136,17 +158,14 @@ export function buildRuleComposition({
       const conditions = new Map<string, number>();
       return {
         conditions: alternative.conditions.map((condition) => ({
-          amount:
-            condition.field === "amount" && currency
-              ? formatBalance(condition.value, currency)
-              : null,
+          ...presentCondition(condition, context, currency),
           id: occurrenceKey(JSON.stringify(condition), conditions),
-          label: ruleConditionLabel(condition, context, currency),
         })),
         id: occurrenceKey(JSON.stringify(alternative), branches),
       };
     }),
     category,
+    categoryAppearance,
     enabled,
     scope,
   };

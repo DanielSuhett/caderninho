@@ -22,6 +22,7 @@ import { tryCatch } from "../../shared";
 import { UiButton } from "../ui";
 import type { OrganizationApi } from "./account-api";
 import { BackofficeDialog } from "./backoffice-dialog";
+import { CategoryLabel } from "./category-appearance";
 import { DisclosureItem } from "./disclosure-item";
 import { RuleComposition } from "./rule-composition";
 import {
@@ -42,7 +43,7 @@ function initialLegacyText(rule?: Rule) {
 function initialCategory(rule: Rule | undefined, catalog: WorkspaceCatalog) {
   return (
     rule?.categoryId ??
-    catalog.categories.find((c) => c.kind === "expense")?.id ??
+    catalog.categories.find((c) => !c.hidden && c.kind === "expense")?.id ??
     ""
   );
 }
@@ -356,10 +357,12 @@ export function RuleEditor({
             <Select
               className="w-full"
               items={[
-                ...catalog.categories.map((c) => ({
-                  label: c.name,
-                  value: c.id,
-                })),
+                ...catalog.categories
+                  .filter((c) => !c.hidden || c.id === fields.category)
+                  .map((c) => ({
+                    label: <CategoryLabel category={c} />,
+                    value: c.id,
+                  })),
               ]}
               label="Categoria"
               name="category"
@@ -788,6 +791,9 @@ const RuleDraftComposition = memo(function RuleDraftDiagram({
           category={
             catalog.categories.find((item) => item.id === category)?.name ?? ""
           }
+          categoryAppearance={catalog.categories.find(
+            (item) => item.id === category,
+          )}
           enabled={enabled}
           people={people}
           rule={draft.data}
