@@ -55,13 +55,15 @@ export function RulePreview({
   const data = current ? state.data : undefined;
   let status = "Complete as condições para consultar.";
   if (input && !current) {
-    status = "Aguardando a pausa na digitação e consultando…";
+    status = "Conferindo transações…";
   }
   if (input && current && state.error) {
     status = "Não foi possível consultar. Seu rascunho está preservado.";
   }
   if (data) {
-    status = `${data.truncated ? "Pelo menos " : ""}${data.count} transações correspondem`;
+    const matches =
+      data.count === 1 ? "transação corresponde" : "transações correspondem";
+    status = `${data.truncated ? "Pelo menos " : ""}${data.count} ${matches}`;
   }
   useEffect(() => {
     onStatus(status);
@@ -116,8 +118,7 @@ export function RulePreview({
         </>
       )}
       <p className="muted">
-        Somente leitura. A prioridade pode fazer outra regra vencer. Salvar não
-        reclassifica o histórico.
+        Prévia somente leitura; outra regra pode ter prioridade.
       </p>
     </section>
   );

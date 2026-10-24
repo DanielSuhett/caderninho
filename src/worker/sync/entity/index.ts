@@ -35,7 +35,11 @@ export interface Publication {
 }
 export interface SyncRepository {
   active: () => Promise<SyncRun[]>;
-  admit: (ids: string[] | undefined, now: string) => Promise<Admission[]>;
+  admit: (
+    ids: string[] | undefined,
+    now: string,
+    initialOnly?: boolean,
+  ) => Promise<Admission[]>;
   connectionAccounts: (connectionId: string) => Promise<AccountMap>;
   fail: (id: string, code: string) => Promise<void>;
   publish: (input: Publication) => Promise<CommitResult>;

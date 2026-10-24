@@ -19,6 +19,7 @@ export function BackofficeDialog({
   dirty,
   busy,
   close,
+  presentation = "editor",
 }: {
   title: string;
   children: ReactNode;
@@ -26,8 +27,10 @@ export function BackofficeDialog({
   dirty: boolean;
   busy: boolean;
   close: () => void;
+  presentation?: "editor" | "confirmation" | "compact-editor";
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
+  const cancelAction = useRef<HTMLButtonElement>(null);
   const id = useId();
   const discardNotice = useRef<HTMLDivElement>(null);
   const [discard, setDiscard] = useState(false);
@@ -42,6 +45,9 @@ export function BackofficeDialog({
     const { overflow } = document.body.style;
     document.body.style.overflow = "hidden";
     dialog.current?.showModal();
+    if (presentation === "confirmation") {
+      cancelAction.current?.focus();
+    }
     return () => {
       document.body.style.overflow = overflow;
       if (previous instanceof HTMLElement && previous.isConnected) {
@@ -50,7 +56,7 @@ export function BackofficeDialog({
         document.querySelector<HTMLElement>("#workspace-content")?.focus();
       }
     };
-  }, []);
+  }, [presentation]);
   useEffect(() => {
     if (!dirty) {
       return;
@@ -93,7 +99,7 @@ export function BackofficeDialog({
   return (
     <dialog
       aria-labelledby={id}
-      className="workspace-drawer backoffice-drawer"
+      className={`workspace-drawer backoffice-drawer ${{ "compact-editor": "backoffice-compact-editor", confirmation: "backoffice-confirmation", editor: "" }[presentation]}`}
       onCancel={cancel}
       ref={dialog}
     >
@@ -144,6 +150,7 @@ export function BackofficeDialog({
         <UiButton
           disabled={busy}
           onClick={requestClose}
+          ref={cancelAction}
           type="button"
           variant="secondary"
         >

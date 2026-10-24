@@ -106,7 +106,43 @@
     grid-template-columns: 1fr;
   }
   .audit-table {
-    min-width: 540px;
+    display: block;
+  }
+  .audit-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+  .audit-table tbody {
+    display: grid;
+  }
+  .audit-table tr {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px 20px;
+    padding: 16px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .audit-table td {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+  }
+  .audit-table td:first-child {
+    grid-column: 1 / -1;
+    max-width: none;
+    font-weight: 550;
+  }
+  .audit-table td::before {
+    font-size: 12px;
+    font-weight: 400;
+    color: var(--muted);
+    content: attr(data-label);
   }
 }
 

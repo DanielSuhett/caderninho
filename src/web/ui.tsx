@@ -15,7 +15,7 @@ export function UiButton({
   DataAttributes & { tone?: "normal" | "danger" }) {
   return (
     <Button
-      size="lg"
+      size="base"
       type="submit"
       {...props}
       className={`${tone === "danger" ? "caderninho-danger" : ""} ${variant === "primary" && tone === "normal" ? "caderninho-primary" : ""} ${className}`}
@@ -33,7 +33,7 @@ export function UiLink({
 }: ComponentProps<typeof LinkButton>) {
   return (
     <LinkButton
-      size="lg"
+      size="base"
       {...props}
       className={`${variant === "primary" ? "caderninho-primary" : ""} ${className}`}
       variant={

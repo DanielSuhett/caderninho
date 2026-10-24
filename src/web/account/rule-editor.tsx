@@ -302,7 +302,7 @@ export function RuleEditor({
           Grupo: {catalog.spaces.find((s) => s.id === spaceId)?.name}
         </p>
         <fieldset disabled={busy}>
-          <legend>Identificação e classificação</legend>
+          <legend className="sr-only">Identificação e classificação</legend>
           <label>
             Nome da regra
             <input
@@ -369,10 +369,7 @@ export function RuleEditor({
               </UiButton>
             ))}
           </div>
-          <p className="muted">
-            Presets substituem as condições e usam BRL. Nome e categoria são
-            preservados.
-          </p>
+          <p className="muted">Presets substituem as condições e usam BRL.</p>
           <label>
             Moeda das condições
             <select

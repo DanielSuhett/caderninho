@@ -1,6 +1,7 @@
 import type { AccountMap, Checkpoint, RunStatus } from "../domain";
 export interface ConnectionInfo {
   accounts: AccountMap;
+  hasTransactions?: boolean | undefined;
   id: string;
   importCheckpoint: Pick<Checkpoint, "accountId" | "phase"> | null;
   importError: string | null;

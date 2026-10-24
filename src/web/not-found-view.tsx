@@ -18,7 +18,12 @@ export function notFoundPage() {
           Conheça o Caderninho e instale sua própria cópia na Cloudflare.
         </p>
         <div className="public-actions">
-          <UiLink href="/">Voltar ao Caderninho</UiLink>
+          <UiLink
+            href="/"
+            size="lg"
+          >
+            Voltar ao Caderninho
+          </UiLink>
         </div>
       </main>
     </PublicLayout>

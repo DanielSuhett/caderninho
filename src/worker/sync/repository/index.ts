@@ -85,7 +85,7 @@ export function createSyncRepository(binding: D1Database): SyncRepository {
           .orderBy(connections.id)
       ).map(current);
     },
-    async admit(ids, now) {
+    async admit(ids, now, initialOnly = false) {
       const selected = await db
         .select({ id: connections.id })
         .from(connections)
@@ -117,6 +117,9 @@ export function createSyncRepository(binding: D1Database): SyncRepository {
                 and(
                   eq(connections.id, connectionId),
                   profileEnabled(connectionId),
+                  initialOnly
+                    ? isNull(connections.importAdmittedAt)
+                    : undefined,
                   or(
                     isNull(connections.importStatus),
                     inArray(connections.importStatus, ["failed", "succeeded"]),

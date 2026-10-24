@@ -2,8 +2,8 @@
 
 O painel mantém a identidade do Caderninho: Hanken local, fundo preto, superfícies
 escuras, laranja para ação e foco. A navegação permanece disponível em todas as
-páginas, sempre à esquerda: barra de 208 px no desktop e faixa de 56 px no
-compacto, com expansão por “Abrir navegação”.
+páginas: barra de 208 px no desktop e menu de 44 px junto ao título no
+compacto, com destinos nomeados em “Abrir navegação”.
 
 | Página | Conteúdo |
 | --- | --- |
@@ -32,8 +32,12 @@ aplicável; o histórico informa que uma sincronização abrange a conexão inte
 Transações aparecem da data mais recente para a mais antiga, com ID como desempate,
 em páginas de até 50 registros. Os valores mantêm moeda e unidades mínimas exatas;
 não há soma enganosa apenas da página nem conversão cambial implícita. Campos
-ficam no drawer “Filtros”; grupo, pessoa e critérios aplicados permanecem visíveis
-junto aos resultados. Editar é rascunho: Aplicar submete GET e reinicia a paginação;
+ficam no drawer “Filtros”; uma linha mantém o contexto de grupo/pessoa ou período
+junto aos resultados e o gatilho conta filtros adicionais. Os campos no drawer
+mostram cada critério aplicado.
+Futuros e limpar ficam no drawer. Categoria e identificadores ficam na expansão
+de cada lançamento; valor, sentido, moeda e exceções seguem visíveis.
+Editar é rascunho: Aplicar submete GET e reinicia a paginação;
 Cancelar, X e Escape descartam. Limpar filtros remove também grupo e pessoa.
 Filtros e cursor ficam na URL, permitindo recarregar, voltar e guardar o recorte.
 
@@ -45,9 +49,32 @@ mudança de dados pede reabertura da lista. A consulta ainda percorre o históri
 para construir a visão efetiva; a latência visual com 100 mil lançamentos não foi
 medida nesta entrega.
 
-Regras e grupos são páginas de visualização. Criar, alterar e aplicar regras segue
-pelas ferramentas MCP existentes. Ver lançamentos que atendem à condição não
-aplica a regra e não modifica dados. Categorias e tags são exibidas por grupo.
+Regras têm criação e edição em drawer; grupos usam um diálogo curto adaptativo.
+Regras ativas classificam as
+próximas importações; salvar não reclassifica o histórico. Ver lançamentos que
+atendem à condição é somente consulta. A página Grupos lista todos os grupos;
+o seletor recorta apenas as categorias e etiquetas, que ficam recolhidas.
+
+## Hierarquia de leitura
+
+A visão geral coloca contas e saldos antes do resumo recolhido da instalação.
+Conexões mantém a jornada, o progresso real e os caminhos de recuperação; seus
+metadados ficam em detalhes. A auditoria começa pelos assistentes autorizados e
+mostra falhas antes da atividade técnica recolhida. Sincronizações mantêm estado,
+titular e “Início”; referências históricas ficam ao fim. A galeria abre por assunto.
+As listas compartilham uma superfície delimitada, sem um card por registro.
+Resumo e detalhe usam o mesmo recuo de 16 px; dados vêm antes do rodapé de ações.
+Os controles têm 36 px no desktop e 44 px no compacto ou toque. Editar/Excluir
+ficam discretos, com nomes acessíveis contextuais e confirmação de exclusão.
+IDs raros ficam em uma única “Referência técnica”; condições, escopos, erros e
+parcialidade permanecem no conteúdo que explicam. Moeda e orçamento do grupo
+aparecem uma vez no resumo. O grupo base Pessoal não oferece exclusão.
+
+O editor de grupo ocupa até 560 px; uma confirmação curta, 440 px. A altura segue
+o conteúdo, limitada a 90dvh, com corpo rolável e ações acessíveis. No celular,
+diálogos curtos ficam na base com margem de 16 px. Regras longas conservam o
+drawer de 720 px. Cancelar uma confirmação recebe foco; Escape devolve o foco ao
+gatilho. Descartar só elimina o rascunho, nunca os dados persistidos.
 
 ## Histórico persistente
 

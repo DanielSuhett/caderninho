@@ -544,7 +544,10 @@ export function landingPage({
               Cloudflare, com acesso controlado por você.
             </p>
             <div className="actions">
-              <UiLink href="https://deploy.workers.cloudflare.com/?url=https://github.com/DanielSuhett/caderninho">
+              <UiLink
+                href="https://deploy.workers.cloudflare.com/?url=https://github.com/DanielSuhett/caderninho"
+                size="lg"
+              >
                 Instalar na minha Cloudflare
               </UiLink>
               {!publicSite && <a href="/account">Abrir meu painel</a>}

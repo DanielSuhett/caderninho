@@ -133,6 +133,7 @@ export function GroupEditor({
           {submitLabel}
         </UiButton>
       }
+      presentation="compact-editor"
       title={space ? "Editar grupo" : "Novo grupo"}
     >
       <form
@@ -142,7 +143,7 @@ export function GroupEditor({
         onSubmit={submit}
       >
         <fieldset disabled={busy}>
-          <legend>Organização financeira</legend>
+          <legend className="sr-only">Organização financeira</legend>
           <label>
             Nome do grupo
             <input
@@ -209,8 +210,7 @@ export function GroupEditor({
             )}
           </label>
           <p className="muted">
-            O grupo organiza dados da mesma instalação. Ele não cria usuários,
-            permissões nem altera a titularidade das contas.
+            Grupos organizam dados; não alteram titulares nem permissões.
           </p>
           {!!message && (
             <p
@@ -279,6 +279,7 @@ export function DeleteOrganizationItem({
     }
     deleted();
   }, [api, deleted, item.id, key, kind, snapshot.csrf, spaceId]);
+  const itemLabel = kind === "rule" ? "regra" : "grupo";
   const protectedSpace = kind === "space" && item.id === "personal";
   let explanation =
     "Somente grupos vazios podem ser excluídos. Contas, transações e outros vínculos nunca serão apagados por esta ação.";
@@ -303,11 +304,12 @@ export function DeleteOrganizationItem({
             tone="danger"
             type="button"
           >
-            {busy ? "Excluindo…" : "Confirmar exclusão"}
+            {busy ? "Excluindo…" : `Excluir ${itemLabel}`}
           </UiButton>
         )
       }
-      title={`Excluir ${kind === "rule" ? "regra" : "grupo"}`}
+      presentation="confirmation"
+      title={`Excluir ${itemLabel}`}
     >
       <p>
         Excluir <strong>{item.name}</strong>?

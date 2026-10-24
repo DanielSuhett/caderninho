@@ -10,6 +10,7 @@ import type { AuditReport, PortalResponse } from "../../contracts";
 import { tryCatch } from "../../shared";
 import { UiButton } from "../ui";
 import type { createAccountApi } from "./account-api";
+import { DisclosureItem } from "./disclosure-item";
 import { EmptyView } from "./workspace-filters";
 import {
   momentLabel,
@@ -18,7 +19,9 @@ import {
 } from "./workspace-resource";
 import {
   FilterDrawer,
+  RecordReference,
   RefreshButton,
+  WorkspaceDetails,
   WorkspaceHeading,
   WorkspaceMetrics,
 } from "./workspace-ui";
@@ -113,10 +116,7 @@ export function AuditView({
   }, [api, confirm, busy, snapshot.csrf, resource.retry]);
   return (
     <>
-      <WorkspaceHeading
-        description="Autorizações e atividade observada nesta instalação."
-        title="Auditoria MCP"
-      >
+      <WorkspaceHeading title="Auditoria MCP">
         <RefreshButton
           disabled={resource.loading || busy}
           label="Atualizar auditoria"
@@ -125,9 +125,12 @@ export function AuditView({
       </WorkspaceHeading>
       <FilterDrawer
         action="/account/audit"
-        summary={[
-          `Período: ${params.get("days") === "1" ? "24 horas" : `${params.get("days") || "7"} dias`}`,
-        ]}
+        activeCount={params.get("days") && params.get("days") !== "7" ? 1 : 0}
+        context={
+          params.get("days") === "1"
+            ? "Últimas 24 horas"
+            : `Últimos ${params.get("days") || "7"} dias`
+        }
       >
         <label>
           Período
@@ -153,80 +156,69 @@ export function AuditView({
       )}
       {!!data && (
         <>
-          <WorkspaceMetrics
-            items={[
-              {
-                hint: `${data.totals.toolCalls} chamadas de ferramentas`,
-                label: "Requisições autenticadas",
-                value: data.totals.requests.toLocaleString("pt-BR"),
-              },
-              {
-                hint: "Payload observado pelo Worker",
-                label: "Corpos recebidos / produzidos",
-                value: `${bytes(data.totals.inputBytes)} / ${bytes(data.totals.outputBytes)}`,
-              },
-              {
-                hint: "Inclui falha de ferramenta em HTTP 200",
-                label: "Falhas / interrupções",
-                value: `${data.totals.errors} / ${data.totals.cancelled}`,
-              },
-              {
-                hint: "Até o encerramento do corpo",
-                label: "Duração média",
-                value: data.totals.requests
-                  ? `${Math.round(data.totals.durationMs / data.totals.requests)} ms`
-                  : "—",
-              },
-            ]}
-          />
-
-          <section aria-labelledby="audit-access">
-            <div className="results-heading">
-              <h2 id="audit-access">Assistentes autorizados</h2>
-              <span>{data.grants.length} nesta página</span>
-            </div>
-            <p className="muted">
-              Autorização cadastrada não significa conexão online. O último uso
-              é agregado por cliente, no período selecionado.
+          {!!data.totals.errors && (
+            <p
+              className="notice"
+              data-tone="warning"
+            >
+              {data.totals.errors} falhas no período. Confira a atividade.
             </p>
+          )}
+          <section
+            aria-labelledby="audit-access"
+            className="workspace-section"
+          >
+            <h2 id="audit-access">Assistentes autorizados</h2>
             {data.grants.length ? (
-              <div className="grant-list">
+              <ul
+                aria-label="Assistentes autorizados"
+                className="record-list"
+              >
                 {data.grants.map((grant) => (
-                  <article
-                    className="grant-row"
-                    key={grant.id}
-                  >
-                    <div>
-                      <h3>{grant.clientName}</h3>
-                      <p>
-                        Autorizado em{" "}
-                        {momentLabel(
-                          new Date(grant.createdAt * 1000).toISOString(),
-                        )}
-                      </p>
-                      <p>
-                        Último uso do cliente:{" "}
-                        {momentLabel(
-                          data.clients.find(
-                            (c) => c.clientId === grant.clientId,
-                          )?.lastSeen ?? null,
-                        )}
-                      </p>
-                      <details className="row-details">
-                        <summary>Detalhes da autorização</summary>
+                  <li key={grant.id}>
+                    <DisclosureItem
+                      className="record-item"
+                      summary={
+                        <>
+                          <span className="record-title">
+                            {grant.clientName}
+                          </span>
+                          <span className="record-context">
+                            Último uso:{" "}
+                            {momentLabel(
+                              data.clients.find(
+                                (c) => c.clientId === grant.clientId,
+                              )?.lastSeen ?? null,
+                            )}
+                          </span>
+                          {!!grant.expiresAt && (
+                            <span className="record-meta">
+                              Expira em{" "}
+                              {momentLabel(
+                                new Date(grant.expiresAt * 1000).toISOString(),
+                              )}
+                            </span>
+                          )}
+                        </>
+                      }
+                    >
+                      <div className="record-detail">
                         <dl className="detail-list">
                           <div>
-                            <dt>Cliente declarado</dt>
+                            <dt>Autorizado em</dt>
                             <dd>
-                              <code>{grant.clientId}</code>
+                              {momentLabel(
+                                new Date(grant.createdAt * 1000).toISOString(),
+                              )}
                             </dd>
                           </div>
+
                           <div>
                             <dt>Permissões OAuth</dt>
                             <dd>{grant.scope.join(", ") || "Acesso ao MCP"}</dd>
                           </div>
                           <div>
-                            <dt>Expira em</dt>
+                            <dt>Expiração</dt>
                             <dd>
                               {grant.expiresAt
                                 ? momentLabel(
@@ -239,200 +231,249 @@ export function AuditView({
                           </div>
                         </dl>
                         <p className="muted">
-                          Nome informado pelo cliente. A autorização permite
-                          usar as ferramentas desta instalação.
+                          Nome declarado pelo cliente. Autorização não indica
+                          conexão online; o último uso se refere ao período
+                          selecionado.
                         </p>
-                      </details>
-                    </div>
-                    {confirm === grant.id ? (
-                      <div className="revoke-confirm">
-                        <p>Revogar o acesso de {grant.clientName}?</p>
-                        <UiButton
-                          disabled={busy}
-                          onClick={revoke}
-                          tone="danger"
-                          type="button"
-                        >
-                          Confirmar revogação
-                        </UiButton>
-                        <UiButton
-                          disabled={busy}
-                          onClick={cancelRevoke}
-                          type="button"
-                          variant="secondary"
-                        >
-                          Cancelar
-                        </UiButton>
+                        {confirm === grant.id ? (
+                          <div className="revoke-confirm">
+                            <p>Revogar o acesso de {grant.clientName}?</p>
+                            <UiButton
+                              disabled={busy}
+                              onClick={revoke}
+                              tone="danger"
+                              type="button"
+                            >
+                              Confirmar revogação
+                            </UiButton>
+                            <UiButton
+                              disabled={busy}
+                              onClick={cancelRevoke}
+                              type="button"
+                              variant="secondary"
+                            >
+                              Cancelar
+                            </UiButton>
+                          </div>
+                        ) : (
+                          <UiButton
+                            className="quiet-action"
+                            disabled={busy}
+                            onClick={askRevoke}
+                            type="button"
+                            value={grant.id}
+                            variant="ghost"
+                          >
+                            Revogar acesso
+                          </UiButton>
+                        )}
+                        <RecordReference>
+                          <div>
+                            <dt>Cliente declarado</dt>
+                            <dd>
+                              <code>{grant.clientId}</code>
+                            </dd>
+                          </div>
+                        </RecordReference>
                       </div>
-                    ) : (
-                      <UiButton
-                        disabled={busy}
-                        onClick={askRevoke}
-                        type="button"
-                        value={grant.id}
-                        variant="secondary"
-                      >
-                        Revogar acesso
-                      </UiButton>
-                    )}
-                  </article>
+                    </DisclosureItem>
+                  </li>
                 ))}
-              </div>
+              </ul>
             ) : (
               <EmptyView title="Nenhum assistente autorizado">
-                Configure a URL MCP em Conexões e autorize seu assistente.
+                <a href="/account/connections">Conectar assistente</a>
               </EmptyView>
             )}
             {!!data.grantCursor && (
               <a
+                className="page-next"
                 href={`/account/audit?${new URLSearchParams({ days: String(data.days), grantCursor: data.grantCursor })}`}
               >
                 Mais autorizações
               </a>
             )}
             {!!params.get("grantCursor") && (
-              <a href={`/account/audit?days=${data.days}`}>
+              <a
+                className="page-next"
+                href={`/account/audit?days=${data.days}`}
+              >
                 Primeiras autorizações
               </a>
             )}
           </section>
-          {data.totals.requests ? (
-            <>
-              <section aria-labelledby="audit-trend">
-                <h2 id="audit-trend">Dias com atividade · UTC</h2>
-                <div className="audit-bars">
-                  {data.daily.map((day) => (
-                    <div
-                      className="audit-day"
-                      key={day.day}
-                    >
-                      <span>
-                        {day.day.slice(5).split("-").reverse().join("/")}
-                      </span>
-                      <meter
-                        aria-label={`${day.day}: ${day.requests} requisições, ${day.errors} falhas`}
-                        max={Math.max(...data.daily.map((d) => d.requests), 1)}
-                        min={0}
-                        value={day.requests}
-                      />
-                      <span>
-                        {day.requests} <small>· {day.errors} falhas</small>
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </section>
-              <section aria-labelledby="audit-model">
-                <h2 id="audit-model">Modelos informados pelos clientes</h2>
-                <p className="muted">
-                  O servidor não identifica o modelo automaticamente. Sem
-                  declaração, mostramos “Não informado”; o nome recebido não é
-                  verificado.
-                </p>
-                <div className="audit-table-wrap">
-                  <table className="audit-table">
-                    <thead>
-                      <tr>
-                        <th>Modelo</th>
-                        <th>Chamadas</th>
-                        <th>Falhas</th>
-                        <th>Taxa de erro</th>
-                        <th>Entrada / saída</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {data.models.map((row) => (
-                        <tr key={row.model ?? "unknown"}>
-                          <td>{row.model ?? "Não informado"}</td>
-                          <td>{row.toolCalls}</td>
-                          <td>{row.errors}</td>
-                          <td>{rate(row.errors, row.toolCalls)}</td>
-                          <td>
-                            {bytes(row.inputBytes)} / {bytes(row.outputBytes)}
-                          </td>
+          <WorkspaceDetails
+            hint={`${data.totals.requests} requisições`}
+            title="Atividade"
+          >
+            <WorkspaceMetrics
+              items={[
+                { label: "Ferramentas", value: data.totals.toolCalls },
+                {
+                  label: "Falhas / interrupções",
+                  value: `${data.totals.errors} / ${data.totals.cancelled}`,
+                },
+                {
+                  label: "Entrada / saída",
+                  value: `${bytes(data.totals.inputBytes)} / ${bytes(data.totals.outputBytes)}`,
+                },
+                {
+                  label: "Duração média",
+                  value: data.totals.requests
+                    ? `${Math.round(data.totals.durationMs / data.totals.requests)} ms`
+                    : "—",
+                },
+              ]}
+            />
+            {data.totals.requests ? (
+              <>
+                <section aria-labelledby="audit-trend">
+                  <h2 id="audit-trend">Dias com atividade · UTC</h2>
+                  <div className="audit-bars">
+                    {data.daily.map((day) => (
+                      <div
+                        className="audit-day"
+                        key={day.day}
+                      >
+                        <span>
+                          {day.day.slice(5).split("-").reverse().join("/")}
+                        </span>
+                        <meter
+                          aria-label={`${day.day}: ${day.requests} requisições, ${day.errors} falhas`}
+                          max={Math.max(
+                            ...data.daily.map((d) => d.requests),
+                            1,
+                          )}
+                          min={0}
+                          value={day.requests}
+                        />
+                        <span>
+                          {day.requests} <small>· {day.errors} falhas</small>
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+                <section aria-labelledby="audit-model">
+                  <h2 id="audit-model">Modelos informados pelos clientes</h2>
+                  <p className="muted">
+                    O servidor não identifica o modelo automaticamente. Sem
+                    declaração, mostramos “Não informado”; o nome recebido não é
+                    verificado.
+                  </p>
+                  <div className="audit-table-wrap">
+                    <table className="audit-table">
+                      <thead>
+                        <tr>
+                          <th>Modelo</th>
+                          <th>Chamadas</th>
+                          <th>Falhas</th>
+                          <th>Taxa de erro</th>
+                          <th>Entrada / saída</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </section>
-              <section aria-labelledby="audit-clients">
-                <h2 id="audit-clients">Volume por cliente</h2>
-                <div className="audit-table-wrap">
-                  <table className="audit-table">
-                    <thead>
-                      <tr>
-                        <th>Cliente</th>
-                        <th>Requisições</th>
-                        <th>Falhas</th>
-                        <th>Entrada / saída</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {data.clients.map((row) => (
-                        <tr key={row.clientId ?? "unknown"}>
-                          <td>{clientLabel(data, row.clientId)}</td>
-                          <td>{row.requests}</td>
-                          <td>{row.errors}</td>
-                          <td>
-                            {bytes(row.inputBytes)} / {bytes(row.outputBytes)}
-                          </td>
+                      </thead>
+                      <tbody>
+                        {data.models.map((row) => (
+                          <tr key={row.model ?? "unknown"}>
+                            <td data-label="Modelo">
+                              {row.model ?? "Não informado"}
+                            </td>
+                            <td data-label="Chamadas">{row.toolCalls}</td>
+                            <td data-label="Falhas">{row.errors}</td>
+                            <td data-label="Taxa de erro">
+                              {rate(row.errors, row.toolCalls)}
+                            </td>
+                            <td data-label="Entrada / saída">
+                              {bytes(row.inputBytes)} / {bytes(row.outputBytes)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </section>
+                <section aria-labelledby="audit-clients">
+                  <h2 id="audit-clients">Volume por cliente</h2>
+                  <div className="audit-table-wrap">
+                    <table className="audit-table">
+                      <thead>
+                        <tr>
+                          <th>Cliente</th>
+                          <th>Requisições</th>
+                          <th>Falhas</th>
+                          <th>Entrada / saída</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </section>
-              <details className="audit-events">
-                <summary>Últimas {data.recent.length} requisições</summary>
-                <div className="audit-table-wrap">
-                  <table className="audit-table">
-                    <thead>
-                      <tr>
-                        <th>Horário</th>
-                        <th>Ferramenta</th>
-                        <th>Resultado</th>
-                        <th>Cliente / modelo</th>
-                        <th>Duração / saída</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {data.recent.map((row) => (
-                        <tr key={row.id}>
-                          <td>{momentLabel(row.startedAt)}</td>
-                          <td>{row.tool ?? "Protocolo MCP"}</td>
-                          <td>
-                            <span
-                              className="status-label"
-                              data-tone={
-                                row.outcome === "failed" ? "error" : "neutral"
-                              }
-                            >
-                              {outcomes[row.outcome]} · HTTP {row.status}
-                            </span>
-                          </td>
-                          <td>
-                            {clientLabel(data, row.clientId)}
-                            <small>{row.model ?? "Modelo não informado"}</small>
-                          </td>
-                          <td>
-                            {row.durationMs} ms · {bytes(row.outputBytes)}
-                          </td>
+                      </thead>
+                      <tbody>
+                        {data.clients.map((row) => (
+                          <tr key={row.clientId ?? "unknown"}>
+                            <td data-label="Cliente">
+                              {clientLabel(data, row.clientId)}
+                            </td>
+                            <td data-label="Requisições">{row.requests}</td>
+                            <td data-label="Falhas">{row.errors}</td>
+                            <td data-label="Entrada / saída">
+                              {bytes(row.inputBytes)} / {bytes(row.outputBytes)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </section>
+                <details className="audit-events">
+                  <summary>Últimas {data.recent.length} requisições</summary>
+                  <div className="audit-table-wrap">
+                    <table className="audit-table">
+                      <thead>
+                        <tr>
+                          <th>Horário</th>
+                          <th>Ferramenta</th>
+                          <th>Resultado</th>
+                          <th>Cliente / modelo</th>
+                          <th>Duração / saída</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </details>
-            </>
-          ) : (
-            <EmptyView title="Ainda não há atividade registrada">
-              Faça uma consulta pelo seu assistente conectado. O histórico
-              começa nesta versão.
-            </EmptyView>
-          )}
-          <details className="audit-limits">
-            <summary>O que estes números medem</summary>
+                      </thead>
+                      <tbody>
+                        {data.recent.map((row) => (
+                          <tr key={row.id}>
+                            <td data-label="Horário">
+                              {momentLabel(row.startedAt)}
+                            </td>
+                            <td data-label="Ferramenta">
+                              {row.tool ?? "Protocolo MCP"}
+                            </td>
+                            <td data-label="Resultado">
+                              <span
+                                className="status-label"
+                                data-tone={
+                                  row.outcome === "failed" ? "error" : "neutral"
+                                }
+                              >
+                                {outcomes[row.outcome]} · HTTP {row.status}
+                              </span>
+                            </td>
+                            <td data-label="Cliente / modelo">
+                              {clientLabel(data, row.clientId)}
+                              <small>
+                                {row.model ?? "Modelo não informado"}
+                              </small>
+                            </td>
+                            <td data-label="Duração / saída">
+                              {row.durationMs} ms · {bytes(row.outputBytes)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </details>
+              </>
+            ) : (
+              <p className="muted">Sem atividade registrada no período.</p>
+            )}
+          </WorkspaceDetails>
+          <WorkspaceDetails title="O que estes números medem">
             <p>
               Janela desde {momentLabel(data.since)}. Histórico consultável de
               30 dias; nenhum argumento, resposta financeira, token ou senha é
@@ -449,7 +490,7 @@ export function AuditView({
               a 30 dias são removidos na próxima atividade. A gravação é best
               effort; uma indisponibilidade da auditoria pode deixar lacunas.
             </p>
-          </details>
+          </WorkspaceDetails>
         </>
       )}
     </>

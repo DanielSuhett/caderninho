@@ -1,4 +1,4 @@
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, exists, getTableColumns, inArray, sql } from "drizzle-orm";
 
 import { connectionPartial, IMPORT_INTERVAL } from "../../../domain";
 import { database } from "../../database";
@@ -7,6 +7,7 @@ import {
   connections,
   people,
   pluggyProfiles,
+  transactions,
 } from "../../schema";
 import type { InstallationRepository } from "../entity";
 export function createInstallationRepository(
@@ -39,7 +40,20 @@ export function createInstallationRepository(
     },
     async state(selection = {}) {
       const items = await db
-        .select()
+        .select({
+          ...getTableColumns(connections),
+          hasTransactions: sql<boolean>`${exists(
+            db
+              .select({ id: transactions.id })
+              .from(transactions)
+              .where(
+                inArray(
+                  transactions.accountId,
+                  sql`(SELECT key FROM json_each(${connections.accounts}))`,
+                ),
+              ),
+          )}`.mapWith(Boolean),
+        })
         .from(connections)
         .where(
           selection.connectionIds &&
@@ -59,6 +73,7 @@ export function createInstallationRepository(
       return {
         connections: items.map((row) => ({
           accounts: row.accounts,
+          hasTransactions: row.hasTransactions,
           id: row.id,
           importCheckpoint: row.importCheckpoint
             ? {

@@ -41,17 +41,18 @@ Títulos de uma cor. Sem palavra isolada em laranja, etiquetas em caixa alta ou 
 
 ## Composição
 
-Telas operacionais: largura máxima 850 px; workspace com navegação lateral e conteúdo flexível, formulários alinhados à esquerda. Margens móveis entre 18 e 24 px; o workspace usa 12 px para acomodar a navegação lateral. Espaçamento cria hierarquia antes de bordas e fundos.
+Telas operacionais: largura máxima 1280 px; workspace com navegação lateral e conteúdo flexível, formulários alinhados à esquerda. Margens móveis entre 18 e 24 px; o workspace usa 16 px no compacto e recupera a largura da navegação em um menu. Espaçamento cria hierarquia antes de bordas e fundos.
 
 Superfícies só para agrupar trabalho relacionado. Raios: 10 px nos grupos; 6 px nos controles; 4 px nos badges. Sem brilhos, gradientes, texturas, avatares fictícios ou grids de cards para preencher espaço. Numeração apenas para sequências reais.
 
-Elevação plana nas linhas, listas e métricas; `--shadow-low` no editor de perfil aberto; `--shadow-raised` em tooltips; `--shadow-public` no grupo principal de landing/login e nos drawers modais. Formulários dentro do drawer são planos. Sombras neutras não substituem borda, contraste nem hierarquia. Não elevar cada nível de uma composição.
+Linhas e métricas planas; as listas de registros usam uma superfície delimitada com `--shadow-low`, sem elevar cada registro; `--shadow-low` no editor de perfil aberto; `--shadow-raised` em tooltips; `--shadow-public` no grupo principal de landing/login e nos drawers modais. Formulários dentro do drawer são planos. Sombras neutras não substituem borda, contraste nem hierarquia. Não elevar cada nível de uma composição.
 
 ### Bordas e superfícies
 
 A auditoria de 23/10/2026 fixou três papéis. `--line` é um separador fino entre
 registros ou partes de um mesmo bloco, desenhado **uma vez por encontro**; listas
-contínuas não ganham moldura ou linha superior só por começarem. `--control-border`
+contínuas usam uma divisória por encontro. Cada lista de registros pode ter um único
+contorno neutro de 1 px e raio de 10 px para delimitar a área de leitura. `--control-border`
 é o contorno de campos, botões e outros controles que precisam de limite visível.
 Avisos usam a borda de seu estado, com 1 px uniforme nos quatro lados; a cor e o
 texto continuam a explicar o estado. O foco de teclado usa outline laranja e
@@ -90,7 +91,7 @@ verificação própria antes de um deploy; não são resultados desta auditoria.
 - `src/web/ui.tsx`: adaptadores SSR dos componentes Kumo. Botão principal laranja com texto escuro; secundário sobre superfície escura. O adaptador usa a variante neutra Kumo para evitar o gradiente e o texto branco obrigatório da variante primary, mantendo suas semânticas e estados.
 - `src/web/portal-view.tsx`: shell operacional compartilhado. O painel em `src/web/account/account-view.tsx` usa React e Kumo; `src/web/consent-view.tsx` exporta o formulário React renderizado no servidor.
 - Fonte copiada para assets no build, CSP `font-src 'self'`; nenhum carregamento de fonte externa. Sem JavaScript para identidade visual.
-- Botões, inputs e summaries com alvos de pelo menos 44 px; o campo de senha mantém 48 px. Compactar conteúdo e espaços, nunca diminuir a área de toque. Foco visível, labels associados, estados disabled legíveis. Cor nunca é a única indicação.
+- Controles operacionais com 36 px no desktop e 44 px no compacto ou com ponteiro de toque; navegação mantém 44 px. Landing e acesso conservam os controles públicos de 44 px e o campo de senha de 48 px. Foco visível, labels associados, estados disabled legíveis. Cor nunca é a única indicação.
 
 ## Conteúdo e interação
 
@@ -116,27 +117,23 @@ Preserve fonte local, foco visível e navegação por teclado em desktop e celul
 ## Navegação da instalação
 
 `/account` apresenta a visão geral. Auditoria MCP, Transações, Regras, Grupos,
-Sincronizações e Conexões têm páginas próprias. A navegação permanece lateral em
-todas as larguras: 208 px com nomes no desktop e uma faixa de 56 px com ícones no
-compacto. “Abrir navegação” revela um drawer à esquerda com os mesmos destinos e
-nomes completos. Ícones Phosphor de 20 px; todos os alvos compactos medem exatamente
-44 × 44 px dentro de 6 px laterais. Menu, destinos, referência e saída compartilham
-o mesmo centro. A classe `sidebar-control` também inclui os botões Kumo; não
-misturar famílias para imitar outra biblioteca. O destino ativo usa fundo/texto de
-seleção e `aria-current`; o foco de teclado mantém outline laranja. O link de salto
-leva ao conteúdo.
+Sincronizações e Conexões têm páginas próprias. A navegação usa uma lateral de 208 px com nomes no desktop. Até 760 px, o
+trilho de ícones sai da composição: um botão de 44 × 44 px junto ao título abre
+o drawer à esquerda com todos os destinos nomeados, referência visual e saída.
+O conteúdo recupera a largura inteira. Ícones Phosphor de 20 px; não diminuir
+áreas de toque para compactar. O destino ativo usa fundo/texto de seleção e
+`aria-current`; foco laranja e link de salto permanecem.
 
-A grade tem 4 px entre destinos e entre ações de rodapé; 12 px após o menu. Após
-o último destino: 16 px até o separador de 1 px, depois 12 px até a referência.
-Referência e saída ficam adjacentes; metadados vêm depois. A seleção não acrescenta
-borda, sombra ou indicador lateral. No desktop, os alvos usam coluna de ícone
-de 20 px, intervalo de 12 px e texto; a lateral tem padding de 6 px. O layout muda
-em 760/761 px, sem um segundo salto em 1000 px. O guia define a verificação por
-retângulos DOM; ausência de overflow ou screenshot isolado não comprova alinhamento.
+O wordmark operacional tem 24 px; a assinatura “MCP financeiro pessoal” fica
+fora do workspace. Essa redução é restrita ao painel e preserva landing e acesso.
 
-Todas as oito páginas do workspace, incluindo a referência visual, usam
-`FilterDrawer`. O botão “Filtros” abre à direita; o recorte aplicado continua
-visível fora do drawer, com pessoa, grupo, período e condições pertinentes à página.
+As páginas de consulta do workspace usam `FilterDrawer`. O botão “Filtros” abre à direita; o recorte aplicado continua
+visível fora do drawer. Uma linha resume o contexto relevante (pessoa, grupo ou período); o botão
+mostra a quantidade de condições adicionais, sem contar defaults ou vazios. Em
+Grupos, a seleção identifica explicitamente o recorte de categorias e etiquetas;
+a lista de grupos continua completa.
+Os critérios completos são os campos aplicados ao reabrir o drawer; limpar e
+selecionar lançamentos futuros ficam dentro dele.
 Editar campos é rascunho; “Aplicar filtros” submete GET. X, Escape e “Cancelar”
 fecham sem aplicar; reabrir recupera o recorte da URL. “Limpar filtros” volta ao
 caminho sem query: remove também pessoa, grupo e paginação, restaurando os padrões.
@@ -149,8 +146,11 @@ reduzido. Validar foco, Escape e retorno ao gatilho no navegador; o componente
 nativo não dispensa essa revisão.
 
 A leitura financeira fica separada da gestão de credenciais. Transações usam
-lista contínua: descrição e valor primeiro, conta e titular juntos, data e
-categoria abaixo no compacto ou em coluna própria no desktop. A linha inteira
+uma lista contínua delimitada: descrição e valor/moeda primeiro, sentido junto ao
+valor, data e conta em uma linha secundária. Titular permanece no resumo quando
+a consulta abrange várias pessoas; não inferir o escopo pelos registros da página.
+Categoria, descrição completa, IDs e explicações ficam na expansão. Pendências,
+parcialidade, parcelas, futuros e exclusão continuam explícitos quando relevantes. A linha inteira
 abre detalhes por clique, Enter ou Espaço; não converter cada célula em um campo
 rotulado no compacto. Regras explicam condições em linguagem legível; grupos exibem espaços, categorias e tags. Falhas e dados parciais ficam
 junto aos resultados, fora dos drawers.
@@ -159,6 +159,24 @@ Confirmação de configuração, autorização OAuth e requisição autenticada 
 evidências diferentes. A UI não atribui marca verificada a um nome declarado pelo
 cliente. Privacidade e manutenção ficam em disclosures, sem esconder falhas.
 O [guia das páginas](docs/frontend-workspace.md) documenta os recortes e limites.
+
+## Hierarquia das páginas
+
+A visão geral começa pelas contas; o resumo da instalação fica recolhido depois
+delas. A jornada de conexão completa pertence a Conexões, reaparecendo na visão
+geral quando ainda falta importar dados. Progresso real, erros e parcialidade
+continuam visíveis; conclusão não se repete antes de cada consulta.
+
+`WorkspaceDetails` agrupa conteúdo secundário com título explícito: atividade e
+referências da auditoria, categorias/etiquetas, explicações das regras e histórico,
+e amostras da galeria. Autorizações precedem métricas na auditoria. Falhas não
+ficam escondidas nessa expansão. Cada regra mostra uma condição reconhecível,
+destino, prioridade e Ativa/Pausada; condições compostas preservam seu alcance
+completo nos detalhes. Datas trazem seu significado: “Saldo em” e “Início”.
+
+O catálogo visual é uma referência recolhida por assunto; não simula filtros sem
+consulta. Editores mantêm labels permanentes, validação e ação fixa no rodapé.
+Tabelas técnicas viram registros rotulados no celular, sem exigir arrastar a página.
 
 ## Gestão de múltiplas pessoas
 
@@ -181,13 +199,23 @@ marca ficam restritas ao selo; não viram cor da página ou estado de sucesso.
 
 ## Densidade e estados operacionais
 
+Minimalismo é seleção de informação. Cada tela tem um título e uma ação principal;
+subtítulos, etiquetas e explicações só aparecem se mudarem a próxima decisão.
+Dados precisam aparecer na primeira tela do celular. Filtros padrão não viram
+chips; explicações e metadados secundários ficam em drawers ou expansões.
+Preservar valor, moeda, sentido e exceções financeiras. Ganhar espaço removendo
+repetições, sem diminuir fonte, contraste ou alvos de toque. Hover e foco dão
+resposta discreta; uma superfície delimita a lista sem criar cards em cada linha.
+
 O painel é suporte ao MCP. Uma primeira tela deve mostrar dados ou a próxima ação,
 não repetir o nome da navegação em um eyebrow. Cabeçalhos operacionais usam
 `WorkspaceHeading`; atualização usa `RefreshButton`. A marca, fonte e paleta não
 mudam ao navegar entre leitura financeira e gestão.
 
 `UiButton` conserva a semântica do Kumo. Na área operacional os controles têm altura
-mínima de 44 px, texto de 14 px e padding de 8 × 14 px. Há um destaque principal por
+mínima de 36 px, texto de 14 px e padding de 6 × 10 px no desktop; até 760 px ou
+com ponteiro de toque, a altura mínima passa a 44 px.
+Essa densidade não reduz a fonte de dados ou valores financeiros. Há um destaque principal por
 tarefa; atualização/importação auxiliar usa secundário. Ícones são do Phosphor,
 compartilhado com o Kumo, com nome acessível e dica no foco/hover. Ações de impacto,
 como revogar acesso, mantêm texto explícito e confirmação. `UiButton tone="danger"`
@@ -205,8 +233,22 @@ O resumo conserva o que muda a interpretação: titular, sinal/moeda e pendênci
 exclusão nas transações; natureza do saldo e parcialidade nas contas; estado,
 prioridade e alcance das regras; moeda e orçamento dos grupos; estado, titular,
 início, falha e recuperação histórica nas sincronizações. IDs e explicações longas
-ficam na expansão. Categorias e etiquetas sem informação adicional permanecem
+ficam na expansão. Resumo e detalhe compartilham o recuo lateral de 16 px;
+o contêiner controla os intervalos de 16 px entre blocos e 24 px entre colunas.
+Dados precedem ações. “Editar” e “Excluir” são botões locais discretos, com nome
+acessível que identifica o objeto; a confirmação de exclusão continua explícita.
+O grupo base Pessoal não oferece a exclusão que o domínio proíbe.
+Uma única “Referência técnica” recolhe IDs de grupos, regras, contas, rodadas e
+clientes MCP, sem outra superfície. Erros, escopos, condições completas,
+parcialidade e consequências permanecem fora dessa referência.
+Categorias e etiquetas sem informação adicional permanecem
 listas simples; não adicionar expansão vazia só para uniformizar aparência.
+
+O editor de grupo usa diálogo com até 560 px e altura do conteúdo; confirmação
+curta usa até 440 px. Ambos têm limite de 90dvh e corpo rolável, com cabeçalho e
+ações preservados. Até 480 px, ficam na base com margem de 16 px. O editor longo
+de regra continua no drawer de 720 px. Cancelar recebe o foco inicial em uma
+confirmação destrutiva; Escape e fechamento devolvem o foco ao gatilho.
 
 `WorkspaceSkeleton` aparece na carga inicial. Na atualização da mesma consulta, os
 dados existentes permanecem visíveis; um aviso indica atualização ou falha, sem

@@ -22,6 +22,7 @@ export function createInstallationService({
       }
       assertPersonalConnector(connection.connector?.id);
       await repository.register(id, profileId);
+      return id;
     },
     state: repository.state,
     async token(id?: string, profileId = DEFAULT_PROFILE) {

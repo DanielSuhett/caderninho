@@ -41,12 +41,14 @@ export function Consent({
         />
         <UiButton
           name="decision"
+          size="lg"
           value="approve"
         >
           Autorizar
         </UiButton>
         <UiButton
           name="decision"
+          size="lg"
           value="deny"
           variant="secondary"
         >

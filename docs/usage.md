@@ -1,8 +1,8 @@
 # Usar o Caderninho
 
 Abra `/account`, entre com sua senha e acesse **Conexões** para escolher **Conectar Meu Pluggy**. Use a mesma
-aplicação Pluggy das suas conexões pessoais. Depois, escolha **Importar esta visão** e
-acompanhe o estado das contas no painel.
+aplicação Pluggy das suas conexões pessoais. Ao confirmar a conexão, a primeira
+importação começa automaticamente. Acompanhe as fases e as páginas publicadas no painel.
 
 Consulte [as páginas da instalação](frontend-workspace.md) para navegar por transações,
 regras, grupos e histórico de sincronizações.
@@ -15,6 +15,19 @@ selecione o perfil antes de conectar. O [guia de titularidade](household.md) exp
 migração, filtros MCP, correção de titular, pausa e limites da Pluggy.
 
 ## Importações
+
+A tela de **Conexões** acompanha a importação real: espera na fila, fase corrente,
+conta em processamento e horário da última observação do status. Esse horário não
+indica atualização no banco. Contas identificadas ainda não significam transações
+publicadas; **Ver transações disponíveis** aparece quando a primeira página está
+salva. Você pode consultá-la enquanto o restante continua sendo importado.
+
+Ao concluir, **Ver transações** também fica disponível para um resultado vazio.
+Uma falha preserva os registros já publicados e oferece os detalhes para recuperação.
+As atualizações automáticas do status param ao concluir, falhar ou ocultar a aba;
+retornar à aba ou escolher **Atualizar status** consulta novamente. Uma indisponibilidade
+na leitura do status mantém a última observação, sem declarar que a importação falhou.
+Pedidos posteriores ficam em **Pessoas, perfis e outras conexões**.
 
 O Caderninho relê contas, transações, investimentos, empréstimos e faturas disponíveis na origem. Uma coleta
 concluída significa que essa enumeração terminou; a instituição pode disponibilizar

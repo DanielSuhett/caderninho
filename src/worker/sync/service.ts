@@ -286,8 +286,12 @@ export function createSyncService(
         ),
       );
     },
-    async request(ids?: string[]) {
-      const admissions = await repository.admit(ids, now().toISOString());
+    async request(ids?: string[], initialOnly = false) {
+      const admissions = await repository.admit(
+        ids,
+        now().toISOString(),
+        initialOnly,
+      );
       const pending = await Promise.all(
         admissions.map((admission) =>
           admission.importId &&

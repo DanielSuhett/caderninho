@@ -23,7 +23,7 @@ com confiança?**
 | Cabeçalho, filtros, métricas, refresh e skeleton | `src/web/account/workspace-ui.tsx` | Compor os componentes existentes; não criar outro cabeçalho local com escala própria. |
 | Campos de escopo e estado vazio | `src/web/account/workspace-filters.tsx` | `ScopeFields` e `EmptyView`; aplicação/limpeza pertencem a `FilterDrawer`. |
 | Drawer modal compartilhado | `src/web/account/workspace-drawer.tsx` | `WorkspaceDrawer`: diálogo nativo, cabeçalho, corpo rolável e ações Kumo. |
-| Editor de backoffice | `src/web/account/backoffice-dialog.tsx` | Drawer de 720 px, cabeçalho/ações fixos, corpo rolável, confirmação de descarte e foco restaurado. |
+| Editor de backoffice | `src/web/account/backoffice-dialog.tsx` | Regra longa: drawer de 720 px; grupo: diálogo de 560 px; confirmação curta: 440 px. Corpo rolável, ações preservadas, descarte e foco restaurado. |
 | Item expansível compartilhado | `src/web/account/disclosure-item.tsx` | `DisclosureItem` fornece interação nativa; os domínios montam resumo e detalhe. |
 | Lista financeira | `src/web/account/transaction-list.tsx` | `TransactionList` compõe a peça comum com dados financeiros e a mesma apresentação na galeria. |
 | Identificação visual de banco | `src/web/account/bank-mark.tsx` | `BankMark` e catálogo `bankMarks`; fallback neutro sem identidade confirmada. |
@@ -171,7 +171,7 @@ hover e não atribuir precisão inexistente a volume, custo ou tokens de IA.
 | Nível | Token / valor | Aplicação |
 | --- | --- | --- |
 | Plano | `--shadow-flat` · `none` | Linhas, tabelas, métricas e estrutura comum. |
-| Baixo | `--shadow-low` · `0 2px 6px #0005, inset 0 1px 0 #ffffff08` | Editor de perfil aberto; listas de registros e formulário dentro de drawer são planos. |
+| Baixo | `--shadow-low` · `0 2px 6px #0005, inset 0 1px 0 #ffffff08` | Lista delimitada e editor de perfil aberto; registros individuais e formulário dentro de drawer são planos. |
 | Elevado | `--shadow-raised` · `0 8px 24px #0008, inset 0 1px 0 #ffffff0c` | Tooltip sobre a página, com `--surface-raised`. |
 | Profundidade ampla | `--shadow-public` · `0 16px 48px #0009, inset 0 1px 0 #ffffff0c` | Grupo principal de landing/login e drawers modais, com `--surface`. |
 
@@ -204,7 +204,8 @@ metadado indispensável à decisão deve subir de hierarquia, não ganhar uma co
 
 Os tokens operacionais existentes em `.workspace` são `--text-title`,
 `--text-section`, `--text-body`, `--text-control`, `--text-caption` e
-`--control-height` (44 px). Use a classe/componente antes de aplicar um token local.
+`--control-height` (36 px no desktop; 44 px até 760 px ou com ponteiro de toque).
+Use a classe/componente antes de aplicar um token local.
 
 ### Espaço, geometria e densidade
 
@@ -220,8 +221,10 @@ Os tokens operacionais existentes em `.workspace` são `--text-title`,
 A escala está disponível em `--space-1`, `--space-2`, `--space-3`,
 `--space-4`, `--space-6` e `--space-8` (múltiplos de 4 px).
 
-Controles e summaries têm alvo de **44 × 44 px no mínimo**, mesmo quando o ícone
-tem 20 px. Uma linha de dados sem ação não precisa ter altura de botão. Raios:
+Controles operacionais têm altura mínima de **36 px no desktop** e **44 px no
+compacto ou toque**, mesmo quando o ícone tem 20 px. Navegação conserva 44 px.
+A linha inteira é o alvo dos summaries, sem altura fixa. Landing e acesso mantêm
+44 px nos botões e 48 px no campo de senha. Uma linha de dados sem ação não precisa ter altura de botão. Raios:
 6 px nos controles, 10 px nos grupos, 4 px nos estados. Sem gradiente, glow,
 textura ou sombra fora dos níveis definidos acima. A linha deve separar; o espaço deve organizar.
 
@@ -236,7 +239,7 @@ Teste também 390 px e zoom 200%; não crie uma largura mínima no `body`.
 | --- | --- | --- | --- |
 | Primária | `<UiButton>` ou `variant="primary"` | Verbo específico: “Conectar Meu Pluggy”, “Aplicar filtros”. Uma ação dominante por tarefa. | Atualização auxiliar, link de navegação, ação que ainda pede escolha. |
 | Secundária | `<UiButton variant="secondary">` | “Importar esta visão”, “Cancelar”, “Tentar novamente”. Superfície neutra. | Tornar uma ação necessária impossível de encontrar. |
-| Ícone | `RefreshButton` | Nome acessível, dica única no foco/hover, ícone Phosphor, alvo 44 px. | “Revogar”, “Conectar” ou qualquer ação cuja consequência não seja óbvia. |
+| Ícone | `RefreshButton` | Nome acessível, dica única no foco/hover, ícone Phosphor, alvo 36 px no desktop e 44 px no compacto/toque. | “Revogar”, “Conectar” ou qualquer ação cuja consequência não seja óbvia. |
 | Destrutiva | Ação secundária → confirmação explícita → `<UiButton tone="danger">` | “Revogar acesso” → “Confirmar revogação”, nome do cliente e “Cancelar”. `tone` muda a semântica visual sem criar `variant="danger"` no Kumo. | Executar ao abrir disclosure, selecionar linha ou clicar num ícone sem texto. |
 | Navegação | `<a href>` ou `UiLink` para CTA | Destino explícito: “Ver transações”, “Mais autorizações”. Preserva comportamento de nova aba/voltar. | Trocar link por botão com `location` sem necessidade. |
 
@@ -244,6 +247,15 @@ Sempre declarar `type="button"` para ação que não submete um formulário.
 `UiButton` assume `submit`. Estado `disabled` preserva tamanho e texto; impedir
 envio duplicado não substitui idempotência no backend. Não chamar `disabled` de
 permissão negada: nesse caso explicar o motivo e a recuperação possível.
+
+Consultar a API da versão instalada antes de adaptar um componente:
+`npx --no-install @cloudflare/kumo doc Button` e `doc Input`. A
+[CLI oficial](https://kumo-ui.com/cli/) consulta componentes e instala blocos; a
+[skill kumo-design](https://kumo-ui.com/skill/) orienta composição e revisão.
+`npx skills add cloudflare/kumo@kumo-design` instala essas orientações, não os
+componentes. Usar ambas como referência e registrar adaptações do Caderninho:
+Hanken, contraste preto/laranja, valores legíveis e alvos de toque. Os adaptadores
+em `ui.tsx` e os tokens centrais continuam a ser a fronteira de identidade.
 
 ```tsx
 <UiButton disabled={busy} onClick={revoke} tone="danger" type="button" variant="secondary">
@@ -288,7 +300,9 @@ import { EmptyView, ScopeFields } from "./workspace-filters";
 import { ResourceFeedback, useResource } from "./workspace-resource";
 import {
   FilterDrawer,
+  RecordReference,
   RefreshButton,
+  WorkspaceDetails,
   WorkspaceHeading,
   WorkspaceMetrics,
   WorkspaceSkeleton,
@@ -301,17 +315,19 @@ import { TransactionList } from "./transaction-list";
 
 | Peça | Props atuais | Uso |
 | --- | --- | --- |
-| `FilterDrawer` | `action: string`, `children: ReactNode`, `summary: string[]` | Gatilho, recorte aplicado, formulário GET em drawer e limpeza completa pelo caminho sem query. |
+| `FilterDrawer` | `action: string`, `children: ReactNode`, `activeCount?: number`, `context?: string` | Gatilho com contagem adicional, contexto aplicado, formulário GET e limpeza dentro do drawer. |
 | `WorkspaceDrawer` | `title: string`, `trigger: ReactNode`, `children: ReactNode`, `footer?: ReactNode`, `side?: "left" \| "right"`, `className?: string` | Lado padrão direito; `footer` acrescenta a ação primária ao fechamento nativo do componente. |
 | `DisclosureItem` | `summary: ReactNode`, `children: ReactNode`, `className?: string` | `details/summary` nativos; chevron decorativo e aparência compartilhada. Não recebe esquema de colunas, seleção ou fetch. |
+| `RecordReference` | `children: ReactNode` | Uma expansão nativa “Referência técnica” com `dl` para IDs raros. Filhos são pares `dt`/`dd`, sem nova superfície; não esconder erros ou escopos. |
 | `TransactionList` | `records: Transaction[]`, `accounts: Array<{ id: string; name: string }>`, `categories: Array<{ id: string; name: string }>` | `Transaction` deriva dos registros de `TransactionListSchema`; formata valores e compõe `DisclosureItem`. |
 | `BankMark` | `institution?: string` | Chave estável do catálogo local; ausente/desconhecida gera BankIcon neutro. |
+| `WorkspaceDetails` | `title: string`, `children: ReactNode`, `hint?: string` | Referência ou conteúdo secundário recolhido com `details/summary` nativos. Não esconder erro, parcialidade ou a próxima ação. |
 | `WorkspaceMetrics` | `items: Array<{ label: string; value: ReactNode; hint?: string }>` | Métricas sem regras financeiras; cada label deve ser único no conjunto. |
 | `WorkspaceHeading` | `title: string`, `description?: string`, `children?: ReactNode` | Título e descrição de uma frase; `children` recebe refresh ou uma ação de página. |
 | `RefreshButton` | `onClick: () => void`, `disabled?: boolean`, `label?: string` | Label padrão “Atualizar dados”; contextualizar como “Atualizar auditoria”. |
 | `WorkspaceSkeleton` | Nenhuma | Preferir acesso por `ResourceFeedback`; uso direto só em estado inicial equivalente. |
-| `UiButton` | Props de `Button` Kumo, atributos `data-*`, `tone?: "normal" \| "danger"`; `variant` padrão `primary` | Tom padrão `normal`; declarar `type`, `disabled` e ação/submit. |
-| `UiLink` | Props de `LinkButton` Kumo; `variant` padrão `primary` | Navegação real com `href`, sem prop `tone`. |
+| `UiButton` | Props de `Button` Kumo, atributos `data-*`, `tone?: "normal" \| "danger"`; `variant` padrão `primary`, `size` padrão `base` | Tom padrão `normal`; declarar `type`, `disabled` e ação/submit. Ações locais discretas usam `ghost`; páginas públicas explicitam `lg`. |
+| `UiLink` | Props de `LinkButton` Kumo; `variant` padrão `primary`, `size` padrão `base` | Navegação real com `href`, sem prop `tone`; páginas públicas explicitam `lg`. |
 | `UiField` | Props de `Input` Kumo + `label: string` | ID associado ao label; IDs fornecidos pelo chamador são preservados. |
 | `ScopeFields` | `snapshot: PortalResponse`, `catalog: WorkspaceCatalog`, `params: URLSearchParams`, `person?: boolean` | Grupo e pessoa de consultas financeiras. Não usar na auditoria de clientes. |
 | `EmptyView` | `title: string`, `children: ReactNode` | Frase explicativa dentro de `p`; não passar outro bloco de formulário como filho. |
@@ -327,9 +343,9 @@ no controller; um link de menu sozinho não cria uma página autenticada.
 
 ### Shell e cabeçalho
 
-Navegação sempre lateral. Desktop: coluna de 208 px com ícone e nome; compacto,
-até 760 px: faixa de 56 px com ícones e conteúdo flexível ao lado. O rail não pode
-rolar horizontalmente; filhos e coluna de conteúdo precisam poder encolher.
+Desktop: navegação lateral de 208 px com ícone e nome. Até 760 px, um botão
+de 44 × 44 px junto ao título abre o drawer de navegação; o trilho sai da
+composição e o conteúdo ocupa a largura inteira. Filhos precisam poder encolher.
 `WorkspaceHeading` mantém título e ação próximos sem reservar altura de hero.
 Não repetir título em eyebrow, descrição da navegação e outra legenda.
 
@@ -352,36 +368,23 @@ margens globais de botão não podem somar espaço ao gap da grade.
 
 | Medida | Compacto, até 760 px | Desktop, acima de 760 px |
 | --- | --- | --- |
-| Coluna lateral | 56 px | 208 px |
-| Padding lateral da sidebar | 6 px | 6 px |
-| Alvo de navegação | 44 × 44 px, padding zero | 196 × 44 px, padding horizontal de 12 px |
-| Ícone | 20 × 20 px, centralizado | 20 × 20 px em coluna própria |
-| Centro X do ícone | `sidebar.left + 28` | `sidebar.left + 28` |
-| Texto | Oculto no rail; disponível no drawer | Coluna flexível após intervalo de 12 px; início em `sidebar.left + 50` |
-| Intervalo entre alvos | 4 px | 4 px |
-| Intervalo para o conteúdo | 16 px | 24 px |
+| Navegação | Botão de 44 × 44 px junto ao título; drawer com até 300 px | Coluna de 208 px |
+| Alvo | Menu de 44 × 44 px; destinos do drawer com 44 px de altura | 196 × 44 px, padding horizontal de 12 px |
+| Ícone | 20 × 20 px, centralizado no menu | 20 × 20 px em coluna própria |
+| Texto | Nome completo no drawer | Coluna flexível após intervalo de 12 px |
+| Intervalo entre destinos | 4 px no drawer | 4 px |
+| Conteúdo | Título com 58 px reservados ao menu; dados na largura inteira | Intervalo de 24 px para a sidebar |
 
-Para o topo compacto, o alvo do menu precede os sete destinos com intervalo de
-12 px. Após o último destino, o rodapé tem `margin-top: 16px`, separador de 1 px
-e `padding-top: 12px`; Referência e Sair têm intervalo de 4 px. O separador ocupa
-a largura interna (44 px no rail), fora das áreas acionáveis. Metadados da
-instalação aparecem depois das ações e ficam ocultos no rail.
+Referência e Sair mantêm a mesma grade dos destinos. O rodapé da navegação tem
+`margin-top: 16px`, separador de 1 px e `padding-top: 12px`; metadados da
+instalação aparecem depois das ações. No desktop, padding vertical de 6 px e
+margem vertical de -6 px reservam espaço para foco. A seleção usa fundo/texto;
+o outline de teclado permanece independente e não pode ser cortado.
 
-Padding vertical de 6 px e margem vertical de -6 px na sidebar reservam espaço
-para foco sem deslocar o primeiro alvo em relação ao topo de `WorkspaceHeading`.
-Outline de 2 px com offset de 3 px precisa permanecer visível, sem corte pelo
-contêiner rolável. A seleção não usa marcador interno, borda unilateral ou sombra.
-Fundo e texto indicam a rota atual; outline laranja aparece no foco de teclado.
-
-O drawer conserva os nomes e a grade de ícone + texto, com itens de 44 px de altura
-ocupando a largura interna disponível. Seu padding externo vem de `.drawer-body`;
-não herdar a largura de 44 px nem esconder labels por estar dentro da sidebar.
-Menu principal, referência e saída devem manter a mesma coordenada X de ícone
-dentro do painel. Botões Fechar/Cancelar do drawer conservam seu papel separado.
-
-Consolidar os seletores da navegação por responsabilidade. Em 760 px usar rail;
-em 761 px usar sidebar aberta. Em 1000 e 1001 px a geometria interna e o intervalo
-para o conteúdo continuam iguais: não existe mais breakpoint exclusivo de 1000 px.
+No drawer, os destinos ocupam a largura interna disponível, com labels completos
+e a mesma coordenada X de ícone. Não herdar a largura de 44 px do gatilho.
+Em 760 px usar menu; em 761 px usar sidebar. Não existe breakpoint exclusivo
+de 1000 px para a geometria interna da navegação.
 O cabeçalho externo segue o padding do `main`; não deslocar a sidebar para alinhar
 ícones pela forma óptica do wordmark.
 
@@ -395,12 +398,12 @@ intervalos verticais, foco e rolagem em altura reduzida. `scrollWidth === client
 
 ### Filtros e recorte aplicado
 
-`FilterDrawer` substitui a barra de formulário na página. Todas as oito páginas do
-workspace usam a mesma composição, inclusive a galeria fictícia. O conteúdo da
-página mantém apenas gatilho “Filtros”, lista `summary` do recorte aplicado e link
-“Limpar filtros”. O resumo deve identificar pessoa/grupo/período relevantes e
-condições extras; não mostrar somente uma contagem que esconda de quem são os dados.
-Os rótulos são descritivos, não chips removíveis, e derivam da URL aplicada.
+`FilterDrawer` substitui a barra de formulário nas páginas que consultam dados.
+A galeria não tem filtro fictício. Fora do drawer ficam “Filtros · N” (N conta
+condições adicionais não vazias) e uma linha curta de contexto: pessoa/grupo ou
+período. Não repetir defaults em chips. Em Grupos, rotular “Categorias e etiquetas:
+Pessoal”, pois a lista de grupos não é filtrada. Os campos completos da URL aplicada
+ficam no drawer, assim como “Limpar filtros”. O rascunho não muda o contexto externo.
 
 O drawer recebe os campos existentes (`ScopeFields`, busca, datas e estados).
 Não passar `FilterActions`: aplicação e limpeza já são responsabilidade do
@@ -443,18 +446,16 @@ para foco e semântica; utilizar diálogo nativo não equivale a homologar a jor
 
 ### Lista de transações
 
-Usar `TransactionList` tanto na página quanto na galeria. Lista sem cards, borda
-apenas entre registros e `DisclosureItem` compartilhado. Toda a linha é o alvo; o
+Usar `TransactionList` tanto na página quanto na galeria. Lista em uma superfície
+delimitada, com uma divisória entre registros e `DisclosureItem` compartilhado. Toda a linha é o alvo; o
 chevron é decorativo e gira quando aberto. Enter e Espaço alternam a expansão,
 com foco visível e sem controles interativos aninhados no summary.
 
-Descrição e valor usam 15 px / 550. Conta e titular ficam juntos em 12 px, separados
-por um traço vertical. Data e uma única etiqueta neutra de categoria ocupam a linha
-seguinte; em containers a partir de 720 px, ocupam uma coluna central própria.
-Estado confirmado fica nos detalhes; pendência e exclusão das análises
-permanecem visíveis porque mudam a interpretação. Não colorir categorias ou
-valores só para decorar. Padding vertical de 14–16 px, intervalos de 4 px dentro
-do registro e 8–16 px entre colunas; altura cresce com conteúdo, sem recortes.
+Descrição e valor usam 15 px / 550. Sentido acompanha o valor; data e conta formam
+uma linha secundária. Titular fica no resumo quando o recorte inclui várias pessoas;
+não inferir titular único pelos registros da página. Categoria, IDs e descrição
+completa ficam nos detalhes. Pendência, futuro e exclusão das análises permanecem
+visíveis porque mudam a interpretação. Padding vertical de 14–16 px, sem altura fixa.
 
 Dinheiro usa algarismos tabulares e formatação exata, preservando sinal e moeda.
 Valores extensos podem quebrar sem perder dígitos; ausência é “Valor indisponível”,
@@ -485,18 +486,20 @@ layout e estados, como `transaction-item wide-amount` ou `record-item wide-value
 
 Resumo inteiro clicável, Enter/Espaço nativos e foco visível. O chevron é
 `aria-hidden`, sem botão próprio; abrir gira o mesmo indicador. Hover e estado
-aberto usam `--surface`, sem sombra ou animação de altura. Transição de 120 ms
-apenas no fundo/chevron, removida com movimento reduzido. Links, botões, inputs e
+aberto usam `--surface-raised`, sem elevar cada registro ou animar altura. Hover
+de cor é imediato; somente o chevron tem transição de 120 ms, removida com movimento reduzido. Links, botões, inputs e
 outras ações ficam **fora do summary**, dentro do painel expandido; não criar
-handlers que disputem com o comportamento nativo ou disclosures aninhados para IDs.
+handlers que disputem com o comportamento nativo. Dentro do detalhe, somente
+`RecordReference` pode recolher os identificadores técnicos; não criar uma
+expansão por campo nem colocar a próxima ação, erro ou informação financeira nela.
 
 | Domínio | Sempre visível no resumo | Dentro da expansão |
 | --- | --- | --- |
-| Transações | Descrição, valor exato/moeda/sinal, conta e titular, data, categoria, entrada/saída; Pendente, Futura e Ignorada quando aplicáveis. | Parcelas conhecidas com data, valor e estado da origem; conta, titular, origem manual/importada e ID do lançamento. |
+| Transações | Descrição, valor exato/moeda/sinal, sentido, conta e data; titular em recorte misto; Pendente, Futura e Ignorada quando aplicáveis. | Categoria, descrição completa, parcelas conhecidas com data/valor/estado, origem e identificadores. |
 | Contas e cartões | Nome, titular, saldo/moeda, tipo, data observada e Dados parciais quando aplicável. Cartão mantém “não é dinheiro disponível”. | Perfil Pluggy, data/hora observada completa, ID da conta e link para suas transações. |
-| Regras | Nome, Ativa/Pausada, condição e categoria, prioridade, movimento e restrição de conta. | Explicação completa da regra, campos de alcance, ID e link para lançamentos com a condição. |
-| Grupos | Nome, tipo, moeda, orçamento ou desativado/valor não definido e início do mês. | Configuração do período/orçamento, ID e link para transações do grupo. |
-| Sincronizações | Perfil, titular registrado, início e estado. Fase atual durante espera/execução; falha e registro recuperado quando aplicáveis. | Última etapa, etapas confirmadas, encerramento, erro completo, orientação de recuperação e IDs de rodada/conexão. |
+| Regras | Nome, Ativa/Pausada, condição reconhecível e categoria de destino, prioridade. | Todas as condições E/OU, restrições de conta/pessoa/moeda, ID e consulta correspondente. |
+| Grupos | Nome, moeda, orçamento ou ausência de orçamento. | Tipo, início do mês, edição, consulta e ID recolhido; não repetir moeda e orçamento. |
+| Sincronizações | Perfil, titular registrado, início e estado. Fase atual durante execução; falha e preservação de dados quando aplicáveis. | Última etapa, etapas confirmadas, registro recuperado, encerramento, erro completo, recuperação e IDs. |
 
 Esses resumos são contratos de informação, não ordem fixa de colunas. Falha,
 parcialidade, pendência, exclusão e natureza do saldo nunca exigem expansão para
@@ -509,7 +512,20 @@ A composição comum usa `.record-title`, `.record-value`, `.record-context` e
 metadados: 12 px. Padding vertical de 14–16 px. É uma linha compacta que pode crescer
 com descrição, nome ou alerta; não usar altura fixa nem truncar dinheiro. Valores
 longos/ausentes de conta recebem `wide-value` e usam outra linha em espaço estreito.
-O detalhe usa `dl` com labels, quebra de IDs e links com alvo mínimo de 44 px.
+Resumo e detalhe têm o mesmo recuo lateral de 16 px. O detalhe usa `dl` com labels
+e intervalos de 16 × 24 px, antes do rodapé de ações; o contêiner controla esses
+espaços, sem margens extras nos filhos. A consulta fica à esquerda; Editar/Excluir
+usam texto discreto, preservando nome acessível contextual e confirmação.
+Referências técnicas vêm por último. IDs quebram sem exigir rolagem da página.
+Links de ação usam a altura mínima operacional de 36/44 px. Não oferecer Excluir
+no grupo base Pessoal, protegido pelo domínio.
+
+No `BackofficeDialog`, `presentation="compact-editor"` identifica o grupo curto
+(560 px), `presentation="confirmation"` a confirmação (440 px), e o padrão
+`editor` mantém a regra longa no drawer (720 px). Diálogos curtos têm altura do
+conteúdo, máximo 90dvh e corpo rolável. Até 480 px, ficam na base com margem de
+16 px. Confirmar exclusão mantém verbo e objeto; o foco inicial fica em Cancelar.
+O tratamento de rascunho, Escape e retorno de foco é compartilhado.
 
 ```tsx
 <ul className="record-list" aria-label="Grupos">
@@ -558,7 +574,7 @@ Cores das marcas se limitam ao selo e não substituem a paleta semântica do pro
 ### Métricas e auditoria
 
 `WorkspaceMetrics` monta um `dl` de contagens/medidas reais; a auditoria mostra até
-quatro medidas comparáveis no topo. Definição em `dt`, número em `dd`, qualificação em
+quatro medidas comparáveis dentro de “Atividade”, recolhida após as autorizações. Definição em `dt`, número em `dd`, qualificação em
 `small`; não encaixar títulos no próprio número. Gráfico só quando mostra mudança
 ou distribuição relevante. A atividade diária mantém contagens em texto e período
 explícito; uma barra sem legenda e sem escala útil é decoração.
@@ -578,22 +594,19 @@ framework nem um modelo de domínio alternativo.
 ### Receita A — leitura com filtros e resultados
 
 Base completa: `transactions-view.tsx`. `resource` vem do `useResource(load)`;
-`data.catalog` é o catálogo já validado na fronteira. `appliedSummary` vem do
-recorte validado da URL e dos nomes do catálogo, como na função existente
-`transactionFilterSummary`; não é construído a partir do rascunho aberto.
+`data.catalog` é o catálogo já validado na fronteira. `activeCount` e `context`
+vêm da URL aplicada e dos nomes do catálogo; não são construídos do rascunho.
 
 ```tsx
 <>
-  <WorkspaceHeading
-    description="Lançamentos por titular, conta e categoria, na moeda de origem."
-    title="Transações"
-  />
+  <WorkspaceHeading title="Transações" />
   <ResourceFeedback {...resource} />
   {!!data && (
     <>
       <FilterDrawer
         action="/account/transactions"
-        summary={appliedSummary}
+        activeCount={activeCount}
+        context={context}
       >
         <ScopeFields catalog={data.catalog} params={params} snapshot={snapshot} />
         <label>
@@ -646,42 +659,47 @@ explica a janela e mantém limites de medição junto às tabelas.
 
 ```tsx
 <>
-  <WorkspaceHeading
-    description="Autorizações e atividade observada nesta instalação."
-    title="Auditoria MCP"
-  >
+  <WorkspaceHeading title="Auditoria MCP">
     <RefreshButton
       disabled={resource.loading || busy}
       label="Atualizar auditoria"
       onClick={resource.retry}
     />
   </WorkspaceHeading>
+  <FilterDrawer
+    action="/account/audit"
+    activeCount={params.get("days") && params.get("days") !== "7" ? 1 : 0}
+    context={params.get("days") === "1" ? "Últimas 24 horas" : `Últimos ${params.get("days") || "7"} dias`}
+  >
+    <label>
+      Período
+      <select defaultValue={params.get("days") || "7"} name="days">
+        <option value="1">24 horas</option>
+        <option value="7">7 dias</option>
+        <option value="30">30 dias</option>
+      </select>
+    </label>
+  </FilterDrawer>
   <ResourceFeedback {...resource} />
   {!!data && (
     <>
-      <WorkspaceMetrics items={[
-        { label: "Requisições autenticadas", value: data.totals.requests },
-        { label: "Falhas", value: data.totals.errors, hint: "No período selecionado" },
-      ]} />
-      <FilterDrawer
-        action="/account/audit"
-        summary={[params.get("days") === "1" ? "Período: 24 horas" : `Período: ${params.get("days") || "7"} dias`]}
-      >
-        <label>
-          Período
-          <select defaultValue={params.get("days") || "7"} name="days">
-            <option value="1">24 horas</option>
-            <option value="7">7 dias</option>
-            <option value="30">30 dias</option>
-          </select>
-        </label>
-      </FilterDrawer>
-      {/* Concessões do contrato AuditReport. */}
-      <section aria-labelledby="models-heading">
-        <h2 id="models-heading">Modelos informados pelos clientes</h2>
-        <p className="muted">Nome declarado pelo cliente; não verificado pelo servidor.</p>
-        {/* Tabela real com chamadas, falhas, denominador e volume. */}
-      </section>
+      {!!data.totals.errors && (
+        <p className="notice" data-tone="warning">
+          {data.totals.errors} falhas no período. Confira a atividade.
+        </p>
+      )}
+      {/* Autorizações do contrato AuditReport vêm primeiro. */}
+      <WorkspaceDetails title="Atividade" hint={`${data.totals.requests} requisições`}>
+        <WorkspaceMetrics items={[
+          { label: "Requisições autenticadas", value: data.totals.requests },
+          { label: "Falhas", value: data.totals.errors, hint: "No período selecionado" },
+        ]} />
+        <section aria-labelledby="models-heading">
+          <h2 id="models-heading">Modelos informados pelos clientes</h2>
+          <p className="muted">Nome declarado pelo cliente; não verificado pelo servidor.</p>
+          {/* Tabela real com chamadas, falhas, denominador e volume. */}
+        </section>
+      </WorkspaceDetails>
     </>
   )}
 </>
@@ -696,12 +714,12 @@ apresentar interrupção como sucesso, nem HTTP 200 como prova de ferramenta con
    skip link funcional, foco visível e nenhuma armadilha. Abrir/fechar drawers e
    disclosures, aplicar/descartar rascunhos e confirmar/cancelar sem mouse. Foco não fica em conteúdo removido após revogação.
 2. **Nome e alvo:** controles com label acessível, summary inteiro acionável sem links aninhados, ícones decorativos ocultos para
-   leitura, alvos 44 px, dicas acessíveis no foco. Placeholder não substitui label;
+   leitura, alvos de 36 px no desktop e 44 px no compacto/toque, dicas acessíveis no foco. Placeholder não substitui label;
    cor não substitui resultado. Links dizem destino ou consequência.
 3. **Leitura e zoom:** contraste mínimo de referência 4,5:1 para texto comum e 3:1
    para texto grande/limites essenciais; medir as combinações reais, não deduzir da
-   paleta. A 200% e em 390 px, nenhuma ação fica cortada. Tabela técnica pode rolar
-   em um contêiner identificado; a página inteira não deve rolar horizontalmente.
+   paleta. A 200% e em 390 px, nenhuma ação fica cortada. Tabelas técnicas empilham
+   campos rotulados no compacto; a página inteira não deve rolar horizontalmente.
 4. **Estados e confiança:** carga inicial, vazio, parcial, erro e atualização testados;
    `role="status"` para espera/sucesso e `role="alert"` para falha. Valores anteriores
    não parecem recentes. Movimento reduzido funciona; alertas não somem por timeout

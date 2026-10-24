@@ -31,11 +31,13 @@ export function TransactionList({
   accounts,
   categories,
   referenceDay,
+  showOwner = true,
 }: {
   records: Array<Transaction | PortalTransaction>;
   accounts: Array<{ id: string; name: string }>;
   categories: Array<{ id: string; name: string }>;
   referenceDay?: string;
+  showOwner?: boolean;
 }) {
   return (
     <ul
@@ -56,6 +58,7 @@ export function TransactionList({
           key={row.id}
           referenceDay={referenceDay}
           row={row}
+          showOwner={showOwner}
         />
       ))}
     </ul>
@@ -67,11 +70,13 @@ function TransactionItem({
   account,
   category,
   referenceDay,
+  showOwner,
 }: {
   row: Transaction | PortalTransaction;
   account: string;
   category: string;
   referenceDay: string | undefined;
+  showOwner: boolean;
 }) {
   const installments = "installments" in row ? row.installments : [];
   const total = "totalInstallments" in row ? row.totalInstallments : null;
@@ -90,11 +95,11 @@ function TransactionItem({
           <TransactionSummary
             account={account}
             amount={amount}
-            category={displayedCategory}
             current={current}
             installments={installments}
             referenceDay={referenceDay}
             row={row}
+            showOwner={showOwner}
             total={total}
           />
         }
@@ -108,6 +113,7 @@ function TransactionItem({
         )}
         <TransactionDetails
           account={account}
+          category={displayedCategory}
           current={current}
           row={row}
           total={total}
@@ -121,23 +127,23 @@ function TransactionSummary({
   row,
   account,
   amount,
-  category,
   installments,
   current,
   total,
   referenceDay,
+  showOwner,
 }: {
   row: Transaction | PortalTransaction;
   account: string;
   amount: string;
-  category: string;
   installments: Installment[];
   current: number | null;
   total: number | null;
   referenceDay: string | undefined;
+  showOwner: boolean;
 }) {
   const anchorDate = "anchorDate" in row ? row.anchorDate : row.date;
-  const anchorKind = "anchorKind" in row ? row.anchorKind : "transaction";
+  const firstKnown = "anchorKind" in row && row.anchorKind === "first_seen";
   const pendingCount = installments.filter(
     (item) => item.status === "PENDING",
   ).length;
@@ -146,9 +152,9 @@ function TransactionSummary({
   ).length;
   let pendingLabel: string | null = null;
   if (pendingCount > 0) {
-    pendingLabel = `${plural(pendingCount, "pendente", "pendentes")} na origem`;
+    pendingLabel = plural(pendingCount, "pendente", "pendentes");
   } else if (installments.length === 0 && row.status === "PENDING") {
-    pendingLabel = "Pendente na origem";
+    pendingLabel = "Pendente";
   }
   let futureLabel: string | null = null;
   if (futureCount > 0) {
@@ -163,29 +169,20 @@ function TransactionSummary({
       </span>
       <span className="transaction-amount">
         <strong>{amount}</strong>
-        {current !== null && total !== null && (
-          <span>
-            Valor da parcela {current}/{total}
-          </span>
-        )}
-      </span>
-      <span className="transaction-account">
-        <span>{account}</span>
-        <span className="transaction-owner">{row.personName}</span>
+        <span>
+          {row.direction === "DEBIT" ? "Saída" : "Entrada"}
+          {current !== null && total !== null
+            ? ` · Parcela ${current}/${total}`
+            : ""}
+        </span>
       </span>
       <span className="transaction-meta">
         <span className="transaction-date">
-          {anchorKind === "purchase" && "Compra em "}
-          {anchorKind === "first_seen" && "Primeira parcela conhecida em "}
+          {firstKnown ? "Primeira conhecida: " : ""}
           <time dateTime={anchorDate}>{dayLabel(anchorDate)}</time>
         </span>
-        {total !== null && current !== null && (
-          <span className="transaction-installment-label">
-            {plural(total, "parcela", "parcelas")}
-          </span>
-        )}
-        <span className="transaction-category">{category}</span>
-        <span>{row.direction === "DEBIT" ? "Saída" : "Entrada"}</span>
+        <span className="transaction-account">{account}</span>
+        {showOwner === true ? <span>{row.personName}</span> : null}
         {!!pendingLabel && (
           <span
             className="transaction-state"
@@ -197,9 +194,7 @@ function TransactionSummary({
         {!!futureLabel && (
           <span className="transaction-state">{futureLabel}</span>
         )}
-        {!!row.ignored && (
-          <span className="transaction-state">Ignorada nas análises</span>
-        )}
+        {!!row.ignored && <span className="transaction-state">Ignorada</span>}
       </span>
     </>
   );
@@ -266,14 +261,38 @@ function TransactionDetails({
   account,
   current,
   total,
+  category,
 }: {
   row: Transaction | PortalTransaction;
   account: string;
   current: number | null;
   total: number | null;
+  category: string;
 }) {
+  const anchorDate = "anchorDate" in row ? row.anchorDate : row.date;
+  const anchorKind = "anchorKind" in row ? row.anchorKind : "transaction";
+  let dateLabel = "Data";
+  if (anchorKind === "purchase") {
+    dateLabel = "Compra em";
+  } else if (anchorKind === "first_seen") {
+    dateLabel = "Primeira parcela conhecida em";
+  }
   return (
     <dl className="transaction-detail">
+      <div className="transaction-identifier">
+        <dt>Descrição completa</dt>
+        <dd>{row.description || "Sem descrição"}</dd>
+      </div>
+      <div>
+        <dt>{dateLabel}</dt>
+        <dd>
+          <time dateTime={anchorDate}>{dayLabel(anchorDate)}</time>
+        </dd>
+      </div>
+      <div>
+        <dt>Categoria</dt>
+        <dd>{category}</dd>
+      </div>
       {current !== null && total !== null && (
         <div>
           <dt>Parcela deste registro</dt>
