@@ -4,6 +4,12 @@ import type {
   PlanningTransaction,
   TransactionProjection,
 } from "../../domain";
+import {
+  CLASSIFICATION_VERSION,
+  fixedCategoryId,
+  pluggyCategory,
+  transactionMatchesText,
+} from "../../domain";
 import type { PlanningRepository, PlanningSnapshot } from "./entity";
 
 export function found<T>(row: T | undefined): T {
@@ -101,17 +107,29 @@ export function transactionStream(
       return null;
     }
     const account = accountMap.get(edit?.accountId ?? row.accountId);
+    const spaceId = edit?.spaceId ?? account?.spaceId ?? "personal";
+    const automatic =
+      snapshot.clefEnabled &&
+      row.classification?.version === CLASSIFICATION_VERSION
+        ? row.classification.category
+        : pluggyCategory(row.category);
+    const sourceCategory = state.categories.some(
+      (category) =>
+        category.id === row.category && category.spaceId === spaceId,
+    )
+      ? row.category
+      : automatic && fixedCategoryId(spaceId, automatic);
     return {
       ...row,
       ...edit,
-      category: edit?.category === undefined ? row.category : edit.category,
+      category: edit?.category === undefined ? sourceCategory : edit.category,
       goalId: edit?.goalId ?? null,
       ignored: edit?.ignored ?? false,
       manual: edit?.manual ?? false,
       personId: account?.personId ?? "self",
       personName: account?.personName ?? "Eu",
       profileId: account?.profileId ?? null,
-      spaceId: edit?.spaceId ?? account?.spaceId ?? "personal",
+      spaceId,
       tagIds: edit?.tagIds ?? [],
     };
   }
@@ -127,10 +145,7 @@ export function transactionStream(
       (!selection.tagId || row.tagIds.includes(selection.tagId)) &&
       (!selection.direction || row.direction === selection.direction) &&
       (!selection.status || row.status === selection.status) &&
-      (!selection.text ||
-        row.description
-          .toLocaleLowerCase()
-          .includes(selection.text.toLocaleLowerCase())) &&
+      (!selection.text || transactionMatchesText(row, selection.text)) &&
       (selection.include_ignored || !row.ignored) &&
       (!selection.cardNumber ||
         details.get(row.id)?.cardNumber === selection.cardNumber)
@@ -199,6 +214,13 @@ export function classification(
     (item) => item.id === row.category && item.spaceId === row.spaceId,
   );
   if (category) {
+    // A loan advance is neither income nor a negative repayment expense.
+    if (
+      row.category === fixedCategoryId(row.spaceId, "financiamento") &&
+      row.direction === "CREDIT"
+    ) {
+      return "transfer";
+    }
     return category.kind;
   }
   if (

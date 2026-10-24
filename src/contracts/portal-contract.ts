@@ -31,6 +31,7 @@ export const PortalResponseSchema = z.object({
             "investments",
             "loans",
             "bills",
+            "classification",
             "finish",
           ]),
         })

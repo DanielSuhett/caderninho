@@ -42,11 +42,21 @@ universal, container de DI nem camadas vazias.
 Contas usam seus IDs Pluggy como chaves do mapa JSON `connections.accounts`.
 Cada valor contém somente nome, tipo, moeda, saldo e horário de leitura do saldo.
 Contas ausentes preservam os metadados e o saldo com seu horário antigo.
-Transações têm nove campos: id, account_id, date, amount_minor, currency,
-direction, status, description e category. O ID do recurso Pluggy identifica a
+Transações têm onze campos: id, account_id, date, amount_minor, currency,
+direction, status, description, category, identification e classification. A coluna JSON
+`identification` preserva um contrato tipado dos dados da Pluggy: descrição
+original, categoria/códigos da origem, operação, estabelecimento e CNPJ/CNAE,
+participantes/documentos/contas do pagamento, referências, dados de boleto e
+cartão (MCC, tarifas, parcelas e datas), ordem e horários da origem. Os valores
+monetários adicionais de boleto/cartão usam strings inteiras em unidades menores.
+Valor na moeda da conta e saldo após o lançamento preservam unidades decimais
+exatas, sem assumir que a moeda da transação seja a moeda da conta; esses campos
+de identificação não participam dos totais financeiros.
+Os últimos quatro dígitos identificam o cartão. O ID do recurso Pluggy identifica a
 transação nesta instalação com uma aplicação Pluggy. A conexão e o tipo BANK
 são resolvidos pelo mapa pequeno de contas, sem repetir esses dados no histórico.
-Não são guardados documentos pessoais, payloads ou marcadores de qualidade por conta.
+Documentos de participantes são preservados como recebidos, inclusive máscaras.
+O contrato descarta campos desconhecidos; não guarda o payload arbitrário do provedor.
 A [referência técnica](cloudflare-product.md#contrato-mínimo-e-consumidores)
 registra o consumidor de cada coluna e dos cinco valores por conta.
 
@@ -60,6 +70,33 @@ empréstimos, cronogramas, marcações de faturas e preferências de notificaç�
 Faturas e metadados de contas/transações têm tabelas próprias. Revisão e recibos
 completam o controle de concorrência e de repetição. Não há tabela universal de
 recursos nem snapshot único com todo o histórico.
+
+`0008_transaction_identification.sql` acrescenta a coluna de identificação sem
+remover o histórico e copia os metadados de cartão já existentes. A tabela de
+metadados de transações continua atendendo às projeções de planejamento; os
+novos dados de identificação pertencem à transação de origem e só a importação
+os atualiza. Registros antigos sem metadados mantêm `identification=null` até
+uma nova importação. O portal apresenta os campos disponíveis nos detalhes e
+busca por descrição, estabelecimento, documento e referências. As consultas
+financeiras e de planejamento/MCP também retornam essa identificação.
+
+`0009_fixed_categories.sql` acrescenta `transactions.classification` e
+`planning_category_groups`. O catálogo contém 33 categorias fixas em cada espaço,
+com ícone, cor e `groupId` em `planning_categories`; os agrupadores também têm
+ícone/cor e pertencem a um espaço. Cada categoria tem zero ou um grupo, que pode
+conter várias categorias. Remover um grupo desfaz o vínculo e preserva categorias,
+regras e transações. Categorias legadas/personalizadas e referências são preservadas;
+as duas categorias genéricas legadas ficam ocultas. Os nomes do catálogo fixo são
+protegidos; sua aparência e agrupamento podem ser editados.
+
+Prioridade efetiva: edição/regra local, Clef habilitado com decisão aceita,
+conversão determinística Pluggy. Valores sem correspondência ficam sem categoria,
+com o rótulo da origem preservado. Clef é opcional e desabilitado por padrão; usa
+`clef-flash`, confiança mínima de 0,8 e opção `unknown`. A fase durável
+`classification` roda depois da importação dos dados, em páginas limitadas, com
+publicação atômica junto do checkpoint. Um hash da evidência evita repetir decisões
+aceitas sem mudanças. Falhas/quota/respostas inválidas não impedem a importação.
+Veja [categorias e classificação](categories.md) para configuração e contratos.
 
 A leitura do planejamento captura a revisão junto das tabelas. Transações são
 percorridas em páginas de 500 registros; uma mudança concorrente invalida o

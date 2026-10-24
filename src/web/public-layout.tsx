@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import { Document } from "./document";
+import { ThemeToggle } from "./theme-toggle";
 import { UiLink } from "./ui";
 
 export function PublicLayout({
@@ -49,6 +50,7 @@ export function PublicLayout({
             aria-label="Navegação principal"
             className="public-nav"
           >
+            <ThemeToggle />
             {access ? (
               <a href="/">Conhecer o produto</a>
             ) : (

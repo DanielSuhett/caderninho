@@ -6,6 +6,7 @@ import type {
 } from "../../domain";
 import {
   activeRules,
+  categoryCatalog,
   localDay,
   monthDate,
   ruleMatches,
@@ -587,7 +588,10 @@ export async function planningMutation(
     input: Extract<PlanningCommand, { tool: "create_category" }>,
   ) {
     const row = {
+      color: input.color ?? "#64748b",
+      groupId: input.groupId ?? null,
       hidden: false,
+      icon: input.icon ?? "shopping",
       id: uuid(),
       kind: input.kind,
       limitMinor: null,
@@ -595,6 +599,9 @@ export async function planningMutation(
       spaceId: input.spaceId,
       system: false,
     };
+    if (row.groupId) {
+      inSpace(state.categoryGroups, row.groupId, input.spaceId);
+    }
     state.categories.push(row);
     return row;
   }
@@ -603,8 +610,23 @@ export async function planningMutation(
     input: Extract<PlanningCommand, { tool: "update_category" }>,
   ) {
     const row = inSpace(state.categories, input.id, input.spaceId);
-    if (row.system) {
+    if (
+      row.system &&
+      (input.name !== undefined || input.hidden !== undefined)
+    ) {
       throw new Error("SYSTEM_CATEGORY");
+    }
+    if (input.groupId) {
+      inSpace(state.categoryGroups, input.groupId, input.spaceId);
+    }
+    if (input.groupId !== undefined) {
+      row.groupId = input.groupId;
+    }
+    if (input.icon !== undefined) {
+      row.icon = input.icon;
+    }
+    if (input.color !== undefined) {
+      row.color = input.color;
     }
     if (input.hidden !== undefined) {
       row.hidden = input.hidden;
@@ -1165,9 +1187,15 @@ export async function planningMutation(
       type: input.type,
     };
     state.spaces.push(row);
-    for (const kind of ["income", "expense", "transfer"] as const) {
+    const catalog = categoryCatalog(id);
+    state.categories.push(...catalog.categories);
+    state.categoryGroups.push(...catalog.categoryGroups);
+    for (const kind of ["income", "expense"] as const) {
       state.categories.push({
-        hidden: false,
+        color: "#64748b",
+        groupId: null,
+        hidden: true,
+        icon: "shopping",
         id: `${id}:${kind}`,
         kind,
         limitMinor: null,
@@ -1233,6 +1261,9 @@ export async function planningMutation(
     }
     state.spaces = state.spaces.filter((row) => row.id !== input.id);
     state.categories = state.categories.filter(
+      (row) => row.spaceId !== input.id,
+    );
+    state.categoryGroups = state.categoryGroups.filter(
       (row) => row.spaceId !== input.id,
     );
     return { deleted: true, id: input.id };
@@ -1367,6 +1398,42 @@ export async function planningMutation(
     case "set_category_limit":
     case "remove_category_limit":
       return handleSetCategoryLimit(command);
+    case "create_category_group": {
+      const row = {
+        color: command.color,
+        icon: command.icon,
+        id: uuid(),
+        name: command.name,
+        spaceId: command.spaceId,
+      };
+      state.categoryGroups.push(row);
+      return row;
+    }
+    case "update_category_group": {
+      const row = inSpace(state.categoryGroups, command.id, command.spaceId);
+      if (command.name !== undefined) {
+        row.name = command.name;
+      }
+      if (command.icon !== undefined) {
+        row.icon = command.icon;
+      }
+      if (command.color !== undefined) {
+        row.color = command.color;
+      }
+      return row;
+    }
+    case "delete_category_group": {
+      const row = inSpace(state.categoryGroups, command.id, command.spaceId);
+      for (const item of state.categories) {
+        if (item.groupId === row.id) {
+          item.groupId = null;
+        }
+      }
+      state.categoryGroups = state.categoryGroups.filter(
+        (group) => group.id !== row.id,
+      );
+      return { deleted: true, id: row.id };
+    }
     case "create_category":
       return handleCreateCategory(command);
     case "update_category":

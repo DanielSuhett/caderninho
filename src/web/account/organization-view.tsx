@@ -17,6 +17,8 @@ import { formatBalance } from "../money";
 import { UiButton } from "../ui";
 import type { OrganizationApi } from "./account-api";
 import { navigateWorkspace } from "./account-navigation";
+import { CategoryLabel } from "./category-appearance";
+import { CategoryOrganization } from "./category-editor";
 import { DisclosureItem } from "./disclosure-item";
 import { QuerySearch } from "./filter-fields";
 import { DeleteOrganizationItem, GroupEditor } from "./group-editor";
@@ -40,11 +42,6 @@ const groupTypes = {
   business: "Profissional",
   family: "Família",
   personal: "Pessoal",
-};
-const categoryTypes = {
-  expense: "Despesa",
-  income: "Entrada",
-  transfer: "Transferência",
 };
 export function OrganizationView({
   api,
@@ -229,9 +226,11 @@ export function OrganizationView({
                   render={<ul />}
                 >
                   {rules.map((r) => {
+                    const categoryAppearance = data.categories.find(
+                      (c) => c.id === r.categoryId,
+                    );
                     const category =
-                      data.categories.find((c) => c.id === r.categoryId)
-                        ?.name ?? "Categoria não identificada";
+                      categoryAppearance?.name ?? "Categoria não identificada";
                     const context = ruleSummary({
                       rule: r,
                     });
@@ -250,7 +249,11 @@ export function OrganizationView({
                                 </Badge>
                               </span>
                               <span className="record-context rule-context">
-                                {context} → {category}
+                                {context} →{" "}
+                                <CategoryLabel
+                                  category={categoryAppearance}
+                                  label={category}
+                                />
                               </span>
                               <span className="record-meta">
                                 <span>Prioridade {r.priority}</span>
@@ -269,6 +272,7 @@ export function OrganizationView({
                             <RuleComposition
                               accounts={data.accounts}
                               category={category}
+                              categoryAppearance={categoryAppearance}
                               enabled={r.enabled}
                               people={snapshot.people}
                               rule={r}
@@ -379,34 +383,18 @@ export function OrganizationView({
               </LayerCard>
               <WorkspaceDetails
                 defaultOpen
-                hint={String(data.categories.length)}
+                hint={String(
+                  data.categories.filter((category) => !category.hidden).length,
+                )}
                 title={`Categorias de ${current?.name ?? spaceId}`}
               >
-                {data.categories.length ? (
-                  <ul className="category-list">
-                    {data.categories.map((c) => (
-                      <li key={c.id}>
-                        <div>
-                          <strong>{c.name}</strong>
-                          <small>
-                            {categoryTypes[c.kind]}
-                            {c.hidden ? " · Oculta" : ""}
-                          </small>
-                        </div>
-                        <span>
-                          {c.limitMinor === null
-                            ? "Sem limite definido"
-                            : formatBalance(
-                                c.limitMinor,
-                                current?.currency ?? "BRL",
-                              )}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p>Nenhuma categoria neste grupo.</p>
-                )}
+                <CategoryOrganization
+                  api={api}
+                  catalog={data}
+                  saved={saved}
+                  snapshot={snapshot}
+                  spaceId={spaceId}
+                />
               </WorkspaceDetails>
               <WorkspaceDetails
                 defaultOpen

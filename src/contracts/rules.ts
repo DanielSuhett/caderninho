@@ -83,10 +83,9 @@ export const RuleFilterSchema = z
       });
     }
   });
-export const RulePreviewSchema = z
+export const RulePreviewQuerySchema = z
   .object({
     accountId: value.nullable().default(null),
-    csrf: z.string(),
     direction: z.enum(["DEBIT", "CREDIT"]).nullable().default(null),
     filter: RuleFilterSchema.nullable().default(null),
     spaceId: value,
@@ -97,6 +96,10 @@ export const RulePreviewSchema = z
     (input) => !!(input.text.trim() || input.filter),
     "Adicione ao menos uma condição.",
   );
+export type RulePreviewQuery = z.infer<typeof RulePreviewQuerySchema>;
+export const RulePreviewSchema = RulePreviewQuerySchema.safeExtend({
+  csrf: z.string(),
+});
 export type RulePreviewInput = z.infer<typeof RulePreviewSchema>;
 export const RulePreviewResultSchema = z.object({
   count: z.number().int().nonnegative(),

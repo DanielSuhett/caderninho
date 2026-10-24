@@ -1,8 +1,10 @@
 # MCP financeiro: catálogo e decisões
 
-Estado: implementação local para revisão, baseada em `061cefb`.
-Referência pesquisada em 22/10/2026. A branch não foi enviada ao Git remoto,
-nem aplicada a uma instalação Cloudflare real.
+Catálogo local em 24/10/2026: 100 ferramentas, sendo quatro originais e 96 de
+planejamento e organização. A [conferência de paridade com o painel](mcp-front-parity.md)
+documenta o escopo, as correções e a evidência local dessa extensão.
+A pesquisa inicial de referência é de 22/10/2026, baseada em `061cefb`.
+Esta validação não publicou código nem aplicou migrações em uma instalação real.
 
 ## Escopo verificado
 
@@ -15,10 +17,11 @@ não afirma paridade de assinatura com tools privadas ou habilitadas por plano.
 A Pluggy fornece contas, transações, faturas, investimentos e empréstimos, com
 cobertura dependente da instituição/conexão. Planejamento e edição são locais.
 As quatro tools `caderninho_*` continuam disponíveis com seus contratos originais.
-As 90 tools adicionais usam a visão efetiva, com sobreposições e dados manuais.
+As 96 tools adicionais usam a visão efetiva, com sobreposições e dados manuais.
 
-A extensão de [backoffice](backoffice.md) acrescenta `delete_space` e condições
-compostas em regras, chegando a 94 tools.
+A extensão de [backoffice](backoffice.md) acrescentou `delete_space` e condições
+compostas em regras. O catálogo também inclui grupos de categorias,
+`preview_rule` e `get_transaction_purchases`.
 
 ## Pessoas e perfis Pluggy
 
@@ -130,6 +133,8 @@ espaço não chegam ao commit.
 | `get_accounts` | Contas e saldos com referência temporal; inclui contas manuais e preferências locais. |
 | `get_cards` | Cartões principais e adicionais identificados na origem; ids estáveis e suporte a include_hidden. |
 | `get_transactions` | Histórico efetivo com edições locais, filtros e paginação consistente. Não some páginas para calcular totais. |
+| `get_transaction_purchases` | Mesma lista de compras do painel: agrupa parcelas antes de paginar, mantém valores individuais e identificação da origem. O período considera a data da compra ou primeira parcela conhecida; não substitui totais financeiros. |
+| `preview_rule` | Simula o mesmo escopo e condições E/OU do painel sem salvar ou reclassificar; informa amostras, contagem, `partial`, `truncated` e revisão. |
 | `get_overview` | Saldos, entradas e saídas por moeda, sem tratar transferências e pagamentos de cartão como consumo. |
 | `get_spending_by_category` | Despesas classificadas por categoria; exclui transferências e itens ignorados. |
 | `get_spending_comparison` | Comparação com período anterior de igual duração. |
@@ -138,7 +143,8 @@ espaço não chegam ao commit.
 | `get_bills` | Faturas importadas, pagamentos bancários e marcação manual separada. |
 | `get_upcoming_payments` | Vencimentos de faturas, recorrências e parcelas de empréstimos sem executar pagamentos. |
 | `get_installments` | Planos manuais e candidatos derivados de metadados; agrupamento da origem é estimativa, não prova de pagamento. |
-| `get_categories` | Listar registros locais e importados, incluindo ocultos quando solicitado. |
+| `get_categories` | Categorias com nome, tipo, ícone, cor e `groupId`; aceita `include_hidden` e filtro por grupo. |
+| `get_category_groups` | Agrupadores de categorias com nome, ícone e cor; são diferentes dos espaços financeiros. |
 | `get_loans` | Listar registros locais e importados, incluindo ocultos quando solicitado. |
 | `get_tags` | Consultar dados locais de planejamento e registros importados disponíveis. |
 | `get_rules` | Consultar dados locais de planejamento e registros importados disponíveis. |
@@ -185,10 +191,13 @@ espaço não chegam ao commit.
 | `set_budget` | Ativar orçamento e definir total mensal por espaço. |
 | `set_category_limit` | Definir limite com orçamento ativado. |
 | `remove_category_limit` | Remover limite com orçamento ativado. |
-| `create_category` | Criar categoria personalizada. |
-| `update_category` | Renomear, ocultar ou restaurar categoria personalizada. |
+| `create_category` | Criar categoria personalizada com ícone, cor e grupo opcionais. |
+| `update_category` | Editar ícone, cor e grupo; categorias personalizadas também permitem renomear ou ocultar. Nomes das categorias fixas são protegidos. |
 | `delete_category` | Excluir categoria personalizada e reatribuir referências à categoria de sistema do mesmo tipo. |
-| `create_rule` | Criar regra textual determinística de categorização. |
+| `create_category_group` | Criar agrupador de categorias com nome, ícone e cor. |
+| `update_category_group` | Editar nome, ícone e cor do agrupador. |
+| `delete_category_group` | Remover agrupador preservando categorias e transações; as categorias ficam sem grupo. |
+| `create_rule` | Criar regra determinística, textual ou composta; salvar não reaplica o histórico. |
 | `update_rule` | Atualizar regra; prioridade menor vence. |
 | `delete_rule` | Excluir regra sem reverter classificações já aplicadas. |
 | `apply_rules` | Aplicar regras sincronicamente a até 500 transações; operação atômica. |
@@ -218,6 +227,7 @@ espaço não chegam ao commit.
 | `delete_tag` | Excluir tag e suas associações. |
 | `create_space` | Criar espaço local da mesma pessoa; não cria usuários nem permissões. |
 | `update_space` | Editar espaço e início do ciclo financeiro. |
+| `delete_space` | Excluir espaço vazio; o pessoal é protegido e referências ativas impedem a remoção. |
 | `move_account` | Mover conta ou todas as contas da conexão entre espaços pessoais. |
 | `move_connection` | Mover conta ou todas as contas da conexão entre espaços pessoais. |
 | `set_notification_preference` | Guardar preferência de canal; não configura nem comprova entrega de notificações. |

@@ -13,6 +13,7 @@ export interface PlanningSnapshot {
   accountDetails: AccountDetails[];
   accounts: PlanningAccount[];
   bills: Bill[];
+  clefEnabled?: boolean;
   owners: ConnectionOwner[];
   partial: boolean;
   people: Person[];

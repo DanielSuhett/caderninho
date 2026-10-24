@@ -8,6 +8,8 @@ import {
   useRef,
 } from "react";
 
+import { ThemeToggle } from "../theme-toggle";
+
 function RouteNavigation({ route }: { route: string }) {
   const { setOpenMobile } = useSidebar();
   const previousRoute = useRef(route);
@@ -117,7 +119,7 @@ export function SidebarFrame({
         </a>
       </Sidebar.Header>
       <Sidebar.Content>{children}</Sidebar.Content>
-      <Sidebar.Footer>
+      <Sidebar.Footer className="workspace-sidebar-footer">
         {isMobile ? (
           <Sidebar.Close
             aria-label="Fechar navegação"
@@ -129,6 +131,7 @@ export function SidebarFrame({
         {showLabels === true && (
           <p className="sidebar-installation">{footer}</p>
         )}
+        {!isMobile && <ThemeToggle />}
       </Sidebar.Footer>
     </Sidebar>
   );
@@ -160,6 +163,7 @@ function WorkspaceContent({
           id="workspace-menu-trigger"
         />
         <span>Caderninho</span>
+        <ThemeToggle />
       </header>
       <main
         className="workspace-content"

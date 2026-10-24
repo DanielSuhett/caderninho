@@ -3,7 +3,7 @@ import type {
   PortalResponse,
   WorkspaceCatalog,
 } from "../contracts";
-import { demoCategories, demoPeople } from "./finance";
+import { demoCategories, demoCategoryGroups, demoPeople } from "./finance";
 
 export function connectionFixture(
   input: Partial<ConnectionInfo> = {},
@@ -56,6 +56,7 @@ export function portalFixture(
 export function workspaceFixture(): WorkspaceCatalog {
   return {
     categories: structuredClone(demoCategories),
+    categoryGroups: structuredClone(demoCategoryGroups),
     rules: [
       {
         accountId: null,

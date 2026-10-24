@@ -13,6 +13,7 @@ import {
   planningBills,
   planningCards,
   planningCategories,
+  planningCategoryGroups,
   planningContributions,
   planningEdits,
   planningGoals,
@@ -42,6 +43,7 @@ function changedRows<T extends { id: string }>(before: T[], after: T[]) {
 }
 export function createPlanningRepository(
   binding: D1Database,
+  clefEnabled = false,
 ): PlanningRepository {
   const db = database(binding);
   async function revision() {
@@ -160,6 +162,28 @@ export function createPlanningRepository(
           ),
           ...changes.deleted.map((id) =>
             db.delete(planningCategories).where(eq(planningCategories.id, id)),
+          ),
+        );
+      }
+      {
+        const changes = changedRows(
+          input.before.state.categoryGroups,
+          input.state.categoryGroups,
+        );
+        writes.push(
+          ...changes.upserts.map((row) =>
+            db
+              .insert(planningCategoryGroups)
+              .values({ data: row, id: row.id })
+              .onConflictDoUpdate({
+                set: { data: row },
+                target: planningCategoryGroups.id,
+              }),
+          ),
+          ...changes.deleted.map((id) =>
+            db
+              .delete(planningCategoryGroups)
+              .where(eq(planningCategoryGroups.id, id)),
           ),
         );
       }
@@ -403,6 +427,7 @@ export function createPlanningRepository(
         cards,
         edits,
         categories,
+        categoryGroups,
         tags,
         rules,
         recurrences,
@@ -427,6 +452,7 @@ export function createPlanningRepository(
         db.select().from(planningCards),
         db.select().from(planningEdits),
         db.select().from(planningCategories),
+        db.select().from(planningCategoryGroups),
         db.select().from(planningTags),
         db.select().from(planningRules),
         db.select().from(planningRecurrences),
@@ -469,6 +495,7 @@ export function createPlanningRepository(
           })),
         ),
         bills: bills.map((r) => r.data),
+        clefEnabled,
         owners,
         partial: !origins.length || origins.some(connectionPartial),
         people: persons,
@@ -478,6 +505,7 @@ export function createPlanningRepository(
           billPayments: billPayments.map((r) => r.data),
           cards: cards.map((r) => r.data),
           categories: categories.map((r) => r.data),
+          categoryGroups: categoryGroups.map((r) => r.data),
           contributions: contributions.map((r) => r.data),
           edits: edits.map((r) => r.data),
           goals: goals.map((r) => r.data),

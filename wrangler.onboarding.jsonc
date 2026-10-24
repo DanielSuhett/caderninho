@@ -72,5 +72,11 @@
         "period": 60
       }
     }
-  ]
+  ],
+  "ai": {
+    "binding": "AI"
+  },
+  "vars": {
+    "CLEF_ENABLED": "false"
+  }
 }

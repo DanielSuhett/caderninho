@@ -308,7 +308,16 @@ await test("native Workflow, 10k/100k volume and persistent installation", {
       if (size === 100_000) {
         const pageSchema = z.object({
           cursor: TransactionQuerySchema.shape.cursor.unwrap().nullable(),
-          records: z.array(z.object({ accountId: z.string(), id: z.string() })),
+          records: z.array(
+            z.object({
+              accountId: z.string(),
+              id: z.string(),
+              identification: z.object({
+                merchant: z.object({ cnae: z.string(), cnpj: z.string() }),
+                providerCode: z.string(),
+              }),
+            }),
+          ),
         });
         const seen = new Set<string>();
         async function readPage(cursor: Cursor | null): Promise<void> {
@@ -324,6 +333,12 @@ await test("native Workflow, 10k/100k volume and persistent installation", {
           assert.equal(response.status, 200);
           const page = pageSchema.parse(await response.json());
           for (const row of page.records) {
+            assert.equal(
+              row.identification.merchant.cnpj,
+              "00.000.000/0001-91",
+            );
+            assert.equal(row.identification.merchant.cnae, "4711302");
+            assert.ok(row.identification.providerCode.startsWith("synthetic-"));
             const identity = row.id;
             assert.equal(seen.has(identity), false);
             seen.add(identity);

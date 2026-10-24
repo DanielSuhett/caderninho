@@ -1,3 +1,25 @@
+export type {
+  FixedCategoryKey,
+  TransactionClassification,
+} from "./category.entity";
+export {
+  CategoryIcon,
+  CLASSIFICATION_VERSION,
+  CLEF_MIN_CONFIDENCE,
+  categoryCatalog,
+  classificationState,
+  defaultCategoryGroups,
+  fixedCategories,
+  fixedCategoryId,
+  pluggyCategory,
+  pluggyCategoryRules,
+} from "./category.entity";
+export {
+  CategoryColorSchema,
+  CategoryIconSchema,
+  FixedCategoryKeySchema,
+  TransactionClassificationSchema,
+} from "./category.schema";
 export { financialCharts } from "./chart.entity";
 export {
   assertPersonalConnector,
@@ -43,6 +65,7 @@ export type {
   BillPayment,
   CardSettings,
   Category,
+  CategoryGroup,
   Contribution,
   Goal,
   Installment,
@@ -85,3 +108,12 @@ export type { RuleCondition, RuleFilter } from "./rules.entity";
 export { activeRules, ruleMatches, ruleText } from "./rules.entity";
 export type { Checkpoint, CommitResult, FinancialSource } from "./sync.entity";
 export { IMPORT_INTERVAL, RunStatus } from "./sync.entity";
+export type {
+  TransactionCard,
+  TransactionIdentification,
+  TransactionMerchant,
+  TransactionParticipant,
+  TransactionPayment,
+} from "./transaction.entity";
+export { transactionMatchesText } from "./transaction.entity";
+export { TransactionIdentificationSchema } from "./transaction.schema";

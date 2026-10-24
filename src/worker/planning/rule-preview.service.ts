@@ -1,4 +1,4 @@
-import type { RulePreviewInput, RulePreviewResult } from "../../contracts";
+import type { RulePreviewQuery, RulePreviewResult } from "../../contracts";
 import { ruleMatches } from "../../domain";
 import type { PlanningRepository } from "./entity";
 import { found, transactionStream } from "./projection";
@@ -6,7 +6,7 @@ import { found, transactionStream } from "./projection";
 const scanLimit = 10_000;
 export async function previewRule(
   repository: PlanningRepository,
-  input: RulePreviewInput,
+  input: RulePreviewQuery,
 ): Promise<RulePreviewResult> {
   const snapshot = await repository.read();
   found(snapshot.state.spaces.find((space) => space.id === input.spaceId));

@@ -3,9 +3,12 @@ import type {
   AccountProjection,
   Checkpoint,
   CommitResult,
+  classificationState,
   FinancialSource,
+  FixedCategoryKey,
   ProductPage,
   RunStatus,
+  TransactionClassification,
   TransactionProjection,
 } from "../../../domain";
 import { Fault, FaultCode } from "../../../domain";
@@ -25,6 +28,7 @@ export interface Admission {
 }
 export interface Publication {
   accounts?: AccountProjection[];
+  classifications?: { id: string; classification: TransactionClassification }[];
   done: boolean;
   error?: string;
   next: Checkpoint;
@@ -40,6 +44,10 @@ export interface SyncRepository {
     now: string,
     initialOnly?: boolean,
   ) => Promise<Admission[]>;
+  classificationPage: (
+    accountId: string,
+    after: { date: string; id: string } | null,
+  ) => Promise<TransactionProjection[]>;
   connectionAccounts: (connectionId: string) => Promise<AccountMap>;
   fail: (id: string, code: string) => Promise<void>;
   publish: (input: Publication) => Promise<CommitResult>;
@@ -50,10 +58,31 @@ export interface Steps {
   do: (name: string, fn: () => Promise<CommitResult>) => Promise<CommitResult>;
 }
 export interface ImportDependencies {
+  classifier?: TransactionClassifier;
   now: () => string;
   repository: SyncRepository;
   source: FinancialSource;
   steps: Steps;
+}
+export type ClassificationState = ReturnType<typeof classificationState>;
+export type TransactionClassifier = (
+  state: ClassificationState,
+) => Promise<{ category: FixedCategoryKey; confidence: number } | null>;
+export interface ClefBinding {
+  run: (
+    model: "@cf/cloudflare/clef-flash",
+    input: {
+      model: "clef-flash";
+      state: ClassificationState;
+      questions: {
+        category: {
+          type: "choice";
+          instructions: string;
+          criteria: Record<string, string>;
+        };
+      };
+    },
+  ) => Promise<unknown>;
 }
 export interface WorkflowPort {
   create: (id: string) => Promise<void>;
