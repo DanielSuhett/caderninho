@@ -3,9 +3,11 @@ import assert from "node:assert/strict";
 import { beforeEach, test } from "vitest";
 import { z } from "zod/v4";
 
+import brasilJson from "../../public/rule-packs/brasil.json";
 import {
-  brasilRulePack,
   PlanningCommandSchema,
+  RuleImportPackageSchema,
+  RuleImportResultSchema,
   RulePreviewResultSchema,
 } from "../../src/contracts";
 import type { ProviderTransaction } from "../../src/domain";
@@ -15,6 +17,7 @@ import { fixture as appFixture, cookies, grant, login } from "./access-fixture";
 import { collect, setup, source, transaction } from "./fixture";
 import { env } from "cloudflare:workers";
 
+const brasilRulePack = RuleImportPackageSchema.parse(brasilJson);
 beforeEach(setup);
 const period = { from: "2026-10-01", to: "2026-10-31" };
 function fixture() {
@@ -30,21 +33,24 @@ function fixture() {
       idempotency_key: crypto.randomUUID(),
       ...args,
     });
-  const install = (args: Record<string, unknown> = {}) =>
-    write("install_rule_pack", {
-      packId: "brasil",
+  const revisions = new Map<string, number>();
+  const install = async (args: Record<string, unknown> = {}) => {
+    const key =
+      typeof args.idempotency_key === "string"
+        ? args.idempotency_key
+        : crypto.randomUUID();
+    const revision = revisions.get(key) ?? (await repository.read()).revision;
+    revisions.set(key, revision);
+    return write("import_rules", {
+      idempotency_key: key,
+      pack: brasilRulePack,
+      revision,
       ...args,
     });
+  };
   return { call, install, repository, write };
 }
-const installed = z.object({
-  categoriesCreated: z.number(),
-  categoryIds: z.record(z.string(), z.string()),
-  packId: z.literal("brasil"),
-  rulesCreated: z.number(),
-  rulesExisting: z.number(),
-  version: z.literal(1),
-});
+const installed = RuleImportResultSchema;
 const identify = (value: unknown) =>
   z.object({ id: z.string() }).parse(value).id;
 async function transactions(f: ReturnType<typeof fixture>) {
@@ -75,18 +81,18 @@ test("native JSON installs atomically, reuses local categories and replays witho
   assert.throws(() =>
     PlanningCommandSchema.parse({
       idempotency_key: "unconfirmed",
-      packId: "brasil",
+      pack: brasilRulePack,
       spaceId: "personal",
-      tool: "install_rule_pack",
+      tool: "import_rules",
     }),
   );
   assert.throws(() =>
     PlanningCommandSchema.parse({
       confirmed: true,
       idempotency_key: "bad-pack",
-      packId: "unknown",
+      pack: { ...brasilRulePack, id: "invalid id" },
       spaceId: "personal",
-      tool: "install_rule_pack",
+      tool: "import_rules",
     }),
   );
   const first = installed.parse(
@@ -94,7 +100,10 @@ test("native JSON installs atomically, reuses local categories and replays witho
   );
   assert.equal(first.rulesCreated, 30);
   assert.equal(first.categoriesCreated, 1);
-  assert.equal(first.categoryIds.farmacia, pharmacy.id);
+  assert.equal(
+    first.categories.find((c) => c.key === "farmacia")?.id,
+    pharmacy.id,
+  );
   assert.deepEqual(await f.install({ idempotency_key: "install" }), first);
   const second = installed.parse(await f.install());
   assert.equal(second.rulesCreated, 0);
@@ -119,7 +128,10 @@ test("native JSON installs atomically, reuses local categories and replays witho
     );
     assert.ok(definition);
     assert.deepEqual(rule.filter, definition.filter);
-    assert.equal(rule.categoryId, first.categoryIds[definition.categoryKey]);
+    assert.equal(
+      rule.categoryId,
+      first.categories.find((c) => c.key === definition.categoryKey)?.id,
+    );
   }
   assert.equal(
     (
@@ -150,7 +162,7 @@ test("ambiguous and foreign category mappings roll back; explicit mapping resolv
   await f.write("create_category", { kind: "expense", name: "educação geral" });
   const before = await f.repository.read();
   await assert.rejects(() => f.install(), {
-    message: "INVALID_RULE_PACK_CATEGORY",
+    message: "INVALID_RULE_IMPORT_CATEGORY",
   });
   assert.deepEqual(await f.repository.read(), before);
   const spaceId = identify(
@@ -164,17 +176,20 @@ test("ambiguous and foreign category mappings roll back; explicit mapping resolv
   );
   await assert.rejects(
     () => f.install({ categoryIds: { farmacia: `${spaceId}:expense` } }),
-    { message: "SPACE_MISMATCH" },
+    { message: "INVALID_RULE_IMPORT_CATEGORY" },
   );
   await assert.rejects(
     () => f.install({ categoryIds: { farmacia: "personal:income" } }),
-    { message: "INVALID_RULE_PACK_CATEGORY" },
+    { message: "INVALID_RULE_IMPORT_CATEGORY" },
   );
   const local = installed.parse(
     await f.install({ categoryIds: { educacao: first } }),
   );
   const other = installed.parse(await f.install({ spaceId }));
-  assert.notEqual(other.categoryIds.educacao, local.categoryIds.educacao);
+  assert.notEqual(
+    other.categories.find((c) => c.key === "educacao")?.id,
+    local.categories.find((c) => c.key === "educacao")?.id,
+  );
   const all = (await f.repository.read()).state.rules;
   assert.equal(all.length, 60);
   assert.equal(new Set(all.map((r) => r.id)).size, 60);
@@ -415,10 +430,11 @@ test("authenticated MCP exposes the installer and persists the JSON in the insta
         arguments: {
           confirmed: true,
           idempotency_key: "mcp-pack",
-          packId: "brasil",
+          pack: brasilRulePack,
+          revision: (await createPlanningRepository(env.DB).read()).revision,
           spaceId: "personal",
         },
-        name: "install_rule_pack",
+        name: "import_rules",
       },
     }),
     headers: {
@@ -426,7 +442,7 @@ test("authenticated MCP exposes the installer and persists the JSON in the insta
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
       "Mcp-Method": "tools/call",
-      "Mcp-Name": "install_rule_pack",
+      "Mcp-Name": "import_rules",
       "Mcp-Protocol-Version": "2026-07-28",
     },
     method: "POST",

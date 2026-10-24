@@ -8,7 +8,7 @@ import {
   TransactionIdentificationSchema,
 } from "../domain";
 import { planningDefinitions } from "./planning";
-import { RulePackOriginSchema } from "./rule-packs";
+import { ImportedRuleOriginSchema } from "./rule-import";
 import { RuleFilterSchema } from "./rules";
 
 // Deliberate read-only allowlist; the portal cannot forward arbitrary MCP mutations.
@@ -16,6 +16,9 @@ export const PortalQuerySchema = z
   .object({
     csrf: z.string(),
     query: z.union([
+      planningDefinitions[96].schema.extend({
+        tool: z.literal("preview_rule_import"),
+      }),
       planningDefinitions[0].schema.extend({ tool: z.literal("get_accounts") }),
       planningDefinitions[2].schema.extend({
         tool: z.literal("get_transactions"),
@@ -82,7 +85,7 @@ const RuleListSchema = z.object({
         direction: z.enum(["DEBIT", "CREDIT"]).nullable(),
         enabled: z.boolean(),
         filter: RuleFilterSchema.nullable().optional(),
-        pack: RulePackOriginSchema.optional(),
+        pack: ImportedRuleOriginSchema.optional(),
         priority: z.number(),
         text: z.string(),
       }),
@@ -192,6 +195,9 @@ export type WorkspaceCatalog = z.infer<typeof WorkspaceCatalogSchema>;
 export const PortalMutationSchema = z
   .object({
     command: z.discriminatedUnion("tool", [
+      planningDefinitions[97].schema.extend({
+        tool: z.literal("import_rules"),
+      }),
       planningDefinitions[52].schema.extend({
         tool: z.literal("create_category"),
       }),

@@ -86,7 +86,7 @@ export interface Rule {
   filter?: import("./rules.entity").RuleFilter | null;
   id: string;
   name: string;
-  pack?: { id: "brasil"; key: string; version: number };
+  pack?: { id: string; key: string; version: number };
   priority: number;
   spaceId: string;
   text: string;

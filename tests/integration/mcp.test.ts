@@ -553,7 +553,7 @@ test("OAuth exposes 100 tools and executes confirmed local writes with durable r
     );
   }
   const listed = await rpc("tools/list", {});
-  assert.equal(listed.result?.tools?.length, 101);
+  assert.equal(listed.result?.tools?.length, 102);
   const groupRequest = {
     arguments: {
       color: "#123456",

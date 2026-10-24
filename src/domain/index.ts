@@ -104,6 +104,7 @@ export type {
   TransactionQuery,
 } from "./query.entity";
 export { Metric, MetricDefinition } from "./query.entity";
+export { resolveRuleImportCategory } from "./rule-import.entity";
 export type { RuleCondition, RuleFilter } from "./rules.entity";
 export {
   activeRules,

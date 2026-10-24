@@ -5,6 +5,7 @@ import type { SafeFields } from "../observability";
 
 const invalidRequests = new Set([
   "INVALID_RULE",
+  "INVALID_RULE_IMPORT_CATEGORY",
   "SPACE_PROTECTED",
   "SPACE_NOT_EMPTY",
   "SPACE_MISMATCH",

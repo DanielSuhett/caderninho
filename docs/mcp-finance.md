@@ -17,11 +17,11 @@ não afirma paridade de assinatura com tools privadas ou habilitadas por plano.
 A Pluggy fornece contas, transações, faturas, investimentos e empréstimos, com
 cobertura dependente da instituição/conexão. Planejamento e edição são locais.
 As quatro tools `caderninho_*` continuam disponíveis com seus contratos originais.
-As 97 tools adicionais usam a visão efetiva, com sobreposições e dados manuais.
+As 98 tools adicionais usam a visão efetiva, com sobreposições e dados manuais.
 
 A extensão de [backoffice](backoffice.md) acrescentou `delete_space` e condições
 compostas em regras. O catálogo também inclui grupos de categorias,
-`preview_rule`, `get_transaction_purchases` e [install_rule_pack](rule-packs.md).
+`preview_rule`, `get_transaction_purchases` e [importação de regras JSON](rule-packs.md).
 
 ## Pessoas e perfis Pluggy
 
@@ -200,7 +200,8 @@ espaço não chegam ao commit.
 | `create_rule` | Criar regra determinística, textual ou composta; salvar não reaplica o histórico. |
 | `update_rule` | Atualizar regra; pessoais precedem pacotes, depois menor prioridade vence. |
 | `delete_rule` | Excluir regra sem reverter classificações já aplicadas. |
-| `install_rule_pack` | [Instalar o Pacote Brasil](rule-packs.md) por espaço, com idempotência e categorias locais; não reclassifica histórico. |
+| `preview_rule_import` | Conferir JSON genérico, categorias e duplicatas sem gravar; retorna revisão. |
+| `import_rules` | Importar atomicamente o JSON confirmado com revisão e idempotência; não reclassifica histórico. |
 | `apply_rules` | Aplicar regras sincronicamente a até 500 transações; operação atômica. |
 | `create_goal` | Criar meta financeira. |
 | `update_goal` | Atualizar meta financeira. |

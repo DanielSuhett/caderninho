@@ -1,73 +1,47 @@
-# Pacote Brasil
+# Importar regras em JSON
 
-O JSON executável está em [brasil.json](../src/contracts/rule-packs/brasil.json):
-30 regras compostas, 9 categorias, versão 1. Usa os filtros nativos do produto,
-sem normalizador ou classificador paralelo. A instalação é opcional por espaço.
+Na tela **Regras**, escolha **Importar regras**, selecione um JSON e confira a
+prévia. Resolva nomes de categorias ambíguos, atualize a prévia e confirme.
+A lista é atualizada depois da gravação. Cancelar/voltar não grava nada.
 
-## Instalar e conferir
+O [JSON Brasil](../public/rule-packs/brasil.json) é um arquivo externo de exemplo
+(30 regras, 9 categorias, 60 alternativas); também pode ser baixado pelo diálogo.
+Nenhum catálogo é importado no bundle ou instalado automaticamente.
 
-Chame a ferramenta MCP `install_rule_pack` na instalação escolhida:
+O contrato aceita pacotes genéricos com `id`, `version`, `categories` e `rules`.
+Categorias declaram `key`, `name`, `kind` (`expense`, `income` ou `transfer`).
+Cada regra declara `key`, `categoryKey` e os mesmos campos/filtros nativos de
+`create_rule`, sem `categoryId`: a categoria é resolvida no espaço selecionado.
+Limites: 100 regras, 50 categorias e arquivo de 64 KiB. JSON malformado, chaves
+repetidas, categorias não declaradas e filtros incompatíveis são recusados.
 
-```json
-{
-  "packId": "brasil",
-  "spaceId": "personal",
-  "confirmed": true,
-  "idempotency_key": "instalar-brasil-v1-personal"
-}
-```
+A prévia usa `preview_rule_import` sem escrever. `import_rules` exige confirmação,
+revisão da prévia e chave de idempotência; categorias/regras/recibo são gravados
+no mesmo batch atômico. Uma revisão concorrente exige atualizar a prévia. Um
+resultado de rede incerto pode ser confirmado novamente com a mesma chave.
 
-O planejamento valida o comando, resolve categorias de despesa no próprio espaço
-e grava categorias, regras, revisão e recibo na mesma transação D1. Reutiliza nome
-idêntico, ignorando caixa; cria a categoria quando ausente. Não altera categorias
-existentes. Nome duplicado ou categoria oculta exige `categoryIds`, por exemplo
-`{"farmacia":"<id-local-retornado-por-get_categories>"}`. IDs de outro espaço,
-categorias ocultas e categorias de renda/transferência são recusados.
+Nomes iguais de categorias exigem mapeamento explícito. IDs de outro espaço,
+categorias ocultas ou de outro tipo são recusados. Categorias ausentes são
+criadas; categorias existentes mantêm nome, ícone e grupo. Conta/pessoa em filtros
+precisa existir nesta instalação e respeitar o escopo do motor.
 
-Confira `get_rules` e `get_categories`. A resposta informa regras criadas/já
-existentes e categorias criadas. IDs de regra derivam de espaço, pacote e chave;
-repetir a chave devolve o recibo, e outra chave não duplica regras. Reinstalar
-preserva regras alteradas ou pausadas; uma regra excluída pode ser recriada pela
-próxima instalação explícita. Esta versão não atualiza regras instaladas em lote.
+IDs de regras derivam de espaço/pacote/chave. Reimportar preserva regras editadas
+ou pausadas e não duplica regras idênticas já existentes. Esta versão acrescenta
+regras; não substitui versões instaladas. Excluir uma regra permite recriá-la em
+uma importação explícita posterior.
 
-A instalação não toca transações. O trigger existente classifica **novas**
-transações nas próximas importações normais do produto. Para o histórico, use a
-tool `preview_rule` ou a prévia do editor (correspondências, não vencedor),
-e depois `apply_rules` com período,
-confirmação e nova chave. O limite continua sendo 500 transações por aplicação.
-Não é necessário nem apropriado disparar uma importação para instalar o pacote.
+Regras pessoais vêm antes das importadas, inclusive quando criadas depois.
+Dentro de cada grupo, prioridade menor e depois ID determinam o vencedor.
+Defaults preservam categorias editadas localmente, inclusive `null`. Editar uma
+regra importada a torna pessoal. Não há aplicação automática ao histórico:
+novas importações normais usam o trigger existente; `preview_rule` e `apply_rules`
+continuam disponíveis para conferência e reaplicação explícita (até 500 registros).
+Excluir/pausar regra não desfaz classificações anteriores.
 
-Regras pessoais, inclusive criadas depois da instalação, precedem defaults
-independentemente da prioridade numérica. Dentro de cada grupo, menor prioridade
-vence; ID desempata. Essa ordem é compartilhada pela aplicação TypeScript, pelo
-catálogo e pelo trigger SQL. Defaults não sobrescrevem uma categoria editada
-localmente, inclusive `null`. Regras pessoais mantêm a reaplicação explícita já
-existente. Editar uma regra do pacote a torna pessoal; pausar preserva a pausa.
-Originais bancários permanecem separados de `planning_edits`. Excluir/pausar uma
-regra não desfaz categorias já aplicadas; use as edições locais existentes para
-corrigir decisões.
-
-## Cobertura e manutenção
-
-Todas as regras exigem débito **POSTED em BRL** e descrição inteira igual a uma
-alternativa declarada. São decisões conservadoras sobre o estabelecimento/ramo,
-sem inferir item, medicamento, recorrência ou identidade jurídica. iFood/Rappi
-exigem ramo explícito (farmácia, pets, mercado ou restaurante); nomes isolados e
-conflitos não classificam. Não há regra por CNPJ, raiz, adquirente ou carteira.
-
-A comparação nativa dobra somente A–Z. As variantes acentuadas declaradas estão
-no JSON; acentos decompostos, espaços extras, prefixos/sufixos bancários e outras
-variantes não são normalizados. Estornos identificados pelo texto e créditos
-ficam fora; um débito rotulado apenas com a marca não revela se é reembolso ou
-outro evento. Não há taxa medida de precisão/cobertura em produção, ranking de
-compras nem descritores bancários comprovados por estas fontes. Os exemplos de
-extrato nos testes são sintéticos.
-
-As 82 regras da proposta não foram convertidas cegamente: termos genéricos como
-salário, doação, tributos e estacionamento exigem contexto; plataformas e grupos
-multiproduto (Carrefour, Cobasi, gateways) são ambíguos; frases normalizadas com
-limites de palavra não têm a mesma semântica de `contains` no motor. Foram
-preservados apenas padrões expressáveis com segurança no contrato atual.
+O motor só dobra A–Z; acentos são literais. O Brasil de exemplo exige débito
+POSTED/BRL e descrições inteiras declaradas. iFood/Rappi precisam indicar ramo.
+Não há inferência por CNPJ/raiz/gateway nem garantia de cobertura bancária;
+fontes sustentam atividades, não descritores ou frequência pessoal de compras.
 
 Fontes primárias conferidas em **24/10/2026** sustentam as atividades abaixo,
 sem provar frequência pessoal ou formatos de extrato. Antes de ampliar aliases,

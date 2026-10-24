@@ -1,8 +1,8 @@
 import { z } from "zod/v4";
 
 import { CategoryColorSchema, CategoryIconSchema } from "../domain";
-import { RulePackCategoryKeySchema } from "./rule-packs";
-import { RuleFilterSchema, RulePreviewQuerySchema } from "./rules";
+import { RuleImportFields } from "./rule-import";
+import { RuleFieldsSchema, RulePreviewQuerySchema } from "./rules";
 
 const id = z.string().min(1).max(160);
 const text = z.string().trim().min(1).max(240);
@@ -106,16 +106,7 @@ const goalFields = {
   targetDate: day.nullable().default(null),
   targetMinor: amount,
 };
-const ruleFields = {
-  accountId: id.nullable().default(null),
-  categoryId: id,
-  direction: direction.nullable().default(null),
-  enabled: z.boolean().default(true),
-  filter: RuleFilterSchema.nullable().default(null),
-  name: text,
-  priority: z.number().int().min(0).max(1000).default(100),
-  text: z.string().trim().max(240).default(""),
-};
+const ruleFields = RuleFieldsSchema.shape;
 
 export const planningDefinitions = [
   {
@@ -997,14 +988,21 @@ export const planningDefinitions = [
   },
   {
     description:
-      "Instalar o pacote Brasil no espaço: cria categorias ausentes e regras compostas sem duplicar nem sobrescrever regras pessoais. Não reaplica o histórico; novas importações usam as regras. categoryIds resolve nomes locais ambíguos.",
-    name: "install_rule_pack",
+      "Conferir importação de JSON de regras compostas, categorias e duplicatas, sem gravar. Retorna revisão para confirmação.",
+    name: "preview_rule_import",
+    readOnly: true,
+    schema: z.object({ ...RuleImportFields, spaceId: id }).strict(),
+  },
+  {
+    description:
+      "Importar JSON de regras compostas atomicamente no espaço confirmado. Preserva regras pessoais e duplicatas; exige a revisão da prévia. Não reaplica histórico.",
+    name: "import_rules",
     readOnly: false,
     schema: z
       .object({
         ...mutation,
-        categoryIds: z.partialRecord(RulePackCategoryKeySchema, id).default({}),
-        packId: z.literal("brasil"),
+        ...RuleImportFields,
+        revision: z.number().int().nonnegative(),
       })
       .strict(),
   },
@@ -1217,8 +1215,9 @@ export const PlanningCommandSchema = z.discriminatedUnion("tool", [
   }),
   planningDefinitions[89].schema.extend({ tool: z.literal("delete_space") }),
   planningDefinitions[96].schema.extend({
-    tool: z.literal("install_rule_pack"),
+    tool: z.literal("preview_rule_import"),
   }),
+  planningDefinitions[97].schema.extend({ tool: z.literal("import_rules") }),
 ]);
 export type PlanningCommand = z.infer<typeof PlanningCommandSchema>;
 

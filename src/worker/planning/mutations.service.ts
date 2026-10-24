@@ -1,8 +1,8 @@
-import type { PlanningCommand } from "../../contracts";
-import { brasilRulePack } from "../../contracts";
+import type { PlanningCommand, RuleImportResult } from "../../contracts";
 import type {
   AccountSettings,
   PlanningState,
+  Rule,
   TransactionEdit,
 } from "../../domain";
 import {
@@ -10,6 +10,7 @@ import {
   categoryCatalog,
   localDay,
   monthDate,
+  resolveRuleImportCategory,
   ruleMatches,
   sacSchedule,
 } from "../../domain";
@@ -587,14 +588,18 @@ export async function planningMutation(
   }
 
   function handleCreateCategory(
-    input: Extract<PlanningCommand, { tool: "create_category" }>,
+    input: Omit<
+      Extract<PlanningCommand, { tool: "create_category" }>,
+      "confirmed" | "idempotency_key"
+    >,
+    id = uuid(),
   ) {
     const row = {
       color: input.color ?? "#64748b",
       groupId: input.groupId ?? null,
       hidden: false,
       icon: input.icon ?? "shopping",
-      id: uuid(),
+      id,
       kind: input.kind,
       limitMinor: null,
       name: input.name,
@@ -676,7 +681,16 @@ export async function planningMutation(
   }
 
   function handleCreateRule(
-    input: Extract<PlanningCommand, { tool: "create_rule" | "update_rule" }>,
+    input:
+      | Omit<
+          Extract<PlanningCommand, { tool: "create_rule" }>,
+          "confirmed" | "idempotency_key"
+        >
+      | Omit<
+          Extract<PlanningCommand, { tool: "update_rule" }>,
+          "confirmed" | "idempotency_key"
+        >,
+    origin?: { id: string; pack: NonNullable<Rule["pack"]> },
   ) {
     if (!(input.text || input.filter)) {
       throw new Error("INVALID_RULE");
@@ -701,7 +715,7 @@ export async function planningMutation(
     const id =
       input.tool === "update_rule"
         ? inSpace(state.rules, input.id, input.spaceId).id
-        : uuid();
+        : (origin?.id ?? uuid());
     const row = {
       accountId: input.accountId,
       categoryId: input.categoryId,
@@ -710,6 +724,7 @@ export async function planningMutation(
       filter: input.filter,
       id,
       name: input.name,
+      ...(origin && { pack: origin.pack }),
       priority: input.priority,
       spaceId: input.spaceId,
       text: input.text,
@@ -727,76 +742,159 @@ export async function planningMutation(
     return { deleted: true, id: input.id };
   }
 
-  async function handleInstallRulePack(
-    input: Extract<PlanningCommand, { tool: "install_rule_pack" }>,
-  ) {
-    const pack = brasilRulePack;
+  async function handleImportRules(
+    input: Extract<
+      PlanningCommand,
+      { tool: "import_rules" | "preview_rule_import" }
+    >,
+  ): Promise<RuleImportResult> {
+    if (input.tool === "import_rules" && input.revision !== snapshot.revision) {
+      throw new Error("RESTART_REQUIRED");
+    }
+    const { pack } = input;
     const prefix = `pack:${await hash([input.spaceId, pack.id])}:`;
-    const categoryIds: Record<string, string> = {};
-    let categoriesCreated = 0;
-    let rulesCreated = 0;
-    // Explicit mappings must be valid even when a repeat has no missing rules.
-    for (const id of Object.values(input.categoryIds)) {
-      const row = inSpace(state.categories, id, input.spaceId);
-      if (row.kind !== "expense" || row.hidden) {
-        throw new Error("INVALID_RULE_PACK_CATEGORY");
-      }
-    }
-    function resolveCategory(target: (typeof pack.categories)[number]) {
-      let categoryId = categoryIds[target.key] ?? input.categoryIds[target.key];
-      if (!categoryId) {
-        const matches = state.categories.filter(
-          (c) =>
-            c.spaceId === input.spaceId &&
-            c.kind === target.kind &&
-            c.name.trim().toLocaleLowerCase("pt-BR") ===
-              target.name.toLocaleLowerCase("pt-BR"),
-        );
-        if (matches.length > 1 || matches.some((c) => c.hidden)) {
-          throw new Error("INVALID_RULE_PACK_CATEGORY");
-        }
-        categoryId = matches[0]?.id;
-        if (!categoryId) {
-          categoryId = handleCreateCategory({
-            ...input,
-            kind: target.kind,
-            name: target.name,
-            tool: "create_category",
-          }).id;
-          categoriesCreated += 1;
-        }
-      }
-      categoryIds[target.key] = categoryId;
-      return categoryId;
-    }
-    for (const definition of pack.rules) {
-      const id = prefix + definition.key;
-      // A user-edited or disabled installed rule keeps its stable identity.
-      if (state.rules.some((row) => row.id === id)) {
-        continue;
-      }
-      const target = found(
-        pack.categories.find((c) => c.key === definition.categoryKey),
-      );
-      const categoryId = resolveCategory(target);
-      const { key, categoryKey: _categoryKey, ...native } = definition;
-      state.rules.push({
-        ...native,
-        categoryId,
-        id,
-        pack: { id: pack.id, key, version: pack.version },
-        spaceId: input.spaceId,
-      });
-      rulesCreated += 1;
-    }
-    return {
-      categoriesCreated,
-      categoryIds,
+    const categoryIds = new Map<string, string>();
+    const mappings = new Map(Object.entries(input.categoryIds));
+    const pending = new Set(
+      pack.rules
+        .filter((r) => !state.rules.some((old) => old.id === prefix + r.key))
+        .map((r) => r.categoryKey),
+    );
+    const result: RuleImportResult = {
+      categories: [],
+      categoriesCreated: 0,
       packId: pack.id,
-      rulesCreated,
-      rulesExisting: pack.rules.length - rulesCreated,
+      revision: snapshot.revision,
+      rules: [],
+      rulesCreated: 0,
+      rulesExisting: 0,
       version: pack.version,
     };
+    function resolveCategory(target: (typeof pack.categories)[number]) {
+      const base = {
+        id: null,
+        key: target.key,
+        kind: target.kind,
+        name: target.name,
+      };
+      if (!pending.has(target.key)) {
+        result.categories.push({ ...base, status: "unused" });
+        return;
+      }
+      const stableId = `${prefix}category:${target.key}`;
+      const resolved = resolveRuleImportCategory({
+        categories: state.categories,
+        kind: target.kind,
+        mappedId: mappings.get(target.key),
+        name: target.name,
+        spaceId: input.spaceId,
+        stableId,
+      });
+      if (resolved.status === "ambiguous" || resolved.status === "invalid") {
+        result.categories.push({ ...base, status: resolved.status });
+        return;
+      }
+      const categorySelected = resolved.category;
+      const row =
+        categorySelected ??
+        handleCreateCategory(
+          {
+            kind: target.kind,
+            name: target.name,
+            spaceId: input.spaceId,
+            tool: "create_category",
+          },
+          stableId,
+        );
+      categoryIds.set(target.key, row.id);
+      if (!categorySelected) {
+        result.categoriesCreated += 1;
+      }
+      result.categories.push({
+        ...base,
+        id: row.id,
+        name: row.name,
+        status: categorySelected ? "existing" : "create",
+      });
+    }
+    pack.categories.forEach(resolveCategory);
+    const blocked = result.categories.some(
+      (c) => c.status === "ambiguous" || c.status === "invalid",
+    );
+    if (blocked && input.tool === "import_rules") {
+      throw new Error("INVALID_RULE_IMPORT_CATEGORY");
+    }
+    function signature(
+      rule: Pick<
+        Rule,
+        "accountId" | "direction" | "categoryId" | "text" | "filter"
+      >,
+    ) {
+      return hash({
+        accountId: rule.accountId,
+        categoryId: rule.categoryId,
+        direction: rule.direction,
+        filter: rule.filter ?? null,
+        text: rule.text,
+      });
+    }
+    const fingerprints = new Set(
+      await Promise.all(
+        state.rules.filter((r) => r.spaceId === input.spaceId).map(signature),
+      ),
+    );
+    const candidates = await Promise.all(
+      pack.rules.map(async (definition) => {
+        const categoryId = categoryIds.get(definition.categoryKey);
+        return {
+          categoryId,
+          definition,
+          fingerprint: categoryId
+            ? await signature({ ...definition, categoryId })
+            : null,
+        };
+      }),
+    );
+    function appendRule(candidate: (typeof candidates)[number]) {
+      const { definition, categoryId, fingerprint } = candidate;
+      const id = prefix + definition.key;
+      const existing = state.rules.find((r) => r.id === id);
+      const categoryName =
+        state.categories.find(
+          (c) => c.id === (existing?.categoryId ?? categoryId),
+        )?.name ??
+        found(pack.categories.find((c) => c.key === definition.categoryKey))
+          .name;
+      const display = {
+        categoryName,
+        enabled: existing?.enabled ?? definition.enabled,
+        key: definition.key,
+        name: existing?.name ?? definition.name,
+        priority: existing?.priority ?? definition.priority,
+      };
+      if (existing || (fingerprint && fingerprints.has(fingerprint))) {
+        result.rules.push({ ...display, status: "existing" });
+        result.rulesExisting += 1;
+        return;
+      }
+      if (!(categoryId && fingerprint)) {
+        result.rules.push({ ...display, status: "blocked" });
+        return;
+      }
+      const { key, categoryKey: _categoryKey, ...native } = definition;
+      handleCreateRule(
+        { ...native, categoryId, spaceId: input.spaceId, tool: "create_rule" },
+        {
+          id,
+          pack: { id: pack.id, key, version: pack.version },
+        },
+      );
+      fingerprints.add(fingerprint);
+      result.rules.push({ ...display, status: "create" });
+      result.rulesCreated += 1;
+    }
+    candidates.forEach(appendRule);
+    return result;
   }
 
   function handleCreateGoal(
@@ -1519,8 +1617,9 @@ export async function planningMutation(
       return handleCreateRule(command);
     case "delete_rule":
       return handleDeleteRule(command);
-    case "install_rule_pack":
-      return await handleInstallRulePack(command);
+    case "preview_rule_import":
+    case "import_rules":
+      return await handleImportRules(command);
     case "create_goal":
     case "update_goal":
       return handleCreateGoal(command);

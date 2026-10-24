@@ -47,6 +47,9 @@ function copyPortalAssets(): Plugin {
           );
         }),
       );
+      await cp(new URL("rule-packs/", output), new URL("rule-packs/", site), {
+        recursive: true,
+      });
       await cp(new URL("chunks/", output), new URL("chunks/", site), {
         recursive: true,
       });
