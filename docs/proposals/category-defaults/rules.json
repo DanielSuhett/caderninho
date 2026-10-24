@@ -37,28 +37,19 @@
       "id": "delivery-uber-eats",
       "category": "Lanches",
       "direction": "debit",
-      "any": [
-        "uber eats",
-        "ubereats"
-      ]
+      "any": ["uber eats", "ubereats"]
     },
     {
       "id": "delivery-99food",
       "category": "Lanches",
       "direction": "debit",
-      "any": [
-        "99 food",
-        "99food"
-      ]
+      "any": ["99 food", "99food"]
     },
     {
       "id": "delivery-ifood-rappi",
       "category": "Lanches",
       "direction": "debit",
-      "any": [
-        "ifood",
-        "rappi"
-      ],
+      "any": ["ifood", "rappi"],
       "except": [
         "mercado",
         "market",
@@ -75,74 +66,41 @@
       "id": "corridas-uber",
       "category": "Corridas",
       "direction": "debit",
-      "any": [
-        "uber trip",
-        "uber trips",
-        "uber viagem",
-        "uber viagens"
-      ],
-      "except": [
-        "uber eats",
-        "ubereats",
-        "uber one"
-      ]
+      "any": ["uber trip", "uber trips", "uber viagem", "uber viagens"],
+      "except": ["uber eats", "ubereats", "uber one"]
     },
     {
       "id": "corridas-99pop",
       "category": "Corridas",
       "direction": "debit",
-      "any": [
-        "99pop",
-        "99 pop"
-      ],
-      "except": [
-        "99pay",
-        "99 pay",
-        "99food",
-        "99 food"
-      ]
+      "any": ["99pop", "99 pop"],
+      "except": ["99pay", "99 pay", "99food", "99 food"]
     },
     {
       "id": "compras-aliexpress",
       "category": "Compras",
       "direction": "debit",
-      "any": [
-        "aliexpress"
-      ]
+      "any": ["aliexpress"]
     },
     {
       "id": "compras-mercado-livre",
       "category": "Compras",
       "direction": "debit",
-      "any": [
-        "mercadolivre",
-        "mercado livre"
-      ],
-      "except": [
-        "mercado pago",
-        "mercadopago"
-      ]
+      "any": ["mercadolivre", "mercado livre"],
+      "except": ["mercado pago", "mercadopago"]
     },
     {
       "id": "compras-shopee",
       "category": "Compras",
       "direction": "debit",
-      "any": [
-        "shopee"
-      ],
-      "except": [
-        "shopeepay",
-        "shopee pay"
-      ]
+      "any": ["shopee"],
+      "except": ["shopeepay", "shopee pay"]
     },
     {
       "id": "compras-magalu",
       "category": "Compras",
       "direction": "debit",
-      "any": [
-        "magalu",
-        "magazine luiza"
-      ],
+      "any": ["magalu", "magazine luiza"],
       "except": [
         "luizacred",
         "luiza cred",
@@ -155,212 +113,135 @@
       "id": "compras-vestuario",
       "category": "Compras",
       "direction": "debit",
-      "any": [
-        "lojas renner",
-        "riachuelo",
-        "shein",
-        "lojas marisa"
-      ],
-      "except": [
-        "realize",
-        "midway",
-        "seguros"
-      ]
+      "any": ["lojas renner", "riachuelo", "shein", "lojas marisa"],
+      "except": ["realize", "midway", "seguros"]
     },
     {
       "id": "compras-eletronicos",
       "category": "Compras",
       "direction": "debit",
-      "any": [
-        "kabum",
-        "terabyte atacado"
-      ]
+      "any": ["kabum", "terabyte atacado"]
     },
     {
       "id": "cuidados-boticario",
       "category": "Cuidados Pessoais",
       "direction": "debit",
-      "any": [
-        "oboticario",
-        "o boticario"
-      ]
+      "any": ["oboticario", "o boticario"]
     },
     {
       "id": "cuidados-cabelo",
       "category": "Cuidados Pessoais",
       "direction": "debit",
-      "any": [
-        "barbearia",
-        "cabeleireiro"
-      ]
+      "any": ["barbearia", "cabeleireiro"]
     },
     {
       "id": "petshop",
       "category": "Petshop",
       "direction": "debit",
-      "any": [
-        "petshop",
-        "pet shop",
-        "petz"
-      ]
+      "any": ["petshop", "pet shop", "petz"]
     },
     {
       "id": "farmacia",
       "category": "Farmácia",
       "direction": "debit",
-      "any": [
-        "drogaria",
-        "farmacia",
-        "droga raia",
-        "drogasil"
-      ]
+      "any": ["drogaria", "farmacia", "droga raia", "drogasil"]
     },
     {
       "id": "mercado",
       "category": "Mercado",
       "direction": "debit",
-      "any": [
-        "supermercado",
-        "hortifruti",
-        "carrefour",
-        "assai"
-      ],
-      "except": [
-        "banco",
-        "seguros"
-      ]
+      "any": ["supermercado", "hortifruti", "carrefour", "assai"],
+      "except": ["banco", "seguros"]
     },
     {
       "id": "lanches-doces",
       "category": "Lanches",
       "direction": "debit",
-      "any": [
-        "cacau show",
-        "lindt"
-      ]
+      "any": ["cacau show", "lindt"]
     },
     {
       "id": "lanches-estabelecimentos",
       "category": "Lanches",
       "direction": "debit",
-      "any": [
-        "padaria",
-        "lanchonete",
-        "cafeteria",
-        "sorveteria"
-      ]
+      "any": ["padaria", "lanchonete", "cafeteria", "sorveteria"]
     },
     {
       "id": "restaurantes-kfc",
       "category": "Restaurantes",
       "direction": "debit",
-      "any": [
-        "kfc"
-      ]
+      "any": ["kfc"]
     },
     {
       "id": "assinatura-netflix",
       "category": "Assinaturas",
       "direction": "debit",
-      "any": [
-        "netflix"
-      ]
+      "any": ["netflix"]
     },
     {
       "id": "assinatura-spotify",
       "category": "Assinaturas",
       "direction": "debit",
-      "any": [
-        "spotify"
-      ]
+      "any": ["spotify"]
     },
     {
       "id": "assinatura-disney-plus",
       "category": "Assinaturas",
       "direction": "debit",
-      "any": [
-        "disney plus",
-        "disneyplus"
-      ]
+      "any": ["disney plus", "disneyplus"]
     },
     {
       "id": "assinatura-youtube-premium",
       "category": "Assinaturas",
       "direction": "debit",
-      "any": [
-        "youtube premium"
-      ]
+      "any": ["youtube premium"]
     },
     {
       "id": "assinatura-google-one",
       "category": "Assinaturas",
       "direction": "debit",
-      "any": [
-        "google one"
-      ]
+      "any": ["google one"]
     },
     {
       "id": "assinatura-claude",
       "category": "Assinaturas",
       "direction": "debit",
-      "any": [
-        "claude ai subscription"
-      ]
+      "any": ["claude ai subscription"]
     },
     {
       "id": "lazer-ticketmaster",
       "category": "Lazer",
       "direction": "debit",
-      "any": [
-        "ticketmaster"
-      ]
+      "any": ["ticketmaster"]
     },
     {
       "id": "lazer-steam",
       "category": "Lazer",
       "direction": "debit",
-      "any": [
-        "steam purchase"
-      ]
+      "any": ["steam purchase"]
     },
     {
       "id": "estacionamento-pedagio",
       "category": "Estacionamento e Pedágio",
       "direction": "debit",
-      "any": [
-        "estacionamento",
-        "pedagio",
-        "digipare"
-      ]
+      "any": ["estacionamento", "pedagio", "digipare"]
     },
     {
       "id": "academia-smart-fit",
       "category": "Academia",
       "direction": "debit",
-      "any": [
-        "smart fit",
-        "smartfit"
-      ]
+      "any": ["smart fit", "smartfit"]
     },
     {
       "id": "educacao-cursos",
       "category": "Educação Geral",
       "direction": "debit",
-      "any": [
-        "udemy",
-        "alura"
-      ]
+      "any": ["udemy", "alura"]
     },
     {
       "id": "tributos",
       "category": "Impostos e Taxas",
       "direction": "debit",
-      "any": [
-        "iptu",
-        "ipva",
-        "darf",
-        "iof"
-      ]
+      "any": ["iptu", "ipva", "darf", "iof"]
     },
     {
       "id": "salario",
@@ -379,10 +260,7 @@
       "id": "doacoes",
       "category": "Doações",
       "direction": "debit",
-      "any": [
-        "dizimo",
-        "doacao"
-      ]
+      "any": ["dizimo", "doacao"]
     }
   ]
 }
