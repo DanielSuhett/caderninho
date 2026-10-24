@@ -1,3 +1,4 @@
+import { Banner } from "@cloudflare/kumo";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { tryCatch } from "../../shared";
@@ -85,27 +86,30 @@ export function ResourceFeedback({
   }
   if (error) {
     return (
-      <div
-        className="notice"
-        data-tone="error"
+      <Banner
+        className="feedback"
+        description={
+          <>
+            <p>
+              Não foi possível atualizar esta visão. Dados já exibidos podem
+              estar desatualizados. Confira os filtros, renove a sessão ou
+              reabra a lista se os dados mudaram durante a paginação.
+            </p>
+            <UiButton
+              onClick={retry}
+              type="button"
+              variant="secondary"
+            >
+              Tentar novamente
+            </UiButton>{" "}
+            <a href={`${location.pathname}?${first}`}>Reabrir do início</a> ·{" "}
+            <a href={location.pathname}>Limpar todos os filtros</a> ·{" "}
+            <a href="/account/login">Entrar novamente</a>
+          </>
+        }
         role="alert"
-      >
-        <p>
-          Não foi possível atualizar esta visão. Dados já exibidos podem estar
-          desatualizados. Confira os filtros, renove a sessão ou reabra a lista
-          se os dados mudaram durante a paginação.
-        </p>
-        <UiButton
-          onClick={retry}
-          type="button"
-          variant="secondary"
-        >
-          Tentar novamente
-        </UiButton>{" "}
-        <a href={`${location.pathname}?${first}`}>Reabrir do início</a> ·{" "}
-        <a href={location.pathname}>Limpar todos os filtros</a> ·{" "}
-        <a href="/account/login">Entrar novamente</a>
-      </div>
+        variant="error"
+      />
     );
   }
   return null;

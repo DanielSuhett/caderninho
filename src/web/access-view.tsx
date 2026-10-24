@@ -1,3 +1,5 @@
+import { Banner, LayerCard } from "@cloudflare/kumo";
+
 import { PublicLayout } from "./public-layout";
 import { UiButton, UiField } from "./ui";
 
@@ -42,7 +44,7 @@ export function accessPage({
         id="conteudo"
         tabIndex={-1}
       >
-        <div className="public-surface">
+        <LayerCard className="public-surface">
           <p className="public-kicker">Seu Caderninho · acesso privado</p>
           <h1>{heading}</h1>
           <p className="access-intro">{intro}</p>
@@ -50,13 +52,12 @@ export function accessPage({
             Você está acessando<code>{origin}</code>
           </div>
           {!!error && (
-            <div
-              className="access-error"
+            <Banner
+              description={error}
               id="login-error"
               role="alert"
-            >
-              {error}
-            </div>
+              variant="error"
+            />
           )}
           {configured ? (
             <>
@@ -108,7 +109,7 @@ export function accessPage({
               <a href={reopen}>reabra esta página</a>.
             </p>
           )}
-        </div>
+        </LayerCard>
         <p className="access-help">
           {authorizing
             ? "Entrar não concede acesso automaticamente."

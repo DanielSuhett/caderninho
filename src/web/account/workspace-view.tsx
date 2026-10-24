@@ -1,34 +1,77 @@
+import { Sidebar, useSidebar } from "@cloudflare/kumo";
 import {
   ArrowsClockwiseIcon,
   BankIcon,
   FoldersIcon,
   HouseIcon,
   ListChecksIcon,
-  ListIcon,
+  NotebookIcon,
   PaletteIcon,
   ReceiptIcon,
   ShieldCheckIcon,
   SignOutIcon,
 } from "@phosphor-icons/react";
-import { type ReactNode, useCallback } from "react";
+import {
+  type KeyboardEvent,
+  lazy,
+  type ReactNode,
+  Suspense,
+  useCallback,
+  useEffect,
+  useRef,
+} from "react";
 
 import type { PortalResponse } from "../../contracts";
-import { UiButton } from "../ui";
+import { tryCatch } from "../../shared";
 import type { createAccountApi } from "./account-api";
-import { AuditView } from "./audit-view";
-import { DesignSystemView } from "./design-system-view";
-import { OrganizationView } from "./organization-view";
-import { SyncHistoryView } from "./sync-history-view";
-import { TransactionsView } from "./transactions-view";
-import { WorkspaceDrawer } from "./workspace-drawer";
+import { WorkspacePageError } from "./workspace-page";
 import { scopedHref } from "./workspace-resource";
+import { WorkspaceSkeleton } from "./workspace-ui";
 
+const AuditView = lazy<typeof import("./audit-view").AuditView>(async () => {
+  const { data, error } = await tryCatch(() => import("./audit-view"));
+  if (error) {
+    return { default: WorkspacePageError };
+  }
+  return { default: data.AuditView };
+});
+const DesignSystemView = lazy<
+  typeof import("./design-system-view").DesignSystemView
+>(async () => {
+  const { data, error } = await tryCatch(() => import("./design-system-view"));
+  if (error) {
+    return { default: WorkspacePageError };
+  }
+  return { default: data.DesignSystemView };
+});
+const OrganizationView = lazy<
+  typeof import("./organization-view").OrganizationView
+>(async () => {
+  const { data, error } = await tryCatch(() => import("./organization-view"));
+  if (error) {
+    return { default: WorkspacePageError };
+  }
+  return { default: data.OrganizationView };
+});
+const SyncHistoryView = lazy<
+  typeof import("./sync-history-view").SyncHistoryView
+>(async () => {
+  const { data, error } = await tryCatch(() => import("./sync-history-view"));
+  if (error) {
+    return { default: WorkspacePageError };
+  }
+  return { default: data.SyncHistoryView };
+});
+const TransactionsView = lazy<
+  typeof import("./transactions-view").TransactionsView
+>(async () => {
+  const { data, error } = await tryCatch(() => import("./transactions-view"));
+  if (error) {
+    return { default: WorkspacePageError };
+  }
+  return { default: data.TransactionsView };
+});
 const pages = [
-  {
-    icon: ShieldCheckIcon,
-    name: "Auditoria MCP",
-    path: "/account/audit",
-  },
   {
     icon: HouseIcon,
     name: "Visão geral",
@@ -59,7 +102,32 @@ const pages = [
     name: "Conexões",
     path: "/account/connections",
   },
+  { icon: ShieldCheckIcon, name: "Auditoria MCP", path: "/account/audit" },
 ];
+
+function RouteNavigation({ route }: { route: string }) {
+  const { setOpenMobile } = useSidebar();
+  const previousRoute = useRef(route);
+  useEffect(() => {
+    if (!route) {
+      return;
+    }
+    const changed = previousRoute.current !== route;
+    previousRoute.current = route;
+    setOpenMobile(false);
+    if (!changed) {
+      return;
+    }
+    const frame = requestAnimationFrame(() =>
+      document
+        .getElementById("workspace-content")
+        ?.focus({ preventScroll: true }),
+    );
+    return () => cancelAnimationFrame(frame);
+  }, [route, setOpenMobile]);
+  return null;
+}
+
 export function WorkspaceView({
   children,
   api,
@@ -76,7 +144,6 @@ export function WorkspaceView({
   busy: boolean;
 }) {
   const path = location.pathname;
-  const params = new URLSearchParams(location.search);
   const logout = useCallback(() => command("logout"), [command]);
   let content = children;
   if (path === "/account/transactions") {
@@ -119,103 +186,187 @@ export function WorkspaceView({
   if (path === "/account/design-system") {
     content = <DesignSystemView key={route} />;
   }
-  const navigation = (
-    <>
-      <nav
-        aria-label="Páginas do Caderninho"
-        className="workspace-nav"
-      >
-        {pages.map((p) => (
-          <a
-            aria-current={path === p.path ? "page" : undefined}
-            aria-label={p.name}
-            className="sidebar-control"
-            href={scopedHref(p.path, params)}
-            key={p.path}
-            title={p.name}
-          >
-            <p.icon
-              aria-hidden="true"
-              size={20}
-            />
-            <span className="nav-label">{p.name}</span>
-          </a>
-        ))}
-      </nav>
-      <div className="sidebar-session">
+  return (
+    <Sidebar.Provider
+      className="workspace"
+      mobileBreakpoint={760}
+    >
+      <RouteNavigation route={route} />
+      <WorkspaceNavigation
+        busy={busy}
+        logout={logout}
+        snapshot={snapshot}
+      />
+      <WorkspaceContent>
+        <Suspense
+          fallback={<WorkspaceSkeleton />}
+          key={route}
+        >
+          {content}
+        </Suspense>
+      </WorkspaceContent>
+    </Sidebar.Provider>
+  );
+}
+
+function WorkspaceNavigation({
+  snapshot,
+  busy,
+  logout,
+}: {
+  snapshot: PortalResponse;
+  busy: boolean;
+  logout: () => void;
+}) {
+  const { state, isMobile, openMobile } = useSidebar();
+  const restoreMenuTrigger = useCallback(() => {
+    requestAnimationFrame(() =>
+      document.getElementById("workspace-menu-trigger")?.focus(),
+    );
+  }, []);
+  const containMobileTab = useCallback(
+    (event: KeyboardEvent<HTMLElement>) => {
+      if (event.key !== "Tab" || !isMobile || !openMobile) {
+        return;
+      }
+      const controls = [
+        ...event.currentTarget.querySelectorAll<HTMLElement>(
+          "a[href],button:not(:disabled),[tabindex='0']",
+        ),
+      ].filter(
+        (node) => !node.closest("[inert]") && node.getClientRects().length > 0,
+      );
+      const [first] = controls;
+      const last = controls.at(-1);
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last?.focus();
+      }
+      if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first?.focus();
+      }
+    },
+    [isMobile, openMobile],
+  );
+  const showLabels = state !== "collapsed" || isMobile;
+  const path = location.pathname;
+  const params = new URLSearchParams(location.search);
+  return (
+    <Sidebar
+      aria-label="Navegação do Caderninho"
+      id="workspace-navigation"
+      onKeyDown={containMobileTab}
+      {...(isMobile && { "aria-modal": openMobile, role: "dialog" })}
+    >
+      <Sidebar.Header>
         <a
-          aria-current={path === "/account/design-system" ? "page" : undefined}
-          aria-label="Referência visual"
-          className="sidebar-control design-reference-link"
-          href="/account/design-system"
+          aria-label="Caderninho, visão geral"
+          className="workspace-brand"
+          href="/account"
         >
-          <PaletteIcon
-            aria-hidden="true"
+          <NotebookIcon
+            aria-hidden
             size={20}
           />
-          <span className="nav-label">Referência visual</span>
+          {showLabels === true && <span>Caderninho</span>}
         </a>
-        <UiButton
-          aria-label="Sair"
-          className="sidebar-control"
-          disabled={busy}
-          onClick={logout}
-          type="button"
-          variant="secondary"
-        >
-          <SignOutIcon
-            aria-hidden="true"
-            size={20}
+      </Sidebar.Header>
+      <Sidebar.Content>
+        <Sidebar.Group>
+          <Sidebar.GroupLabel>Instalação pessoal</Sidebar.GroupLabel>
+          <nav aria-label="Páginas do Caderninho">
+            <Sidebar.Menu>
+              {pages.map((page) => (
+                <Sidebar.MenuButton
+                  active={path === page.path}
+                  aria-current={path === page.path ? "page" : undefined}
+                  href={scopedHref(page.path, params)}
+                  icon={page.icon}
+                  key={page.path}
+                  tooltip={page.name}
+                >
+                  {page.name}
+                </Sidebar.MenuButton>
+              ))}
+            </Sidebar.Menu>
+          </nav>
+        </Sidebar.Group>
+        <Sidebar.Group>
+          <Sidebar.Menu>
+            <Sidebar.MenuButton
+              active={path === "/account/design-system"}
+              href="/account/design-system"
+              icon={PaletteIcon}
+              tooltip="Referência visual"
+            >
+              Referência visual
+            </Sidebar.MenuButton>
+            <Sidebar.MenuButton
+              disabled={busy}
+              icon={SignOutIcon}
+              onClick={logout}
+              tooltip="Sair"
+            >
+              Sair
+            </Sidebar.MenuButton>
+          </Sidebar.Menu>
+        </Sidebar.Group>
+      </Sidebar.Content>
+      <Sidebar.Footer>
+        {isMobile ? (
+          <Sidebar.Close
+            aria-label="Fechar navegação"
+            onClick={restoreMenuTrigger}
           />
-          <span className="nav-label">Sair</span>
-        </UiButton>
-        <p>
-          Instalação privada
-          <br />
-          <small>
+        ) : (
+          <Sidebar.Trigger aria-label="Alternar navegação" />
+        )}
+        {showLabels === true && (
+          <p className="sidebar-installation">
             {snapshot.people.length}{" "}
             {snapshot.people.length === 1 ? "pessoa" : "pessoas"} ·{" "}
             {snapshot.connections.length}{" "}
             {snapshot.connections.length === 1 ? "conexão" : "conexões"}
-          </small>
-        </p>
-      </div>
-    </>
+          </p>
+        )}
+      </Sidebar.Footer>
+    </Sidebar>
   );
+}
+
+function WorkspaceContent({ children }: { children: ReactNode }) {
+  const { isMobile, openMobile } = useSidebar();
   return (
-    <div className="workspace">
+    <div
+      className="workspace-main"
+      inert={isMobile && openMobile}
+    >
       <a
         className="skip-link"
         href="#workspace-content"
       >
         Ir para o conteúdo
       </a>
-      <aside className="workspace-sidebar">
-        <WorkspaceDrawer
-          className="sidebar-toggle"
-          side="left"
-          title="Navegação"
-          trigger={
-            <>
-              <ListIcon
-                aria-hidden="true"
-                size={20}
-              />
-              <span className="sr-only">Abrir navegação</span>
-            </>
-          }
-        >
-          {navigation}
-        </WorkspaceDrawer>
-        {navigation}
-      </aside>
-      <div
+      <header className="workspace-mobile-header">
+        <Sidebar.Trigger
+          aria-controls="workspace-navigation"
+          aria-expanded={openMobile}
+          aria-label="Abrir navegação"
+          id="workspace-menu-trigger"
+        />
+        <span>Caderninho</span>
+      </header>
+      <main
         className="workspace-content"
         id="workspace-content"
         tabIndex={-1}
       >
-        {content}
-      </div>
+        {children}
+      </main>
+      <footer className="workspace-footer">
+        Seus dados na sua Cloudflare. Acesso controlado por você.
+      </footer>
     </div>
   );
 }

@@ -1,3 +1,4 @@
+import { Link } from "@cloudflare/kumo";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { HouseholdCommand, PortalResponse } from "../../contracts";
@@ -311,7 +312,7 @@ export function AccountView() {
             >
               Tentar novamente
             </UiButton>{" "}
-            <a href="/account/login">Entrar novamente</a>
+            <Link href="/account/login">Entrar novamente</Link>
           </p>
         ) : null}
       </div>

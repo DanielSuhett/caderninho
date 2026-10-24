@@ -1,10 +1,9 @@
-import { XIcon } from "@phosphor-icons/react";
+import { Banner, LayerDialog } from "@cloudflare/kumo";
 import {
+  type ComponentProps,
   type ReactNode,
-  type SyntheticEvent,
   useCallback,
   useEffect,
-  useId,
   useRef,
   useState,
 } from "react";
@@ -13,25 +12,28 @@ import { UiButton } from "../ui";
 import { guardWorkspaceNavigation } from "./account-navigation";
 
 export function BackofficeDialog({
+  open,
   title,
   children,
-  footer,
+  primaryAction,
+  actionHint,
   dirty,
   busy,
   close,
   presentation = "editor",
 }: {
+  open: boolean;
   title: string;
   children: ReactNode;
-  footer: ReactNode;
+  primaryAction: ComponentProps<typeof LayerDialog.Actions.Primary>;
+  actionHint?: ReactNode;
   dirty: boolean;
   busy: boolean;
   close: () => void;
   presentation?: "editor" | "confirmation" | "compact-editor";
 }) {
-  const dialog = useRef<HTMLDialogElement>(null);
-  const cancelAction = useRef<HTMLButtonElement>(null);
-  const id = useId();
+  const editingBody = useRef<HTMLDivElement>(null);
+  const editingFocus = useRef<HTMLElement | null>(null);
   const discardNotice = useRef<HTMLDivElement>(null);
   const [discard, setDiscard] = useState(false);
   useEffect(() => {
@@ -41,24 +43,23 @@ export function BackofficeDialog({
     }
   }, [discard]);
   useEffect(() => {
-    const previous = document.activeElement;
-    const { overflow } = document.body.style;
-    document.body.style.overflow = "hidden";
-    dialog.current?.showModal();
-    if (presentation === "confirmation") {
-      cancelAction.current?.focus();
+    if (!open) {
+      return;
     }
-    return () => {
-      document.body.style.overflow = overflow;
-      if (previous instanceof HTMLElement && previous.isConnected) {
-        previous.focus();
-      } else {
-        document.querySelector<HTMLElement>("#workspace-content")?.focus();
-      }
-    };
-  }, [presentation]);
+    setDiscard(false);
+    if (presentation !== "confirmation") {
+      return;
+    }
+    const frame = requestAnimationFrame(() =>
+      editingBody.current
+        ?.closest('[role="dialog"], [role="alertdialog"]')
+        ?.querySelector<HTMLButtonElement>("button")
+        ?.focus(),
+    );
+    return () => cancelAnimationFrame(frame);
+  }, [open, presentation]);
   useEffect(() => {
-    if (!dirty) {
+    if (!(open && dirty)) {
       return;
     }
     const leave = (event: BeforeUnloadEvent) => {
@@ -66,97 +67,105 @@ export function BackofficeDialog({
     };
     window.addEventListener("beforeunload", leave);
     return () => window.removeEventListener("beforeunload", leave);
-  }, [dirty]);
+  }, [dirty, open]);
   const requestClose = useCallback(() => {
     if (busy) {
       return;
     }
     if (dirty) {
+      if (document.activeElement instanceof HTMLElement) {
+        editingFocus.current = document.activeElement;
+      }
       setDiscard(true);
-    } else {
-      close();
+      return;
     }
+    close();
   }, [busy, dirty, close]);
-  useEffect(
-    () =>
-      guardWorkspaceNavigation(() => {
-        if (dirty || busy) {
-          requestClose();
-          return false;
-        }
-        return true;
-      }),
-    [dirty, busy, requestClose],
-  );
-  const cancel = useCallback(
-    (event: SyntheticEvent<HTMLDialogElement>) => {
-      event.preventDefault();
-      requestClose();
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    return guardWorkspaceNavigation(() => {
+      if (dirty || busy) {
+        requestClose();
+        return false;
+      }
+      return true;
+    });
+  }, [dirty, busy, requestClose, open]);
+  const onOpenChange = useCallback(
+    (next: boolean) => {
+      if (!next) {
+        requestClose();
+      }
     },
     [requestClose],
   );
-  const continueEditing = useCallback(() => setDiscard(false), []);
+  const continueEditing = useCallback(() => {
+    setDiscard(false);
+    requestAnimationFrame(() => {
+      const previous = editingFocus.current;
+      if (previous?.isConnected && editingBody.current?.contains(previous)) {
+        previous.focus();
+        return;
+      }
+      editingBody.current
+        ?.querySelector<HTMLElement>("input,button[role=combobox]")
+        ?.focus();
+    });
+  }, []);
+  const DialogRoot =
+    presentation === "confirmation" ? LayerDialog.Alert : LayerDialog.Root;
   return (
-    <dialog
-      aria-labelledby={id}
-      className={`workspace-drawer backoffice-drawer ${{ "compact-editor": "backoffice-compact-editor", confirmation: "backoffice-confirmation", editor: "" }[presentation]}`}
-      onCancel={cancel}
-      ref={dialog}
+    <DialogRoot
+      dismissDisabled={busy || discard}
+      onOpenChange={onOpenChange}
+      open={open}
     >
-      <header className="drawer-heading">
-        <h2 id={id}>{title}</h2>
-        <UiButton
-          aria-label="Fechar editor"
-          className="icon-button"
-          disabled={busy}
-          onClick={requestClose}
-          type="button"
-          variant="secondary"
-        >
-          <XIcon size={20} />
-        </UiButton>
-      </header>
-      <div className="drawer-body">
-        {!!discard && (
+      <LayerDialog.Content size={presentation === "editor" ? "lg" : "base"}>
+        <LayerDialog.Title>{title}</LayerDialog.Title>
+        <LayerDialog.Body>
+          {!!discard && (
+            <div ref={discardNotice}>
+              <Banner
+                action={
+                  <div className="record-actions">
+                    <UiButton
+                      onClick={continueEditing}
+                      type="button"
+                      variant="secondary"
+                    >
+                      Continuar editando
+                    </UiButton>
+                    <UiButton
+                      onClick={close}
+                      tone="danger"
+                      type="button"
+                    >
+                      Descartar alterações
+                    </UiButton>
+                  </div>
+                }
+                title="Descartar as alterações ainda não salvas?"
+                variant="alert"
+              />
+            </div>
+          )}
           <div
-            className="notice"
-            ref={discardNotice}
-            role="alert"
+            inert={discard}
+            ref={editingBody}
           >
-            <p>Descartar as alterações ainda não salvas?</p>
-            <UiButton
-              onClick={continueEditing}
-              type="button"
-              variant="secondary"
-            >
-              Continuar editando
-            </UiButton>
-            <UiButton
-              onClick={close}
-              tone="danger"
-              type="button"
-            >
-              Descartar alterações
-            </UiButton>
+            {children}
+            {actionHint}
           </div>
-        )}
-        <div inert={discard}>{children}</div>
-      </div>
-      <footer
-        className="drawer-footer"
-        inert={discard}
-      >
-        {footer}
-        <UiButton
-          disabled={busy}
-          onClick={requestClose}
-          ref={cancelAction}
-          type="button"
-          variant="secondary"
-        >
-          Cancelar
-        </UiButton>
-      </footer>
-    </dialog>
+        </LayerDialog.Body>
+        <LayerDialog.Actions dismissLabel="Cancelar">
+          <LayerDialog.Actions.Primary
+            {...primaryAction}
+            disabled={busy || discard || primaryAction.disabled}
+          />
+        </LayerDialog.Actions>
+      </LayerDialog.Content>
+    </DialogRoot>
   );
 }

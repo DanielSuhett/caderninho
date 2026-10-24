@@ -1,3 +1,11 @@
+import {
+  Badge,
+  DropdownMenu,
+  InlineCopyText,
+  LayerCard,
+  Select,
+  useKumoToastManager,
+} from "@cloudflare/kumo";
 import { type MouseEvent, useCallback, useState } from "react";
 
 import {
@@ -10,6 +18,7 @@ import type { createAccountApi } from "./account-api";
 import { navigateWorkspace } from "./account-navigation";
 import { formatBalance } from "./dashboard-view";
 import { DisclosureItem } from "./disclosure-item";
+import { QuerySearch, SearchField } from "./filter-fields";
 import { DeleteOrganizationItem, GroupEditor } from "./group-editor";
 import { conditionFields } from "./rule-draft";
 import { RuleEditor } from "./rule-editor";
@@ -20,9 +29,9 @@ import {
   useResource,
 } from "./workspace-resource";
 import {
-  FilterDrawer,
   RecordReference,
   WorkspaceDetails,
+  WorkspaceFilters,
   WorkspaceHeading,
 } from "./workspace-ui";
 
@@ -50,7 +59,9 @@ export function OrganizationView({
     id?: string;
     remove?: boolean;
   } | null>(null);
-  const [notice, setNotice] = useState("");
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [editorSession, setEditorSession] = useState(0);
+  const { add: notify } = useKumoToastManager();
   const [params] = useState(() => new URLSearchParams(location.search));
   const spaceId = params.get("space") || "personal";
   const load = useCallback(
@@ -82,22 +93,25 @@ export function OrganizationView({
       (!params.get("enabled") || String(r.enabled) === params.get("enabled")),
   );
   const current = data?.spaces.find((s) => s.id === spaceId);
-  const closeEditor = useCallback(() => setEditor(null), []);
+  const closeEditor = useCallback(() => setEditorOpen(false), []);
   const saved = useCallback(() => {
-    setEditor(null);
-    setNotice("Alteração salva.");
+    setEditorOpen(false);
+    notify({ title: "Alteração salva.", variant: "success" });
     if (editor?.remove && editor.kind === "space" && editor.id === spaceId) {
       navigateWorkspace(new URL("/account/groups", location.origin));
       return;
     }
     resource.retry();
-  }, [resource.retry, editor, spaceId]);
-  const newItem = useCallback(
-    () => setEditor({ kind: page === "rules" ? "rule" : "space" }),
-    [page],
-  );
-  const openItem = useCallback((event: MouseEvent<HTMLButtonElement>) => {
+  }, [resource.retry, editor, spaceId, notify]);
+  const newItem = useCallback(() => {
+    setEditor({ kind: page === "rules" ? "rule" : "space" });
+    setEditorSession((value) => value + 1);
+    setEditorOpen(true);
+  }, [page]);
+  const openItem = useCallback((event: MouseEvent<HTMLElement>) => {
     const { id, kind, remove } = event.currentTarget.dataset;
+    setEditorSession((value) => value + 1);
+    setEditorOpen(true);
     setEditor({
       kind: kind === "rule" ? "rule" : "space",
       ...(id && { id }),
@@ -115,60 +129,23 @@ export function OrganizationView({
           {page === "rules" ? "Nova regra" : "Novo grupo"}
         </UiButton>
       </WorkspaceHeading>
-      {!!notice && (
-        <p
-          className="notice"
-          role="status"
-        >
-          {notice}
-        </p>
+      {!!data && (
+        <OrganizationEditors
+          api={api}
+          close={closeEditor}
+          data={data}
+          editor={editor}
+          open={editorOpen}
+          saved={saved}
+          session={editorSession}
+          snapshot={snapshot}
+          spaceId={spaceId}
+        />
       )}
-      {!!(editor && data) &&
-        (() => {
-          const rule = data.rules.find((row) => row.id === editor.id);
-          const space = data.spaces.find((row) => row.id === editor.id);
-          if (editor.remove) {
-            const item = editor.kind === "rule" ? rule : space;
-            return item ? (
-              <DeleteOrganizationItem
-                api={api}
-                close={closeEditor}
-                deleted={saved}
-                item={item}
-                kind={editor.kind}
-                snapshot={snapshot}
-                spaceId={editor.kind === "space" ? item.id : spaceId}
-              />
-            ) : null;
-          }
-          if (editor.kind === "space") {
-            return (
-              <GroupEditor
-                api={api}
-                snapshot={snapshot}
-                {...(space && { space })}
-                close={closeEditor}
-                saved={saved}
-              />
-            );
-          }
-          return (
-            <RuleEditor
-              accounts={data.accounts}
-              api={api}
-              catalog={data}
-              snapshot={snapshot}
-              spaceId={spaceId}
-              {...(rule && { rule })}
-              close={closeEditor}
-              saved={saved}
-            />
-          );
-        })()}
       <ResourceFeedback {...resource} />
       {!!data && (
         <>
-          <FilterDrawer
+          <WorkspaceFilters
             action={`/account/${page}`}
             activeCount={
               {
@@ -183,6 +160,16 @@ export function OrganizationView({
                 rules: current?.name ?? spaceId,
               }[page]
             }
+            leading={
+              page === "rules" && (
+                <QuerySearch
+                  action="/account/rules"
+                  label="Buscar regra"
+                  name="q"
+                  params={params}
+                />
+              )
+            }
           >
             <ScopeFields
               catalog={data}
@@ -192,35 +179,35 @@ export function OrganizationView({
             />
             {page === "rules" && (
               <>
-                <label className="filter-wide">
-                  Buscar regra
-                  <input
+                <div className="filter-wide">
+                  <SearchField
                     defaultValue={params.get("q") ?? ""}
+                    label="Buscar regra"
                     name="q"
                     placeholder="Nome ou trecho da descrição"
                     type="search"
                   />
-                </label>
-                <label>
-                  Estado
-                  <select
-                    defaultValue={params.get("enabled") ?? ""}
-                    name="enabled"
-                  >
-                    <option value="">Todas as regras</option>
-                    <option value="true">Ativas</option>
-                    <option value="false">Pausadas</option>
-                  </select>
-                </label>
+                </div>
+                <Select
+                  defaultValue={params.get("enabled") ?? ""}
+                  items={[
+                    { label: "Todas as regras", value: "" },
+                    { label: "Ativas", value: "true" },
+                    { label: "Pausadas", value: "false" },
+                  ]}
+                  label="Estado"
+                  name="enabled"
+                />
               </>
             )}
-          </FilterDrawer>
+          </WorkspaceFilters>
           {page === "rules" ? (
             <>
               {rules?.length ? (
-                <ul
+                <LayerCard
                   aria-label="Regras de classificação"
                   className="record-list"
+                  render={<ul />}
                 >
                   {rules.map((r) => {
                     const category =
@@ -249,12 +236,9 @@ export function OrganizationView({
                             <>
                               <span className="record-title">{r.name}</span>
                               <span className="record-value">
-                                <span
-                                  className="status-label"
-                                  data-tone="neutral"
-                                >
+                                <Badge variant="secondary">
                                   {r.enabled ? "Ativa" : "Pausada"}
-                                </span>
+                                </Badge>
                               </span>
                               <span className="record-context rule-context">
                                 {context} → {category}
@@ -308,7 +292,14 @@ export function OrganizationView({
                               <div>
                                 <dt>Identificador da regra</dt>
                                 <dd>
-                                  <code>{r.id}</code>
+                                  <InlineCopyText
+                                    labels={{
+                                      copied: "Identificador copiado",
+                                      copyAction: "Copiar identificador",
+                                    }}
+                                  >
+                                    {r.id}
+                                  </InlineCopyText>
                                 </dd>
                               </div>
                             </RecordReference>
@@ -317,7 +308,7 @@ export function OrganizationView({
                       </li>
                     );
                   })}
-                </ul>
+                </LayerCard>
               ) : (
                 <EmptyView title="Nenhuma regra encontrada">
                   Use Nova regra para começar com um preset e conferir as
@@ -333,9 +324,10 @@ export function OrganizationView({
             </>
           ) : (
             <>
-              <ul
+              <LayerCard
                 aria-label="Grupos"
                 className="record-list"
+                render={<ul />}
               >
                 {data.spaces.map((s) => (
                   <li key={s.id}>
@@ -378,7 +370,14 @@ export function OrganizationView({
                           <div>
                             <dt>Identificador do grupo</dt>
                             <dd>
-                              <code>{s.id}</code>
+                              <InlineCopyText
+                                labels={{
+                                  copied: "Identificador copiado",
+                                  copyAction: "Copiar identificador",
+                                }}
+                              >
+                                {s.id}
+                              </InlineCopyText>
                             </dd>
                           </div>
                         </RecordReference>
@@ -386,7 +385,7 @@ export function OrganizationView({
                     </DisclosureItem>
                   </li>
                 ))}
-              </ul>
+              </LayerCard>
               <WorkspaceDetails
                 hint={String(data.categories.length)}
                 title={`Categorias de ${current?.name ?? spaceId}`}
@@ -441,6 +440,74 @@ export function OrganizationView({
   );
 }
 
+function OrganizationEditors({
+  api,
+  close,
+  data,
+  editor,
+  open,
+  saved,
+  session,
+  snapshot,
+  spaceId,
+}: {
+  api: ReturnType<typeof createAccountApi>;
+  close: () => void;
+  data: WorkspaceCatalog & {
+    accounts: {
+      id: string;
+      name: string;
+      personId: string;
+      personName: string;
+    }[];
+  };
+  editor: { kind: "rule" | "space"; id?: string; remove?: boolean } | null;
+  open: boolean;
+  saved: () => void;
+  session: number;
+  snapshot: PortalResponse;
+  spaceId: string;
+}) {
+  const rule = data.rules.find((row) => row.id === editor?.id);
+  const space = data.spaces.find((row) => row.id === editor?.id);
+  return (
+    <>
+      <RuleEditor
+        accounts={data.accounts}
+        api={api}
+        catalog={data}
+        close={close}
+        key={`rule-${session}`}
+        open={open && editor?.kind === "rule" && !editor.remove}
+        {...(rule && { rule })}
+        saved={saved}
+        snapshot={snapshot}
+        spaceId={spaceId}
+      />
+      <GroupEditor
+        api={api}
+        close={close}
+        key={`group-${session}`}
+        open={open && editor?.kind === "space" && !editor.remove}
+        saved={saved}
+        snapshot={snapshot}
+        {...(space && { space })}
+      />
+      <DeleteOrganizationItem
+        api={api}
+        close={close}
+        deleted={saved}
+        item={(editor?.kind === "rule" ? rule : space) ?? { id: "", name: "" }}
+        key={`delete-${session}`}
+        kind={editor?.kind ?? "rule"}
+        open={open && !!editor?.remove}
+        snapshot={snapshot}
+        spaceId={editor?.kind === "space" ? (editor.id ?? spaceId) : spaceId}
+      />
+    </>
+  );
+}
+
 function OrganizationActions({
   item,
   kind,
@@ -452,36 +519,51 @@ function OrganizationActions({
   kind: "rule" | "space";
   href: string;
   linkLabel: string;
-  onOpen: (event: MouseEvent<HTMLButtonElement>) => void;
+  onOpen: (event: MouseEvent<HTMLElement>) => void;
 }) {
   const noun = kind === "rule" ? "regra" : "grupo";
   return (
     <div className="record-actions">
-      <a href={href}>{linkLabel}</a>
       <UiButton
         aria-label={`Editar ${noun} ${item.name}`}
         data-id={item.id}
         data-kind={kind}
         onClick={onOpen}
         type="button"
-        variant="ghost"
+        variant="secondary"
       >
         Editar
       </UiButton>
-      {(kind === "rule" || item.id !== "personal") && (
-        <UiButton
-          aria-label={`Excluir ${noun} ${item.name}`}
-          data-id={item.id}
-          data-kind={kind}
-          data-remove="true"
-          onClick={onOpen}
-          tone="danger"
-          type="button"
-          variant="ghost"
+      <DropdownMenu>
+        <DropdownMenu.Trigger
+          aria-label={`Mais ações de ${item.name}`}
+          render={
+            <UiButton
+              type="button"
+              variant="ghost"
+            />
+          }
         >
-          Excluir
-        </UiButton>
-      )}
+          Mais ações
+        </DropdownMenu.Trigger>
+        <DropdownMenu.Content>
+          <DropdownMenu.LinkItem href={href}>{linkLabel}</DropdownMenu.LinkItem>
+          {(kind === "rule" || item.id !== "personal") && (
+            <>
+              <DropdownMenu.Separator />
+              <DropdownMenu.Item
+                data-id={item.id}
+                data-kind={kind}
+                data-remove="true"
+                onClick={onOpen}
+                variant="danger"
+              >
+                Excluir {noun}
+              </DropdownMenu.Item>
+            </>
+          )}
+        </DropdownMenu.Content>
+      </DropdownMenu>
     </div>
   );
 }

@@ -1,3 +1,4 @@
+import { Banner, Input, Select } from "@cloudflare/kumo";
 import { useCallback, useState } from "react";
 
 import {
@@ -7,11 +8,14 @@ import {
   PortalTransactionListSchema,
   type WorkspaceCatalog,
 } from "../../contracts";
+import { UiCheckbox } from "../ui";
 import type { createAccountApi } from "./account-api";
+import { CursorPagination } from "./cursor-pagination";
+import { CatalogField, DateRangeFields, QuerySearch } from "./filter-fields";
 import { TransactionList } from "./transaction-list";
 import { EmptyView, ScopeFields } from "./workspace-filters";
-import { ResourceFeedback, useResource } from "./workspace-resource";
-import { FilterDrawer, WorkspaceHeading } from "./workspace-ui";
+import { dayLabel, ResourceFeedback, useResource } from "./workspace-resource";
+import { WorkspaceFilters, WorkspaceHeading } from "./workspace-ui";
 
 export function TransactionsView({
   api,
@@ -83,7 +87,7 @@ export function TransactionsView({
       <ResourceFeedback {...resource} />
       {!!data && (
         <>
-          <FilterDrawer
+          <WorkspaceFilters
             action="/account/transactions"
             activeCount={
               [
@@ -104,120 +108,105 @@ export function TransactionsView({
               data.catalog,
               data.accounts,
             )}
+            leading={
+              <QuerySearch
+                action="/account/transactions"
+                label="Buscar descrição"
+                name="text"
+                params={params}
+              />
+            }
           >
             <ScopeFields
               catalog={data.catalog}
               params={params}
               snapshot={snapshot}
             />
-            <label className="filter-wide">
-              Buscar descrição
-              <input
+            <div className="filter-wide">
+              <Input
                 defaultValue={params.get("text") ?? ""}
+                label="Buscar descrição"
                 maxLength={240}
                 name="text"
                 placeholder="Ex.: mercado, aluguel, salário"
                 type="search"
               />
-            </label>
-            <div className="advanced-filter-grid">
-              <label>
-                De
-                <input
-                  defaultValue={params.get("from") ?? ""}
-                  name="from"
-                  type="date"
-                />
-              </label>
-              <label>
-                Até
-                <input
-                  defaultValue={params.get("to") ?? ""}
-                  name="to"
-                  type="date"
-                />
-              </label>
-              <label>
-                Movimento
-                <select
-                  defaultValue={params.get("direction") ?? ""}
-                  name="direction"
-                >
-                  <option value="">Entradas e saídas</option>
-                  <option value="DEBIT">Saídas</option>
-                  <option value="CREDIT">Entradas</option>
-                </select>
-              </label>
-              <label>
-                Conta
-                <select
-                  defaultValue={params.get("accountId") ?? ""}
-                  name="accountId"
-                >
-                  <option value="">Todas as contas</option>
-                  {data.accounts.map((a) => (
-                    <option
-                      key={a.id}
-                      value={a.id}
-                    >
-                      {a.name} · {a.personName}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Categoria
-                <select
-                  defaultValue={params.get("categoryId") ?? ""}
-                  name="categoryId"
-                >
-                  <option value="">Todas as categorias</option>
-                  {data.catalog.categories.map((c) => (
-                    <option
-                      key={c.id}
-                      value={c.id}
-                    >
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Estado
-                <select
-                  defaultValue={params.get("status") ?? ""}
-                  name="status"
-                >
-                  <option value="">Todos</option>
-                  <option value="POSTED">Registradas na origem</option>
-                  <option value="PENDING">Pendentes na origem</option>
-                </select>
-              </label>
-              <label className="checkbox-label">
-                <input
-                  defaultChecked={future}
-                  name="future"
-                  type="checkbox"
-                />
-                Lançamentos futuros
-              </label>
-              <label className="checkbox-label">
-                <input
-                  defaultChecked={params.get("ignored") === "on"}
-                  name="ignored"
-                  type="checkbox"
-                />
-                Incluir ignoradas
-              </label>
             </div>
-          </FilterDrawer>
+            <div className="advanced-filter-grid">
+              <DateRangeFields
+                from={params.get("from") ?? ""}
+                to={params.get("to") ?? ""}
+              />
+              <Select
+                defaultValue={params.get("direction") ?? ""}
+                items={[
+                  { label: "Entradas e saídas", value: "" },
+                  { label: "Saídas", value: "DEBIT" },
+                  { label: "Entradas", value: "CREDIT" },
+                ]}
+                label="Movimento"
+                name="direction"
+              />
+              <CatalogField
+                defaultValue={params.get("accountId") ?? ""}
+                items={[
+                  { label: "Todas as contas", value: "" },
+                  ...data.accounts.map((a) => ({
+                    label: `${a.name} · ${a.personName}`,
+                    value: a.id,
+                  })),
+                ]}
+                label="Conta"
+                name="accountId"
+              />
+              <CatalogField
+                defaultValue={params.get("categoryId") ?? ""}
+                items={[
+                  { label: "Todas as categorias", value: "" },
+                  ...data.catalog.categories.map((c) => ({
+                    label: c.name,
+                    value: c.id,
+                  })),
+                ]}
+                label="Categoria"
+                name="categoryId"
+              />
+              <Select
+                defaultValue={params.get("status") ?? ""}
+                items={[
+                  { label: "Todos", value: "" },
+                  { label: "Registradas na origem", value: "POSTED" },
+                  { label: "Pendentes na origem", value: "PENDING" },
+                ]}
+                label="Estado"
+                name="status"
+              />
+              <div className="checkbox-label">
+                <UiCheckbox
+                  defaultChecked={future}
+                  label="Lançamentos futuros"
+                  name="future"
+                />
+              </div>
+              <div className="checkbox-label">
+                <UiCheckbox
+                  defaultChecked={params.get("ignored") === "on"}
+                  label="Incluir ignoradas"
+                  name="ignored"
+                />
+              </div>
+            </div>
+          </WorkspaceFilters>
           {!!data.result.partial && (
-            <p
-              className="notice"
-              data-tone="warning"
-            >
-              Histórico parcial. <a href="/account/sync">Ver importações</a>
-            </p>
+            <Banner
+              className="feedback"
+              description={
+                <>
+                  Histórico parcial. <a href="/account/sync">Ver importações</a>
+                </>
+              }
+              variant="alert"
+            />
           )}
           {data.result.data.records.length ? (
             <TransactionList
@@ -240,20 +229,17 @@ export function TransactionsView({
                 : "Altere os filtros ou importe suas conexões na página Conexões."}
             </EmptyView>
           )}
-          <div className="pagination">
-            <p>{data.result.data.records.length} nesta página</p>
-            {params.has("cursor") && (
-              <a href={`/account/transactions?${first}`}>Voltar ao início</a>
-            )}
-            {!!data.result.data.cursor && (
-              <a
-                className="page-next"
-                href={`/account/transactions?${next}`}
-              >
-                Próximas
-              </a>
-            )}
-          </div>
+          <CursorPagination
+            count={data.result.data.records.length}
+            first={
+              params.has("cursor") ? `/account/transactions?${first}` : null
+            }
+            next={
+              data.result.data.cursor ? `/account/transactions?${next}` : null
+            }
+            noun="transações"
+            singular="transação"
+          />
         </>
       )}
     </>
@@ -275,6 +261,8 @@ function transactionFilterContext(
     catalog.spaces.find((s) => s.id === spaceId)?.name ?? spaceId,
     person?.name ?? (multiplePeople ? "Todas as pessoas" : ""),
     params.get("future") === "on" ? "Futuros" : "",
+    params.get("from") ? `Desde ${dayLabel(params.get("from") ?? "")}` : "",
+    params.get("to") ? `Até ${dayLabel(params.get("to") ?? "")}` : "",
   ]
     .filter(Boolean)
     .join(" · ");

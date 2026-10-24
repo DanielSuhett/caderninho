@@ -18,16 +18,16 @@ recebe o resultado real da execução, sem transformar planos em validação.
 
 | ID | Tarefa e arquivos principais | Dependência | Aceite observável | Estado |
 | --- | --- | --- | --- | --- |
-| K01 | Versionar inventário e contrato visual em `DESIGN.md` | Preparação | Padrão Kumo explícito; candidatos condicionais não viram requisitos automáticos | Em execução |
-| K02 | Tema, fonte, estilos standalone e controles em `design.tsx`, `design-tokens.ts`, `document.tsx`, `ui.tsx`, `portal-view.tsx` e Vite | K01 | Tema claro, fonte do sistema, corpo 14 px, estados nativos Kumo; sem overrides genéricos nem Hanken sem consumidor | Pendente |
-| K03 | Sidebar real em `workspace-view.tsx` | K02 | Header/Menu/Group/Footer/Trigger da biblioteca; destinos e escopo preservados, menu móvel e teclado funcionando | Pendente |
-| K04 | Filtros e formulários Kumo em workspace, regras, grupos e conexões | K02 | Input/Select/Combobox/Checkbox/Field conforme a tarefa; nomes, GET, rascunho, limpeza e cursor preservados | Pendente |
-| K05 | Diálogos e detalhes em `workspace-drawer.tsx`, `backoffice-dialog.tsx`, editores e disclosures | K02 | Root sempre montado, Escape, foco, busy, descarte e retorno ao gatilho; nenhuma perda de rascunho por fechar overlay | Pendente |
-| K06 | Visão geral com LayerCard/Table e estados reais em `dashboard-view.tsx` | K03–K05 | Contas antes dos metadados; saldos exatos por moeda, zero e indisponível distintos; parcialidade consultável | Pendente |
-| K07 | Transações com Table/Collapsible/Badge e paginação em `transaction-list.tsx` e `transactions-view.tsx` | K03–K05 | Desktop e celular legíveis; compra agrupada, parcelas e datas de origem preservadas; total desconhecido sem páginas inventadas | Pendente |
-| K08 | Regras, grupos, sincronizações, conexões e auditoria; Banner/Empty/Loader/SkeletonLine/cópia/Tooltip | K03–K07 | Todas as rotas e ações existentes cobertas; falhas descobertas; ferramentas, requisições, bytes e modelos distintos | Pendente |
-| K09 | Landing, acesso, consentimento e 404 com Kumo; Meter com denominador conhecido | K02 | URLs/âncoras, campos e textos legais preservados; navegação pública própria; barras continuam consumo de cota | Pendente |
-| K10 | Limpar CSS/galeria/docs e validar comportamento e aparência | K06–K09 | Check completo, revisão desktop/celular e estados expandidos; relatório `design-qa.md`, limites e bundle registrados | Pendente |
+| K01 | Versionar inventário e contrato visual em `DESIGN.md` | Preparação | Padrão Kumo explícito; candidatos condicionais não viram requisitos automáticos | Concluída |
+| K02 | Tema, fonte, estilos standalone e controles em `design.tsx`, `design-tokens.ts`, `document.tsx`, `ui.tsx`, `portal-view.tsx` e Vite | K01 | Tema escuro, fonte do sistema, corpo 14 px, estados nativos Kumo; sem overrides genéricos nem Hanken sem consumidor | Concluída |
+| K03 | Sidebar real em `workspace-view.tsx` | K02 | Header/Menu/Group/Footer/Trigger da biblioteca; destinos e escopo preservados, menu móvel e teclado funcionando | Concluída |
+| K04 | Filtros e formulários Kumo em workspace, regras, grupos e conexões | K02 | Input/Select/Combobox/Checkbox/Field conforme a tarefa; nomes, GET, rascunho, limpeza e cursor preservados | Concluída |
+| K05 | Diálogos e detalhes em `workspace-drawer.tsx`, `backoffice-dialog.tsx`, editores e disclosures | K02 | Root sempre montado, Escape, foco, busy, descarte e retorno ao gatilho; nenhuma perda de rascunho por fechar overlay | Concluída |
+| K06 | Visão geral com LayerCard/Table e estados reais em `dashboard-view.tsx` | K03–K05 | Contas antes dos metadados; saldos exatos por moeda, zero e indisponível distintos; parcialidade consultável | Concluída |
+| K07 | Transações com Table/Collapsible/Badge e paginação em `transaction-list.tsx` e `transactions-view.tsx` | K03–K05 | Desktop e celular legíveis; compra agrupada, parcelas e datas de origem preservadas; total desconhecido sem páginas inventadas | Concluída |
+| K08 | Regras, grupos, sincronizações, conexões e auditoria; Banner/Empty/Loader/SkeletonLine/cópia/Tooltip | K03–K07 | Todas as rotas e ações existentes cobertas; falhas descobertas; ferramentas, requisições, bytes e modelos distintos | Concluída |
+| K09 | Landing, acesso, consentimento e 404 com Kumo; Meter com denominador conhecido | K02 | URLs/âncoras, campos e textos legais preservados; navegação pública própria; barras continuam consumo de cota | Concluída |
+| K10 | Limpar CSS/galeria/docs e validar comportamento e aparência | K06–K09 | Check completo passou; aprovação visual reaberta e bloqueada na rodada crítica | Em execução |
 
 ## Decisões de escopo
 
@@ -78,4 +78,14 @@ Evidência local/sintética não comprova Pluggy, OAuth real, produção ou host
 
 ## Evidências da execução
 
-Serão registradas aqui e em `design-qa.md` ao concluir cada conjunto.
+Implementação e disposições de todos os componentes em [execucao.md](execucao.md).
+Capturas e interações em [capturas/README.md](capturas/README.md) e [design-qa.md](../../design-qa.md).
+
+## Ampliação autorizada: polimento e demonstração pública
+
+| ID | Trabalho | Aceite | Estado |
+| --- | --- | --- | --- |
+| K11 | Inter local, escala semântica, contraste e grade comum | Conteúdo16px/metadado14px, eixos medidos e capturas com grade em todas as páginas; regra14 da skill cede à preferência explícita | Em execução |
+| K12 | Composição de dashboard e transações inspirada na demo Securo | Kumo real; métricas/agregados completos por moeda/período; transações compactas, sem imitar operações inexistentes | Em execução |
+| K13 | Demo pública acessível pela landing | Dados fictícios isolados, período/contas interativos, sem autenticação/secrets nem escrita nas finanças reais | Pendente |
+| K14 | Rodadas de crítica por página | Agente designer independente, notas qualitativas e evidência atual até8/10 em cada página desktop/celular e estados essenciais | Em execução |

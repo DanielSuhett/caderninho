@@ -58,15 +58,7 @@ function subscribe(notify: () => void) {
     window.removeEventListener(navigationEvent, changed);
   };
 }
-function closePanels() {
-  for (const dialog of document.querySelectorAll("dialog[open]")) {
-    if (dialog instanceof HTMLDialogElement) {
-      dialog.close();
-    }
-  }
-}
 export function navigateWorkspace(url: URL) {
-  closePanels();
   if (url.pathname + url.search !== currentRoute()) {
     history.pushState(null, "", url.pathname + url.search);
   }
@@ -148,11 +140,12 @@ export function useAccountNavigation() {
       return;
     }
     previous.current = route;
-    closePanels();
     document
       .querySelector<HTMLElement>("#workspace-content")
       ?.focus({ preventScroll: true });
-    window.scrollTo({ behavior: "instant", top: 0 });
+    document
+      .querySelector<HTMLElement>(".workspace-main")
+      ?.scrollTo({ behavior: "instant", top: 0 });
   }, [route]);
   return route;
 }

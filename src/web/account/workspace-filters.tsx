@@ -1,3 +1,5 @@
+import { Empty, Select } from "@cloudflare/kumo";
+
 import type { PortalResponse, WorkspaceCatalog } from "../../contracts";
 
 export function ScopeFields({
@@ -13,40 +15,22 @@ export function ScopeFields({
 }) {
   return (
     <>
-      <label>
-        Grupo
-        <select
-          defaultValue={params.get("space") ?? "personal"}
-          name="space"
-        >
-          {catalog.spaces.map((s) => (
-            <option
-              key={s.id}
-              value={s.id}
-            >
-              {s.name}
-            </option>
-          ))}
-        </select>
-      </label>
+      <Select
+        defaultValue={params.get("space") ?? "personal"}
+        items={[...catalog.spaces.map((s) => ({ label: s.name, value: s.id }))]}
+        label="Grupo"
+        name="space"
+      />
       {person ? (
-        <label>
-          Pessoa
-          <select
-            defaultValue={params.get("person") ?? ""}
-            name="person"
-          >
-            <option value="">Todas as pessoas</option>
-            {snapshot.people.map((p) => (
-              <option
-                key={p.id}
-                value={p.id}
-              >
-                {p.name}
-              </option>
-            ))}
-          </select>
-        </label>
+        <Select
+          defaultValue={params.get("person") ?? ""}
+          items={[
+            { label: "Todas as pessoas", value: "" },
+            ...snapshot.people.map((p) => ({ label: p.name, value: p.id })),
+          ]}
+          label="Pessoa"
+          name="person"
+        />
       ) : (
         <input
           name="person"
@@ -65,9 +49,10 @@ export function EmptyView({
   children: React.ReactNode;
 }) {
   return (
-    <div className="empty-state">
-      <h2>{title}</h2>
-      <p>{children}</p>
-    </div>
+    <Empty
+      contents={<p>{children}</p>}
+      size="sm"
+      title={title}
+    />
   );
 }

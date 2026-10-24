@@ -22,14 +22,6 @@ function copyPortalAssets(): Plugin {
       );
       await writeFile(new URL("404.html", site), renderPage(notFoundPage()));
       await copyFile(
-        new URL("src/web/assets/fonts/OFL.txt", root),
-        new URL("OFL.txt", site),
-      );
-      await copyFile(
-        new URL("src/web/assets/fonts/hanken-grotesk.ttf", root),
-        new URL("hanken-grotesk.ttf", output),
-      );
-      await copyFile(
         new URL(import.meta.resolve("@cloudflare/kumo/styles/standalone")),
         new URL("kumo.css", output),
       );
@@ -38,7 +30,7 @@ function copyPortalAssets(): Plugin {
         `/*\n  Referrer-Policy: same-origin\n  X-Content-Type-Options: nosniff\n  Content-Security-Policy: default-src 'none'; font-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'\n\n/chunks/*\n  Cache-Control: public, max-age=31536000, immutable\n`,
       );
       await Promise.all(
-        ["hanken-grotesk.ttf", "kumo.css", "_headers"].map((name) =>
+        ["kumo.css", "_headers"].map((name) =>
           copyFile(new URL(name, output), new URL(name, site)),
         ),
       );

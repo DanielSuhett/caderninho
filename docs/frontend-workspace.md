@@ -1,80 +1,50 @@
 # Páginas da instalação
 
-O painel mantém a identidade do Caderninho: Hanken local, fundo preto, superfícies
-escuras, laranja para ação e foco. A navegação permanece disponível em todas as
-páginas: barra de 208 px no desktop e menu de 44 px junto ao título no
-compacto, com destinos nomeados em “Abrir navegação”.
+O painel usa a identidade padrão escura do Kumo 2.14.0, com fonte do sistema,
+conteúdo em 14 px, ação primária e foco da biblioteca. A Sidebar real permanece
+no desktop; até 760 px usa seu menu modal. A navegação pública tem seus próprios
+links. [DESIGN.md](../DESIGN.md) e o [guia](design-system.md) governam a composição.
 
 | Página | Conteúdo |
 | --- | --- |
-| `/account` | Visão geral de contas, saldos e titulares |
-| `/account/transactions` | Lançamentos, filtros, detalhes e paginação |
-| `/account/rules` | Condições, categoria de destino, prioridade e estado das regras |
-| `/account/groups` | Espaços de planejamento, orçamento, categorias e tags |
-| `/account/sync` | Rodadas admitidas, etapas, conclusão e falhas |
-| `/account/audit` | Autorizações OAuth, uso por cliente/modelo declarado, bytes e falhas |
-| `/account/design-system` | Referência viva de componentes e layouts, com exemplos fictícios |
-| `/account/connections` | Pessoas, aplicações Pluggy, conexões e acesso do assistente |
+| `/account` | Contas, saldos e titulares em LayerCard/Collapsible |
+| `/account/transactions` | Table, filtros GET, Dialog de detalhes e parcelas |
+| `/account/rules` | Condições, categoria, prioridade, preview e edição |
+| `/account/groups` | Grupos de planejamento, orçamento, categorias e etiquetas |
+| `/account/sync` | Rodadas, fases, estados, erros e referências históricas |
+| `/account/audit` | Autorizações, requisições, ferramentas, modelos declarados e bytes |
+| `/account/connections` | Pessoas, perfis Pluggy, conexão/importação e URL MCP |
+| `/account/design-system` | Referência viva com os componentes reais e dados fictícios |
 
-## Pessoa, perfil e grupo
+## Escopo e consulta
 
-**Pessoa** identifica o titular declarado. **Perfil Pluggy** identifica a aplicação
-que autoriza a coleta. **Grupo** é o espaço de planejamento já utilizado pelas
-ferramentas MCP: pessoal, família ou profissional. Grupo não muda titularidade,
-não cria uma permissão e não divide o consentimento bancário.
+Pessoa identifica o titular declarado; perfil Pluggy identifica a aplicação de
+coleta. Grupo organiza planejamento, sem mudar titularidade ou permissões.
+A instalação é privada para o dono e seus filtros são apenas recortes de consulta.
+Links conservam pessoa e grupo. Uma sincronização sempre abrange a conexão inteira.
 
-A instalação continua privada para seu dono, com acesso a todas as pessoas.
-Os filtros são recortes de consulta. Os links preservam pessoa e grupo quando
-aplicável; o histórico informa que uma sincronização abrange a conexão inteira.
+Transações são ordenadas por data decrescente, com ID como desempate, em páginas
+de até 50 registros. Valores conservam moeda e unidades menores exatas. A API
+vincula o cursor aos filtros, à ordem e à revisão dos dados; se mudarem, reabrir a
+lista. Não calcular um total apenas dos registros da página nem converter moedas.
 
-## Consultas e regras
+Toolbar abre LayerDialog com rascunho dos filtros. Aplicar submete GET e reinicia
+cursor; cancelar, X e Escape não alteram a URL. Limpar remove pessoa/grupo/cursor.
+Datas aceitam digitação e calendário range em português, sem conversão de fuso.
+A tabela muda sua composição no celular, mantendo valor, moeda, conta, sentido e
+exceções. Dialog detalha origem, titular, datas, IDs e parcelas recebidas.
 
-Transações aparecem da data mais recente para a mais antiga, com ID como desempate,
-em páginas de até 50 registros. Os valores mantêm moeda e unidades mínimas exatas;
-não há soma enganosa apenas da página nem conversão cambial implícita. Campos
-ficam no drawer “Filtros”; uma linha mantém o contexto de grupo/pessoa ou período
-junto aos resultados e o gatilho conta filtros adicionais. Os campos no drawer
-mostram cada critério aplicado.
-Futuros e limpar ficam no drawer. Categoria e identificadores ficam na expansão
-de cada lançamento; valor, sentido, moeda e exceções seguem visíveis.
-Editar é rascunho: Aplicar submete GET e reinicia a paginação;
-Cancelar, X e Escape descartam. Limpar filtros remove também grupo e pessoa.
-Filtros e cursor ficam na URL, permitindo recarregar, voltar e guardar o recorte.
+## Edição e operação
 
-O Worker reutiliza a visão financeira efetiva das ferramentas MCP, incluindo
-lançamentos manuais, alterações e ignorados. O novo argumento opcional
-`order: "date_desc"` de `get_transactions` habilita a ordenação por data; o padrão
-`id` preserva o contrato anterior. Cursores vinculam filtros, ordem e revisão; uma
-mudança de dados pede reabertura da lista. A consulta ainda percorre o histórico
-para construir a visão efetiva; a latência visual com 100 mil lançamentos não foi
-medida nesta entrega.
+Regras e grupos usam Dialog. Alterações não salvas exigem descarte; busy bloqueia
+fechamento e navegação. Salvar regra afeta próximas importações, sem reclassificar
+histórico. Excluir exige confirmação e preserva os vínculos financeiros. Grupo
+Pessoal não oferece exclusão. Nome de cliente/modelo MCP continua declarado.
 
-Regras têm criação e edição em drawer; grupos usam um diálogo curto adaptativo.
-Regras ativas classificam as
-próximas importações; salvar não reclassifica o histórico. Ver lançamentos que
-atendem à condição é somente consulta. A página Grupos lista todos os grupos;
-o seletor recorta apenas as categorias e etiquetas, que ficam recolhidas.
-
-## Hierarquia de leitura
-
-A visão geral coloca contas e saldos antes do resumo recolhido da instalação.
-Conexões mantém a jornada, o progresso real e os caminhos de recuperação; seus
-metadados ficam em detalhes. A auditoria começa pelos assistentes autorizados e
-mostra falhas antes da atividade técnica recolhida. Sincronizações mantêm estado,
-titular e “Início”; referências históricas ficam ao fim. A galeria abre por assunto.
-As listas compartilham uma superfície delimitada, sem um card por registro.
-Resumo e detalhe usam o mesmo recuo de 16 px; dados vêm antes do rodapé de ações.
-Os controles têm 36 px no desktop e 44 px no compacto ou toque. Editar/Excluir
-ficam discretos, com nomes acessíveis contextuais e confirmação de exclusão.
-IDs raros ficam em uma única “Referência técnica”; condições, escopos, erros e
-parcialidade permanecem no conteúdo que explicam. Moeda e orçamento do grupo
-aparecem uma vez no resumo. O grupo base Pessoal não oferece exclusão.
-
-O editor de grupo ocupa até 560 px; uma confirmação curta, 440 px. A altura segue
-o conteúdo, limitada a 90dvh, com corpo rolável e ações acessíveis. No celular,
-diálogos curtos ficam na base com margem de 16 px. Regras longas conservam o
-drawer de 720 px. Cancelar uma confirmação recebe foco; Escape devolve o foco ao
-gatilho. Descartar só elimina o rascunho, nunca os dados persistidos.
+Visão geral começa pelas contas. Conexões concentra configuração, primeira
+importação, consulta parcial e recuperação. Fases e erros permanecem visíveis.
+Autorizações precedem métricas na auditoria. Banner conserva erros/parcialidade;
+Toasty confirma gravações concluídas. Importação usa Loader sem percentagem fictícia.
 
 ## Histórico persistente
 

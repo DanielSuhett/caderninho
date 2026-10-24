@@ -1,15 +1,19 @@
 import {
-  type FormEvent,
-  type MouseEvent,
-  type SyntheticEvent,
-  useCallback,
-  useState,
-} from "react";
+  Badge,
+  Banner,
+  ClipboardText,
+  Empty,
+  InlineCopyText,
+  LayerCard,
+  Link,
+  Select,
+} from "@cloudflare/kumo";
+import { BankIcon } from "@phosphor-icons/react";
+import { type FormEvent, type MouseEvent, useCallback, useState } from "react";
 
 import type { HouseholdCommand, PortalResponse } from "../../contracts";
-import { tryCatch } from "../../shared";
 import { UiButton } from "../ui";
-import { BankMark } from "./bank-mark";
+import { BackofficeDialog } from "./backoffice-dialog";
 import {
   type ConnectionActivity,
   ConnectionJourney,
@@ -19,10 +23,10 @@ import { DisclosureItem } from "./disclosure-item";
 import { HouseholdPanel } from "./household-view";
 import { dayLabel } from "./workspace-resource";
 import {
-  FilterDrawer,
   RecordReference,
   RefreshButton,
   WorkspaceDetails,
+  WorkspaceFilters,
   WorkspaceHeading,
   WorkspaceMetrics,
 } from "./workspace-ui";
@@ -65,24 +69,29 @@ function DashboardMessage({
   readError: boolean;
   partial: boolean;
 }) {
+  const content =
+    message ||
+    (readError &&
+      "Não foi possível atualizar o status. Os dados salvos continuam disponíveis.") ||
+    (partial && (
+      <>
+        Histórico parcial.{" "}
+        <Link href="/account/connections">Conferir conexões</Link>.
+      </>
+    ));
+  if (!content) {
+    return null;
+  }
   return (
-    <p
-      aria-live="polite"
-      className="dashboard-message"
+    <Banner
+      className="feedback"
+      description={content}
       role="status"
-    >
-      {message ||
-        (readError &&
-          "Não foi possível atualizar o status. Os dados salvos continuam disponíveis.") ||
-        (partial ? (
-          <>
-            Histórico parcial.{" "}
-            <a href="/account/connections">Conferir conexões</a>.
-          </>
-        ) : null)}
-    </p>
+      variant={readError || partial ? "alert" : "default"}
+    />
   );
 }
+
 export function DashboardView(props: {
   snapshot: PortalResponse;
   section: "overview" | "connections";
@@ -106,8 +115,14 @@ export function DashboardView(props: {
     manage,
     connect: openConnection,
   } = props;
+  const [revokeAll, setRevokeAll] = useState(false);
+  const askRevokeAll = useCallback(() => setRevokeAll(true), []);
+  const cancelRevokeAll = useCallback(() => setRevokeAll(false), []);
+  const confirmRevokeAll = useCallback(() => {
+    command("disconnect-assistants");
+    setRevokeAll(false);
+  }, [command]);
   const [managementOpen, setManagementOpen] = useState(!snapshot.configured);
-  const [copyMessage, setCopyMessage] = useState("");
   const hasResult = snapshot.connections.some(
     (c) => c.hasTransactions || c.lastSuccessAt,
   );
@@ -125,27 +140,6 @@ export function DashboardView(props: {
         ?.focus(),
     );
   }, [snapshot.configured, props.section]);
-  const toggleManagement = useCallback(
-    (event: SyntheticEvent<HTMLDetailsElement>) =>
-      setManagementOpen(event.currentTarget.open),
-    [],
-  );
-  const copyMcp = useCallback(async () => {
-    const { data: _data, error } = await tryCatch(() =>
-      navigator.clipboard.writeText(`${snapshot.origin}/mcp`),
-    );
-    setCopyMessage(
-      error
-        ? "Não foi possível copiar. Selecione a URL abaixo."
-        : "URL MCP copiada.",
-    );
-  }, [snapshot.origin]);
-  const onCopyMcp = useCallback(() => {
-    copyMcp().then(
-      () => undefined,
-      () => undefined,
-    );
-  }, [copyMcp]);
   const visible = snapshot.connections.filter(
     (c) => !personId || c.personId === personId,
   );
@@ -214,6 +208,26 @@ export function DashboardView(props: {
   );
   return (
     <div className="finance-dashboard">
+      <BackofficeDialog
+        busy={busy}
+        close={cancelRevokeAll}
+        dirty={false}
+        open={revokeAll}
+        presentation="confirmation"
+        primaryAction={{
+          children: "Confirmar revogação",
+          onClick: confirmRevokeAll,
+          type: "button",
+          variant: "destructive",
+        }}
+        title="Revogar todos os assistentes"
+      >
+        <p>
+          Todos os assistentes precisarão de uma nova autorização. Os dados
+          desta instalação serão preservados.
+        </p>
+      </BackofficeDialog>
+
       <WorkspaceHeading
         title={props.section === "overview" ? "Visão geral" : "Conexões"}
       >
@@ -235,7 +249,7 @@ export function DashboardView(props: {
         />
       )}
       {hasResult && (props.section === "overview" || managementOpen) && (
-        <FilterDrawer
+        <WorkspaceFilters
           action={
             props.section === "overview" ? "/account" : "/account/connections"
           }
@@ -244,23 +258,15 @@ export function DashboardView(props: {
             "Todas as pessoas"
           }
         >
-          <label>
-            Pessoa
-            <select
-              defaultValue={personId}
-              name="person"
-            >
-              <option value="">Todas as pessoas</option>
-              {snapshot.people.map((p) => (
-                <option
-                  key={p.id}
-                  value={p.id}
-                >
-                  {p.name}
-                </option>
-              ))}
-            </select>
-          </label>
+          <Select
+            defaultValue={personId}
+            items={[
+              { label: "Todas as pessoas", value: "" },
+              ...snapshot.people.map((p) => ({ label: p.name, value: p.id })),
+            ]}
+            label="Pessoa"
+            name="person"
+          />
           <input
             name="space"
             type="hidden"
@@ -268,7 +274,7 @@ export function DashboardView(props: {
               new URLSearchParams(location.search).get("space") ?? "personal"
             }
           />
-        </FilterDrawer>
+        </WorkspaceFilters>
       )}
       <DashboardMessage
         message={props.message}
@@ -288,17 +294,16 @@ export function DashboardView(props: {
               Contas e cartões
             </h2>
             {!accounts.length && (
-              <div className="empty-state">
-                <h3>Suas contas aparecem aqui após a importação.</h3>
-                <p>
-                  Adicione um perfil Pluggy, conecte uma instituição e importe
-                  os dados.
-                </p>
-              </div>
+              <Empty
+                description="Adicione um perfil Pluggy, conecte uma instituição e importe os dados."
+                size="sm"
+                title="Suas contas aparecem aqui após a importação."
+              />
             )}
-            <ul
+            <LayerCard
               aria-label="Contas e cartões"
               className="record-list"
+              render={<ul />}
             >
               {accounts.map((a) => (
                 <li key={a.id}>
@@ -312,7 +317,10 @@ export function DashboardView(props: {
                     summary={
                       <>
                         <span className="record-title bank-heading">
-                          <BankMark />
+                          <BankIcon
+                            aria-hidden
+                            size={20}
+                          />
                           {a.name}
                         </span>
                         <span className="record-value">
@@ -331,7 +339,7 @@ export function DashboardView(props: {
                               : "Saldo ainda não observado"}
                           </span>
                           {!!a.partial && (
-                            <span data-tone="warning">Dados parciais</span>
+                            <Badge variant="warning">Dados parciais</Badge>
                           )}
                         </span>
                       </>
@@ -352,16 +360,23 @@ export function DashboardView(props: {
                           <dd>{timestamp(a.balanceObservedAt)}</dd>
                         </div>
                       </dl>
-                      <a
+                      <Link
                         href={`/account/transactions?${new URLSearchParams({ accountId: a.id, ...(personId && { person: personId }), space: new URLSearchParams(location.search).get("space") ?? "personal" })}`}
                       >
                         Ver transações desta conta
-                      </a>
+                      </Link>
                       <RecordReference>
                         <div>
                           <dt>Identificador da conta</dt>
                           <dd>
-                            <code>{a.id}</code>
+                            <InlineCopyText
+                              labels={{
+                                copied: "Identificador copiado",
+                                copyAction: "Copiar identificador",
+                              }}
+                            >
+                              {a.id}
+                            </InlineCopyText>
                           </dd>
                         </div>
                       </RecordReference>
@@ -369,7 +384,7 @@ export function DashboardView(props: {
                   </DisclosureItem>
                 </li>
               ))}
-            </ul>
+            </LayerCard>
           </section>
           <WorkspaceDetails title="Resumo da instalação">
             <WorkspaceMetrics
@@ -390,12 +405,12 @@ export function DashboardView(props: {
       )}
       {props.section === "connections" && (
         <>
-          <details
+          <DisclosureItem
             className="journey-management"
-            onToggle={toggleManagement}
+            onOpenChange={setManagementOpen}
             open={managementOpen}
+            summary={<>Gerenciar conexões e perfis</>}
           >
-            <summary>Gerenciar conexões e perfis</summary>
             <section aria-labelledby="connections-heading">
               <div className="section-heading">
                 <h2
@@ -415,41 +430,44 @@ export function DashboardView(props: {
                 </UiButton>
               </div>
               {importable.length < visible.length && (
-                <p
-                  className="notice"
-                  data-tone="warning"
-                >
-                  Perfis pausados ou sem credenciais ficam fora desta
-                  importação. Seus dados continuam visíveis.
-                </p>
+                <Banner
+                  className="feedback"
+                  description={
+                    <>
+                      Perfis pausados ou sem credenciais ficam fora desta
+                      importação. Seus dados continuam visíveis.
+                    </>
+                  }
+                  variant="alert"
+                />
               )}
               <form
                 className="connect-form"
                 onSubmit={connect}
               >
-                <label htmlFor="connect-profile">
-                  Conectar usando o perfil
-                </label>
                 <div className="inline-fields">
-                  <select
+                  <Select
+                    defaultValue={enabled[0]?.id ?? ""}
                     disabled={!enabled.length}
                     id="connect-profile"
+                    items={[
+                      ...enabled.map((p) => ({
+                        label: (
+                          <>
+                            {p.name} ·{" "}
+                            {
+                              snapshot.people.find(
+                                (person) => person.id === p.personId,
+                              )?.name
+                            }
+                          </>
+                        ),
+                        value: p.id,
+                      })),
+                    ]}
+                    label="Conectar usando o perfil"
                     name="profileId"
-                  >
-                    {enabled.map((p) => (
-                      <option
-                        key={p.id}
-                        value={p.id}
-                      >
-                        {p.name} ·{" "}
-                        {
-                          snapshot.people.find(
-                            (person) => person.id === p.personId,
-                          )?.name
-                        }
-                      </option>
-                    ))}
-                  </select>
+                  />
                   <UiButton
                     disabled={busy || !enabled.length}
                     type="submit"
@@ -459,13 +477,16 @@ export function DashboardView(props: {
                 </div>
               </form>
               {!enabled.length && (
-                <p
-                  className="notice"
-                  data-tone="warning"
-                >
-                  Adicione ou ative um perfil em “Pessoas e perfis Pluggy” para
-                  conectar.
-                </p>
+                <Banner
+                  className="feedback"
+                  description={
+                    <>
+                      Adicione ou ative um perfil em “Pessoas e perfis Pluggy”
+                      para conectar.
+                    </>
+                  }
+                  variant="alert"
+                />
               )}
               <div className="connection-list">
                 {visible.map((c) => (
@@ -474,13 +495,22 @@ export function DashboardView(props: {
                     key={c.id}
                   >
                     <div>
-                      <span
-                        className={`sync-state sync-${c.importStatus ?? "pending"}`}
+                      <Badge
+                        variant={
+                          (
+                            {
+                              failed: "error",
+                              pending: "warning",
+                              running: "info",
+                              succeeded: "success",
+                            } as const
+                          )[c.importStatus ?? "pending"]
+                        }
                       >
                         {c.importStatus
                           ? importLabels[c.importStatus]
                           : "Não importada"}
-                      </span>
+                      </Badge>
                       <h3>
                         {c.personName}{" "}
                         <span className="muted">/ {c.profileName}</span>
@@ -500,14 +530,17 @@ export function DashboardView(props: {
                           : "Disponível agora"}
                       </p>
                       {!!c.importError && (
-                        <p
-                          className="notice"
-                          data-tone="error"
-                        >
-                          {importFailureMessage(c.importError)}
-                          <br />
-                          Código: {c.importError}.
-                        </p>
+                        <Banner
+                          className="feedback"
+                          description={
+                            <>
+                              {importFailureMessage(c.importError)}
+                              <br />
+                              Código: {c.importError}.
+                            </>
+                          }
+                          variant="error"
+                        />
                       )}
                     </div>
                     <div className="connection-actions">
@@ -523,29 +556,23 @@ export function DashboardView(props: {
                       >
                         Reautorizar conexão
                       </UiButton>
-                      <details>
-                        <summary>Alterar titular</summary>
+                      <DisclosureItem summary={<>Alterar titular</>}>
                         <form
                           data-id={c.id}
                           onSubmit={assign}
                         >
-                          <label htmlFor={`owner-${c.id}`}>
-                            Pessoa desta conexão
-                          </label>
-                          <select
+                          <Select
                             defaultValue={c.personId ?? "self"}
                             id={`owner-${c.id}`}
+                            items={[
+                              ...snapshot.people.map((p) => ({
+                                label: p.name,
+                                value: p.id,
+                              })),
+                            ]}
+                            label="Pessoa desta conexão"
                             name="personId"
-                          >
-                            {snapshot.people.map((p) => (
-                              <option
-                                key={p.id}
-                                value={p.id}
-                              >
-                                {p.name}
-                              </option>
-                            ))}
-                          </select>
+                          />
                           <p className="muted">
                             Reatribui o histórico desta conexão. Não altera o
                             titular na instituição nem as credenciais.
@@ -557,7 +584,7 @@ export function DashboardView(props: {
                             Salvar titular
                           </UiButton>
                         </form>
-                      </details>
+                      </DisclosureItem>
                     </div>
                   </article>
                 ))}
@@ -568,30 +595,34 @@ export function DashboardView(props: {
               manage={props.manage}
               snapshot={snapshot}
             />
-          </details>
-          <details className="journey-assistants">
-            <summary>Conectar meu assistente MCP</summary>
+          </DisclosureItem>
+          <DisclosureItem
+            className="journey-assistants"
+            summary={<>Conectar meu assistente MCP</>}
+          >
             <p>
               Autorizar um assistente dá acesso aos dados de toda a instalação.
             </p>
-            <code className="mcp-address">{snapshot.origin}/mcp</code>
-            <UiButton
-              onClick={onCopyMcp}
-              type="button"
-              variant="secondary"
-            >
-              Copiar URL MCP
-            </UiButton>
-            <p role="status">{copyMessage}</p>
-            <details>
-              <summary>Gerenciar acesso dos assistentes</summary>
+            <ClipboardText
+              className="mcp-address"
+              labels={{ copyAction: "Copiar URL MCP" }}
+              text={`${snapshot.origin}/mcp`}
+              tooltip={{
+                copiedText: "URL MCP copiada.",
+                text: "Copiar URL MCP",
+              }}
+            />
+            <p className="muted">
+              Se a cópia não estiver disponível, selecione a URL acima.
+            </p>
+            <DisclosureItem summary={<>Gerenciar acesso dos assistentes</>}>
               <p>
                 A revogação exige uma nova autorização. Contas e histórico
                 permanecem salvos.
               </p>
               <UiButton
                 disabled={busy}
-                onClick={action}
+                onClick={askRevokeAll}
                 tone="danger"
                 type="button"
                 value="disconnect-assistants"
@@ -599,13 +630,15 @@ export function DashboardView(props: {
               >
                 Revogar todos os assistentes
               </UiButton>
-            </details>
-          </details>
+            </DisclosureItem>
+          </DisclosureItem>
         </>
       )}
       {props.section === "overview" && !hasResult && (
         <p>
-          <a href="/account/connections">Gerenciar pessoas e perfis Pluggy</a>
+          <Link href="/account/connections">
+            Gerenciar pessoas e perfis Pluggy
+          </Link>
         </p>
       )}
     </div>

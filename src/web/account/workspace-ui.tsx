@@ -1,12 +1,16 @@
 import {
-  ArrowClockwiseIcon,
-  SlidersHorizontalIcon,
-} from "@phosphor-icons/react";
+  Badge,
+  RefreshButton as KumoRefreshButton,
+  SkeletonLine,
+  Text,
+  Toolbar,
+  Tooltip,
+} from "@cloudflare/kumo";
+import { SlidersHorizontalIcon } from "@phosphor-icons/react";
 import { type ReactNode, useId } from "react";
 
-import { UiButton } from "../ui";
 import { DisclosureItem } from "./disclosure-item";
-import { WorkspaceDrawer } from "./workspace-drawer";
+import { FilterDialog } from "./filter-dialog";
 
 export function WorkspaceHeading({
   title,
@@ -20,7 +24,13 @@ export function WorkspaceHeading({
   return (
     <header className="workspace-heading">
       <div>
-        <h1>{title}</h1>
+        <Text
+          as="h1"
+          size="lg"
+          variant="heading"
+        >
+          {title}
+        </Text>
         {!!description && <p>{description}</p>}
       </div>
       {children}
@@ -38,27 +48,16 @@ export function RefreshButton({
   label?: string;
 }) {
   return (
-    <span className="icon-action">
-      <UiButton
-        aria-label={label}
-        className="icon-button"
-        disabled={disabled}
-        onClick={onClick}
-        type="button"
-        variant="secondary"
-      >
-        <ArrowClockwiseIcon
-          aria-hidden="true"
-          size={20}
+    <Tooltip
+      content={label}
+      render={
+        <KumoRefreshButton
+          aria-label={label}
+          disabled={disabled}
+          onClick={onClick}
         />
-      </UiButton>
-      <span
-        aria-hidden="true"
-        className="action-tooltip"
-      >
-        {label}
-      </span>
-    </span>
+      }
+    />
   );
 }
 
@@ -70,74 +69,78 @@ export function WorkspaceSkeleton() {
       role="status"
     >
       <span className="sr-only">Carregando dados salvos…</span>
-      <div
-        aria-hidden="true"
-        className="skeleton-controls"
-      />
       {["first", "second", "third", "fourth"].map((row) => (
         <div
-          aria-hidden="true"
+          aria-hidden
           className="skeleton-row"
           key={row}
         >
-          <span />
-          <span />
-          <span />
+          <SkeletonLine
+            blockHeight={16}
+            maxWidth={80}
+            minWidth={60}
+          />
+          <SkeletonLine
+            blockHeight={16}
+            maxWidth={60}
+            minWidth={40}
+          />
         </div>
       ))}
     </div>
   );
 }
 
-export function FilterDrawer({
+export function WorkspaceFilters({
   action,
   children,
   context,
   activeCount = 0,
+  leading,
 }: {
   action: string;
   children: ReactNode;
   context?: string;
   activeCount?: number;
+  leading?: ReactNode;
 }) {
   const formId = useId();
   return (
     <div className="filter-toolbar">
-      <WorkspaceDrawer
-        footer={
-          <UiButton
-            form={formId}
-            type="submit"
-          >
-            Aplicar filtros
-          </UiButton>
-        }
-        title="Filtros"
-        trigger={
-          <>
-            <SlidersHorizontalIcon
-              aria-hidden="true"
-              size={20}
-            />
-            Filtros{activeCount > 0 ? ` · ${activeCount}` : ""}
-          </>
-        }
-      >
-        <form
-          action={action}
-          className="workspace-filters"
-          id={formId}
-          method="get"
+      {leading}
+      <Toolbar aria-label="Filtros da consulta">
+        <FilterDialog
+          formId={formId}
+          title="Filtros"
+          trigger={
+            <>
+              <SlidersHorizontalIcon
+                aria-hidden="true"
+                size={20}
+              />
+              Filtros{activeCount > 0 ? ` · ${activeCount}` : ""}
+            </>
+          }
         >
-          {children}
-          <a
-            className="filter-clear"
-            href={action}
+          <form
+            action={action}
+            className="workspace-filters"
+            id={formId}
+            method="get"
           >
-            Limpar filtros
-          </a>
-        </form>
-      </WorkspaceDrawer>
+            {children}
+            <a
+              className="filter-clear"
+              href={action}
+            >
+              Limpar filtros
+            </a>
+          </form>
+        </FilterDialog>
+        {(activeCount > 0 || new URLSearchParams(location.search).size > 0) && (
+          <Toolbar.Link href={action}>Limpar</Toolbar.Link>
+        )}
+      </Toolbar>
       {!!context && <p className="filter-context">{context}</p>}
     </div>
   );
@@ -158,18 +161,24 @@ export function WorkspaceDetails({
   title,
   children,
   hint,
+  open,
+  onOpenChange,
 }: {
   title: string;
   children: ReactNode;
   hint?: string;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
   return (
     <DisclosureItem
       className="workspace-details"
+      {...(onOpenChange && { onOpenChange })}
+      {...(open !== undefined && { open })}
       summary={
         <>
-          <h2 className="workspace-details-title">{title}</h2>
-          {!!hint && <span className="workspace-details-hint">{hint}</span>}
+          <span className="workspace-details-title">{title}</span>
+          {!!hint && <Badge variant="secondary">{hint}</Badge>}
         </>
       }
     >

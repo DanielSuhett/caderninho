@@ -1,11 +1,19 @@
+import {
+  Badge,
+  Banner,
+  InlineCopyText,
+  LayerCard,
+  LayerDialog,
+  Table,
+} from "@cloudflare/kumo";
 import type { z } from "zod/v4";
 
 import type {
   PortalTransactionListSchema,
   TransactionListSchema,
 } from "../../contracts";
+import { UiButton } from "../ui";
 import { formatBalance } from "./dashboard-view";
-import { DisclosureItem } from "./disclosure-item";
 import { dayLabel } from "./workspace-resource";
 
 type Transaction = z.infer<
@@ -40,28 +48,40 @@ export function TransactionList({
   showOwner?: boolean;
 }) {
   return (
-    <ul
-      aria-label="Lançamentos"
-      className="transaction-list"
-    >
-      {records.map((row) => (
-        <TransactionItem
-          account={
-            accounts.find((item) => item.id === row.accountId)?.name ??
-            "Conta não identificada"
-          }
-          category={
-            categories.find((item) => item.id === row.category)?.name ??
-            row.category ??
-            "Sem categoria"
-          }
-          key={row.id}
-          referenceDay={referenceDay}
-          row={row}
-          showOwner={showOwner}
-        />
-      ))}
-    </ul>
+    <LayerCard className="financial-surface">
+      <Table
+        aria-label="Lançamentos"
+        className="transaction-table"
+      >
+        <Table.Header>
+          <Table.Row>
+            <Table.Head>Descrição</Table.Head>
+            <Table.Head>Conta</Table.Head>
+            <Table.Head>Data</Table.Head>
+            <Table.Head>Valor e moeda</Table.Head>
+          </Table.Row>
+        </Table.Header>
+        <Table.Body>
+          {records.map((row) => (
+            <TransactionItem
+              account={
+                accounts.find((item) => item.id === row.accountId)?.name ??
+                "Conta não identificada"
+              }
+              category={
+                categories.find((item) => item.id === row.category)?.name ??
+                row.category ??
+                "Sem categoria"
+              }
+              key={row.id}
+              referenceDay={referenceDay}
+              row={row}
+              showOwner={showOwner}
+            />
+          ))}
+        </Table.Body>
+      </Table>
+    </LayerCard>
   );
 }
 
@@ -82,122 +102,149 @@ function TransactionItem({
   const total = "totalInstallments" in row ? row.totalInstallments : null;
   const current = "installmentNumber" in row ? row.installmentNumber : null;
   const amount = amountLabel(row);
+  const anchorDate = "anchorDate" in row ? row.anchorDate : row.date;
+  const firstKnown = "anchorKind" in row && row.anchorKind === "first_seen";
   const displayedCategory = installments.some(
     (item) => item.category !== row.category,
   )
     ? "Categorias variadas"
     : category;
+  const { pendingLabel, futureLabel } = transactionStates(
+    row,
+    installments,
+    referenceDay,
+  );
   return (
-    <li>
-      <DisclosureItem
-        className={`transaction-item ${amount.length > 18 || row.amountMinor === null ? "wide-amount" : ""}`}
-        summary={
-          <TransactionSummary
+    <LayerDialog.Root>
+      <Table.Row>
+        <Table.Cell data-label="Descrição">
+          <LayerDialog.Trigger
+            aria-label={`Ver detalhes de ${row.description || "Sem descrição"}`}
+            render={
+              <UiButton
+                className="transaction-open"
+                type="button"
+                variant="ghost"
+              />
+            }
+          >
+            {row.description || "Sem descrição"}
+          </LayerDialog.Trigger>
+          <span className="table-secondary">{displayedCategory}</span>
+          <div className="transaction-states">
+            {!!pendingLabel && <Badge variant="warning">{pendingLabel}</Badge>}
+            {!!futureLabel && <Badge variant="info">{futureLabel}</Badge>}
+            {!!row.ignored && <Badge variant="secondary">Ignorada</Badge>}
+          </div>
+        </Table.Cell>
+        <Table.Cell data-label="Conta">
+          {account}
+          {showOwner === true && (
+            <span className="table-secondary">{row.personName}</span>
+          )}
+        </Table.Cell>
+        <Table.Cell data-label="Data">
+          {firstKnown === true && (
+            <span className="table-secondary">Primeira conhecida</span>
+          )}
+          <time dateTime={anchorDate}>{dayLabel(anchorDate)}</time>
+        </Table.Cell>
+        <Table.Cell
+          className="money-cell"
+          data-label="Valor e moeda"
+        >
+          <strong>{amount}</strong>
+          <span className="table-secondary">
+            {row.direction === "DEBIT" ? "Saída" : "Entrada"}
+            {current !== null && total !== null
+              ? ` · Parcela ${current}/${total}`
+              : ""}
+          </span>
+        </Table.Cell>
+      </Table.Row>
+      <LayerDialog.Content
+        closeLabel="Fechar detalhes"
+        size="lg"
+      >
+        <LayerDialog.Title>Detalhes da transação</LayerDialog.Title>
+        <LayerDialog.Body>
+          <TransactionDetailContent
             account={account}
-            amount={amount}
-            current={current}
-            installments={installments}
+            category={displayedCategory}
             referenceDay={referenceDay}
             row={row}
-            showOwner={showOwner}
-            total={total}
           />
-        }
-      >
-        {installments.length > 0 && (
-          <InstallmentSchedule
-            installments={installments}
-            referenceDay={referenceDay}
-            total={total}
-          />
-        )}
-        <TransactionDetails
-          account={account}
-          category={displayedCategory}
-          current={current}
-          row={row}
-          total={total}
-        />
-      </DisclosureItem>
-    </li>
+        </LayerDialog.Body>
+      </LayerDialog.Content>
+    </LayerDialog.Root>
   );
 }
 
-function TransactionSummary({
+export function TransactionDetailContent({
   row,
   account,
-  amount,
-  installments,
-  current,
-  total,
+  category,
   referenceDay,
-  showOwner,
 }: {
   row: Transaction | PortalTransaction;
   account: string;
-  amount: string;
-  installments: Installment[];
-  current: number | null;
-  total: number | null;
-  referenceDay: string | undefined;
-  showOwner: boolean;
+  category: string;
+  referenceDay?: string | undefined;
 }) {
-  const anchorDate = "anchorDate" in row ? row.anchorDate : row.date;
-  const firstKnown = "anchorKind" in row && row.anchorKind === "first_seen";
-  const pendingCount = installments.filter(
-    (item) => item.status === "PENDING",
-  ).length;
-  const futureCount = installments.filter(
-    (item) => !!referenceDay && item.date > referenceDay,
-  ).length;
-  let pendingLabel: string | null = null;
-  if (pendingCount > 0) {
-    pendingLabel = plural(pendingCount, "pendente", "pendentes");
-  } else if (installments.length === 0 && row.status === "PENDING") {
-    pendingLabel = "Pendente";
-  }
-  let futureLabel: string | null = null;
-  if (futureCount > 0) {
-    futureLabel = plural(futureCount, "futura", "futuras");
-  } else if (referenceDay && anchorDate > referenceDay) {
-    futureLabel = "Futura";
-  }
+  const installments = "installments" in row ? row.installments : [];
+  const total = "totalInstallments" in row ? row.totalInstallments : null;
+  const current = "installmentNumber" in row ? row.installmentNumber : null;
   return (
     <>
-      <span className="transaction-description">
-        {row.description || "Sem descrição"}
-      </span>
-      <span className="transaction-amount">
-        <strong>{amount}</strong>
-        <span>
-          {row.direction === "DEBIT" ? "Saída" : "Entrada"}
-          {current !== null && total !== null
-            ? ` · Parcela ${current}/${total}`
-            : ""}
-        </span>
-      </span>
-      <span className="transaction-meta">
-        <span className="transaction-date">
-          {firstKnown ? "Primeira conhecida: " : ""}
-          <time dateTime={anchorDate}>{dayLabel(anchorDate)}</time>
-        </span>
-        <span className="transaction-account">{account}</span>
-        {showOwner === true ? <span>{row.personName}</span> : null}
-        {!!pendingLabel && (
-          <span
-            className="transaction-state"
-            data-tone="warning"
-          >
-            {pendingLabel}
-          </span>
-        )}
-        {!!futureLabel && (
-          <span className="transaction-state">{futureLabel}</span>
-        )}
-        {!!row.ignored && <span className="transaction-state">Ignorada</span>}
-      </span>
+      <p className="transaction-dialog-amount">
+        <strong>{amountLabel(row)}</strong> ·{" "}
+        {row.direction === "DEBIT" ? "Saída" : "Entrada"}
+      </p>
+      {row.ignored === true && (
+        <Banner
+          description="Este lançamento permanece disponível para consulta e está marcado como ignorado."
+          title="Transação ignorada"
+        />
+      )}
+      {installments.length > 0 && (
+        <InstallmentSchedule
+          installments={installments}
+          referenceDay={referenceDay}
+          total={total}
+        />
+      )}
+      <TransactionDetails
+        account={account}
+        category={category}
+        current={current}
+        row={row}
+        total={total}
+      />
     </>
   );
+}
+
+function transactionStates(
+  row: Transaction | PortalTransaction,
+  installments: Installment[],
+  referenceDay: string | undefined,
+) {
+  const anchorDate = "anchorDate" in row ? row.anchorDate : row.date;
+  const pending = installments.filter(
+    (item) => item.status === "PENDING",
+  ).length;
+  const future = installments.filter(
+    (item) => !!referenceDay && item.date > referenceDay,
+  ).length;
+  let pendingLabel = row.status === "PENDING" ? "Pendente" : "";
+  if (pending > 0) {
+    pendingLabel = plural(pending, "pendente", "pendentes");
+  }
+  let futureLabel = referenceDay && anchorDate > referenceDay ? "Futura" : "";
+  if (future > 0) {
+    futureLabel = plural(future, "futura", "futuras");
+  }
+  return { futureLabel, pendingLabel };
 }
 
 function InstallmentSchedule({
@@ -235,6 +282,7 @@ function InstallmentSchedule({
                 ? "Pendente na origem"
                 : "Registrada na origem"}
               {!!referenceDay && item.date > referenceDay && " · Futura"}
+              {!!item.ignored && " · Ignorada"}
             </span>
           </li>
         ))}
@@ -331,7 +379,14 @@ function TransactionDetails({
             : "Identificador"}
         </dt>
         <dd>
-          <code>{row.id}</code>
+          <InlineCopyText
+            labels={{
+              copied: "Identificador copiado",
+              copyAction: "Copiar identificador",
+            }}
+          >
+            {row.id}
+          </InlineCopyText>
         </dd>
       </div>
     </dl>

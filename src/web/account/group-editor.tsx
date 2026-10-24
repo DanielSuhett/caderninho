@@ -1,3 +1,4 @@
+import { Banner, Grid, Input, Select } from "@cloudflare/kumo";
 import {
   type ChangeEvent,
   type FormEvent,
@@ -14,18 +15,19 @@ import {
   type WorkspaceCatalog,
 } from "../../contracts";
 import { tryCatch } from "../../shared";
-import { UiButton } from "../ui";
 import type { createAccountApi } from "./account-api";
 import { BackofficeDialog } from "./backoffice-dialog";
 
 type Space = WorkspaceCatalog["spaces"][number];
 export function GroupEditor({
+  open,
   api,
   snapshot,
   space,
   close,
   saved,
 }: {
+  open: boolean;
   api: ReturnType<typeof createAccountApi>;
   snapshot: PortalResponse;
   space?: Space;
@@ -101,16 +103,14 @@ export function GroupEditor({
       setName(event.currentTarget.value),
     [],
   );
-  const onType = useCallback(
-    (event: ChangeEvent<HTMLSelectElement>) =>
-      setType(event.currentTarget.value),
-    [],
-  );
-  const onCurrency = useCallback(
-    (event: ChangeEvent<HTMLSelectElement>) =>
-      setCurrency(event.currentTarget.value),
-    [],
-  );
+  const onType = useCallback((value: string | null) => {
+    setDirty(true);
+    setType(value ?? "personal");
+  }, []);
+  const onCurrency = useCallback((value: string | null) => {
+    setDirty(true);
+    setCurrency(value ?? "BRL");
+  }, []);
   const onDay = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => setDay(event.currentTarget.value),
     [],
@@ -124,16 +124,9 @@ export function GroupEditor({
       busy={busy}
       close={close}
       dirty={dirty}
-      footer={
-        <UiButton
-          disabled={busy}
-          form={id}
-          type="submit"
-        >
-          {submitLabel}
-        </UiButton>
-      }
+      open={open}
       presentation="compact-editor"
+      primaryAction={{ children: submitLabel, form: id, type: "submit" }}
       title={space ? "Editar grupo" : "Novo grupo"}
     >
       <form
@@ -144,48 +137,50 @@ export function GroupEditor({
       >
         <fieldset disabled={busy}>
           <legend className="sr-only">Organização financeira</legend>
-          <label>
-            Nome do grupo
-            <input
-              maxLength={240}
-              onChange={onName}
-              placeholder="Ex.: Casa em comum"
-              required
-              value={name}
+          <Input
+            label="Nome do grupo"
+            maxLength={240}
+            onChange={onName}
+            placeholder="Ex.: Casa em comum"
+            required
+            value={name}
+          />
+          <Grid
+            gap="sm"
+            variant="2up"
+          >
+            <Select
+              items={[
+                { label: "Pessoal", value: "personal" },
+                { label: "Família", value: "family" },
+                { label: "Profissional", value: "business" },
+              ]}
+              label="Tipo"
+              onValueChange={onType}
+              value={type}
             />
-          </label>
-          <div className="editor-grid">
-            <label>
-              Tipo
-              <select
-                onChange={onType}
-                value={type}
-              >
-                <option value="personal">Pessoal</option>
-                <option value="family">Família</option>
-                <option value="business">Profissional</option>
-              </select>
-            </label>
-            <label>
-              Início do mês
-              <input
-                max={28}
-                min={1}
-                onChange={onDay}
-                required
-                type="number"
-                value={day}
-              />
-            </label>
-          </div>
-          <label>
-            Moeda
-            <select
-              disabled={!!space}
-              onChange={onCurrency}
-              value={currency}
-            >
-              {[
+            <Input
+              label="Início do mês"
+              max={28}
+              min={1}
+              onChange={onDay}
+              required
+              type="number"
+              value={day}
+            />
+          </Grid>
+          <Select
+            description={
+              !!space && (
+                <small>
+                  A moeda é definida na criação; os valores existentes não serão
+                  convertidos.
+                </small>
+              )
+            }
+            disabled={!!space}
+            items={[
+              ...[
                 "BRL",
                 "USD",
                 "EUR",
@@ -198,27 +193,22 @@ export function GroupEditor({
                 "CLP",
                 "JPY",
                 "KWD",
-              ].map((code) => (
-                <option key={code}>{code}</option>
-              ))}
-            </select>
-            {!!space && (
-              <small>
-                A moeda é definida na criação; os valores existentes não serão
-                convertidos.
-              </small>
-            )}
-          </label>
+              ].map((code) => ({ label: code, value: code })),
+            ]}
+            label="Moeda"
+            onValueChange={onCurrency}
+            value={currency}
+          />
           <p className="muted">
             Grupos organizam dados; não alteram titulares nem permissões.
           </p>
           {!!message && (
-            <p
-              className="notice"
+            <Banner
+              className="feedback"
+              description={message}
               role="alert"
-            >
-              {message}
-            </p>
+              variant="default"
+            />
           )}
         </fieldset>
       </form>
@@ -226,6 +216,7 @@ export function GroupEditor({
   );
 }
 export function DeleteOrganizationItem({
+  open,
   api,
   snapshot,
   item,
@@ -234,6 +225,7 @@ export function DeleteOrganizationItem({
   close,
   deleted,
 }: {
+  open: boolean;
   api: ReturnType<typeof createAccountApi>;
   snapshot: PortalResponse;
   item: { id: string; name: string };
@@ -296,19 +288,15 @@ export function DeleteOrganizationItem({
       busy={busy}
       close={close}
       dirty={false}
-      footer={
-        !protectedSpace && (
-          <UiButton
-            disabled={busy}
-            onClick={remove}
-            tone="danger"
-            type="button"
-          >
-            {busy ? "Excluindo…" : `Excluir ${itemLabel}`}
-          </UiButton>
-        )
-      }
+      open={open}
       presentation="confirmation"
+      primaryAction={{
+        children: busy ? "Excluindo…" : `Excluir ${itemLabel}`,
+        disabled: protectedSpace,
+        onClick: remove,
+        type: "button",
+        variant: "destructive",
+      }}
       title={`Excluir ${itemLabel}`}
     >
       <p>
@@ -316,13 +304,12 @@ export function DeleteOrganizationItem({
       </p>
       <p>{explanation}</p>
       {!!message && (
-        <p
-          className="notice"
-          data-tone="error"
+        <Banner
+          className="feedback"
+          description={message}
           role="alert"
-        >
-          {message}
-        </p>
+          variant="error"
+        />
       )}
     </BackofficeDialog>
   );
