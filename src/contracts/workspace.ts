@@ -7,6 +7,7 @@ import {
   TransactionClassificationSchema,
   TransactionIdentificationSchema,
 } from "../domain";
+import { PortalCardsQuerySchema } from "./cards";
 import { planningDefinitions } from "./planning";
 import { ImportedRuleOriginSchema } from "./rule-import";
 import { RuleFilterSchema } from "./rules";
@@ -16,6 +17,7 @@ export const PortalQuerySchema = z
   .object({
     csrf: z.string(),
     query: z.union([
+      PortalCardsQuerySchema,
       planningDefinitions[96].schema.extend({
         tool: z.literal("preview_rule_import"),
       }),

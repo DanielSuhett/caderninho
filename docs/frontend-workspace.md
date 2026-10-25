@@ -118,7 +118,7 @@ O [guia de componentes](design-system.md) define a composição das páginas. Ca
 
 ## Demo pública
 
-`/demo`, `/demo/transactions`, `/demo/rules` e `/demo/groups` são assets públicos
+`/demo`, `/demo/transactions`, `/demo/cards`, `/demo/rules` e `/demo/groups` são assets públicos
 sem autenticação e sem consulta à API financeira privada. Compartilham
 WorkspaceFrame, SidebarFrame, FinancialDashboard, TransactionList e
 OrganizationView com seus editores e prévia. Ledger sintético de maio a outubro 2026,
@@ -162,6 +162,11 @@ ou atomicidade. Grupo novo tem Receitas/Despesas/Transferências e nenhuma conta
 mudar de grupo preserva mês, escolhe sua moeda e limpa conta/texto/direção.
 
 ## Agregação e apresentação
+
+A aba [Cartões](cards.md), em `/account/cards`, tem um recorte próprio de contas
+`CREDIT`: inclui compras sem categoria e separa limite atual, gastos confirmados,
+pendências e parcelas futuras. A rosca divide as compras antes dos estornos;
+não atribui categorias à ocupação do limite. A demo equivalente é `/demo/cards`.
 
 Resumo/categorias usam `get_overview`; a série usa `generate_chart` com
 `groupBy=month` e seis meses. O portal valida ambos pelos schemas de resposta.

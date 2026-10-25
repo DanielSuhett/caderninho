@@ -87,6 +87,7 @@ export function installationRoutes(access: Hono<PortalEnv>) {
   };
   app.get("/account", (c) => c.html(renderPage(accountPage())));
   for (const path of [
+    "cards",
     "transactions",
     "rules",
     "groups",
@@ -126,6 +127,9 @@ export function installationRoutes(access: Hono<PortalEnv>) {
       RULE_IMPORT_MAX_BYTES + 16_384,
     );
     const service = planningService(c.env);
+    if (input.query.tool === "get_portal_cards") {
+      return c.json(await service.cards(input.query));
+    }
     if (input.query.tool === "get_portal_transactions") {
       return c.json(await service.portalTransactions(input.query));
     }

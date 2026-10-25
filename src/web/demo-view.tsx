@@ -7,6 +7,7 @@ import {
 } from "@cloudflare/kumo";
 import {
   ArrowSquareOutIcon,
+  CreditCardIcon,
   FolderIcon,
   HouseIcon,
   ListChecksIcon,
@@ -22,6 +23,7 @@ import {
 import { createRoot } from "react-dom/client";
 
 import { demoPeople, demoReferenceDay } from "../fixtures/finance";
+import { demoPortalFixture } from "../fixtures/workspace";
 import { tryCatch } from "../shared";
 import {
   navigateWorkspace,
@@ -48,10 +50,16 @@ const Organization = lazy(async () => {
   const { data, error } = await tryCatch(() => import("./demo-organization"));
   return { default: error ? WorkspacePageError : data.DemoOrganization };
 });
+const Cards = lazy(async () => {
+  const { data, error } = await tryCatch(() => import("./account/cards-view"));
+  return { default: error ? WorkspacePageError : data.CardsView };
+});
+const demoSnapshot = demoPortalFixture();
 const trailingSlash = /\/$/;
 const pages = [
   { icon: HouseIcon, label: "Visão geral", path: "" },
   { icon: ReceiptIcon, label: "Transações", path: "/transactions" },
+  { icon: CreditCardIcon, label: "Cartões", path: "/cards" },
   { icon: ListChecksIcon, label: "Regras", path: "/rules" },
   { icon: FolderIcon, label: "Grupos", path: "/groups" },
 ];
@@ -244,6 +252,7 @@ function Demo() {
   const organization =
     location.pathname.includes("/rules") ||
     location.pathname.includes("/groups");
+  const cards = location.pathname.includes("/cards");
   const params = new URLSearchParams(location.search);
   const unavailable = !session
     .spaces()
@@ -297,7 +306,17 @@ function Demo() {
                   />
                 </Suspense>
               )}
-              {!(unavailable || organization) && (
+              {!unavailable && cards && (
+                <Suspense fallback={<WorkspaceSkeleton />}>
+                  <Cards
+                    api={session.api}
+                    basePath="/demo/cards"
+                    key={route}
+                    snapshot={demoSnapshot}
+                  />
+                </Suspense>
+              )}
+              {!(unavailable || organization || cards) && (
                 <DemoFinancial
                   route={route}
                   session={session}

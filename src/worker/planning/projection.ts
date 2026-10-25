@@ -280,7 +280,8 @@ export function planningCoverage(
     (row) =>
       (row.spaceId === selection.spaceId || movedAccountIds.has(row.id)) &&
       (!selection.personId || row.personId === selection.personId) &&
-      (!selection.accountId || row.id === selection.accountId),
+      (!selection.accountId || row.id === selection.accountId) &&
+      (!selection.accountIds || selection.accountIds.includes(row.id)),
   );
   const connectionIds = new Set(
     selectedAccounts.flatMap((row) =>

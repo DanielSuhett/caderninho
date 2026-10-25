@@ -1,6 +1,11 @@
-import type { PlanningCommand, PortalTransactionQuery } from "../../contracts";
+import type {
+  PlanningCommand,
+  PortalCardsQuery,
+  PortalTransactionQuery,
+} from "../../contracts";
 import { planningDefinitions } from "../../contracts";
 import { hash, tryCatch } from "../../shared";
+import { portalCards } from "./cards.service";
 import type { PlanningRepository, PlanningSnapshot } from "./entity";
 import { planningMutation } from "./mutations.service";
 import { portalTransactions } from "./portal-transactions.service";
@@ -80,6 +85,22 @@ export function createPlanningService(
     return planningQuery(input, snapshot, repository, now());
   }
   return {
+    async cards(input: PortalCardsQuery) {
+      const snapshot = await repository.read();
+      const data = await portalCards(input, snapshot, repository, now());
+      const context = readContext(snapshot, {
+        ...input,
+        accountIds: data.accounts
+          .filter(
+            (account) => !input.accountId || account.id === input.accountId,
+          )
+          .map((account) => account.id),
+      });
+      if ((await repository.revision()) !== snapshot.revision) {
+        throw new Error("RESTART_REQUIRED");
+      }
+      return { ...context, data };
+    },
     async execute(input: PlanningCommand): Promise<unknown> {
       if (input.tool === "preview_rule") {
         const result = await previewRule(repository, input);
