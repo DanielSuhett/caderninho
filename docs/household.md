@@ -35,7 +35,10 @@ reiniciar uma execução terminal ou apagar o histórico. Fotos persistem no D1,
 com preparação local e os limites do contrato. Rascunhos do onboarding bloqueiam
 navegação e fechamento até salvar ou cancelar.
 
-O instalador solicita apenas `ADMIN_PASSWORD`. Credenciais Pluggy são validadas
+O instalador gera a chave de acesso, sem pedir senha. Guarda somente seu hash em
+`ADMIN_ACCESS_HASH` e entrega um link privado no resultado do deploy; a primeira
+tela oferece cópia com ClipboardText. `ADMIN_PASSWORD` anterior continua válido.
+Credenciais Pluggy são validadas
 no servidor e ficam no cofre privado já existente. Secrets Pluggy de ambiente
 continuam como fallback das instalações anteriores; nenhum secret real é removido.
 

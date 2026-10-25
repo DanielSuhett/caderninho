@@ -6,7 +6,7 @@ import { PortalIssue } from "../../../contracts";
 import { hash } from "../../../shared";
 import type { Bindings } from "../../bindings";
 import type { PortalSession } from "../entity";
-import { adminConfigured, token } from "../service";
+import { adminAccess, token } from "../service";
 
 export const sessionCookie = "__Host-caderninho";
 export const cookieOptions = {
@@ -26,9 +26,18 @@ const SessionSchema = z.object({
 }) satisfies z.ZodType<PortalSession>;
 const sessionMaxAge = 28_800;
 
+export function configuredAccess<E extends { Bindings: Bindings }>(
+  c: Context<E>,
+) {
+  return adminAccess({
+    accessHash: c.env.ADMIN_ACCESS_HASH,
+    password: c.env.ADMIN_PASSWORD,
+  });
+}
+
 function signingSecret<E extends { Bindings: Bindings }>(c: Context<E>) {
   return hash({
-    password: c.env.ADMIN_PASSWORD,
+    password: configuredAccess(c)?.secret,
     purpose: sessionCookie,
     version: c.env.CF_VERSION_METADATA.id,
   });
@@ -37,7 +46,7 @@ function signingSecret<E extends { Bindings: Bindings }>(c: Context<E>) {
 export async function readSession<E extends { Bindings: Bindings }>(
   c: Context<E>,
 ) {
-  if (!adminConfigured(c.env.ADMIN_PASSWORD)) {
+  if (!configuredAccess(c)) {
     return null;
   }
   const value = await getSignedCookie(c, await signingSecret(c), sessionCookie);

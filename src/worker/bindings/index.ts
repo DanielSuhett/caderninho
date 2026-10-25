@@ -14,6 +14,7 @@ export interface DurableWorkflow {
   get: (id: string) => Promise<DurableInstance>;
 }
 export interface Bindings {
+  ADMIN_ACCESS_HASH?: string;
   ADMIN_PASSWORD?: string;
   AI?: ClefBinding;
   ASSETS?: Cloudflare.Env["ASSETS"];

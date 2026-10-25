@@ -1,1 +1,8 @@
-export { adminConfigured, returnPath, token, verifyPassword } from "./service";
+export {
+  accessKeyHash,
+  adminConfigured,
+  generateAdminAccess,
+  returnPath,
+  token,
+  verifyPassword,
+} from "./service";

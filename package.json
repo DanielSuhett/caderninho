@@ -7,7 +7,7 @@
   "scripts": {
     "build": "npm run build:portal && wrangler deploy --dry-run --outdir dist/worker",
     "build:portal": "vite build",
-    "deploy": "npm run build:portal && wrangler d1 migrations apply DB --remote && wrangler deploy",
+    "deploy": "npm run build:portal && node --import tsx scripts/deploy.ts",
     "deploy:onboarding": "npm run build:portal && wrangler deploy --config wrangler.onboarding.jsonc --keep-vars",
     "deploy:site": "npm run build:portal && wrangler pages deploy --cwd site --branch main",
     "dev": "npm run build:portal && wrangler dev",
@@ -17,11 +17,11 @@
     "lint": "ultracite check --formatter-enabled=false --error-on-warnings .",
     "lint:fix": "ultracite fix --formatter-enabled=false --error-on-warnings .",
     "migrate:local": "wrangler d1 migrations apply DB --local",
-    "test": "node --import tsx --test \"src/**/__tests__/*.test.ts\"",
+    "test": "node --import tsx --test \"src/**/__tests__/*.test.ts\" \"scripts/__tests__/*.test.ts\"",
     "test:product": "vitest run",
     "test:product:runtime": "node --import tsx tests/integration/run-runtime.ts",
     "typecheck": "tsc --noEmit",
-    "types": "wrangler types src/worker/runtime.d.ts --env-file .dev.vars.example"
+    "types": "wrangler types src/worker/runtime.d.ts --env-file docs/dev.vars.example"
   },
   "dependencies": {
     "@cloudflare/kumo": "2.14.0",
@@ -68,9 +68,6 @@
       },
       "OAUTH_KV": {
         "description": "Autorizações OAuth privadas desta instalação. Criado pelo botão."
-      },
-      "ADMIN_PASSWORD": {
-        "description": "Escolha uma senha pessoal de 16 a 256 caracteres para abrir seu painel. Guarde-a no seu gerenciador de senhas."
       }
     }
   }

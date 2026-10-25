@@ -20,8 +20,9 @@ import {
   observeSpan,
   SpanName,
 } from "../../observability";
-import { adminConfigured, returnPath, token, verifyPassword } from "../service";
+import { returnPath, token, verifyAdminAccess } from "../service";
 import {
+  configuredAccess,
   cookieOptions,
   createSession,
   type PortalEnv,
@@ -180,7 +181,8 @@ function loginRoutes() {
     }
     const csrf = token();
     setCookie(c, loginCookie, csrf, { ...cookieOptions, maxAge: 600 });
-    const configured = adminConfigured(c.env.ADMIN_PASSWORD);
+    const access = configuredAccess(c);
+    const configured = !!access;
     if (!configured) {
       markFailure(new Error(FailureCode.INSTALLATION_INCOMPLETE), {
         phase: SpanName.authentication,
@@ -192,6 +194,7 @@ function loginRoutes() {
           configured,
           csrf,
           error: "",
+          generated: !!access?.generated,
           origin: requestOrigin(c.req.raw),
           target,
         }),
@@ -210,13 +213,15 @@ function loginRoutes() {
     ) {
       return c.text("Formato inválido.", 415);
     }
-    if (!adminConfigured(c.env.ADMIN_PASSWORD)) {
+    const access = configuredAccess(c);
+    if (!access) {
       markFailure(new Error(FailureCode.INSTALLATION_INCOMPLETE), {
         phase: SpanName.authentication,
       });
       return c.text("Acesso não configurado.", 503);
     }
     const form = await boundedForm(c.req.raw);
+    const target = returnPath(form.get("returnTo") ?? undefined);
     const csrf = getCookie(c, loginCookie);
     if (!csrf || form.get("csrf") !== csrf) {
       return c.text("Atualize a página para entrar novamente.", 403);
@@ -235,24 +240,24 @@ function loginRoutes() {
             configured: true,
             csrf,
             error: "Limite de tentativas. Aguarde 60 segundos.",
+            generated: access.generated,
             origin: requestOrigin(c.req.raw),
-            target: returnPath(form.get("returnTo") ?? undefined),
+            target,
           }),
         ),
         429,
       );
     }
-    if (
-      !(await verifyPassword(c.env.ADMIN_PASSWORD, form.get("password") ?? ""))
-    ) {
+    if (!(await verifyAdminAccess(access, form.get("password") ?? ""))) {
       return c.html(
         renderPage(
           accessPage({
             configured: true,
             csrf,
-            error: "Senha inválida.",
+            error: access.generated ? "Chave inválida." : "Senha inválida.",
+            generated: access.generated,
             origin: requestOrigin(c.req.raw),
-            target: returnPath(form.get("returnTo") ?? undefined),
+            target,
           }),
         ),
         401,
@@ -260,7 +265,7 @@ function loginRoutes() {
     }
     await createSession(c);
     deleteCookie(c, loginCookie, cookieOptions);
-    return c.redirect(returnPath(form.get("returnTo") ?? undefined), 303);
+    return c.redirect(target, 303);
   });
   return app;
 }

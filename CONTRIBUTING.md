@@ -33,7 +33,8 @@ publicam. O rápido verifica configuração, tipos gerados, TypeScript, formato 
 lint; o completo acrescenta testes, build dry-run e runtime local D1/Workflow.
 
 `types` regenera bindings usando somente os nomes de secrets de
-`.dev.vars.example`; `types:check` confere sem reescrever. `migrate:local` usa
+`docs/dev.vars.example`; `types:check` confere sem reescrever. O exemplo fica fora
+da raiz para não gerar campos de secrets no Deploy to Cloudflare. `migrate:local` usa
 somente D1 local. Deploy é separado e inclui inicialização do D1 remoto.
 
 Enquanto o projeto estiver em pré-produção, mantenha o modelo inicial completo

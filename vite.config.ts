@@ -142,6 +142,9 @@ export default defineConfig({
     outDir: "dist/web",
     rolldownOptions: {
       input: {
+        access: fileURLToPath(
+          new URL("./src/web/access-entry.tsx", import.meta.url),
+        ),
         account: fileURLToPath(
           new URL("./src/web/account-entry.ts", import.meta.url),
         ),

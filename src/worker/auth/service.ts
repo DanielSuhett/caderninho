@@ -1,4 +1,52 @@
-import { secretsEqual } from "../../shared";
+import { hash, secretsEqual } from "../../shared";
+import type { AdminAccess } from "./entity";
+
+const accessHashPattern = /^[a-f0-9]{64}$/;
+const accessKeyPattern = /^cad_[a-f0-9]{64}$/;
+
+export function adminAccess({
+  password,
+  accessHash,
+}: {
+  password: string | undefined;
+  accessHash: string | undefined;
+}): AdminAccess | null {
+  if (adminConfigured(password)) {
+    return { generated: false, secret: password ?? "" };
+  }
+  return accessHash && accessHashPattern.test(accessHash)
+    ? { generated: true, secret: accessHash }
+    : null;
+}
+
+export function accessKeyHash(key: string) {
+  return hash({ key, purpose: "caderninho-admin-access" });
+}
+
+export async function generateAdminAccess() {
+  const bytes = crypto.getRandomValues(new Uint8Array(32));
+  const key = `cad_${Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("")}`;
+  return { hash: await accessKeyHash(key), key };
+}
+
+export async function verifyAdminAccess(
+  access: AdminAccess | null,
+  supplied: string,
+) {
+  if (!access) {
+    return false;
+  }
+  if (!access.generated) {
+    return verifyPassword(access.secret, supplied);
+  }
+  return (
+    accessKeyPattern.test(supplied) &&
+    secretsEqual({
+      expected: access.secret,
+      supplied: await accessKeyHash(supplied),
+    })
+  );
+}
 
 export function adminConfigured(password: string | undefined) {
   return !!password && password.length >= 16 && password.length <= 256;

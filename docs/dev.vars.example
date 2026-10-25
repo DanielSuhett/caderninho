@@ -1,0 +1,13 @@
+# Apenas para desenvolvimento local: copie para .dev.vars e use fixtures.
+# O deploy gera a chave de acesso automaticamente, sem formulário de secrets.
+# Senha opcional para desenvolvimento e instalações anteriores:
+ADMIN_PASSWORD=
+# Hash da chave gerada, configurado automaticamente pelo instalador:
+ADMIN_ACCESS_HASH=
+# O onboarding configura Pluggy por pessoa dentro da instalação.
+# Fallback opcional para instalações que já usam secrets de ambiente:
+PLUGGY_CLIENT_ID=
+PLUGGY_CLIENT_SECRET=
+
+# Opcional: apenas se cadastrar webhooks na Pluggy.
+# WEBHOOK_SECRET=

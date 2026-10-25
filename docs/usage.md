@@ -1,8 +1,10 @@
 # Usar o Caderninho
 
-Abra `/account`, entre com sua senha e acesse **Conexões** para escolher **Conectar Meu Pluggy**. Use a mesma
-aplicação Pluggy das suas conexões pessoais. Ao confirmar a conexão, a primeira
-importação começa automaticamente. Acompanhe as fases e as páginas publicadas no painel.
+Na primeira instalação, abra o link privado no resultado do deploy, copie a chave
+gerada e clique em Começar. Nos próximos acessos, abra `/account` e use essa chave
+ou a senha de uma instalação anterior. Em **Pessoas**, cadastre nome/foto,
+configure o acesso Pluggy e autorize seus bancos. Conclua Pessoas para iniciar
+a primeira importação. O painel acompanha as fases e as páginas publicadas.
 
 Consulte [as páginas da instalação](frontend-workspace.md) para navegar por transações,
 regras, grupos e histórico de sincronizações.
@@ -10,8 +12,8 @@ regras, grupos e histórico de sincronizações.
 ## Pessoas e perfis
 
 O dashboard reúne as contas de titulares distintos e permite alternar entre uma
-pessoa e “Todos”. Cadastre pessoas e credenciais em **Pessoas e perfis Pluggy**;
-selecione o perfil antes de conectar. O [guia de titularidade](household.md) explica
+pessoa e “Todos”. Cadastre pessoas e credenciais em **Pessoas**; os próximos bancos
+reutilizam o acesso da pessoa. O [guia de titularidade](household.md) explica
 configuração, filtros MCP, correção de titular, pausa e limites da Pluggy.
 
 ## Importações
@@ -148,10 +150,14 @@ conexões fora da seleção não invalidam esse cursor.
 **Revogar todos os assistentes** remove seus grants OAuth. A sessão do painel
 continua válida; novos acessos MCP precisam de consentimento. **Sair** apaga o
 cookie deste navegador. Uma cópia desse cookie continua válida até completar oito
-horas do login ou até trocar ADMIN_PASSWORD ou a versão do Worker. A expiração é
+horas do login ou até trocar a chave/senha ou a versão do Worker. A expiração é
 conferida no servidor. A autenticação do painel não grava sessões no D1 ou KV.
 
-Altere ADMIN_PASSWORD nos secrets para trocar a senha: os cookies anteriores
+O primeiro deploy gera a chave e guarda apenas `ADMIN_ACCESS_HASH` nos secrets.
+Deploys seguintes preservam esse acesso. O link privado do primeiro deploy contém
+a chave original; guarde-a num gerenciador de senhas. O painel não recupera a
+chave pelo hash. Para recuperar acesso perdido, defina `ADMIN_PASSWORD` nos
+secrets com 16 a 256 caracteres; a senha passa a prevalecer e os cookies anteriores
 perdem a validade. Publicar outra versão do Worker também os invalida. Essas
 mudanças e o logout preservam as autorizações dos assistentes; use **Revogar todos
 os assistentes** para removê-las.
