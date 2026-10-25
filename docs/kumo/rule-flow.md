@@ -19,7 +19,7 @@ filter continuam mostrando a condição de texto original.
 
 Ativa/pausada e prioridade ficam na linha da regra, fora do Flow. Grupo fica no
 contexto da consulta/editor. A primeira regra ativa que
-corresponder vence, da menor prioridade para a maior, com ID como desempate.
+corresponder vence: pessoais antes dos pacotes, depois da menor prioridade para a maior, com ID como desempate.
 Pausada informa no diagrama que não será aplicada e conserva prioridade na linha. Salvar afeta as
 próximas importações; não reclassifica o histórico. A prévia de correspondências
 continua distinta de uma garantia de qual regra vencerá.

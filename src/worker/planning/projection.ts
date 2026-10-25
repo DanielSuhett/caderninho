@@ -1,3 +1,4 @@
+import type { PlanningCommand } from "../../contracts";
 import type {
   PlanningAccount,
   PlanningState,
@@ -6,6 +7,7 @@ import type {
 } from "../../domain";
 import {
   CLASSIFICATION_VERSION,
+  connectionPartial,
   fixedCategoryId,
   pluggyCategory,
   transactionMatchesText,
@@ -68,8 +70,10 @@ export function accounts(
 }
 export interface Selection {
   accountId?: string | undefined;
+  accountIds?: string[] | undefined;
   cardNumber?: string | undefined;
   categoryId?: string | undefined;
+  currency?: string | undefined;
   direction?: string | undefined;
   from?: string | undefined;
   include_ignored?: boolean | undefined;
@@ -80,6 +84,27 @@ export interface Selection {
   tagId?: string | undefined;
   text?: string | undefined;
   to?: string | undefined;
+}
+export function planningSelection(command: PlanningCommand): Selection {
+  return {
+    spaceId: command.spaceId,
+    ...("personId" in command &&
+      command.personId && { personId: command.personId }),
+    ...("accountId" in command &&
+      command.accountId && { accountId: command.accountId }),
+    ...("categoryId" in command &&
+      command.categoryId && { categoryId: command.categoryId }),
+    ...("currency" in command &&
+      command.currency && { currency: command.currency }),
+    ...("tagId" in command && command.tagId && { tagId: command.tagId }),
+    ...("cardNumber" in command &&
+      command.cardNumber && { cardNumber: command.cardNumber }),
+    ...("direction" in command &&
+      command.direction && { direction: command.direction }),
+    ...("status" in command && command.status && { status: command.status }),
+    ...("text" in command && command.text && { text: command.text }),
+    include_ignored: "include_ignored" in command && command.include_ignored,
+  };
 }
 export function validatePeriod(input: {
   from?: string | undefined;
@@ -141,7 +166,9 @@ export function transactionStream(
       (!selection.from || row.date >= selection.from) &&
       (!selection.to || row.date <= selection.to) &&
       (!selection.accountId || row.accountId === selection.accountId) &&
+      (!selection.accountIds || selection.accountIds.includes(row.accountId)) &&
       (!selection.categoryId || row.category === selection.categoryId) &&
+      (!selection.currency || row.currency === selection.currency) &&
       (!selection.tagId || row.tagIds.includes(selection.tagId)) &&
       (!selection.direction || row.direction === selection.direction) &&
       (!selection.status || row.status === selection.status) &&
@@ -165,16 +192,7 @@ export function transactionStream(
       status: edit.status ?? "POSTED",
     });
   }
-  return async function* (selection: Selection, ids?: string[]) {
-    validatePeriod(selection);
-    for await (const page of repository.transactions(ids)) {
-      for (const row of page) {
-        const value = effective(row);
-        if (value && matches(value, selection)) {
-          yield value;
-        }
-      }
-    }
+  function* manualRows(selection: Selection, ids?: string[]) {
     for (const edit of state.edits.filter(
       (row) => row.manual && !row.deleted && (!ids || ids.includes(row.id)),
     )) {
@@ -183,6 +201,121 @@ export function transactionStream(
         yield row;
       }
     }
+  }
+  async function* projected(
+    rows: AsyncIterable<TransactionProjection[]>,
+    selection: Selection,
+  ) {
+    for await (const sourceRows of rows) {
+      for (const row of sourceRows) {
+        const value = effective(row);
+        if (value && matches(value, selection)) {
+          yield value;
+        }
+      }
+    }
+  }
+  function selectedAccountIds(selection: Selection) {
+    return [...accountMap.values()]
+      .filter(
+        (row) =>
+          row.spaceId === selection.spaceId &&
+          (!selection.accountIds || selection.accountIds.includes(row.id)) &&
+          (!selection.accountId || row.id === selection.accountId) &&
+          (!selection.personId || row.personId === selection.personId) &&
+          (!selection.profileId || row.profileId === selection.profileId),
+      )
+      .map((row) => row.id);
+  }
+  return async function* (
+    selection: Selection,
+    ids?: string[],
+    page?: { order: "id" | "date_desc"; after: string; limit: number },
+  ) {
+    validatePeriod(selection);
+    yield* manualRows(selection, ids);
+    if (ids) {
+      yield* projected(repository.transactions(ids), selection);
+      return;
+    }
+    // Edits can move a source row into the selection across dates/accounts.
+    const editedIds = [...edits.values()]
+      .filter((row) => !row.manual)
+      .map((row) => row.id);
+    if (editedIds.length) {
+      yield* projected(repository.transactions(editedIds), selection);
+    }
+    const sources = repository.transactions(undefined, {
+      accountIds: selectedAccountIds(selection),
+      excludeIds: editedIds,
+      from: selection.from,
+      to: selection.to,
+      ...(page && {
+        after: page.after,
+        order: page.order,
+        pageSize: Math.min(500, page.limit),
+      }),
+    });
+    let count = 0;
+    for await (const row of projected(sources, selection)) {
+      yield row;
+      count += 1;
+      if (page && count >= page.limit) {
+        return;
+      }
+    }
+  };
+}
+
+export function planningCoverage(
+  snapshot: PlanningSnapshot,
+  selection: Selection,
+) {
+  const movedAccountIds = new Set(
+    snapshot.state.edits
+      .filter((edit) => !edit.deleted && edit.spaceId === selection.spaceId)
+      .flatMap((edit) => (edit.accountId ? [edit.accountId] : [])),
+  );
+  const selectedAccounts = accounts(snapshot).filter(
+    (row) =>
+      (row.spaceId === selection.spaceId || movedAccountIds.has(row.id)) &&
+      (!selection.personId || row.personId === selection.personId) &&
+      (!selection.accountId || row.id === selection.accountId),
+  );
+  const connectionIds = new Set(
+    selectedAccounts.flatMap((row) =>
+      row.connectionId ? [row.connectionId] : [],
+    ),
+  );
+  const origins = snapshot.connections.filter((row) => {
+    if (connectionIds.has(row.id)) {
+      return true;
+    }
+    const personId =
+      snapshot.owners.find((owner) => owner.connectionId === row.id)
+        ?.personId ?? "self";
+    return (
+      !selection.accountId &&
+      selection.spaceId === "personal" &&
+      !Object.keys(row.accounts).length &&
+      (!selection.personId || personId === selection.personId)
+    );
+  });
+  const successes = origins.map((row) => row.lastSuccessAt);
+  let kind = "empty";
+  if (origins.length) {
+    kind = "imported";
+  } else if (selectedAccounts.some((row) => row.manual)) {
+    kind = "local_only";
+  }
+  return {
+    connectionIds: origins.map((row) => row.id).sort(),
+    kind,
+    oldestLastSuccessAt:
+      !successes.length || successes.some((value) => value === null)
+        ? null
+        : (successes.sort()[0] ?? null),
+    partial: origins.some(connectionPartial),
   };
 }
 export async function selectedTransactions(

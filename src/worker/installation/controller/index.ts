@@ -12,6 +12,7 @@ import {
   PortalMutationSchema,
   PortalQuerySchema,
   RevokeGrantSchema,
+  RULE_IMPORT_MAX_BYTES,
   RulePreviewSchema,
   SyncActionSchema,
   SyncHistorySelectionSchema,
@@ -48,10 +49,12 @@ export function installationRoutes(access: Hono<PortalEnv>) {
     c.header("Cache-Control", "no-store");
     c.header("Referrer-Policy", "same-origin");
     c.header("X-Content-Type-Options", "nosniff");
-    c.header(
-      "Content-Security-Policy",
-      "default-src 'none'; font-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; frame-src https://connect.pluggy.ai; img-src 'self' data:; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
-    );
+    if (!c.res.headers.has("Content-Security-Policy")) {
+      c.header(
+        "Content-Security-Policy",
+        "default-src 'none'; font-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; frame-src https://connect.pluggy.ai; img-src 'self' data:; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
+      );
+    }
   });
   app.route("/", access);
   app.use("/account", sessionMiddleware);
@@ -74,8 +77,9 @@ export function installationRoutes(access: Hono<PortalEnv>) {
     request: Request,
     csrf: string,
     schema: z.ZodType<T>,
+    maximum = 32_768,
   ) => {
-    const input = schema.parse(await boundedJson(request, 32_768));
+    const input = schema.parse(await boundedJson(request, maximum));
     if (input.csrf !== csrf) {
       throw new Error("SESSION_REQUIRED");
     }
@@ -119,6 +123,7 @@ export function installationRoutes(access: Hono<PortalEnv>) {
       c.req.raw,
       c.get("session").csrf,
       PortalQuerySchema,
+      RULE_IMPORT_MAX_BYTES + 16_384,
     );
     const service = planningService(c.env);
     if (input.query.tool === "get_portal_transactions") {
@@ -131,6 +136,7 @@ export function installationRoutes(access: Hono<PortalEnv>) {
       c.req.raw,
       c.get("session").csrf,
       PortalMutationSchema,
+      RULE_IMPORT_MAX_BYTES + 16_384,
     );
     return c.json(await planningService(c.env).execute(input.command));
   });
@@ -139,6 +145,7 @@ export function installationRoutes(access: Hono<PortalEnv>) {
       c.req.raw,
       c.get("session").csrf,
       RulePreviewSchema,
+      RULE_IMPORT_MAX_BYTES,
     );
     return c.json(await rulePreview(c.env, input));
   });

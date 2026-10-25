@@ -34,6 +34,7 @@ export {
   exactJSON,
   localDay,
   minor,
+  minorPresentation,
 } from "./exact";
 export { Fault } from "./fault.entity";
 export type {
@@ -104,8 +105,14 @@ export type {
   TransactionQuery,
 } from "./query.entity";
 export { Metric, MetricDefinition } from "./query.entity";
+export { resolveRuleImportCategory } from "./rule-import.entity";
 export type { RuleCondition, RuleFilter } from "./rules.entity";
-export { activeRules, ruleMatches, ruleText } from "./rules.entity";
+export {
+  activeRules,
+  compareRules,
+  ruleMatches,
+  ruleText,
+} from "./rules.entity";
 export type { Checkpoint, CommitResult, FinancialSource } from "./sync.entity";
 export { IMPORT_INTERVAL, RunStatus } from "./sync.entity";
 export type {

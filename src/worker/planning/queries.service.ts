@@ -1,7 +1,13 @@
 import type { PlanningCommand } from "../../contracts";
 import { PlanningCursorSchema } from "../../contracts";
 import type { PlanningState, PlanningTransaction } from "../../domain";
-import { financialCharts, localDay, monthDate } from "../../domain";
+import {
+  compareRules,
+  financialCharts,
+  localDay,
+  minorPresentation,
+  monthDate,
+} from "../../domain";
 import { hash } from "../../shared";
 import { type ProjectedPayment, recurrencePayments } from "./billing";
 import { effectiveBills } from "./bills.service";
@@ -11,6 +17,8 @@ import {
   classification,
   found,
   inSpace,
+  planningSelection,
+  type Selection,
   transactionStream,
   validatePeriod,
 } from "./projection";
@@ -21,6 +29,8 @@ interface Totals {
   expense: bigint;
   income: bigint;
   unclassified: number;
+  unclassifiedAmount: bigint;
+  unclassifiedUnknown: number;
   unknown: number;
 }
 const emptyTotals = (): Totals => ({
@@ -29,6 +39,8 @@ const emptyTotals = (): Totals => ({
   expense: 0n,
   income: 0n,
   unclassified: 0,
+  unclassifiedAmount: 0n,
+  unclassifiedUnknown: 0,
   unknown: 0,
 });
 const absolute = (value: string) => {
@@ -97,6 +109,33 @@ export function cardCatalog(snapshot: PlanningSnapshot, state: PlanningState) {
   }
   return [...result.values()];
 }
+function validateSelection(
+  selection: Selection,
+  snapshot: PlanningSnapshot,
+  accountMap: Map<string, import("../../domain").PlanningAccount>,
+) {
+  if (selection.accountId) {
+    const account = found(accountMap.get(selection.accountId));
+    const moved = snapshot.state.edits.some(
+      (edit) =>
+        edit.accountId === account.id &&
+        edit.spaceId === selection.spaceId &&
+        !edit.deleted,
+    );
+    if (
+      (account.spaceId !== selection.spaceId && !moved) ||
+      (selection.personId && account.personId !== selection.personId)
+    ) {
+      throw new Error("SPACE_MISMATCH");
+    }
+  }
+  if (selection.categoryId) {
+    inSpace(snapshot.state.categories, selection.categoryId, selection.spaceId);
+  }
+  if (selection.tagId) {
+    inSpace(snapshot.state.tags, selection.tagId, selection.spaceId);
+  }
+}
 export async function planningQuery(
   command: PlanningCommand,
   snapshot: PlanningSnapshot,
@@ -118,6 +157,8 @@ export async function planningQuery(
     snapshot.transactionDetails.map((row) => [row.id, row]),
   );
   const accountMap = new Map(allAccounts.map((row) => [row.id, row]));
+  const querySelection = planningSelection(command);
+  validateSelection(querySelection, snapshot, accountMap);
   const scoped = <T extends { spaceId: string }>(rows: T[]) =>
     rows.filter((row) => row.spaceId === command.spaceId);
   function owned<
@@ -166,10 +207,14 @@ export async function planningQuery(
     const rows = owned(allAccounts).map((a) => ({ ...a }));
     const map = new Map(rows.map((a) => [a.id, a]));
     const matched = new Set<string>();
-    for await (const row of stream({
-      include_ignored: true,
-      spaceId: command.spaceId,
-    })) {
+    const manualIds = rows.filter((row) => row.manual).map((row) => row.id);
+    for await (const row of manualIds.length
+      ? stream({
+          accountIds: manualIds,
+          include_ignored: true,
+          spaceId: command.spaceId,
+        })
+      : []) {
       const account = map.get(row.accountId);
       if (
         !account?.manual ||
@@ -272,6 +317,11 @@ export async function planningQuery(
     );
     if (kind === "unclassified") {
       total.unclassified += 1;
+      if (row.amountMinor === null) {
+        total.unclassifiedUnknown += 1;
+      } else {
+        total.unclassifiedAmount += absolute(row.amountMinor);
+      }
     }
     if (row.amountMinor === null) {
       total.unknown += 1;
@@ -288,34 +338,67 @@ export async function planningQuery(
       addExpense(row, total, groups, groupBy);
     }
   }
-  async function summary(
-    from: string,
-    to: string,
+  async function summaries(
+    intervals: { from: string; to: string }[],
     groupBy: "category" | "month" = "category",
   ) {
-    validatePeriod({ from, to });
-    const totals = new Map<string, Totals>();
-    const groups = new Map<
-      string,
-      { currency: string; group: string; amount: bigint; unknown: number }
-    >();
-    for await (const row of stream({ from, spaceId: command.spaceId, to })) {
+    for (const interval of intervals) {
+      validatePeriod(interval);
+    }
+    const periods = intervals.map((interval) => ({
+      ...interval,
+      groups: new Map<
+        string,
+        { currency: string; group: string; amount: bigint; unknown: number }
+      >(),
+      totals: new Map<string, Totals>(),
+    }));
+    const [firstDay] = intervals.map((interval) => interval.from).sort();
+    const lastDay = intervals
+      .map((interval) => interval.to)
+      .sort()
+      .at(-1);
+    for await (const row of stream({
+      ...querySelection,
+      from: firstDay,
+      to: lastDay,
+    })) {
       if (row.status !== "POSTED" || row.date > day) {
         continue;
       }
-      addSummaryRow(row, totals, groups, groupBy);
+      for (const interval of periods) {
+        if (row.date >= interval.from && row.date <= interval.to) {
+          addSummaryRow(row, interval.totals, interval.groups, groupBy);
+        }
+      }
     }
-    return {
+    return periods.map(({ from, to, totals, groups }) => ({
       classification:
         "Only explicit local income/expense categories; unclassified bank movements are reported separately.",
+      dateBasis: "transaction",
+      eligibility: { status: "POSTED", throughDay: day },
       from,
       groups: [...groups.values()].map((g) => ({
         amountMinor: g.amount.toString(),
+        ...minorPresentation(g.amount.toString(), g.currency),
         currency: g.currency,
         group: g.group,
+        label:
+          groupBy === "category"
+            ? (state.categories.find((category) => category.id === g.group)
+                ?.name ?? "Sem classificação")
+            : g.group,
+        ...(groupBy === "category" && {
+          categoryId: g.group,
+          categoryName:
+            state.categories.find((category) => category.id === g.group)
+              ?.name ?? "Sem classificação",
+        }),
       })),
+      measure: "classified_expense",
       partial: snapshot.partial,
       referenceDay: day,
+      selection: { ...querySelection, from, to },
       to,
       totals: [...totals].map(([currency, t]) => ({
         cashFlowMinor: t.unknown ? null : t.cashFlow.toString(),
@@ -326,10 +409,23 @@ export async function planningQuery(
         knownCashFlowMinor: t.cashFlow.toString(),
         knownExpenseMinor: t.expense.toString(),
         knownIncomeMinor: t.income.toString(),
+        knownUnclassifiedMinor: t.unclassifiedAmount.toString(),
         unclassifiedCount: t.unclassified,
+        unclassifiedMinor: t.unclassifiedUnknown
+          ? null
+          : t.unclassifiedAmount.toString(),
+        unclassifiedUnknownAmountCount: t.unclassifiedUnknown,
         unknownAmountCount: t.unknown,
       })),
-    };
+      unit: "minor",
+    }));
+  }
+  async function summary(
+    from: string,
+    to: string,
+    groupBy: "category" | "month" = "category",
+  ) {
+    return found((await summaries([{ from, to }], groupBy))[0]);
   }
   async function upcoming(from: string, to: string) {
     validatePeriod({ from, to });
@@ -361,7 +457,8 @@ export async function planningQuery(
     result.push(
       ...owned(state.recurrences)
         .filter(
-          (r) => r.active && accountMap.get(r.accountId)?.type !== "CREDIT",
+          ({ active, accountId }) =>
+            active && accountMap.get(accountId)?.type !== "CREDIT",
         )
         .flatMap((r) =>
           recurrencePayments(r, from, to).filter(
@@ -443,7 +540,11 @@ export async function planningQuery(
     }
     const rows: import("../../domain").PlanningTransaction[] = [];
     const order = transactionOrder(input.order, after);
-    for await (const row of stream(input)) {
+    for await (const row of allTransactions(input, undefined, {
+      after,
+      limit: limit + 1,
+      order: input.order,
+    })) {
       if (order.following(row)) {
         rows.push(row);
         rows.sort(order.compare);
@@ -467,6 +568,11 @@ export async function planningQuery(
       partial: snapshot.partial,
       records,
       referenceDay: day,
+      selection: {
+        ...querySelection,
+        ...(input.from && { from: input.from }),
+        ...(input.to && { to: input.to }),
+      },
     };
   }
 
@@ -506,9 +612,7 @@ export async function planningQuery(
     _input: Extract<PlanningCommand, { tool: "get_rules" }>,
   ) {
     return {
-      records: scoped(state.rules).sort(
-        (a, b) => a.priority - b.priority || a.id.localeCompare(b.id),
-      ),
+      records: scoped(state.rules).sort(compareRules),
     };
   }
 
@@ -687,10 +791,11 @@ export async function planningQuery(
   ) {
     const result = await summary(input.from, input.to, input.groupBy);
     return {
-      charts: financialCharts({ groups: result.groups, type: input.type }),
+      charts: input.includeSvg
+        ? financialCharts({ groups: result.groups, type: input.type })
+        : [],
       groupBy: input.groupBy,
       type: input.type,
-      unit: "minor",
       ...result,
     };
   }
@@ -701,16 +806,32 @@ export async function planningQuery(
     validatePeriod(input);
     const days =
       (Date.parse(input.to) - Date.parse(input.from)) / 86_400_000 + 1;
+    let previousFrom = new Date(Date.parse(input.from) - days * 86_400_000)
+      .toISOString()
+      .slice(0, 10);
+    let previousTo = new Date(Date.parse(input.from) - 86_400_000)
+      .toISOString()
+      .slice(0, 10);
+    if (input.comparison === "previous_month") {
+      previousFrom = monthDate(input.from, -1);
+      previousTo = monthDate(input.to, -1);
+    }
+    if (input.comparison === "explicit") {
+      if (!(input.previousFrom && input.previousTo)) {
+        throw new Error("INVALID_PERIOD");
+      }
+      ({ previousFrom, previousTo } = input);
+    } else if (input.previousFrom || input.previousTo) {
+      throw new Error("INVALID_PERIOD");
+    }
+    const [current, previous] = await summaries([
+      input,
+      { from: previousFrom, to: previousTo },
+    ]);
     return {
-      current: await summary(input.from, input.to),
-      previous: await summary(
-        new Date(Date.parse(input.from) - days * 86_400_000)
-          .toISOString()
-          .slice(0, 10),
-        new Date(Date.parse(input.from) - 86_400_000)
-          .toISOString()
-          .slice(0, 10),
-      ),
+      comparison: input.comparison,
+      current: found(current),
+      previous: found(previous),
     };
   }
 

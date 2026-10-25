@@ -1,15 +1,34 @@
 import type { PlanningCommand, PortalTransactionQuery } from "../../contracts";
 import { planningDefinitions } from "../../contracts";
 import { hash, tryCatch } from "../../shared";
-import type { PlanningRepository } from "./entity";
+import type { PlanningRepository, PlanningSnapshot } from "./entity";
 import { planningMutation } from "./mutations.service";
 import { portalTransactions } from "./portal-transactions.service";
+import {
+  planningCoverage,
+  planningSelection,
+  type Selection,
+} from "./projection";
 import { planningQuery } from "./queries.service";
 import { previewRule } from "./rule-preview.service";
 
 const reads = new Set<string>(
   planningDefinitions.filter((d) => d.readOnly).map((d) => d.name),
 );
+function readContext(snapshot: PlanningSnapshot, selection: Selection) {
+  const coverage = planningCoverage(snapshot, selection);
+  return {
+    coverage,
+    oldestLastSuccessAt: coverage.oldestLastSuccessAt,
+    partial: coverage.partial,
+    revision: snapshot.revision,
+    scope: {
+      spaceId: selection.spaceId,
+      ...(selection.personId && { personId: selection.personId }),
+    },
+    view: "effective",
+  };
+}
 export function createPlanningService(
   repository: PlanningRepository,
   now: () => Date = () => new Date(),
@@ -38,15 +57,27 @@ export function createPlanningService(
   }
   async function purchases(input: PortalTransactionQuery) {
     const snapshot = await repository.read();
+    const context = readContext(snapshot, input);
+    snapshot.partial = context.partial;
     const result = await portalTransactions(input, snapshot, repository, now());
     if ((await repository.revision()) !== snapshot.revision) {
       throw new Error("RESTART_REQUIRED");
     }
     return {
+      ...context,
       data: result,
-      partial: snapshot.partial,
-      revision: snapshot.revision,
     };
+  }
+  function query(input: PlanningCommand, snapshot: PlanningSnapshot) {
+    if (input.tool === "preview_rule_import") {
+      return planningMutation(input, {
+        now: now().toISOString(),
+        repository,
+        snapshot,
+        state: structuredClone(snapshot.state),
+      });
+    }
+    return planningQuery(input, snapshot, repository, now());
   }
   return {
     async execute(input: PlanningCommand): Promise<unknown> {
@@ -68,17 +99,17 @@ export function createPlanningService(
           return prior.result;
         }
       }
-      const snapshot = await repository.read();
+      const snapshot = await repository.read(
+        reads.has(input.tool) ? input.tool : undefined,
+      );
       if (reads.has(input.tool)) {
-        const result = await planningQuery(input, snapshot, repository, now());
+        const context = readContext(snapshot, planningSelection(input));
+        snapshot.partial = context.partial;
+        const result = await query(input, snapshot);
         if ((await repository.revision()) !== snapshot.revision) {
           throw new Error("RESTART_REQUIRED");
         }
-        return {
-          data: result,
-          partial: snapshot.partial,
-          revision: snapshot.revision,
-        };
+        return { ...context, data: result };
       }
       if (!("idempotency_key" in input)) {
         throw new Error("CONFIRMATION_REQUIRED");

@@ -12,15 +12,18 @@ type RuleTransaction = Pick<
   | "status"
 >;
 
-export function activeRules<
-  T extends Pick<Rule, "enabled" | "priority" | "id">,
->(rules: readonly T[]) {
-  return rules
-    .filter((rule) => rule.enabled)
-    .toSorted(
-      (a, b) =>
-        a.priority - b.priority || (a.id < b.id ? -1 : Number(a.id > b.id)),
-    );
+type OrderedRule = Pick<Rule, "priority" | "id"> & { pack?: Rule["pack"] };
+export function compareRules(a: OrderedRule, b: OrderedRule) {
+  return (
+    Number(!!a.pack) - Number(!!b.pack) ||
+    a.priority - b.priority ||
+    (a.id < b.id ? -1 : Number(a.id > b.id))
+  );
+}
+export function activeRules<T extends OrderedRule & Pick<Rule, "enabled">>(
+  rules: readonly T[],
+) {
+  return rules.filter((rule) => rule.enabled).toSorted(compareRules);
 }
 
 export type RuleCondition =

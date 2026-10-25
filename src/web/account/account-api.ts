@@ -2,8 +2,10 @@ import { z } from "zod/v4";
 
 import {
   AccountConnectTokenSchema,
+  AccountFailureCodeSchema,
   AuditReportSchema,
   type HouseholdCommand,
+  HouseholdResultSchema,
   type PortalMutation,
   type PortalQuery,
   PortalResponseSchema,
@@ -13,6 +15,7 @@ import {
   WorkspaceCatalogSchema,
 } from "../../contracts";
 import { httpClient, requestJson } from "../../shared";
+import { AccountRequestError } from "./account-feedback";
 import { createReadCache } from "./read-cache";
 
 export type OrganizationApi = Pick<
@@ -27,6 +30,21 @@ export function createAccountApi(
   const cache = createReadCache();
   const client = httpClient.extend({
     fetch: fetcher,
+    hooks: {
+      afterResponse: [
+        ({ response }) => {
+          if (response.ok) {
+            return;
+          }
+          const code = AccountFailureCodeSchema.safeParse(
+            response.headers.get("X-Caderninho-Error"),
+          );
+          if (code.success) {
+            throw new AccountRequestError(code.data);
+          }
+        },
+      ],
+    },
     redirect: "manual",
     retry: 0,
   });
@@ -115,7 +133,7 @@ export function createAccountApi(
         ),
       ),
     manage: async (input: HouseholdCommand, signal: AbortSignal) =>
-      z.json().parse(await request("/manage", signal, input)),
+      HouseholdResultSchema.parse(await request("/manage", signal, input)),
     planning: async (
       command: PortalMutation,
       csrf: string,

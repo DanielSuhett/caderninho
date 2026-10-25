@@ -106,6 +106,7 @@ const safeErrors = new Set([
   "IDEMPOTENCY_CONFLICT",
   "CONFIRMATION_REQUIRED",
   "INVALID_RULE",
+  "INVALID_RULE_IMPORT_CATEGORY",
   "SPACE_PROTECTED",
   "SPACE_NOT_EMPTY",
   "CHART_TOO_LARGE",
@@ -221,6 +222,11 @@ export async function fetchMcp(
             return {
               content: [{ text: JSON.stringify(payload), type: "text" }],
               isError: !!error,
+              ...(!error && {
+                structuredContent: z
+                  .record(z.string(), z.unknown())
+                  .parse(data),
+              }),
             };
           },
           { action },

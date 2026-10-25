@@ -48,8 +48,8 @@ export function createHouseholdRepository(
         .onConflictDoUpdate({ set: { name: row.name }, target: people.id })
         .run();
     },
-    async profile(row) {
-      await db
+    async profile(row, person) {
+      const profile = db
         .insert(pluggyProfiles)
         .values(row)
         .onConflictDoUpdate({
@@ -60,8 +60,12 @@ export function createHouseholdRepository(
             name: row.name,
           },
           target: pluggyProfiles.id,
-        })
-        .run();
+        });
+      if (person) {
+        await db.batch([db.insert(people).values(person), profile]);
+        return;
+      }
+      await profile.run();
     },
     async read() {
       const [persons, profiles, owners] = await db.batch([

@@ -24,7 +24,7 @@ empréstimos disponibilizados pela Pluggy. As consultas e a importação estão 
 | `finance` | Contas, transações, consultas e totais objetivos |
 | `sync` | Admissão diária, despacho, páginas e commits duráveis |
 | `planning` | Organização, lançamentos manuais e cálculos de planejamento |
-| `mcp` | 93 ferramentas no SDK, mantendo as quatro originais |
+| `mcp` | Ferramentas no SDK, mantendo as quatro originais |
 
 Controllers validam transporte. Services coordenam casos de uso por portas em
 `entity/index.ts`, sem SQL, HTTP ou Bindings. Repositories implementam essas portas
@@ -98,8 +98,9 @@ publicação atômica junto do checkpoint. Um hash da evidência evita repetir d
 aceitas sem mudanças. Falhas/quota/respostas inválidas não impedem a importação.
 Veja [categorias e classificação](categories.md) para configuração e contratos.
 
-A leitura do planejamento captura a revisão junto das tabelas. Transações são
-percorridas em páginas de 500 registros; uma mudança concorrente invalida o
+A leitura do planejamento captura a revisão junto das tabelas. As consultas efetivas filtram contas e período no SQL e leem as origens editadas
+separadamente para preservar mudanças locais de data/conta. A lista usa paginação
+ordenada e para após obter a página e sua continuação; uma mudança concorrente invalida o
 resultado/cursor. Escritas calculam mudanças em memória e confirmam apenas os
 registros alterados, a revisão e o recibo no mesmo batch. O CHECK da revisão
 aborta commits obsoletos; a chave única impede duplicação. Triggers de publicação

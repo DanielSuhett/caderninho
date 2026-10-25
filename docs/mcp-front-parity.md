@@ -15,8 +15,8 @@ credenciais, conexões e acessos de assistentes continua no painel.
 | Prévia, cadastro e reaplicação de regras | `preview_rule`, `create_rule`, `update_rule`, `delete_rule`, `apply_rules` | Prévia sem escrita, condições E/OU, escopo obrigatório e comparadores exatos. Salvar não altera o histórico; reaplicar exige período e confirmação explícitos. |
 | Edição de categorias, agrupadores e grupos financeiros | `create_category`, `update_category`, `delete_category`; `create_category_group`, `update_category_group`, `delete_category_group`; `create_space`, `update_space`, `delete_space` | Mesmos comandos do painel, confirmação e idempotência. Nomes das categorias fixas são protegidos; apagar agrupador preserva categorias. Espaços têm proteção contra remoção com referências ativas. |
 
-O catálogo contém 100 ferramentas: quatro originais e 96 de planejamento
-(28 consultas e 68 escritas). A revisão dos registros e despachos não encontrou
+O [inventário gerado](mcp-tools.md) contém a contagem atual e distingue
+consultas, escritas locais e sincronização. A revisão dos registros e despachos não encontrou
 ferramentas de planejamento sem implementação. Contar registros não comprova
 a execução de todos os caminhos possíveis de cada ferramenta.
 

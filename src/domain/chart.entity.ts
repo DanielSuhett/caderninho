@@ -12,7 +12,13 @@ function escapeXml(value: string) {
 const palette = ["#2563eb", "#0f766e", "#b45309", "#be123c", "#7c3aed"];
 export function financialCharts(input: {
   type: "bar" | "line" | "doughnut";
-  groups: { currency: string; group: string; amountMinor: string }[];
+  groups: {
+    currency: string;
+    group: string;
+    amountMinor: string;
+    label?: string;
+    formattedAmount?: string;
+  }[];
 }) {
   const currencies = [...new Set(input.groups.map((row) => row.currency))];
   return currencies.map((currency) => {
@@ -33,6 +39,7 @@ export function financialCharts(input: {
     const total = magnitudes.reduce((sum, value) => sum + value, 0n);
     let cumulative = 0;
     const points: string[] = [];
+    const spacing = rows.length > 1 ? 760 / (rows.length - 1) : 0;
     const shapes = rows
       .map((row, index) => {
         const amount = BigInt(row.amountMinor);
@@ -42,7 +49,7 @@ export function financialCharts(input: {
           10,
         );
         const y = 60 + index * 28;
-        const label = `${escapeXml(row.group)}: ${escapeXml(row.amountMinor)} ${escapeXml(currency)} minor`;
+        const label = `${escapeXml(row.label ?? row.group)}: ${escapeXml(row.formattedAmount ?? `${row.amountMinor} ${currency} minor`)}`;
         const color = palette[index % palette.length] ?? "#2563eb";
         if (input.type === "doughnut") {
           const share = ringShare(amount, magnitude, total);
@@ -52,7 +59,7 @@ export function financialCharts(input: {
         }
         if (input.type === "line") {
           points.push(
-            `${60 + index * 12},${210 - (amount < 0n ? -width : width) / 2}`,
+            `${60 + index * spacing},${210 - (amount < 0n ? -width : width) / 2}`,
           );
           return `<text x="60" y="${430 + index * 20}">${label}</text>`;
         }

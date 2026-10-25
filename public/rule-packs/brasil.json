@@ -1,0 +1,1343 @@
+{
+  "id": "brasil",
+  "version": 1,
+  "categories": [
+    {
+      "key": "farmacia",
+      "name": "Farmácia",
+      "kind": "expense"
+    },
+    {
+      "key": "pets",
+      "name": "Petshop",
+      "kind": "expense"
+    },
+    {
+      "key": "corridas",
+      "name": "Corridas",
+      "kind": "expense"
+    },
+    {
+      "key": "assinaturas",
+      "name": "Assinaturas",
+      "kind": "expense"
+    },
+    {
+      "key": "mercado",
+      "name": "Mercado",
+      "kind": "expense"
+    },
+    {
+      "key": "restaurantes",
+      "name": "Restaurantes",
+      "kind": "expense"
+    },
+    {
+      "key": "compras",
+      "name": "Compras",
+      "kind": "expense"
+    },
+    {
+      "key": "academia",
+      "name": "Academia",
+      "kind": "expense"
+    },
+    {
+      "key": "educacao",
+      "name": "Educação Geral",
+      "kind": "expense"
+    }
+  ],
+  "rules": [
+    {
+      "key": "ifood-farmacia",
+      "categoryKey": "farmacia",
+      "accountId": null,
+      "direction": "DEBIT",
+      "enabled": true,
+      "filter": {
+        "currency": "BRL",
+        "alternatives": [
+          {
+            "conditions": [
+              {
+                "field": "description",
+                "operator": "equals",
+                "value": "ifood farmacia"
+              },
+              {
+                "field": "status",
+                "operator": "equals",
+                "value": "POSTED"
+              }
+            ]
+          },
+          {
+            "conditions": [
+              {
+                "field": "description",
+                "operator": "equals",
+                "value": "ifood farmácia"
+              },
+              {
+                "field": "status",
+                "operator": "equals",
+                "value": "POSTED"
+              }
+            ]
+          },
+          {
+            "conditions": [
+              {
+                "field": "description",
+                "operator": "equals",
+                "value": "IFOOD FARMÁCIA"
+              },
+              {
+                "field": "status",
+                "operator": "equals",
+                "value": "POSTED"
+              }
+            ]
+          },
+          {
+            "conditions": [
+              {
+                "field": "description",
+                "operator": "equals",
+                "value": "ifood drogaria"
+              },
+              {
+                "field": "status",
+                "operator": "equals",
+                "value": "POSTED"
+              }
+            ]
+          }
+        ]
+      },
+      "name": "Farmácia no iFood",
+      "priority": 900,
+      "text": "ifood"
+    },
+    {
+      "key": "rappi-farmacia",
+      "categoryKey": "farmacia",
+      "accountId": null,
+      "direction": "DEBIT",
+      "enabled": true,
+      "filter": {
+        "currency": "BRL",
+        "alternatives": [
+          {
+            "conditions": [
+              {
+                "field": "description",
+                "operator": "equals",
+                "value": "rappi farmacia"
+              },
+              {
+                "field": "status",
+                "operator": "equals",
+                "value": "POSTED"
+              }
+            ]
+          },
+          {
+            "conditions": [
+              {
+                "field": "description",
+                "operator": "equals",
+                "value": "rappi farmácia"
+              },
+              {
+                "field": "status",
+                "operator": "equals",
+                "value": "POSTED"
+              }
+            ]
+          },
+          {
+            "conditions": [
+              {
+                "field": "description",
+                "operator": "equals",
+                "value": "RAPPI FARMÁCIA"
+              },
+              {
+                "field": "status",
+                "operator": "equals",
+                "value": "POSTED"
+              }
+            ]
+          },
+          {
+            "conditions": [
+              {
+                "field": "description",
+                "operator": "equals",
+                "value": "rappi drogaria"
+              },
+              {
+                "field": "status",
+                "operator": "equals",
+                "value": "POSTED"
+              }
+            ]
+          }
+        ]
+      },
+      "name": "Farmácia na Rappi",
+      "priority": 900,
+      "text": "rappi"
+    },
+    {
+      "key": "ifood-pets",
+      "categoryKey": "pets",
+      "accountId": null,
+      "direction": "DEBIT",
+      "enabled": true,
+      "filter": {
+        "currency": "BRL",
+        "alternatives": [
+          {
+            "conditions": [
+              {
+                "field": "description",
+                "operator": "equals",
+                "value": "ifood pet shop"
+              },
+              {
+                "field": "status",
+                "operator": "equals",
+                "value": "POSTED"
+              }
+            ]
+          },
+          {
+            "conditions": [
+              {
+                "field": "description",
+                "operator": "equals",
+                "value": "ifood petshop"
+              },
+              {
+                "field": "status",
+                "operator": "equals",
+                "value": "POSTED"
+              }
+            ]
+          },
+          {
+            "conditions": [
+              {
+                "field": "description",
+                "operator": "equals",
+                "value": "ifood petz"
+              },
+              {
+                "field": "status",
+                "operator": "equals",
+                "value": "POSTED"
+              }
+            ]
+          }
+        ]
+      },
+      "name": "Pets no iFood",
+      "priority": 900,
+      "text": "ifood"
+    },
+    {
+      "key": "rappi-pets",
+      "categoryKey": "pets",
+      "accountId": null,
+      "direction": "DEBIT",
+      "enabled": true,
+      "filter": {
+        "currency": "BRL",
+        "alternatives": [
+          {
+            "conditions": [
+              {
+                "field": "description",
+                "operator": "equals",
+                "value": "rappi pet shop"
+              },
+              {
+                "field": "status",
+                "operator": "equals",
+                "value": "POSTED"
+              }
+            ]
+          },
+          {
+            "conditions": [
+              {
+                "field": "description",
+                "operator": "equals",
+                "value": "rappi petshop"
+              },
+              {
+                "field": "status",
+                "operator": "equals",
+                "value": "POSTED"
+              }
+            ]
+          },
+          {
+            "conditions": [
+              {
+                "field": "description",
+                "operator": "equals",
+                "value": "rappi petz"
+              },
+              {
+                "field": "status",
+                "operator": "equals",
+                "value": "POSTED"
+              }
+            ]
+          }
+        ]
+      },
+      "name": "Pets na Rappi",
+      "priority": 900,
+      "text": "rappi"
+    },
+    {
+      "key": "uber-viagens",
+      "categoryKey": "corridas",
+      "accountId": null,
+      "direction": "DEBIT",
+      "enabled": true,
+      "filter": {
+        "currency": "BRL",
+        "alternatives": [
+          {
+            "conditions": [
+              {
+                "field": "description",
+                "operator": "equals",
+                "value": "uber trip"
+              },
+              {
+                "field": "status",
+                "operator": "equals",
+                "value": "POSTED"
+              }
+            ]
+          },
+          {
+            "conditions": [
+              {
+                "field": "description",
+                "operator": "equals",
+                "value": "uber*trip"
+              },
+              {
+                "field": "status",
+                "operator": "equals",
+                "value": "POSTED"
+              }
+            ]
+          },
+          {
+            "conditions": [
+              {
+                "field": "description",
+                "operator": "equals",
+                "value": "uber viagem"
+              },
+              {
+                "field": "status",
+                "operator": "equals",
+                "value": "POSTED"
+              }
+            ]
+          },
+          {
+            "conditions": [
+              {
+                "field": "description",
+                "operator": "equals",
+                "value": "uber*viagem"
+              },
+              {
+                "field": "status",
+                "operator": "equals",
+                "value": "POSTED"
+              }
+            ]
+          }
+        ]
+      },
+      "name": "Viagens Uber",
+      "priority": 900,
+      "text": "uber"
+    },
+    {
+      "key": "99pop",
+      "categoryKey": "corridas",
+      "accountId": null,
+      "direction": "DEBIT",
+      "enabled": true,
+      "filter": {
+        "currency": "BRL",
+        "alternatives": [
+          {
+            "conditions": [
+              {
+                "field": "description",
+                "operator": "equals",
+                "value": "99pop"
+              },
+              {
+                "field": "status",
+                "operator": "equals",
+                "value": "POSTED"
+              }
+            ]
+          },
+          {
+            "conditions": [
+              {
+                "field": "description",
+                "operator": "equals",
+                "value": "99 pop"
+              },
+              {
+                "field": "status",
+                "operator": "equals",
+                "value": "POSTED"
+              }
+            ]
+          }
+        ]
+      },
+      "name": "Corridas 99Pop",
+      "priority": 900,
+      "text": "99"
+    },
+    {
+      "key": "netflix",
+      "categoryKey": "assinaturas",
+      "accountId": null,
+      "direction": "DEBIT",
+      "enabled": true,
+      "filter": {
+        "currency": "BRL",
+        "alternatives": [
+          {
+            "conditions": [
+              {
+                "field": "description",
+                "operator": "equals",
+                "value": "netflix"
+              },
+              {
+                "field": "status",
+                "operator": "equals",
+                "value": "POSTED"
+              }
+            ]
+          },
+          {
+            "conditions": [
+              {
+                "field": "description",
+                "operator": "equals",
+                "value": "netflix.com"
+              },
+              {
+                "field": "status",
+                "operator": "equals",
+                "value": "POSTED"
+              }
+            ]
+          }
+        ]
+      },
+      "name": "Netflix",
+      "priority": 900,
+      "text": "netflix"
+    },
+    {
+      "key": "spotify",
+      "categoryKey": "assinaturas",
+      "accountId": null,
+      "direction": "DEBIT",
+      "enabled": true,
+      "filter": {
+        "currency": "BRL",
+        "alternatives": [
+          {
+            "conditions": [
+              {
+                "field": "description",
+                "operator": "equals",
+                "value": "spotify"
+              },
+              {
+                "field": "status",
+                "operator": "equals",
+                "value": "POSTED"
+              }
+            ]
+          }
+        ]
+      },
+      "name": "Spotify",
+      "priority": 900,
+      "text": "spotify"
+    },
+    {
+      "key": "petz",
+      "categoryKey": "pets",
+      "accountId": null,
+      "direction": "DEBIT",
+      "enabled": true,
+      "filter": {
+        "currency": "BRL",
+        "alternatives": [
+          {
+            "conditions": [
+              {
+                "field": "description",
+                "operator": "equals",
+                "value": "petz"
+              },
+              {
+                "field": "status",
+                "operator": "equals",
+                "value": "POSTED"
+              }
+            ]
+          }
+        ]
+      },
+      "name": "Petz",
+      "priority": 900,
+      "text": "petz"
+    },
+    {
+      "key": "drogasil",
+      "categoryKey": "farmacia",
+      "accountId": null,
+      "direction": "DEBIT",
+      "enabled": true,
+      "filter": {
+        "currency": "BRL",
+        "alternatives": [
+          {
+            "conditions": [
+              {
+                "field": "description",
+                "operator": "equals",
+                "value": "drogasil"
+              },
+              {
+                "field": "status",
+                "operator": "equals",
+                "value": "POSTED"
+              }
+            ]
+          }
+        ]
+      },
+      "name": "Drogasil",
+      "priority": 900,
+      "text": "drogasil"
+    },
+    {
+      "key": "drogaria-raia",
+      "categoryKey": "farmacia",
+      "accountId": null,
+      "direction": "DEBIT",
+      "enabled": true,
+      "filter": {
+        "currency": "BRL",
+        "alternatives": [
+          {
+            "conditions": [
+              {
+                "field": "description",
+                "operator": "equals",
+                "value": "drogaria raia"
+              },
+              {
+                "field": "status",
+                "operator": "equals",
+                "value": "POSTED"
+              }
+            ]
+          }
+        ]
+      },
+      "name": "Drogaria Raia",
+      "priority": 900,
+      "text": "drogaria raia"
+    },
+    {
+      "key": "drogaria-sao-paulo",
+      "categoryKey": "farmacia",
+      "accountId": null,
+      "direction": "DEBIT",
+      "enabled": true,
+      "filter": {
+        "currency": "BRL",
+        "alternatives": [
+          {
+            "conditions": [
+              {
+                "field": "description",
+                "operator": "equals",
+                "value": "drogaria sao paulo"
+              },
+              {
+                "field": "status",
+                "operator": "equals",
+                "value": "POSTED"
+              }
+            ]
+          },
+          {
+            "conditions": [
+              {
+                "field": "description",
+                "operator": "equals",
+                "value": "drogaria são paulo"
+              },
+              {
+                "field": "status",
+                "operator": "equals",
+                "value": "POSTED"
+              }
+            ]
+          },
+          {
+            "conditions": [
+              {
+                "field": "description",
+                "operator": "equals",
+                "value": "DROGARIA SÃO PAULO"
+              },
+              {
+                "field": "status",
+                "operator": "equals",
+                "value": "POSTED"
+              }
+            ]
+          }
+        ]
+      },
+      "name": "Drogaria São Paulo",
+      "priority": 900,
+      "text": "drogaria"
+    },
+    {
+      "key": "drogarias-pacheco",
+      "categoryKey": "farmacia",
+      "accountId": null,
+      "direction": "DEBIT",
+      "enabled": true,
+      "filter": {
+        "currency": "BRL",
+        "alternatives": [
+          {
+            "conditions": [
+              {
+                "field": "description",
+                "operator": "equals",
+                "value": "drogarias pacheco"
+              },
+              {
+                "field": "status",
+                "operator": "equals",
+                "value": "POSTED"
+              }
+            ]
+          },
+          {
+            "conditions": [
+              {
+                "field": "description",
+                "operator": "equals",
+                "value": "drogaria pacheco"
+              },
+              {
+                "field": "status",
+                "operator": "equals",
+                "value": "POSTED"
+              }
+            ]
+          }
+        ]
+      },
+      "name": "Drogarias Pacheco",
+      "priority": 900,
+      "text": "pacheco"
+    },
+    {
+      "key": "assai",
+      "categoryKey": "mercado",
+      "accountId": null,
+      "direction": "DEBIT",
+      "enabled": true,
+      "filter": {
+        "currency": "BRL",
+        "alternatives": [
+          {
+            "conditions": [
+              {
+                "field": "description",
+                "operator": "equals",
+                "value": "assai atacadista"
+              },
+              {
+                "field": "status",
+                "operator": "equals",
+                "value": "POSTED"
+              }
+            ]
+          },
+          {
+            "conditions": [
+              {
+                "field": "description",
+                "operator": "equals",
+                "value": "assaí atacadista"
+              },
+              {
+                "field": "status",
+                "operator": "equals",
+                "value": "POSTED"
+              }
+            ]
+          },
+          {
+            "conditions": [
+              {
+                "field": "description",
+                "operator": "equals",
+                "value": "ASSAÍ ATACADISTA"
+              },
+              {
+                "field": "status",
+                "operator": "equals",
+                "value": "POSTED"
+              }
+            ]
+          }
+        ]
+      },
+      "name": "Assaí Atacadista",
+      "priority": 900,
+      "text": "assa"
+    },
+    {
+      "key": "atacadao",
+      "categoryKey": "mercado",
+      "accountId": null,
+      "direction": "DEBIT",
+      "enabled": true,
+      "filter": {
+        "currency": "BRL",
+        "alternatives": [
+          {
+            "conditions": [
+              {
+                "field": "description",
+                "operator": "equals",
+                "value": "atacadao"
+              },
+              {
+                "field": "status",
+                "operator": "equals",
+                "value": "POSTED"
+              }
+            ]
+          },
+          {
+            "conditions": [
+              {
+                "field": "description",
+                "operator": "equals",
+                "value": "atacadão"
+              },
+              {
+                "field": "status",
+                "operator": "equals",
+                "value": "POSTED"
+              }
+            ]
+          },
+          {
+            "conditions": [
+              {
+                "field": "description",
+                "operator": "equals",
+                "value": "ATACADÃO"
+              },
+              {
+                "field": "status",
+                "operator": "equals",
+                "value": "POSTED"
+              }
+            ]
+          }
+        ]
+      },
+      "name": "Atacadão",
+      "priority": 900,
+      "text": "atacad"
+    },
+    {
+      "key": "pao-de-acucar",
+      "categoryKey": "mercado",
+      "accountId": null,
+      "direction": "DEBIT",
+      "enabled": true,
+      "filter": {
+        "currency": "BRL",
+        "alternatives": [
+          {
+            "conditions": [
+              {
+                "field": "description",
+                "operator": "equals",
+                "value": "pao de acucar"
+              },
+              {
+                "field": "status",
+                "operator": "equals",
+                "value": "POSTED"
+              }
+            ]
+          },
+          {
+            "conditions": [
+              {
+                "field": "description",
+                "operator": "equals",
+                "value": "pão de açúcar"
+              },
+              {
+                "field": "status",
+                "operator": "equals",
+                "value": "POSTED"
+              }
+            ]
+          },
+          {
+            "conditions": [
+              {
+                "field": "description",
+                "operator": "equals",
+                "value": "PÃO DE AÇÚCAR"
+              },
+              {
+                "field": "status",
+                "operator": "equals",
+                "value": "POSTED"
+              }
+            ]
+          }
+        ]
+      },
+      "name": "Pão de Açúcar",
+      "priority": 900,
+      "text": ""
+    },
+    {
+      "key": "ifood-mercado",
+      "categoryKey": "mercado",
+      "accountId": null,
+      "direction": "DEBIT",
+      "enabled": true,
+      "filter": {
+        "currency": "BRL",
+        "alternatives": [
+          {
+            "conditions": [
+              {
+                "field": "description",
+                "operator": "equals",
+                "value": "ifood mercado"
+              },
+              {
+                "field": "status",
+                "operator": "equals",
+                "value": "POSTED"
+              }
+            ]
+          },
+          {
+            "conditions": [
+              {
+                "field": "description",
+                "operator": "equals",
+                "value": "ifood supermercado"
+              },
+              {
+                "field": "status",
+                "operator": "equals",
+                "value": "POSTED"
+              }
+            ]
+          }
+        ]
+      },
+      "name": "Mercado no iFood",
+      "priority": 900,
+      "text": "ifood"
+    },
+    {
+      "key": "rappi-mercado",
+      "categoryKey": "mercado",
+      "accountId": null,
+      "direction": "DEBIT",
+      "enabled": true,
+      "filter": {
+        "currency": "BRL",
+        "alternatives": [
+          {
+            "conditions": [
+              {
+                "field": "description",
+                "operator": "equals",
+                "value": "rappi mercado"
+              },
+              {
+                "field": "status",
+                "operator": "equals",
+                "value": "POSTED"
+              }
+            ]
+          },
+          {
+            "conditions": [
+              {
+                "field": "description",
+                "operator": "equals",
+                "value": "rappi supermercado"
+              },
+              {
+                "field": "status",
+                "operator": "equals",
+                "value": "POSTED"
+              }
+            ]
+          }
+        ]
+      },
+      "name": "Mercado na Rappi",
+      "priority": 900,
+      "text": "rappi"
+    },
+    {
+      "key": "ifood-restaurante",
+      "categoryKey": "restaurantes",
+      "accountId": null,
+      "direction": "DEBIT",
+      "enabled": true,
+      "filter": {
+        "currency": "BRL",
+        "alternatives": [
+          {
+            "conditions": [
+              {
+                "field": "description",
+                "operator": "equals",
+                "value": "ifood restaurante"
+              },
+              {
+                "field": "status",
+                "operator": "equals",
+                "value": "POSTED"
+              }
+            ]
+          },
+          {
+            "conditions": [
+              {
+                "field": "description",
+                "operator": "equals",
+                "value": "ifood restaurantes"
+              },
+              {
+                "field": "status",
+                "operator": "equals",
+                "value": "POSTED"
+              }
+            ]
+          }
+        ]
+      },
+      "name": "Restaurante no iFood",
+      "priority": 900,
+      "text": "ifood"
+    },
+    {
+      "key": "rappi-restaurante",
+      "categoryKey": "restaurantes",
+      "accountId": null,
+      "direction": "DEBIT",
+      "enabled": true,
+      "filter": {
+        "currency": "BRL",
+        "alternatives": [
+          {
+            "conditions": [
+              {
+                "field": "description",
+                "operator": "equals",
+                "value": "rappi restaurante"
+              },
+              {
+                "field": "status",
+                "operator": "equals",
+                "value": "POSTED"
+              }
+            ]
+          },
+          {
+            "conditions": [
+              {
+                "field": "description",
+                "operator": "equals",
+                "value": "rappi restaurantes"
+              },
+              {
+                "field": "status",
+                "operator": "equals",
+                "value": "POSTED"
+              }
+            ]
+          }
+        ]
+      },
+      "name": "Restaurante na Rappi",
+      "priority": 900,
+      "text": "rappi"
+    },
+    {
+      "key": "mcdonalds",
+      "categoryKey": "restaurantes",
+      "accountId": null,
+      "direction": "DEBIT",
+      "enabled": true,
+      "filter": {
+        "currency": "BRL",
+        "alternatives": [
+          {
+            "conditions": [
+              {
+                "field": "description",
+                "operator": "equals",
+                "value": "mcdonalds"
+              },
+              {
+                "field": "status",
+                "operator": "equals",
+                "value": "POSTED"
+              }
+            ]
+          },
+          {
+            "conditions": [
+              {
+                "field": "description",
+                "operator": "equals",
+                "value": "mcdonald's"
+              },
+              {
+                "field": "status",
+                "operator": "equals",
+                "value": "POSTED"
+              }
+            ]
+          }
+        ]
+      },
+      "name": "McDonald’s",
+      "priority": 900,
+      "text": "mcdonald"
+    },
+    {
+      "key": "burger-king",
+      "categoryKey": "restaurantes",
+      "accountId": null,
+      "direction": "DEBIT",
+      "enabled": true,
+      "filter": {
+        "currency": "BRL",
+        "alternatives": [
+          {
+            "conditions": [
+              {
+                "field": "description",
+                "operator": "equals",
+                "value": "burger king"
+              },
+              {
+                "field": "status",
+                "operator": "equals",
+                "value": "POSTED"
+              }
+            ]
+          }
+        ]
+      },
+      "name": "Burger King",
+      "priority": 900,
+      "text": "burger king"
+    },
+    {
+      "key": "kfc",
+      "categoryKey": "restaurantes",
+      "accountId": null,
+      "direction": "DEBIT",
+      "enabled": true,
+      "filter": {
+        "currency": "BRL",
+        "alternatives": [
+          {
+            "conditions": [
+              {
+                "field": "description",
+                "operator": "equals",
+                "value": "kfc"
+              },
+              {
+                "field": "status",
+                "operator": "equals",
+                "value": "POSTED"
+              }
+            ]
+          }
+        ]
+      },
+      "name": "KFC",
+      "priority": 900,
+      "text": "kfc"
+    },
+    {
+      "key": "renner",
+      "categoryKey": "compras",
+      "accountId": null,
+      "direction": "DEBIT",
+      "enabled": true,
+      "filter": {
+        "currency": "BRL",
+        "alternatives": [
+          {
+            "conditions": [
+              {
+                "field": "description",
+                "operator": "equals",
+                "value": "lojas renner"
+              },
+              {
+                "field": "status",
+                "operator": "equals",
+                "value": "POSTED"
+              }
+            ]
+          }
+        ]
+      },
+      "name": "Lojas Renner",
+      "priority": 900,
+      "text": "renner"
+    },
+    {
+      "key": "riachuelo",
+      "categoryKey": "compras",
+      "accountId": null,
+      "direction": "DEBIT",
+      "enabled": true,
+      "filter": {
+        "currency": "BRL",
+        "alternatives": [
+          {
+            "conditions": [
+              {
+                "field": "description",
+                "operator": "equals",
+                "value": "lojas riachuelo"
+              },
+              {
+                "field": "status",
+                "operator": "equals",
+                "value": "POSTED"
+              }
+            ]
+          }
+        ]
+      },
+      "name": "Lojas Riachuelo",
+      "priority": 900,
+      "text": "riachuelo"
+    },
+    {
+      "key": "kabum",
+      "categoryKey": "compras",
+      "accountId": null,
+      "direction": "DEBIT",
+      "enabled": true,
+      "filter": {
+        "currency": "BRL",
+        "alternatives": [
+          {
+            "conditions": [
+              {
+                "field": "description",
+                "operator": "equals",
+                "value": "kabum"
+              },
+              {
+                "field": "status",
+                "operator": "equals",
+                "value": "POSTED"
+              }
+            ]
+          },
+          {
+            "conditions": [
+              {
+                "field": "description",
+                "operator": "equals",
+                "value": "kabum!"
+              },
+              {
+                "field": "status",
+                "operator": "equals",
+                "value": "POSTED"
+              }
+            ]
+          }
+        ]
+      },
+      "name": "KaBuM",
+      "priority": 900,
+      "text": "kabum"
+    },
+    {
+      "key": "decathlon",
+      "categoryKey": "compras",
+      "accountId": null,
+      "direction": "DEBIT",
+      "enabled": true,
+      "filter": {
+        "currency": "BRL",
+        "alternatives": [
+          {
+            "conditions": [
+              {
+                "field": "description",
+                "operator": "equals",
+                "value": "decathlon"
+              },
+              {
+                "field": "status",
+                "operator": "equals",
+                "value": "POSTED"
+              }
+            ]
+          }
+        ]
+      },
+      "name": "Decathlon",
+      "priority": 900,
+      "text": "decathlon"
+    },
+    {
+      "key": "smart-fit",
+      "categoryKey": "academia",
+      "accountId": null,
+      "direction": "DEBIT",
+      "enabled": true,
+      "filter": {
+        "currency": "BRL",
+        "alternatives": [
+          {
+            "conditions": [
+              {
+                "field": "description",
+                "operator": "equals",
+                "value": "smart fit"
+              },
+              {
+                "field": "status",
+                "operator": "equals",
+                "value": "POSTED"
+              }
+            ]
+          }
+        ]
+      },
+      "name": "Smart Fit",
+      "priority": 900,
+      "text": "smart fit"
+    },
+    {
+      "key": "alura",
+      "categoryKey": "educacao",
+      "accountId": null,
+      "direction": "DEBIT",
+      "enabled": true,
+      "filter": {
+        "currency": "BRL",
+        "alternatives": [
+          {
+            "conditions": [
+              {
+                "field": "description",
+                "operator": "equals",
+                "value": "alura"
+              },
+              {
+                "field": "status",
+                "operator": "equals",
+                "value": "POSTED"
+              }
+            ]
+          }
+        ]
+      },
+      "name": "Alura",
+      "priority": 900,
+      "text": "alura"
+    },
+    {
+      "key": "udemy",
+      "categoryKey": "educacao",
+      "accountId": null,
+      "direction": "DEBIT",
+      "enabled": true,
+      "filter": {
+        "currency": "BRL",
+        "alternatives": [
+          {
+            "conditions": [
+              {
+                "field": "description",
+                "operator": "equals",
+                "value": "udemy"
+              },
+              {
+                "field": "status",
+                "operator": "equals",
+                "value": "POSTED"
+              }
+            ]
+          }
+        ]
+      },
+      "name": "Udemy",
+      "priority": 900,
+      "text": "udemy"
+    }
+  ]
+}
