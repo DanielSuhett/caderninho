@@ -1,6 +1,8 @@
 # Auditoria de arquitetura
 
-Base: `origin/main` em `6c2de5c`, após os merges recentes. O checkout principal
+Base inicial: `origin/main` em `6c2de5c`, após os merges recentes.
+A integração posterior de `27869b9` preserva `get_subscriptions`, recebido
+enquanto a validação desta auditoria estava em execução. O checkout principal
 contém trabalho local em andamento; esta revisão usa um worktree isolado e não
 inclui essas alterações ainda não publicadas.
 
@@ -72,9 +74,10 @@ locais de cartões e planos mantêm sua persistência própria.
 | O repository interpretava nomes de ferramentas MCP para escolher tabelas. | `PlanningRead` descreve recursos internos; o caso de uso traduz o comando e preserva a leitura seletiva. |
 | Mutações dependiam do arquivo de consultas para projetar cartões. | `cardCatalog` fica junto das projeções compartilhadas. A classificação perde uma decisão que devolvia o mesmo resultado nos dois caminhos. |
 
-Uma comparação executável com `6c2de5c` confirmou igualdade dos 98 schemas de
-entrada, descrições e permissões de leitura, além das uniões de comandos e das
-allowlists do portal. Os contratos públicos mantêm os mesmos campos e defaults.
+Uma comparação executável confirmou igualdade dos 98 schemas da base inicial.
+Após integrar `27869b9`, a mesma comparação cobre os 99 schemas de entrada,
+descrições e permissões de leitura, além das uniões de comandos e das allowlists
+do portal. Os contratos públicos mantêm os mesmos campos e defaults.
 
 ### 4. Configuração, composição e falhas
 

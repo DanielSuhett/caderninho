@@ -2,7 +2,7 @@
 
 Gerado por `npm run docs:mcp` a partir do registro de ferramentas.
 
-102 ferramentas: 32 consultas/prévias, 69 escritas locais e 1 operação de sincronização.
+103 ferramentas: 33 consultas/prévias, 69 escritas locais e 1 operação de sincronização.
 
 | Ferramenta | Operação | Schema de saída | Descrição |
 | --- | --- | --- | --- |
@@ -68,6 +68,7 @@ Gerado por `npm run docs:mcp` a partir do registro de ferramentas.
 | `get_spending_by_category` | consulta/prévia | sim | Despesas classificadas por categoria; exclui transferências e itens ignorados. |
 | `get_spending_comparison` | consulta/prévia | sim | Comparar gastos com período anterior de igual duração, mesmos dias do mês anterior ou intervalo explícito. Já inclui grupos e totais dos dois períodos. |
 | `get_spending_pace` | consulta/prévia | sim | Ritmo observado de despesas e projeção linear explicitamente estimada. |
+| `get_subscriptions` | consulta/prévia | sim | Identificar candidatos a assinaturas e cobranças recorrentes no histórico efetivo, com frequência, valores exatos e evidências. Exclui pendentes, futuros, transferências classificadas e parcelas identificadas. Padrão: últimos 12 meses e 3 ocorrências. Não confirma contratos nem cria recorrências; partial/truncated indicam análise incompleta. |
 | `get_tags` | consulta/prévia | — | Etiquetas locais do espaço, com IDs e nomes para filtrar e organizar transações. |
 | `get_transaction_purchases` | consulta/prévia | — | Compras e transações com parcelas de cartão agrupadas antes da paginação, como na lista do painel. Mantém valores de cada parcela, moeda, pendência, datas e identificação. Datas filtram a compra ou primeira parcela conhecida; nunca some a página para calcular totais. |
 | `get_transactions` | consulta/prévia | — | Histórico efetivo com edições locais e paginação consistente. Para últimas compras envie order=date_desc e limit=5; não some páginas para calcular totais. |

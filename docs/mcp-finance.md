@@ -124,6 +124,44 @@ true. Para últimas compras, prefira `date_desc`, `limit: 5`, e reutilize grupos
 presentes nos resumos. Não trunque descrições nem descarte grupos silenciosamente:
 um registro extenso ou agrupamentos sem paginação podem produzir respostas grandes.
 
+## Assinaturas e padrões de recorrência
+
+`get_subscriptions` identifica candidatos no histórico efetivo; `get_recurrences`
+continua listando compromissos cadastrados. A consulta não cria recorrências,
+não confirma contratos e não informa se uma assinatura permanece ativa.
+
+```json
+{"name":"get_subscriptions","arguments":{"from":"2026-01-01","to":"2026-10-24","minOccurrences":3}}
+```
+
+Sem datas, analisa os últimos 12 meses até o dia de referência. Aceita `spaceId`,
+`personId`, `accountId` e `currency`. Agrupa por conta, moeda, cartão e CNPJ do
+estabelecimento; sem CNPJ completo, usa o nome do estabelecimento ou a descrição
+normalizada. Não remove números da descrição nem deduplica cobranças por semelhança.
+Exige três ocorrências por padrão (`minOccurrences`: 2–12), valores com variação
+de até 20% sobre o menor valor e intervalos semanais, mensais, trimestrais ou anuais.
+As tolerâncias são, respectivamente, 2, 3, 7 e 14 dias; meses respeitam o calendário.
+Para padrões anuais, amplie o período e/ou use `minOccurrences: 2`.
+
+Exclui ignorados, excluídos locais, créditos, pendentes, futuros, transferências
+classificadas, pagamentos de fatura e parcelas identificadas. Valores desconhecidos
+ou zero não sustentam candidatos. Repetições no mesmo dia, intervalos irregulares
+e grandes mudanças de valor podem impedir a detecção. Débitos sem classificação
+podem sustentar um candidato a cobrança recorrente, sem se tornarem despesas
+confirmadas. O nome de um serviço sozinho não comprova recorrência.
+
+Cada candidato informa frequência, primeira/última ocorrência, quantidade,
+valores mínimo/máximo/mais recente, soma observada exata e as últimas três
+evidências com IDs, datas e valores. `nextExpectedDate` é uma estimativa e pode
+estar no passado. Não some projeções a valores realizados.
+
+A leitura para em 10 mil registros efetivos e devolve `scannedCount`/`scanLimit`.
+`limit` limita candidatos (padrão 50, máximo 100). `truncated` sinaliza qualquer
+um desses cortes; nesse caso, `matchedCount` descreve apenas o que foi encontrado
+na análise, não o universo completo. Reduza o período ou selecione uma conta.
+`estimated`, `partial`, cobertura e referência da última coleta acompanham a
+resposta: ausência de candidatos não comprova ausência de assinaturas.
+
 ## Correspondência com o painel
 
 | Capacidade | Contrato compartilhado |
@@ -166,6 +204,8 @@ com chamadas MCP HTTP/OAuth sintéticas. `mcp.test.ts` cobre catálogo e transpo
 `planning-feedback.test.ts` cobre filtros consistentes, cobertura, moedas, precisão,
 comparações, paginação editada e seis schemas de saída. Cenários com 1.000 e 10.000
 registros fora do período verificam leitura/materialização limitada para o recorte.
+`subscriptions.test.ts` cobre evidências, filtros, exclusões, limites e a chamada
+MCP/OAuth sintética de `get_subscriptions`, incluindo o schema de saída.
 
 A medição D1 reexecuta os SELECTs reais na mesma fixture para obter `rows_read`,
 porque Drizzle `raw()` descarta metadados. Ela não inclui leituras do snapshot nem

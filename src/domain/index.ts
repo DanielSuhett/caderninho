@@ -115,6 +115,11 @@ export {
   ruleMatches,
   ruleText,
 } from "./rules.entity";
+export type { SubscriptionCandidate } from "./subscription.entity";
+export {
+  detectSubscriptions,
+  SubscriptionCadence,
+} from "./subscription.entity";
 export type { Checkpoint, CommitResult, FinancialSource } from "./sync.entity";
 export { IMPORT_INTERVAL, RunStatus } from "./sync.entity";
 export type {
