@@ -16,6 +16,7 @@ import {
   type WorkspaceCatalog,
 } from "../../contracts";
 import { HttpRequestError, tryCatch } from "../../shared";
+import { randomId } from "../random-id";
 import { UiButton } from "../ui";
 import type { OrganizationApi } from "./account-api";
 import { BackofficeDialog } from "./backoffice-dialog";
@@ -172,7 +173,7 @@ export function RuleImporter({
     };
     const payload = JSON.stringify(values);
     if (receipt.current.payload !== payload) {
-      receipt.current = { key: crypto.randomUUID(), payload };
+      receipt.current = { key: randomId(), payload };
     }
     setBusy("save");
     const { data: _data, error } = await tryCatch(() =>

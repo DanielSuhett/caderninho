@@ -15,6 +15,7 @@ import {
 import { workspaceFixture } from "../fixtures/workspace";
 import type { OrganizationApi } from "./account/account-api";
 import type { DemoData } from "./demo-data";
+import { randomId } from "./random-id";
 
 type Group = Omit<WorkspaceCatalog, "spaces">;
 type ParsedMutation = z.output<typeof PortalMutationSchema>["command"];
@@ -91,7 +92,7 @@ function mutateCategoryCatalog(group: Group, command: ParsedMutation) {
       group.categoryGroups.push({
         color: command.color,
         icon: command.icon,
-        id: `demo:${crypto.randomUUID()}`,
+        id: `demo:${randomId()}`,
         name: command.name,
       });
       return true;
@@ -179,7 +180,7 @@ export function createDemoSession({
         const id =
           command.tool === "update_rule"
             ? required(group.rules.find((rule) => rule.id === command.id)).id
-            : `demo:${crypto.randomUUID()}`;
+            : `demo:${randomId()}`;
         const {
           accountId,
           categoryId,
@@ -211,7 +212,7 @@ export function createDemoSession({
         group.rules = group.rules.filter((rule) => rule.id !== command.id);
         break;
       case "create_space": {
-        const id = `demo:${crypto.randomUUID()}`;
+        const id = `demo:${randomId()}`;
         const { name, type, currency, monthStartDay } = command;
         spaces = [
           ...spaces,

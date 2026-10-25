@@ -1,7 +1,42 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { conditionDraft, parseRuleDraft } from "../account/rule-draft";
+import {
+  conditionDraft,
+  initialAlternatives,
+  parseRuleDraft,
+} from "../account/rule-draft";
+
+const uuidPattern =
+  /^[\da-f]{8}-[\da-f]{4}-4[\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/;
+
+test("rule drafts initialize and retain distinct identities without randomUUID on HTTP LAN origins", () => {
+  const original = Object.getOwnPropertyDescriptor(crypto, "randomUUID");
+  Object.defineProperty(crypto, "randomUUID", {
+    configurable: true,
+    value: undefined,
+  });
+  try {
+    const alternatives = initialAlternatives();
+    const ids = [
+      alternatives[0]?.id,
+      alternatives[0]?.conditions[0]?.id,
+      conditionDraft().id,
+      conditionDraft("amount").id,
+    ];
+    assert.equal(new Set(ids).size, ids.length);
+    for (const id of ids) {
+      assert.ok(id);
+      assert.match(id, uuidPattern);
+    }
+  } finally {
+    if (original) {
+      Object.defineProperty(crypto, "randomUUID", original);
+    } else {
+      Reflect.deleteProperty(crypto, "randomUUID");
+    }
+  }
+});
 
 test("rule draft preserves decimal precision and rejects incomplete or currencyless amounts", () => {
   const input = {
