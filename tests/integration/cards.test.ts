@@ -1,0 +1,190 @@
+import assert from "node:assert/strict";
+
+import { beforeEach, test } from "vitest";
+
+import { PortalCardsQuerySchema, PortalCardsSchema } from "../../src/contracts";
+import { createPlanningService } from "../../src/worker/planning";
+import { createPlanningRepository } from "../../src/worker/planning/repository";
+import { command, cookies, fixture, login } from "./access-fixture";
+import { account, collect, setup, source, transaction } from "./fixture";
+import { env } from "cloudflare:workers";
+
+beforeEach(setup);
+const card = account({
+  creditData: {
+    availableCreditLimit: "700",
+    balanceCloseDate: "2026-10-25",
+    balanceDueDate: "2026-11-02",
+    creditLimit: "1000",
+  },
+  number: "xxxx4242",
+  type: "CREDIT",
+});
+const metadata = {
+  cardNumber: "4242",
+  installmentNumber: 1,
+  purchaseDate: "2026-10-05",
+  totalInstallments: 3,
+};
+function service() {
+  return createPlanningService(
+    createPlanningRepository(env.DB),
+    () => new Date("2026-10-24T15:00:00Z"),
+  );
+}
+const query = (input: Record<string, unknown> = {}) =>
+  PortalCardsQuerySchema.parse({
+    month: "2026-10",
+    tool: "get_portal_cards",
+    ...input,
+  });
+
+test("cards use the full CREDIT-account scope, provider limits and received installments without invoice or bank double counting", async () => {
+  await collect(
+    source(
+      [
+        transaction({
+          amount: "-100",
+          category: "Groceries",
+          creditCardMetadata: metadata,
+          id: "purchase",
+        }),
+        transaction({
+          amount: "20",
+          category: "Groceries",
+          id: "refund",
+          type: "CREDIT",
+        }),
+        transaction({
+          amount: "-25",
+          creditCardMetadata: metadata,
+          date: "2026-10-23",
+          id: "pending",
+          status: "PENDING",
+        }),
+        transaction({
+          amount: "-30",
+          creditCardMetadata: metadata,
+          date: "2026-10-30",
+          id: "future",
+          status: "PENDING",
+        }),
+        transaction({
+          amount: "-33",
+          creditCardMetadata: { ...metadata, installmentNumber: 2 },
+          date: "2026-11-05",
+          id: "november",
+        }),
+        transaction({
+          amount: "-999",
+          category: "Groceries",
+          id: "payment",
+          operationType: "PAGAMENTO_FATURA",
+        }),
+        transaction({
+          accountId: "bank",
+          amount: "-900",
+          category: "Groceries",
+          id: "bank",
+        }),
+        transaction({ amount: "-12", currencyCode: "USD", id: "foreign" }),
+      ],
+      [card, account({ id: "bank" })],
+    ),
+  );
+  const report = PortalCardsSchema.parse(await service().cards(query()));
+  assert.equal(report.data.confirmed.totalMinor, "8000");
+  assert.equal(report.data.purchases.totalMinor, "10000");
+  assert.equal(report.data.refunds.totalMinor, "2000");
+  assert.equal(report.data.pending.totalMinor, "2500");
+  assert.equal(report.data.future.totalMinor, "3000");
+  assert.equal(report.data.accounts.length, 1);
+  assert.equal(report.data.accounts[0]?.allocatedMinor, "30000");
+  assert.equal(report.data.accounts[0]?.availableCreditMinor, "70000");
+  assert.equal(report.data.accounts[0]?.cardNumber, "4242");
+  assert.deepEqual(report.data.currencies, ["BRL", "USD"]);
+  assert.equal(report.data.months[0]?.confirmed.totalMinor, "10000");
+  assert.equal(report.data.months[0]?.pending.totalMinor, "2500");
+  assert.equal(report.data.months[0]?.future.totalMinor, "3000");
+  assert.equal(report.data.months[1]?.future.totalMinor, "3300");
+  assert.equal(report.data.months[2]?.future.count, 0);
+  assert.equal(report.data.installments.length, 3);
+  await assert.rejects(service().cards(query({ accountId: "bank" })), {
+    message: "NOT_FOUND",
+  });
+  await assert.rejects(service().cards(query({ personId: "missing" })), {
+    message: "NOT_FOUND",
+  });
+});
+
+test("installment pagination keeps exact complete totals and rejects cursors reused in another scope", async () => {
+  await collect(
+    source(
+      Array.from({ length: 54 }, (_, index) =>
+        transaction({
+          amount: "-9007199254740993.01",
+          creditCardMetadata: metadata,
+          id: `parcel-${String(index).padStart(3, "0")}`,
+        }),
+      ),
+      [card],
+    ),
+  );
+  const first = PortalCardsSchema.parse(await service().cards(query())).data;
+  assert.equal(
+    first.confirmed.totalMinor,
+    (54n * 900719925474099301n).toString(),
+  );
+  assert.equal(first.installments.length, 50);
+  assert.ok(first.nextCursor);
+  const second = PortalCardsSchema.parse(
+    await service().cards(query({ cursor: first.nextCursor })),
+  ).data;
+  assert.equal(second.installments.length, 4);
+  assert.equal(second.nextCursor, null);
+  assert.deepEqual(first.months, second.months);
+  assert.deepEqual(first.confirmed, second.confirmed);
+  assert.equal(
+    new Set(
+      [...first.installments, ...second.installments].map((row) => row.id),
+    ).size,
+    54,
+  );
+  await assert.rejects(
+    service().cards(query({ cursor: first.nextCursor, month: "2026-11" })),
+    { message: "RESTART_REQUIRED" },
+  );
+});
+
+test("unknown money stays unknown and the authenticated portal validates its card query", async () => {
+  await collect(
+    source(
+      [transaction({ amount: null, creditCardMetadata: metadata })],
+      [account({ type: "CREDIT" })],
+    ),
+  );
+  const result = PortalCardsSchema.parse(await service().cards(query())).data;
+  assert.equal(result.confirmed.totalMinor, null);
+  assert.equal(result.confirmed.unknownCount, 1);
+  assert.equal(result.accounts[0]?.creditLimitMinor, null);
+  assert.equal(result.accounts[0]?.allocatedMinor, null);
+  const app = fixture();
+  const denied = await app.request("/account/cards");
+  assert.notEqual(denied.status, 200);
+  const cookie = cookies(await login(app));
+  assert.equal(
+    (await app.request("/account/cards", { headers: { Cookie: cookie } }))
+      .status,
+    200,
+  );
+  const response = await command(app, cookie, "query", { query: query() });
+  assert.equal(response.status, 200);
+  assert.equal(
+    PortalCardsSchema.parse(await response.json()).data.installments.length,
+    1,
+  );
+  const invalid = await command(app, cookie, "query", {
+    query: { ...query(), month: "2026-13" },
+  });
+  assert.equal(invalid.status, 400);
+});
