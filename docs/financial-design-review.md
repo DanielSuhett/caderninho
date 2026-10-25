@@ -39,8 +39,8 @@ copiado código do Securo. Dados financeiros seguem
 
 ## Evidência
 
-As etapas de `mise run check` passaram: tipos, formatação, lint, 92 testes
-unitários, 160 testes de integração, build/dry-run e runtime nativo com 10 mil
+As etapas de `mise run check` passaram: tipos, formatação, lint, 94 testes
+unitários, 161 testes de integração, build/dry-run e runtime nativo com 10 mil
 e 100 mil registros, incluindo persistência após reinício. O teste da rota
 removida confirma 404; o contrato MCP de compromissos segue coberto.
 
@@ -55,7 +55,8 @@ moedas, excluídos/resgatados, dados antigos sem metadados, dinheiro acima da
 precisão de Number e contrato MCP. O teste OAuth local anuncia a ferramenta e
 consulta uma posição manual com dinheiro exato através de `tools/call`.
 
-Nenhuma migração SQL foi criada: metadados usam JSON existente. Reimportações
+A carteira usa o JSON existente, sem migração própria. Fotos de pessoas usam a
+migração aditiva 0011, descrita abaixo. Reimportações
 preservam grupo e inclusão. Novos campos de posições antigas serão preenchidos
 quando a instituição os enviar na próxima sincronização.
 
@@ -90,3 +91,21 @@ A largura móvel efetivamente medida foi de 325 CSS px, sem overflow horizontal
 ou quebra dos valores nos quatro indicadores. Aplicar pessoa/cartão e cancelar
 seleção foram conferidos no navegador. Inspeção de teclado e reflow é local e
 não constitui auditoria completa de acessibilidade.
+
+## Fotos de pessoas
+
+As duas fotos fornecidas para a demo aparecem no grupo do filtro, nas opções de
+pessoa e nos combos com instituição/bandeira. Perfis reais aceitam upload em
+Conexões, com prévia, troca e remoção; sem foto, mantêm as iniciais. O navegador
+normaliza em JPEG de 160 × 160 px; o servidor aceita apenas imagens raster
+embutidas de até 24.576 caracteres, com tipo e assinatura compatíveis. A foto
+fica na coluna opcional `people.photo`, adicionada pela migração 0011. Atualizar
+um nome sem enviar foto preserva a imagem existente; `photo: null` a remove.
+
+O fluxo completo foi conferido em uma instalação isolada em localhost, com
+credenciais sintéticas: upload, salvar, recarregar, remover, salvar, recarregar e
+substituir a foto. A representação enviada de cada imagem ficou entre 8 e 9 KB. A demo foi
+conferida em `http://localhost:8924/demo/investments/?currency=BRL`.
+
+Captura do [editor de foto](assets/financial-design/person-photo-editor.png),
+com upload e persistência verificados no navegador.

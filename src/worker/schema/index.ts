@@ -204,6 +204,7 @@ export const planningReceipts = sqliteTable("planning_receipts", {
 export const people = sqliteTable("people", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
+  photo: text("photo"),
 });
 export const pluggyProfiles = sqliteTable("pluggy_profiles", {
   clientFingerprint: text("client_fingerprint").unique(),

@@ -45,7 +45,10 @@ export function createHouseholdRepository(
       await db
         .insert(people)
         .values(row)
-        .onConflictDoUpdate({ set: { name: row.name }, target: people.id })
+        .onConflictDoUpdate({
+          set: { name: row.name, photo: row.photo ?? null },
+          target: people.id,
+        })
         .run();
     },
     async profile(row, person) {

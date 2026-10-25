@@ -24,6 +24,7 @@ import {
 import type { PortalResponse } from "../../contracts";
 import { tryCatch } from "../../shared";
 import type { createAccountApi } from "./account-api";
+import { PersonDirectory } from "./person-identity";
 import { WorkspacePageError } from "./workspace-page";
 import { scopedHref } from "./workspace-resource";
 import { SidebarFrame, WorkspaceFrame } from "./workspace-shell";
@@ -260,23 +261,25 @@ export function WorkspaceView({
     content = <DesignSystemView key={route} />;
   }
   return (
-    <WorkspaceFrame
-      navigation={
-        <WorkspaceNavigation
-          busy={busy}
-          logout={logout}
-          snapshot={snapshot}
-        />
-      }
-      route={route}
-    >
-      <div
-        className="workspace-page"
-        key={route}
+    <PersonDirectory value={snapshot.people}>
+      <WorkspaceFrame
+        navigation={
+          <WorkspaceNavigation
+            busy={busy}
+            logout={logout}
+            snapshot={snapshot}
+          />
+        }
+        route={route}
       >
-        <Suspense fallback={<WorkspaceSkeleton />}>{content}</Suspense>
-      </div>
-    </WorkspaceFrame>
+        <div
+          className="workspace-page"
+          key={route}
+        >
+          <Suspense fallback={<WorkspaceSkeleton />}>{content}</Suspense>
+        </div>
+      </WorkspaceFrame>
+    </PersonDirectory>
   );
 }
 

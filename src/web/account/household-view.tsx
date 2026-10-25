@@ -4,6 +4,7 @@ import type { HouseholdCommand, PortalResponse } from "../../contracts";
 import { UiButton, UiCheckbox } from "../ui";
 import type { ManagementOutcome } from "./account-feedback";
 import { DisclosureItem } from "./disclosure-item";
+import { PersonEditor } from "./person-editor";
 import {
   type HouseholdEditorModel,
   useHouseholdEditor,
@@ -35,37 +36,22 @@ export function HouseholdPanel({
         </div>
       </div>
       <p>
-        Edite os nomes ou atualize as credenciais das contas já cadastradas.
+        Edite nomes e fotos ou atualize as credenciais das contas cadastradas.
         Para incluir outra pessoa e conta Pluggy, use “Adicionar conexão”.
       </p>
       <div className="people-editor">
         {snapshot.people.map((person) => (
-          <form
-            data-id={person.id}
+          <PersonEditor
+            busy={busy}
             key={person.id}
             onSubmit={editor.savePerson}
+            person={person}
           >
-            <div className="inline-fields">
-              <Input
-                defaultValue={person.name}
-                id={`person-${person.id}`}
-                label="Nome da pessoa"
-                maxLength={80}
-                name="name"
-                required
-              />
-              <UiButton
-                disabled={busy}
-                type="submit"
-              >
-                Salvar nome
-              </UiButton>
-            </div>
             <HouseholdFeedback
               editor={editor}
               target={person.id}
             />
-          </form>
+          </PersonEditor>
         ))}
       </div>
       <div className="profile-grid">

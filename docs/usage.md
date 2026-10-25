@@ -198,3 +198,16 @@ lista, mas não entram nos totais. Rentabilidade não é deduzida da diferença 
 bruto, líquido ou aportes. Não há série histórica inventada nem execução de
 aplicações/resgates. Campos novos de registros antigos dependem da próxima
 sincronização com a instituição.
+
+### Foto da pessoa
+
+Em **Conexões → Editar titulares e credenciais**, escolha **Adicionar foto** ou
+**Trocar foto**, confira a prévia e clique em **Salvar pessoa**. **Remover foto**
+volta às iniciais e também precisa ser salvo. JPEG, PNG e WebP de até 5 MB são
+aceitos; o navegador recorta e reduz a foto para 160 × 160 px antes de enviar.
+A imagem fica no banco privado da instalação, sem serviços externos de avatar.
+
+A migração aditiva `0011_person_photos.sql` acrescenta a coluna opcional em
+`people`. Nomes e perfis existentes são preservados. A atualização precisa dessa
+migração antes de executar o novo Worker; o comando de deploy já aplica as
+migrações. Nenhuma migração remota foi aplicada nesta implementação.

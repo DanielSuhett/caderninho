@@ -40,6 +40,7 @@ export {
   HouseholdCatalogSchema,
   HouseholdCommandSchema,
   HouseholdResultSchema,
+  PersonPhotoSchema,
 } from "./household";
 export {
   type InvestmentList,

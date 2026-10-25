@@ -2,6 +2,25 @@ import { z } from "zod/v4";
 
 const id = z.string().min(1).max(160);
 const name = z.string().trim().min(1).max(80);
+// Only bounded raster data can be stored; no third-party image requests or SVG.
+export const PersonPhotoSchema = z
+  .string()
+  .max(24_576)
+  .regex(
+    /^data:image\/(jpeg|png|webp);base64,(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/,
+  )
+  .pipe(
+    z.string().refine((value) => {
+      const bytes = atob(value.slice(value.indexOf(",") + 1));
+      if (value.startsWith("data:image/jpeg;")) {
+        return bytes.startsWith("\xff\xd8\xff");
+      }
+      if (value.startsWith("data:image/png;")) {
+        return bytes.startsWith("\x89PNG\r\n\x1a\n");
+      }
+      return bytes.startsWith("RIFF") && bytes.slice(8, 12) === "WEBP";
+    }, "Selecione uma foto JPEG, PNG ou WebP válida."),
+  );
 export const HouseholdCommandSchema = z.discriminatedUnion("action", [
   z
     .object({
@@ -19,6 +38,7 @@ export const HouseholdCommandSchema = z.discriminatedUnion("action", [
       csrf: z.string(),
       id: id.optional(),
       name,
+      photo: PersonPhotoSchema.nullable().optional(),
     })
     .strict(),
   z
@@ -52,7 +72,7 @@ export const HouseholdResultSchema = z.union([
   z.object({ ok: z.literal(true) }),
 ]);
 export const HouseholdCatalogSchema = z.object({
-  people: z.array(z.object({ id, name })),
+  people: z.array(z.object({ id, name, photo: z.string().nullish() })),
   profiles: z.array(
     z.object({
       configured: z.boolean(),

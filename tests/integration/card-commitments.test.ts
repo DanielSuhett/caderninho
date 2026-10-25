@@ -266,7 +266,7 @@ test("person and space selection validate IDs, preserve hidden credit accounts a
   await assert.rejects(() => f.query({ accountId: "bank" }), {
     message: "CARD_REQUIRED",
   });
-  await env.DB.prepare("INSERT INTO people VALUES('ana','Ana')").run();
+  await env.DB.prepare("INSERT INTO people(id,name) VALUES('ana','Ana')").run();
   await collect(
     source(
       [

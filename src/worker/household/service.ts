@@ -141,6 +141,10 @@ export function createHouseholdService(dependencies: {
         const person = {
           id: input.id ?? crypto.randomUUID(),
           name: input.name,
+          photo:
+            input.photo === undefined
+              ? (state.people.find((row) => row.id === input.id)?.photo ?? null)
+              : input.photo,
         };
         await repository.person(person);
         return person;

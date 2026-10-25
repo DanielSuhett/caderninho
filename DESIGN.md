@@ -164,3 +164,9 @@ A demo tem um único marcador no topo; não repete avisos junto de cada filtro.
 Os avatares de pessoas integram o botão Filtros em um grupo compacto (até três
 avatares e +N). Filtros de escopo, classe, instituição, cartão e moeda ficam no
 diálogo Kumo. Cada tela tem uma ação de atualização, sem ícones duplicados.
+
+PersonAvatar usa a foto da pessoa quando disponível e mantém as iniciais como
+alternativa para ausência ou falha de carregamento. PersonDirectory compartilha
+a identidade por ID, sem repetir imagens nos registros financeiros. As duas
+pessoas da demo usam as fotos fornecidas para ilustrar o produto. A edição em
+Conexões oferece prévia, troca, remoção e salvamento explícito.

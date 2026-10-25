@@ -1817,3 +1817,26 @@
 .investor-position > .disclosure-panel {
   padding-inline: 16px;
 }
+
+.person-avatar {
+  overflow: hidden;
+}
+.person-avatar img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.person-editor-fields {
+  min-width: 0;
+  padding: 0;
+  margin: 0;
+  border: 0;
+}
+.person-photo-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 16px;
+}

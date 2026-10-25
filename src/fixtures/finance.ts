@@ -9,8 +9,8 @@ import { WorkspaceCatalogSchema } from "../contracts";
 import { categoryCatalog, monthDate } from "../domain";
 export const demoReferenceDay = "2026-10-24";
 export const demoPeople = [
-  { id: "demo-person", name: "Ana Silva" },
-  { id: "demo-person-2", name: "Bruno Costa" },
+  { id: "demo-person", name: "Ana Silva", photo: "/demo-people/ana.jpg" },
+  { id: "demo-person-2", name: "Bruno Costa", photo: "/demo-people/bruno.jpg" },
 ];
 const demoCategoryIds = new Map([
   ["salario-renda", "salary"],

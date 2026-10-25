@@ -1,9 +1,19 @@
 import { Tooltip } from "@cloudflare/kumo";
 import { PlusIcon } from "@phosphor-icons/react";
-import { type MouseEvent, useCallback } from "react";
+import {
+  createContext,
+  type MouseEvent,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 
 import type { Person } from "../../domain";
 import { UiButton } from "../ui";
+
+export const PersonDirectory = createContext<Person[]>([]);
 
 const nameSeparator = /\s+/;
 
@@ -28,20 +38,50 @@ export function PersonAvatar({
   size = 32,
 }: {
   person: Person;
-  size?: 24 | 32;
+  size?: 24 | 32 | 64;
 }) {
+  const people = useContext(PersonDirectory);
+  const photo =
+    person.photo === undefined
+      ? people.find((p) => p.id === person.id)?.photo
+      : person.photo;
+  const [failed, setFailed] = useState<string | null>(null);
+  const image = useRef<HTMLImageElement>(null);
+  useEffect(() => {
+    const element = image.current;
+    if (!(element && photo)) {
+      return;
+    }
+    const fail = () => setFailed(photo);
+    element.addEventListener("error", fail);
+    if (element.complete && element.naturalWidth === 0) {
+      fail();
+    }
+    return () => element.removeEventListener("error", fail);
+  }, [photo]);
   return (
     <span
       aria-hidden="true"
       className="person-avatar"
       style={{
         backgroundColor: personColor(person.id),
-        fontSize: size === 24 ? 12 : 14,
+        fontSize: { 24: 12, 32: 14, 64: 28 }[size],
         height: size,
         width: size,
       }}
     >
-      {personInitials(person.name)}
+      {photo && failed !== photo ? (
+        <img
+          alt=""
+          height={size}
+          ref={image}
+          referrerPolicy="no-referrer"
+          src={photo}
+          width={size}
+        />
+      ) : (
+        personInitials(person.name)
+      )}
     </span>
   );
 }

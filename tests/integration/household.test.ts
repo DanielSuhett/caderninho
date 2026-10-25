@@ -574,3 +574,57 @@ test("default application binding refuses a changed environment and missing stor
   });
   await assert.rejects(missing.connection("c"));
 });
+
+test("person photos persist through name edits and can be explicitly removed", async () => {
+  const app = fixture();
+  const cookie = cookies(await login(app));
+  const photo =
+    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jY1sAAAAASUVORK5CYII=";
+  const saved = await command(app, cookie, "manage", {
+    action: "save_person",
+    name: "Foto exemplo",
+    photo,
+  });
+  assert.equal(saved.status, 200);
+  const personId = identify(await saved.json());
+  const readPerson = async () => {
+    const response = await app.request("/api/account", {
+      headers: { Cookie: cookie },
+    });
+    return PortalResponseSchema.parse(await response.json()).people.find(
+      (person) => person.id === personId,
+    );
+  };
+  assert.equal((await readPerson())?.photo, photo);
+  assert.equal(
+    (
+      await command(app, cookie, "manage", {
+        action: "save_person",
+        id: personId,
+        name: "Nome atualizado",
+      })
+    ).status,
+    200,
+  );
+  assert.equal((await readPerson())?.photo, photo);
+  const invalid = await command(app, cookie, "manage", {
+    action: "save_person",
+    id: personId,
+    name: "Nome atualizado",
+    photo: "data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=",
+  });
+  assert.equal(invalid.status, 400);
+  assert.equal((await readPerson())?.photo, photo);
+  assert.equal(
+    (
+      await command(app, cookie, "manage", {
+        action: "save_person",
+        id: personId,
+        name: "Nome atualizado",
+        photo: null,
+      })
+    ).status,
+    200,
+  );
+  assert.equal((await readPerson())?.photo, null);
+});

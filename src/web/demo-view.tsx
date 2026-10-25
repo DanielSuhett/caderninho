@@ -35,7 +35,7 @@ import {
 import { monthLabel } from "./account/dashboard-period";
 import { FinancialDashboard } from "./account/financial-dashboard";
 import { PeriodPicker } from "./account/period-picker";
-import { PersonStack } from "./account/person-identity";
+import { PersonDirectory, PersonStack } from "./account/person-identity";
 import { ScopeFields } from "./account/workspace-filters";
 import { WorkspacePageError } from "./account/workspace-page";
 import { SidebarFrame, WorkspaceFrame } from "./account/workspace-shell";
@@ -286,84 +286,88 @@ function Demo() {
     <KumoLocaleProvider
       translations={{ layerDialog: { cancel: "Cancelar", close: "Fechar" } }}
     >
-      <TooltipProvider>
-        <Toasty>
-          <WorkspaceFrame
-            footer=""
-            navigation={
-              <DemoNavigation
-                onReset={reset}
-                session={session}
-              />
-            }
-            route={route}
-          >
-            <div className="workspace-page">
-              <div className="demo-toolbar">
-                <Tooltip
-                  content="Dados fictícios. As alterações duram até recarregar a aba."
-                  render={
-                    <button type="button">
-                      <Badge variant="secondary">Demo</Badge>
-                    </button>
-                  }
-                />
-              </div>
-              {unavailable && (
-                <>
-                  <WorkspaceHeading title="Grupo indisponível nesta sessão" />
-                  <p>
-                    Ao recarregar a aba, os grupos criados na demo são
-                    removidos. Os dados iniciais continuam disponíveis.
-                  </p>
-                  <UiLink
-                    href={`/demo?month=${selectedDemoMonth(params.get("month"))}`}
-                  >
-                    Abrir grupo Pessoal
-                  </UiLink>
-                </>
-              )}
-              {!unavailable && organization && (
-                <Suspense fallback={<WorkspaceSkeleton />}>
-                  <Organization
-                    key={`${route}:${resetVersion}`}
-                    page={
-                      location.pathname.includes("/rules") ? "rules" : "groups"
-                    }
-                    session={session}
-                  />
-                </Suspense>
-              )}
-              {!unavailable && cards && (
-                <Suspense fallback={<WorkspaceSkeleton />}>
-                  <Cards
-                    api={session.api}
-                    basePath="/demo/cards"
-                    key={route}
-                    snapshot={demoSnapshot}
-                  />
-                </Suspense>
-              )}
-              {!unavailable && investments && (
-                <Suspense fallback={<WorkspaceSkeleton />}>
-                  <Investments
-                    api={session.api}
-                    basePath="/demo/investments"
-                    key={route}
-                    snapshot={demoSnapshot}
-                  />
-                </Suspense>
-              )}
-              {!(unavailable || organization || cards || investments) && (
-                <DemoFinancial
-                  route={route}
+      <PersonDirectory value={demoPeople}>
+        <TooltipProvider>
+          <Toasty>
+            <WorkspaceFrame
+              footer=""
+              navigation={
+                <DemoNavigation
+                  onReset={reset}
                   session={session}
                 />
-              )}
-            </div>
-          </WorkspaceFrame>
-        </Toasty>
-      </TooltipProvider>
+              }
+              route={route}
+            >
+              <div className="workspace-page">
+                <div className="demo-toolbar">
+                  <Tooltip
+                    content="Dados fictícios. As alterações duram até recarregar a aba."
+                    render={
+                      <button type="button">
+                        <Badge variant="secondary">Demo</Badge>
+                      </button>
+                    }
+                  />
+                </div>
+                {unavailable && (
+                  <>
+                    <WorkspaceHeading title="Grupo indisponível nesta sessão" />
+                    <p>
+                      Ao recarregar a aba, os grupos criados na demo são
+                      removidos. Os dados iniciais continuam disponíveis.
+                    </p>
+                    <UiLink
+                      href={`/demo?month=${selectedDemoMonth(params.get("month"))}`}
+                    >
+                      Abrir grupo Pessoal
+                    </UiLink>
+                  </>
+                )}
+                {!unavailable && organization && (
+                  <Suspense fallback={<WorkspaceSkeleton />}>
+                    <Organization
+                      key={`${route}:${resetVersion}`}
+                      page={
+                        location.pathname.includes("/rules")
+                          ? "rules"
+                          : "groups"
+                      }
+                      session={session}
+                    />
+                  </Suspense>
+                )}
+                {!unavailable && cards && (
+                  <Suspense fallback={<WorkspaceSkeleton />}>
+                    <Cards
+                      api={session.api}
+                      basePath="/demo/cards"
+                      key={route}
+                      snapshot={demoSnapshot}
+                    />
+                  </Suspense>
+                )}
+                {!unavailable && investments && (
+                  <Suspense fallback={<WorkspaceSkeleton />}>
+                    <Investments
+                      api={session.api}
+                      basePath="/demo/investments"
+                      key={route}
+                      snapshot={demoSnapshot}
+                    />
+                  </Suspense>
+                )}
+                {!(unavailable || organization || cards || investments) && (
+                  <DemoFinancial
+                    route={route}
+                    session={session}
+                  />
+                )}
+              </div>
+            </WorkspaceFrame>
+          </Toasty>
+        </TooltipProvider>
+      </PersonDirectory>
     </KumoLocaleProvider>
   );
 }

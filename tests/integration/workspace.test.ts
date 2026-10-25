@@ -34,7 +34,7 @@ test("run history survives later imports, preserves admission ownership and pagi
     "2026-10-01T01:00:00Z",
   );
   assert.equal(repeated[0]?.status, "cooldown");
-  await env.DB.prepare("INSERT INTO people VALUES('ana','Ana')").run();
+  await env.DB.prepare("INSERT INTO people(id,name) VALUES('ana','Ana')").run();
   await env.DB.prepare(
     "UPDATE connection_owners SET person_id='ana' WHERE connection_id='c'",
   ).run();

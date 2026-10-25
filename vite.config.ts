@@ -52,6 +52,15 @@ function copyPortalAssets(): Plugin {
           );
         }),
       );
+      await Promise.all(
+        [output, site].map((destination) =>
+          cp(
+            new URL("src/web/assets/demo-people/", root),
+            new URL("demo-people/", destination),
+            { recursive: true },
+          ),
+        ),
+      );
       await cp(new URL("rule-packs/", output), new URL("rule-packs/", site), {
         recursive: true,
       });
