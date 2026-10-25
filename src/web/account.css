@@ -1451,6 +1451,9 @@
   align-items: center;
   height: 36px;
 }
+.account-avatar-stack > :not(:last-child) {
+  margin-inline-end: -10px;
+}
 .account-avatar {
   position: relative;
   display: grid;
@@ -1473,7 +1476,6 @@
 }
 .account-avatar-owner {
   display: inline-flex;
-  margin-inline-end: -10px;
   border-radius: 50%;
   box-shadow: 0 0 0 2px var(--surface);
 }

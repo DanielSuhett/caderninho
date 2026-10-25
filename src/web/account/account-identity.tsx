@@ -33,25 +33,8 @@ export interface AccountAppearance {
   name: string;
   type?: string | undefined;
 }
-export function accountLogo(account: AccountAppearance) {
-  const brand = account.identity?.cardBrand;
-  if (brand) {
-    return brands[brand.toUpperCase().replace(brandSeparators, "")] ?? null;
-  }
-  if (account.type === "CREDIT") {
-    return null;
-  }
-  return institutionLogoUrl(account.identity?.institution?.logoUrl);
-}
-export function AccountAvatar({
-  account,
-  person,
-}: {
-  account: AccountAppearance;
-  person?: Person | undefined;
-}) {
+function AccountLogo({ src, credit }: { src: string | null; credit: boolean }) {
   const [failed, setFailed] = useState<string | null>(null);
-  const src = accountLogo(account);
   const image = useRef<HTMLImageElement>(null);
   useEffect(() => {
     const element = image.current;
@@ -65,10 +48,41 @@ export function AccountAvatar({
     }
     return () => element.removeEventListener("error", failedImage);
   }, [src]);
-  const Fallback =
-    account.type === "CREDIT" || account.identity?.cardBrand
-      ? CreditCardIcon
-      : BankIcon;
+  const Fallback = credit ? CreditCardIcon : BankIcon;
+  return (
+    <span
+      aria-hidden="true"
+      className="account-avatar"
+    >
+      {src && failed !== src ? (
+        <img
+          alt=""
+          height={32}
+          loading="lazy"
+          ref={image}
+          referrerPolicy="no-referrer"
+          src={src}
+          width={32}
+        />
+      ) : (
+        <Fallback size={20} />
+      )}
+    </span>
+  );
+}
+export function AccountAvatar({
+  account,
+  person,
+}: {
+  account: AccountAppearance;
+  person?: Person | undefined;
+}) {
+  const bank = institutionLogoUrl(account.identity?.institution?.logoUrl);
+  const brand = account.identity?.cardBrand;
+  const card = brand
+    ? (brands[brand.toUpperCase().replace(brandSeparators, "")] ?? null)
+    : null;
+  const credit = account.type === "CREDIT" || !!brand;
   const description =
     [
       person?.name,
@@ -94,24 +108,16 @@ export function AccountAvatar({
               />
             </span>
           )}
-          <span
-            aria-hidden="true"
-            className="account-avatar"
-          >
-            {src && failed !== src ? (
-              <img
-                alt=""
-                height={32}
-                loading="lazy"
-                ref={image}
-                referrerPolicy="no-referrer"
-                src={src}
-                width={32}
-              />
-            ) : (
-              <Fallback size={20} />
-            )}
-          </span>
+          <AccountLogo
+            credit={bank ? false : credit}
+            src={bank ?? card}
+          />
+          {!!bank && !!card && (
+            <AccountLogo
+              credit
+              src={card}
+            />
+          )}
         </span>
       }
     />

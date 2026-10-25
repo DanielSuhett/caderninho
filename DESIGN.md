@@ -212,9 +212,11 @@ exatas, com semântica e rótulos próprios. Composição de investimentos usa p
 bruta; líquido, resultado informado e resgate não são estimados. Valores sem
 cobertura aparecem como indisponíveis. Dados antigos continuam legíveis.
 
-PersonAvatar identifica pessoas; AccountAvatar mostra bandeira em cartões e
-instituição em contas/investimentos, com avatar de pessoa sobreposto quando há
-mais de uma pessoa e nenhum filtro de pessoa selecionado. O combo usa círculos
+PersonAvatar identifica pessoas; AccountAvatar mostra a instituição em contas,
+cartões e investimentos. Em cartões, compõe também a bandeira disponível, sem
+substituir o logo do banco. O avatar de pessoa entra na composição quando há
+mais de uma pessoa e nenhum filtro de pessoa selecionado. Transações e filtros
+reutilizam essa composição. O combo usa círculos
 de 32 px sobrepostos em 10 px, no mesmo eixo. Bandeiras vêm de assets locais licenciados. Instituições
 usam exclusivamente `connector.imageUrl` da CDN Pluggy, sem inferir pelo nome do
 ativo. Instituição explícita de B3 prevalece; sem logo verificado, ícone genérico.

@@ -124,6 +124,30 @@ modelos declarados. Bytes não são tokens nem custo de IA. A escala diária de
 Meter usa o máximo observado no período, declarado no texto, sem sugerir cota.
 Free tier mantém laranja como consumo, período, cota e estimativa identificados.
 
+### Composição de avatares
+
+`AccountAvatar` compõe pessoa, instituição e bandeira sem trocar o banco pela
+bandeira do cartão. São círculos de 32 px com sobreposição de 10 px; partes
+ausentes não deixam espaços vazios. O SVG bancário usa a identidade normalizada
+da conta e a URL validada da CDN Pluggy. A bandeira usa o asset local existente.
+Cada imagem mantém seu fallback independente. O nome acessível e o Tooltip
+identificam a composição inteira; as imagens internas são decorativas.
+
+A pessoa aparece conforme o contexto existente: várias pessoas e nenhum filtro
+individual. Ao filtrar uma pessoa, banco e bandeira continuam disponíveis.
+Contas sem identidade bancária mantêm o ícone genérico, sem deduzir banco pela
+descrição da transação ou pelo nome da conta.
+
+Revisão local de 25/10/2026, com dados fictícios e `mise run check` aprovado:
+
+| Superfície / estado | Conferência |
+| --- | --- |
+| Transações | Alteradas e revisadas no desktop e a 391 CSS px, nos dois temas; foto, SVG e bandeira carregados, sem overflow da página. |
+| Filtros | Opções de conta revisadas com banco/bandeira; abertura por teclado e aplicação do filtro de pessoa preservaram a identidade bancária. |
+| Cartões / limites | Composição compartilhada revisada no desktop escuro e no celular claro; cartão sem instituição manteve somente pessoa/bandeira. |
+| Outros consumidores | Visão geral, investimentos e onboarding reutilizam o componente; sem revisão visual adicional nesta alteração. Usos sem bandeira conservam a mesma composição anterior. |
+| Ausência / falha de logo | Conta sem identidade conferida na demo com ícone genérico. Falha de rede da imagem não foi provocada nesta revisão. |
+
 ## Referência e validação
 
 `/account/design-system` demonstra os componentes realmente usados, com dados
