@@ -3,6 +3,7 @@ import { PlanningCursorSchema } from "../../contracts";
 import type { PlanningState, PlanningTransaction } from "../../domain";
 import {
   compareRules,
+  detectSubscriptions,
   financialCharts,
   localDay,
   minorPresentation,
@@ -929,7 +930,46 @@ export async function planningQuery(
       through: input.to,
     };
   }
+  async function handleGetSubscriptions(
+    input: Extract<PlanningCommand, { tool: "get_subscriptions" }>,
+  ) {
+    const to = input.to && input.to < day ? input.to : day;
+    const from = input.from ?? monthDate(to, -12);
+    validatePeriod({ from, to });
+    const transactions: import("../../domain").TransactionProjection[] = [];
+    const scanLimit = 10_000;
+    let scannedCount = 0;
+    let truncated = false;
+    for await (const row of stream({ ...querySelection, from, to })) {
+      if (scannedCount === scanLimit) {
+        truncated = true;
+        break;
+      }
+      scannedCount += 1;
+      const details = metadata.get(row.id);
+      const kind = classification(row, state, details?.operationType ?? null);
+      if (kind !== "transfer" && kind !== "income") {
+        transactions.push({ ...row, ...(details && { details }) });
+      }
+    }
+    const candidates = detectSubscriptions({
+      minOccurrences: input.minOccurrences,
+      transactions,
+    });
+    return {
+      estimated: true,
+      matchedCount: candidates.length,
+      records: candidates.slice(0, input.limit),
+      referenceDay: day,
+      scanLimit,
+      scannedCount,
+      selection: { ...querySelection, from, to },
+      truncated: truncated || candidates.length > input.limit,
+    };
+  }
   switch (command.tool) {
+    case "get_subscriptions":
+      return await handleGetSubscriptions(command);
     case "get_spaces":
       return handleGetSpaces(command);
     case "get_accounts":

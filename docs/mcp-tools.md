@@ -2,7 +2,7 @@
 
 Gerado por `npm run docs:mcp` a partir do registro de ferramentas.
 
-102 ferramentas: 32 consultas/prévias, 69 escritas locais e 1 operação de sincronização.
+103 ferramentas: 33 consultas/prévias, 69 escritas locais e 1 operação de sincronização.
 
 | Ferramenta | Operação | Schema de saída | Descrição |
 | --- | --- | --- | --- |
@@ -108,3 +108,4 @@ Gerado por `npm run docs:mcp` a partir do registro de ferramentas.
 | `preview_rule` | consulta/prévia | — | Simular uma regra sem salvar nem reclassificar. Usa o mesmo escopo obrigatório, alternativas OU, condições E e dinheiro exato do painel. Informa contagem, amostras e limites de cobertura; truncated ou partial impedem tratar a contagem como definitiva. |
 | `preview_rule_import` | consulta/prévia | — | Conferir importação de JSON de regras compostas, categorias e duplicatas, sem gravar. Retorna revisão para confirmação. |
 | `import_rules` | escrita local | — | Importar JSON de regras compostas atomicamente no espaço confirmado. Preserva regras pessoais e duplicatas; exige a revisão da prévia. Não reaplica histórico. |
+| `get_subscriptions` | consulta/prévia | sim | Identificar candidatos a assinaturas e cobranças recorrentes no histórico efetivo, com frequência, valores exatos e evidências. Exclui pendentes, futuros, transferências classificadas e parcelas identificadas. Padrão: últimos 12 meses e 3 ocorrências. Não confirma contratos nem cria recorrências; partial/truncated indicam análise incompleta. |

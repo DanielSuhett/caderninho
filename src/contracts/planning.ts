@@ -1019,6 +1019,23 @@ export const planningDefinitions = [
       })
       .strict(),
   },
+  {
+    description:
+      "Identificar candidatos a assinaturas e cobranças recorrentes no histórico efetivo, com frequência, valores exatos e evidências. Exclui pendentes, futuros, transferências classificadas e parcelas identificadas. Padrão: últimos 12 meses e 3 ocorrências. Não confirma contratos nem cria recorrências; partial/truncated indicam análise incompleta.",
+    name: "get_subscriptions",
+    readOnly: true,
+    schema: z
+      .object({
+        ...scope,
+        accountId: id.optional(),
+        currency: currency.optional(),
+        from: day.optional(),
+        limit: z.number().int().min(1).max(100).default(50),
+        minOccurrences: z.number().int().min(2).max(12).default(3),
+        to: day.optional(),
+      })
+      .strict(),
+  },
 ] as const;
 export const PlanningCommandSchema = z.discriminatedUnion("tool", [
   planningDefinitions[94].schema.extend({
@@ -1231,6 +1248,9 @@ export const PlanningCommandSchema = z.discriminatedUnion("tool", [
     tool: z.literal("preview_rule_import"),
   }),
   planningDefinitions[97].schema.extend({ tool: z.literal("import_rules") }),
+  planningDefinitions[98].schema.extend({
+    tool: z.literal("get_subscriptions"),
+  }),
 ]);
 export type PlanningCommand = z.infer<typeof PlanningCommandSchema>;
 
