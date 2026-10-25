@@ -1,5 +1,6 @@
 import { z } from "zod/v4";
 
+import { SubscriptionCadence, type SubscriptionCandidate } from "../domain";
 import { FinancialOverviewSchema, FinancialSummarySchema } from "./dashboard";
 
 const minor = z.string().regex(/^-?\d+$/);
@@ -61,7 +62,44 @@ function envelope<T extends z.ZodType>(data: T) {
   });
 }
 
+export const SubscriptionsResultSchema = envelope(
+  z.object({
+    estimated: z.literal(true),
+    matchedCount: z.number().int().nonnegative(),
+    records: z.array(
+      z.object({
+        accountId: z.string(),
+        amountMinor: minor,
+        cadence: z.enum(SubscriptionCadence),
+        cardNumber: z.string().nullable(),
+        currency: z.string(),
+        evidence: z.array(
+          z.object({
+            amountMinor: minor,
+            date: z.iso.date(),
+            transactionId: z.string(),
+          }),
+        ),
+        firstSeen: z.iso.date(),
+        lastSeen: z.iso.date(),
+        maxAmountMinor: minor,
+        minAmountMinor: minor,
+        name: z.string(),
+        nextExpectedDate: z.iso.date(),
+        observedTotalMinor: minor,
+        occurrences: z.number().int().min(2),
+      }) satisfies z.ZodType<SubscriptionCandidate>,
+    ),
+    referenceDay: z.iso.date(),
+    scanLimit: z.number().int().positive(),
+    scannedCount: z.number().int().nonnegative(),
+    selection,
+    truncated: z.boolean(),
+  }),
+);
+
 export const planningOutputSchemas = new Map<string, z.ZodType>([
+  ["get_subscriptions", SubscriptionsResultSchema],
   [
     "get_overview",
     envelope(
