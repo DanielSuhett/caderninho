@@ -33,21 +33,12 @@ export const PortalQuerySchema = z
   .object({
     csrf: z.string(),
     query: z.union([
-      planningTools.preview_rule_import.schema.extend({
-        tool: z.literal("preview_rule_import"),
-      }),
-      planningTools.get_accounts.schema.extend({
-        tool: z.literal("get_accounts"),
-      }),
-      planningTools.get_transactions.schema.extend({
-        tool: z.literal("get_transactions"),
-      }),
-      planningTools.get_overview.schema.extend({
-        tool: z.literal("get_overview"),
-      }),
-      planningTools.generate_chart.schema.extend({
+      planningTools.preview_rule_import.command,
+      planningTools.get_accounts.command,
+      planningTools.get_transactions.command,
+      planningTools.get_overview.command,
+      planningTools.generate_chart.command.extend({
         groupBy: z.literal(SpendingGroupBy.month),
-        tool: z.literal("generate_chart"),
       }),
       PortalTransactionQuerySchema,
     ]),
@@ -247,45 +238,19 @@ export type WorkspaceCatalog = z.infer<typeof WorkspaceCatalogSchema>;
 export const PortalMutationSchema = z
   .object({
     command: z.discriminatedUnion("tool", [
-      planningTools.import_rules.schema.extend({
-        tool: z.literal("import_rules"),
-      }),
-      planningTools.create_category.schema.extend({
-        tool: z.literal("create_category"),
-      }),
-      planningTools.update_category.schema.extend({
-        tool: z.literal("update_category"),
-      }),
-      planningTools.delete_category.schema.extend({
-        tool: z.literal("delete_category"),
-      }),
-      planningTools.create_category_group.schema.extend({
-        tool: z.literal("create_category_group"),
-      }),
-      planningTools.update_category_group.schema.extend({
-        tool: z.literal("update_category_group"),
-      }),
-      planningTools.delete_category_group.schema.extend({
-        tool: z.literal("delete_category_group"),
-      }),
-      planningTools.create_rule.schema.extend({
-        tool: z.literal("create_rule"),
-      }),
-      planningTools.update_rule.schema.extend({
-        tool: z.literal("update_rule"),
-      }),
-      planningTools.delete_rule.schema.extend({
-        tool: z.literal("delete_rule"),
-      }),
-      planningTools.create_space.schema.extend({
-        tool: z.literal("create_space"),
-      }),
-      planningTools.update_space.schema.extend({
-        tool: z.literal("update_space"),
-      }),
-      planningTools.delete_space.schema.extend({
-        tool: z.literal("delete_space"),
-      }),
+      planningTools.import_rules.command,
+      planningTools.create_category.command,
+      planningTools.update_category.command,
+      planningTools.delete_category.command,
+      planningTools.create_category_group.command,
+      planningTools.update_category_group.command,
+      planningTools.delete_category_group.command,
+      planningTools.create_rule.command,
+      planningTools.update_rule.command,
+      planningTools.delete_rule.command,
+      planningTools.create_space.command,
+      planningTools.update_space.command,
+      planningTools.delete_space.command,
     ]),
     csrf: z.string(),
   })

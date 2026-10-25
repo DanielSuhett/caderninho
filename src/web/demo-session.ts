@@ -275,15 +275,11 @@ export function createDemoSession({
         throw new Error("UNSUPPORTED_DEMO_OPERATION");
     }
   }
-  function unsupportedQuery(): never {
-    throw new Error("UNSUPPORTED_DEMO_OPERATION");
-  }
-  const queries: {
+  const queries: Partial<{
     [Tool in keyof PortalQueryResults]: (
       query: PortalQuery & { tool: Tool },
     ) => PortalQueryResults[Tool];
-  } = {
-    generate_chart: unsupportedQuery,
+  }> = {
     get_accounts: (query) => ({
       data: {
         records: view(query.spaceId).accounts.map((account) => ({
@@ -296,10 +292,6 @@ export function createDemoSession({
         })),
       },
     }),
-    get_overview: unsupportedQuery,
-    get_portal_transactions: unsupportedQuery,
-    get_transactions: unsupportedQuery,
-    preview_rule_import: unsupportedQuery,
   };
   const api: OrganizationApi = {
     catalog: (spaceId, signal) =>
@@ -360,7 +352,13 @@ export function createDemoSession({
         };
       }),
     query: (query, _csrf, signal) =>
-      local(signal, () => queries[query.tool](query)),
+      local(signal, () => {
+        const read = queries[query.tool];
+        if (!read) {
+          throw new Error("UNSUPPORTED_DEMO_OPERATION");
+        }
+        return read(query);
+      }),
   };
   return {
     api,

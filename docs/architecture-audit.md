@@ -123,14 +123,25 @@ Rascunhos de formulários podem representar entradas ainda inválidas; não rece
 casts para satisfazer enums. As uniões discriminadas e os `switch` preservam o
 narrowing, e o lint nativo continua sem novas supressões ou plugins.
 
+### 7. Revisão estrita de qualidade
+
+A [revisão thermo-nuclear](thermo-nuclear-code-quality-review.md) corrigiu quatro
+problemas estruturais adicionais: registro duplicado dos comandos, mistura dos
+fluxos de leitura/escrita, identidade redundante no cache e handlers fictícios
+no demo. As cinco mudanças de implementação removem 257 linhas líquidas sem
+acrescentar uma camada. A união interna dos comandos passa a ser derivada do
+registro; as allowlists externas permanecem explícitas.
+
 ## Validação da entrega
 
 `mise run check:quick` passa após as mudanças e após integrar a ferramenta de
 assinaturas. `mise run lint:fix` e `mise run format` convergem sem alterações.
 A revisão adicional de imports, enums e simplificações também passou por
 `mise run check`: 80 testes Node, 156 testes Cloudflare em 26 arquivos, build e
-runtime nativo com 10 mil e 100 mil registros. A comparação dos 99 contratos
-continua idêntica à base `27869b9`, inclusive a ordem das opções dos schemas.
+runtime nativo com 10 mil e 100 mil registros. A comparação dos 99 schemas de
+entrada, metadados e allowlists permanece idêntica à base `27869b9`, inclusive a
+ordem das opções externas. As variantes da união interna são comparadas por nome,
+pois agora seguem o registro em vez da ordem da antiga lista duplicada.
 A validação completa usa `mise run check`: tipos gerados, TypeScript, formatação,
 lint, testes Node, integração Cloudflare, build e runtime nativo com 10 mil e
 100 mil registros, replay e persistência após reinício. O resultado da revisão

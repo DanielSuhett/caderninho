@@ -2,10 +2,8 @@
 export function createReadCache(now = Date.now) {
   const entries = new Map<string, { value: unknown; expires: number }>();
   const pending = new Map<string, symbol>();
-  let generation = 0;
   return {
     clear() {
-      generation += 1;
       entries.clear();
       pending.clear();
     },
@@ -14,12 +12,11 @@ export function createReadCache(now = Date.now) {
       if (!fresh && entry && entry.expires > now()) {
         return entry.value;
       }
-      const started = generation;
       const request = Symbol("read");
       pending.set(key, request);
       try {
         const value = await load();
-        if (started === generation && pending.get(key) === request) {
+        if (pending.get(key) === request) {
           entries.delete(key);
           entries.set(key, { expires: now() + 10_000, value });
           if (entries.size > 20) {

@@ -107,17 +107,8 @@ export function createPlanningService(
       if (input.tool === "get_transaction_purchases") {
         return purchases({ ...input, tool: "get_portal_transactions" });
       }
-      const digest = await hash(input);
-      if ("idempotency_key" in input) {
-        const prior = await receipt(input.idempotency_key, digest);
-        if (prior) {
-          return prior.result;
-        }
-      }
-      const snapshot = await repository.read(
-        isPlanningQuery(input) ? catalogReads.get(input.tool) : undefined,
-      );
       if (isPlanningQuery(input)) {
+        const snapshot = await repository.read(catalogReads.get(input.tool));
         const context = readContext(snapshot, planningSelection(input));
         snapshot.partial = context.partial;
         const result = await query(input, snapshot);
@@ -126,9 +117,12 @@ export function createPlanningService(
         }
         return { ...context, data: result };
       }
-      if (!("idempotency_key" in input)) {
-        throw new Error(PlanningError.CONFIRMATION_REQUIRED);
+      const digest = await hash(input);
+      const prior = await receipt(input.idempotency_key, digest);
+      if (prior) {
+        return prior.result;
       }
+      const snapshot = await repository.read();
       const state = structuredClone(snapshot.state);
       const result = {
         ...(await planningMutation(input, {
