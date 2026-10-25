@@ -2,7 +2,9 @@
 
 Base inicial: `origin/main` em `6c2de5c`, após os merges recentes.
 A integração posterior de `27869b9` preserva `get_subscriptions`, recebido
-enquanto a validação desta auditoria estava em execução. O checkout principal
+enquanto a validação desta auditoria estava em execução. A resolução final integra
+`main@17d037d`, merge do PR #13 com cartões, compromissos, investimentos e fotos.
+O checkout principal
 contém trabalho local em andamento; esta revisão usa um worktree isolado e não
 inclui essas alterações ainda não publicadas.
 
@@ -39,8 +41,9 @@ precisam saber. A implementação faz parte desta entrega, por solicitação do 
 - Testes de domínio, integração Cloudflare, build e runtime sintético passam.
 - O diff concentra responsabilidades e remove duplicações; tamanho de arquivo
   sozinho não justifica extração.
-- O PR permanece draft. Publicação do produto, merge e migrações remotas são
-  etapas separadas e não fazem parte desta auditoria.
+- O PR foi publicado como draft antes da implementação. A integração e o merge
+  na main foram autorizados em solicitação posterior; migrações e publicações
+  remotas do Worker continuam fora do escopo.
 
 ## Achados e correções
 
@@ -132,21 +135,43 @@ no demo. As cinco mudanças de implementação removem 257 linhas líquidas sem
 acrescentar uma camada. A união interna dos comandos passa a ser derivada do
 registro; as allowlists externas permanecem explícitas.
 
+### 8. Integração com o último merge da main
+
+A resolução dos 18 arquivos em conflito usa `main@17d037d` como base e preserva
+cartões, compromissos, carteira do investidor, identidade financeira e fotos de
+pessoas do PR #13. Os novos comandos entram no registro nomeado e as respostas
+no cliente tipado, mantendo os campos, filtros e defaults recebidos. O contexto
+de cobertura continua distinguindo contas CREDIT e investimentos. A identidade
+dos cartões permanece na projeção compartilhada, sem restaurar a dependência das
+mutações no módulo de consultas.
+
+Os novos componentes usam entradas específicas do Kumo e tipos importados no
+topo. O demo mantém os quatro handlers implementados, com um único tratamento
+para consultas sem suporte. A lista de cartões reutiliza o codec de cursor e
+inclui o dia financeiro no filtro: os testes verificam a virada do dia e três
+cursores malformados. O teste de demo exercita ambas as consultas de cartões
+com escopo e moeda omitidos, preservando seus defaults.
+
 ## Validação da entrega
 
-`mise run check:quick` passa após as mudanças e após integrar a ferramenta de
-assinaturas. `mise run lint:fix` e `mise run format` convergem sem alterações.
-A revisão adicional de imports, enums e simplificações também passou por
-`mise run check`: 80 testes Node, 156 testes Cloudflare em 26 arquivos, build e
-runtime nativo com 10 mil e 100 mil registros. A comparação dos 99 schemas de
-entrada, metadados e allowlists permanece idêntica à base `27869b9`, inclusive a
-ordem das opções externas. As variantes da união interna são comparadas por nome,
-pois agora seguem o registro em vez da ordem da antiga lista duplicada.
-A validação completa usa `mise run check`: tipos gerados, TypeScript, formatação,
-lint, testes Node, integração Cloudflare, build e runtime nativo com 10 mil e
-100 mil registros, replay e persistência após reinício. O resultado da revisão
-atual está registrado no PR.
+A integração final passou por `mise run check`: tipos gerados, TypeScript,
+formatação, lint, **96 testes Node**, **169 testes Cloudflare em 28 arquivos**,
+build e runtime nativo com **10 mil e 100 mil registros**. O runtime comprova
+replay, falha parcial, desconexão do cliente, dinheiro exato, persistência após
+reinício e ausência de credenciais sintéticas nos assets. `lint:fix` e `format`
+convergem sem alterações.
 
-A evidência desta entrega é local e sintética. Provedor Pluggy, OAuth com serviço
-externo, publicação Cloudflare e execução em um host MCP real exigem validações
-próprias. Esta revisão preserva um pacote e um deploy, sem migrações de schema.
+A comparação executável dos **100 schemas de entrada**, descrições, flags de
+leitura e allowlists permanece idêntica à base `17d037d`, inclusive a ordem das
+opções externas. As variantes da união interna são comparadas por nome, pois
+seguem o registro em vez da antiga lista duplicada. O catálogo MCP foi regenerado.
+O inventário final cobre **213 arquivos e 997 imports estáticos**, sem imports
+duplicados, tipos inline, imports pelo próprio barrel, violações das convenções
+verificadas ou ciclos de execução. A CI da integração fica registrada no PR.
+
+A evidência desta entrega é local/sintética e de CI. Provedor Pluggy, OAuth com
+serviço externo e execução em um host MCP real exigem validações próprias. Esta
+revisão preserva um pacote e um deploy e não acrescenta migrações à main atual.
+A migração de fotos recebida no PR #13 foi preservada e exercitada somente no
+banco local de testes; nenhuma migração remota ou publicação manual do Worker
+foi executada.

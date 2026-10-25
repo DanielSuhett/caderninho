@@ -52,7 +52,7 @@ export function installationRoutes(access: Hono<PortalEnv>) {
     if (!c.res.headers.has("Content-Security-Policy")) {
       c.header(
         "Content-Security-Policy",
-        "default-src 'none'; font-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; frame-src https://connect.pluggy.ai; img-src 'self' data:; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
+        "default-src 'none'; font-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; frame-src https://connect.pluggy.ai; img-src 'self' data: https://cdn.pluggy.ai/assets/connector-icons/; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
       );
     }
   });
@@ -87,7 +87,9 @@ export function installationRoutes(access: Hono<PortalEnv>) {
   };
   app.get("/account", (c) => c.html(renderPage(accountPage())));
   for (const path of [
+    "cards",
     "transactions",
+    "investments",
     "rules",
     "groups",
     "sync",
@@ -126,6 +128,9 @@ export function installationRoutes(access: Hono<PortalEnv>) {
       RULE_IMPORT_MAX_BYTES + 16_384,
     );
     const service = planningService(c.env);
+    if (input.query.tool === "get_portal_cards") {
+      return c.json(await service.cards(input.query));
+    }
     if (input.query.tool === "get_portal_transactions") {
       return c.json(await service.portalTransactions(input.query));
     }

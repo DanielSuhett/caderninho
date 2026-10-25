@@ -2,6 +2,7 @@ import { Sidebar } from "@cloudflare/kumo/components/sidebar";
 import {
   ArrowsClockwiseIcon,
   BankIcon,
+  CreditCardIcon,
   FoldersIcon,
   HouseIcon,
   ListChecksIcon,
@@ -27,6 +28,7 @@ import type { AuditView as AuditComponent } from "./audit-view";
 import type { DesignSystemView as DesignSystemComponent } from "./design-system-view";
 import type { OrganizationView as OrganizationComponent } from "./organization-view";
 import type { OverviewView as OverviewComponent } from "./overview-view";
+import { PersonDirectory } from "./person-identity";
 import type { SyncHistoryView as SyncHistoryComponent } from "./sync-history-view";
 import type { TransactionsView as TransactionsComponent } from "./transactions-view";
 import { WorkspacePageError } from "./workspace-page";
@@ -34,6 +36,11 @@ import { scopedHref } from "./workspace-resource";
 import { SidebarFrame, WorkspaceFrame } from "./workspace-shell";
 import { WorkspaceSkeleton } from "./workspace-ui";
 
+const loadInvestments = async () => {
+  const { data, error } = await tryCatch(() => import("./investments-view"));
+  return { default: error ? WorkspacePageError : data.InvestmentsView };
+};
+const InvestmentsView = memo(lazy(loadInvestments));
 const loadOverview = async () => {
   const { data, error } = await tryCatch(() => import("./overview-view"));
   if (error) {
@@ -41,6 +48,11 @@ const loadOverview = async () => {
   }
   return { default: data.OverviewView };
 };
+const loadCards = async () => {
+  const { data, error } = await tryCatch(() => import("./cards-view"));
+  return { default: error ? WorkspacePageError : data.CardsView };
+};
+const CardsView = memo(lazy(loadCards));
 const loadAudit = async () => {
   const { data, error } = await tryCatch(() => import("./audit-view"));
   if (error) {
@@ -93,9 +105,11 @@ const TransactionsView = memo(
 const pageLoaders: Record<string, (() => Promise<unknown>) | undefined> = {
   "/account": loadOverview,
   "/account/audit": loadAudit,
+  "/account/cards": loadCards,
   "/account/connections": () => import("./dashboard-view"),
   "/account/design-system": loadDesignSystem,
   "/account/groups": loadOrganization,
+  "/account/investments": loadInvestments,
   "/account/rules": loadOrganization,
   "/account/sync": loadSyncHistory,
   "/account/transactions": loadTransactions,
@@ -127,6 +141,12 @@ const pages = [
     name: "Transações",
     path: "/account/transactions",
   },
+  {
+    icon: CreditCardIcon,
+    name: "Cartões",
+    path: "/account/cards",
+  },
+  { icon: BankIcon, name: "Investimentos", path: "/account/investments" },
   {
     icon: ListChecksIcon,
     name: "Regras",
@@ -168,6 +188,15 @@ export function WorkspaceView({
   const path = location.pathname;
   const logout = useCallback(() => command("logout"), [command]);
   let content = children;
+  if (path === "/account/cards") {
+    content = (
+      <CardsView
+        api={api}
+        key={route}
+        snapshot={snapshot}
+      />
+    );
+  }
   if (
     path === "/account" &&
     snapshot.connections.some(
@@ -201,6 +230,15 @@ export function WorkspaceView({
       />
     );
   }
+  if (path === "/account/investments") {
+    content = (
+      <InvestmentsView
+        api={api}
+        key={route}
+        snapshot={snapshot}
+      />
+    );
+  }
   if (path === "/account/sync") {
     content = (
       <SyncHistoryView
@@ -223,23 +261,25 @@ export function WorkspaceView({
     content = <DesignSystemView key={route} />;
   }
   return (
-    <WorkspaceFrame
-      navigation={
-        <WorkspaceNavigation
-          busy={busy}
-          logout={logout}
-          snapshot={snapshot}
-        />
-      }
-      route={route}
-    >
-      <div
-        className="workspace-page"
-        key={route}
+    <PersonDirectory value={snapshot.people}>
+      <WorkspaceFrame
+        navigation={
+          <WorkspaceNavigation
+            busy={busy}
+            logout={logout}
+            snapshot={snapshot}
+          />
+        }
+        route={route}
       >
-        <Suspense fallback={<WorkspaceSkeleton />}>{content}</Suspense>
-      </div>
-    </WorkspaceFrame>
+        <div
+          className="workspace-page"
+          key={route}
+        >
+          <Suspense fallback={<WorkspaceSkeleton />}>{content}</Suspense>
+        </div>
+      </WorkspaceFrame>
+    </PersonDirectory>
   );
 }
 

@@ -7,8 +7,12 @@ import {
 
 const paths = new Set([
   "/account",
+  "/account/cards",
+  "/demo/cards",
+  "/demo/cards/",
   "/account/audit",
   "/account/transactions",
+  "/account/investments",
   "/account/rules",
   "/account/groups",
   "/account/sync",
@@ -18,6 +22,8 @@ const paths = new Set([
   "/demo/",
   "/demo/transactions",
   "/demo/transactions/",
+  "/demo/investments",
+  "/demo/investments/",
   "/demo/rules",
   "/demo/rules/",
   "/demo/groups",

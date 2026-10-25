@@ -6,6 +6,8 @@ import type {
   TransactionProjection,
   TransactionStatus,
 } from "./finance.entity";
+import type { FinancialIdentity } from "./financial-identity.entity";
+import type { InvestmentDetails } from "./investment.entity";
 import type { RuleFilter } from "./rules.entity";
 
 export const SpaceType = {
@@ -169,11 +171,13 @@ export interface Investment {
   connectionId: string | null;
   currency: string;
   date: string | null;
+  details?: InvestmentDetails | null | undefined;
   id: string;
+  identity?: FinancialIdentity | null | undefined;
   included: boolean;
   manual: boolean;
   name: string;
-  personId?: string;
+  personId?: string | undefined;
   spaceId: string;
   type: string;
 }

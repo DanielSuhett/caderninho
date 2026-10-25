@@ -128,7 +128,7 @@ export function SidebarFrame({
         ) : (
           <Sidebar.Trigger aria-label="Alternar navegação" />
         )}
-        {showLabels === true && (
+        {showLabels === true && !!footer && (
           <p className="sidebar-installation">{footer}</p>
         )}
         {!isMobile && <ThemeToggle />}
@@ -138,7 +138,7 @@ export function SidebarFrame({
 }
 function WorkspaceContent({
   children,
-  footer = "Seus dados na sua Cloudflare. Acesso controlado por você.",
+  footer = "",
 }: {
   children: ReactNode;
   footer?: string;
@@ -175,7 +175,7 @@ function WorkspaceContent({
       >
         {children}
       </main>
-      <footer className="workspace-footer">{footer}</footer>
+      {!!footer && <footer className="workspace-footer">{footer}</footer>}
     </div>
   );
 }

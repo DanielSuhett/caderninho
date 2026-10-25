@@ -32,7 +32,13 @@ export interface ProviderPayment
   boletoMetadata?: ProviderBoleto | null | undefined;
 }
 export interface ProviderConnection {
-  connector?: { id: string | number } | undefined;
+  connector?:
+    | {
+        id: string | number;
+        name?: string | null | undefined;
+        imageUrl?: string | null | undefined;
+      }
+    | undefined;
   id: string;
 }
 export interface ProviderAccount {
@@ -40,6 +46,8 @@ export interface ProviderAccount {
   creditData?:
     | {
         creditLimit?: MoneyInput;
+        brand?: string | null | undefined;
+        brandAdditionalInfo?: string | null | undefined;
         availableCreditLimit?: MoneyInput;
         balanceCloseDate?: string | null | undefined;
         balanceDueDate?: string | null | undefined;

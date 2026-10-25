@@ -87,7 +87,7 @@ pendentes, futuras e ignoradas continuam explícitas.
 Meter representa consumo com denominador conhecido. Nas estimativas do free
 tier, o preenchimento laranja continua representando consumo, com período,
 cota e estimativa identificados. Importação Pluggy mostra fase e contas reais,
-sem porcentagem global inventada. A demo pública em `/demo`, `/demo/transactions`,
+sem porcentagem global inventada. A demo pública em `/demo`, `/demo/transactions`, `/demo/investments`,
 `/demo/rules` e `/demo/groups` usa somente fixtures sintéticas compartilhadas
 com testes; compartilha os componentes reais do aplicativo. Edições de regras e
 grupos duram até recarregar a aba. Salvar uma regra não reclassifica o histórico;
@@ -123,6 +123,13 @@ inferir instituição por nome de conta, pessoa ou saldo.
 
 ## Conferência de composição
 
+Cartões (`/account/cards` e `/demo/cards`), Investimentos e Visão geral
+compartilham `FinancialMetric`, valores de 32/26 px, metadados de 14 px e os
+tokens globais de conteúdo de 16 px. Cartões e Visão geral usam `CreditLimitCard`.
+Gastos mensais, limites atuais e parcelas recebidas formam seções distintas.
+A carteira mostra composição atual por classe e instituição. Consulte os
+[cálculos e estados de Cartões](docs/cards.md).
+
 Grade opt-in: `?grid=1` no painel/demo e `#layout-grid` nas páginas públicas.
 12 colunas e gutters de 24 px no desktop; 4 colunas e 16 px no celular; baseline 8 px.
 A grade confere eixos de conteúdo e margens; o padding interno dos componentes
@@ -132,3 +139,34 @@ Não incluir controles que só abrem conteúdo vazio, IDs na leitura financeira
 inicial ou ações secundárias dominantes. A validação visual é limitada aos
 estados realmente vistos; revisar desktop, celular, teclado, foco e os dois
 temas antes de considerar uma alteração concluída.
+
+## Carteira e identidade financeira
+
+Investimentos é a carteira do investidor em `/account/investments` e
+`/demo/investments`; parcelas de cartão ficam em Cartões. A aba Compromissos
+foi removida. As telas usam FinancialMetric, LayerCard, donuts e legendas
+exatas, com semântica e rótulos próprios. Composição de investimentos usa posição
+bruta; líquido, resultado informado e resgate não são estimados. Valores sem
+cobertura aparecem como indisponíveis. Dados antigos continuam legíveis.
+
+PersonAvatar identifica pessoas; AccountAvatar mostra bandeira em cartões e
+instituição em contas/investimentos, com avatar de pessoa sobreposto quando há
+mais de uma pessoa e nenhum filtro de pessoa selecionado. O combo usa círculos
+de 32 px sobrepostos em 10 px, no mesmo eixo. Bandeiras vêm de assets locais licenciados. Instituições
+usam exclusivamente `connector.imageUrl` da CDN Pluggy, sem inferir pelo nome do
+ativo. Instituição explícita de B3 prevalece; sem logo verificado, ícone genérico.
+Filtros, linhas, saldos e limites reutilizam a mesma identificação.
+
+Títulos e métricas não repetem explicações no corpo. Ajuda contextual fica em
+Tooltip Kumo acessível por foco, avisos de falha/parcialidade permanecem visíveis.
+A demo tem um único marcador no topo; não repete avisos junto de cada filtro.
+
+Os avatares de pessoas integram o botão Filtros em um grupo compacto (até três
+avatares e +N). Filtros de escopo, classe, instituição, cartão e moeda ficam no
+diálogo Kumo. Cada tela tem uma ação de atualização, sem ícones duplicados.
+
+PersonAvatar usa a foto da pessoa quando disponível e mantém as iniciais como
+alternativa para ausência ou falha de carregamento. PersonDirectory compartilha
+a identidade por ID, sem repetir imagens nos registros financeiros. As duas
+pessoas da demo usam as fotos fornecidas para ilustrar o produto. A edição em
+Conexões oferece prévia, troca, remoção e salvamento explícito.

@@ -1,9 +1,11 @@
 import { z } from "zod/v4";
 
 import {
+  AccountType,
   CategoryColorSchema,
   CategoryIconSchema,
   CategoryKind,
+  FinancialIdentitySchema,
   RunStatus,
   SpaceType,
   SpendingGroupBy,
@@ -12,10 +14,13 @@ import {
   TransactionIdentificationSchema,
   TransactionStatus,
 } from "../domain";
+import { CardCommitmentsResponseSchema } from "./card-commitments";
+import { PortalCardsQuerySchema, PortalCardsSchema } from "./cards";
 import {
   FinancialOverviewResponseSchema,
   MonthlySpendingResponseSchema,
 } from "./dashboard";
+import { InvestmentListSchema } from "./investments";
 import { planningTools } from "./planning";
 import {
   ImportedRuleOriginSchema,
@@ -33,6 +38,9 @@ export const PortalQuerySchema = z
   .object({
     csrf: z.string(),
     query: z.union([
+      PortalCardsQuerySchema,
+      planningTools.get_investments.command,
+      planningTools.get_card_commitments.command,
       planningTools.preview_rule_import.command,
       planningTools.get_accounts.command,
       planningTools.get_transactions.command,
@@ -114,7 +122,14 @@ const RuleListSchema = z.object({
 });
 export const AccountListSchema = z.object({
   data: z.object({
-    records: z.array(named.extend({ personId: id, personName: z.string() })),
+    records: z.array(
+      named.extend({
+        identity: FinancialIdentitySchema.nullish(),
+        personId: id,
+        personName: z.string(),
+        type: z.enum([AccountType.BANK, AccountType.CREDIT]).optional(),
+      }),
+    ),
   }),
 });
 const TransactionRecordSchema = z.object({
@@ -164,7 +179,10 @@ export const PortalTransactionListSchema = z.object({
 const portalQueryResponses = {
   generate_chart: MonthlySpendingResponseSchema,
   get_accounts: AccountListSchema,
+  get_card_commitments: CardCommitmentsResponseSchema,
+  get_investments: InvestmentListSchema,
   get_overview: FinancialOverviewResponseSchema,
+  get_portal_cards: PortalCardsSchema,
   get_portal_transactions: PortalTransactionListSchema,
   get_transactions: TransactionListSchema,
   preview_rule_import: z.object({ data: RuleImportResultSchema }),

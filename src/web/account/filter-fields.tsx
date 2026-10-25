@@ -15,7 +15,9 @@ import {
   useState,
 } from "react";
 
+import type { Person } from "../../domain";
 import { UiButton } from "../ui";
+import { type AccountAppearance, AccountIdentity } from "./account-identity";
 import { type CategoryAppearance, CategoryLabel } from "./category-appearance";
 
 const Calendar = lazy(async () => {
@@ -118,8 +120,10 @@ export function QuerySearch({
 }
 
 interface CatalogOption {
+  account?: AccountAppearance;
   appearance?: CategoryAppearance;
   label: string;
+  owner?: Person | undefined;
   value: string;
 }
 
@@ -128,7 +132,9 @@ export function AccountFilter({
   value,
   showOwner = false,
 }: {
-  accounts: Array<{ id: string; name: string; personName?: string }>;
+  accounts: Array<
+    AccountAppearance & { id: string; personId?: string; personName?: string }
+  >;
   value: string;
   showOwner?: boolean;
 }) {
@@ -144,10 +150,12 @@ export function AccountFilter({
   const items = [
     { label: "Todas as contas", value: "" },
     ...accounts.map((account) => ({
-      label:
-        showOwner && account.personName
-          ? `${account.name} · ${account.personName}`
-          : account.name,
+      account,
+      label: account.name,
+      owner:
+        showOwner && account.personId && account.personName
+          ? { id: account.personId, name: account.personName }
+          : undefined,
       value: account.id,
     })),
   ];
@@ -156,7 +164,18 @@ export function AccountFilter({
       <Select
         className="w-full"
         defaultValue={value}
-        items={items}
+        items={items.map((item) => ({
+          label:
+            "account" in item ? (
+              <AccountIdentity
+                account={item.account}
+                person={item.owner}
+              />
+            ) : (
+              item.label
+            ),
+          value: item.value,
+        }))}
         label="Conta"
         name="accountId"
       />
@@ -183,14 +202,21 @@ function renderOption(item: CatalogOption) {
       key={item.value}
       value={item}
     >
-      {item.appearance ? (
-        <CategoryLabel
-          category={item.appearance}
-          label={item.label}
+      {!!item.account && (
+        <AccountIdentity
+          account={item.account}
+          person={item.owner}
         />
-      ) : (
-        item.label
       )}
+      {!item.account &&
+        (item.appearance ? (
+          <CategoryLabel
+            category={item.appearance}
+            label={item.label}
+          />
+        ) : (
+          item.label
+        ))}
     </Combobox.Item>
   );
 }

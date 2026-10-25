@@ -6,18 +6,77 @@ import type {
   PortalQueryResults,
   WorkspaceCatalog,
 } from "../contracts";
-import { activeRules, categoryCatalog, ruleMatches } from "../domain";
+import {
+  activeRules,
+  categoryCatalog,
+  investmentPortfolio,
+  ruleMatches,
+} from "../domain";
+import { cardCommitmentsFixture } from "../fixtures/card-commitments";
 import {
   type DemoRecord,
   demoAccounts,
   demoLedger,
   demoPeople,
+  demoReferenceDay,
 } from "../fixtures/finance";
+import { demoInvestments } from "../fixtures/investments";
 import { workspaceFixture } from "../fixtures/workspace";
 import type { OrganizationApi } from "./account/account-api";
+import { demoCards } from "./demo-cards";
 import type { DemoData } from "./demo-data";
 import { randomId } from "./random-id";
 
+function demoCommitments(
+  query: Extract<PortalQuery, { tool: "get_card_commitments" }>,
+  categories: WorkspaceCatalog["categories"],
+  revision: number,
+): PortalQueryResults["get_card_commitments"] {
+  const fixture = cardCommitmentsFixture(
+    { month: query.month ?? "2026-10" },
+    query,
+  );
+
+  const data =
+    query.spaceId === "personal" || !query.spaceId
+      ? {
+          ...fixture,
+          categories: fixture.categories.map((row) => ({
+            ...row,
+            color:
+              categories.find((category) => category.id === row.id)?.color ??
+              row.color,
+            name:
+              categories.find((category) => category.id === row.id)?.name ??
+              row.name,
+          })),
+        }
+      : {
+          ...fixture,
+          accounts: [],
+          categories: [],
+          installments: [],
+          months: [],
+          totals: [],
+        };
+  return {
+    coverage: {
+      connectionIds: [],
+      kind: "local_only",
+      oldestLastSuccessAt: demoReferenceDay,
+      partial: false,
+    },
+    data,
+    oldestLastSuccessAt: demoReferenceDay,
+    partial: false,
+    revision,
+    scope: {
+      spaceId: query.spaceId ?? "personal",
+      ...(query.personId && { personId: query.personId }),
+    },
+    view: "effective",
+  };
+}
 type Group = Omit<WorkspaceCatalog, "spaces">;
 type ParsedMutation = z.output<typeof PortalMutationSchema>["command"];
 type RuleCommand = Extract<
@@ -284,13 +343,43 @@ export function createDemoSession({
       data: {
         records: view(query.spaceId).accounts.map((account) => ({
           id: account.id,
+          identity: account.identity,
           name: account.name,
           personId: account.personId,
           personName:
             demoPeople.find((person) => person.id === account.personId)?.name ??
             "Pessoa de exemplo",
+          type: account.type,
         })),
       },
+    }),
+    get_card_commitments: (query) =>
+      demoCommitments(
+        query,
+        view(query.spaceId ?? "personal").categories,
+        revision,
+      ),
+    get_investments: (query) => ({
+      data: investmentPortfolio(
+        demoInvestments.filter(
+          (row) =>
+            row.spaceId === query.spaceId &&
+            (!query.personId || row.personId === query.personId),
+        ),
+        query,
+      ),
+      partial: false,
+    }),
+    get_portal_cards: (query) => ({
+      data: demoCards(
+        {
+          ...query,
+          currency: query.currency ?? "BRL",
+          spaceId: query.spaceId ?? "personal",
+        },
+        view(query.spaceId ?? "personal"),
+      ),
+      partial: false,
     }),
   };
   const api: OrganizationApi = {

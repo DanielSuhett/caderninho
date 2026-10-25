@@ -1,4 +1,5 @@
 import type { TransactionClassification } from "./category.entity";
+import type { FinancialIdentity } from "./financial-identity.entity";
 import type { AccountDetails, TransactionDetails } from "./planning.entity";
 import type { TransactionIdentification } from "./transaction.entity";
 
@@ -23,6 +24,7 @@ export interface AccountMetadata {
   balanceMinor: string | null;
   balanceObservedAt: string | null;
   currency: string;
+  identity?: FinancialIdentity | null | undefined;
   name: string;
   type: AccountType;
 }

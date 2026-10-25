@@ -13,6 +13,7 @@ import {
   TransactionOrder,
   TransactionStatus,
 } from "../domain";
+import { CardCommitmentsQuerySchema } from "./card-commitments";
 import { RuleImportFields } from "./rule-import";
 import { RuleFieldsSchema, RulePreviewQuerySchema } from "./rules";
 
@@ -492,6 +493,12 @@ export const planningTools = {
     readOnly: true,
     schema: z.object({ ...scope }).strict(),
   }),
+  get_card_commitments: planningTool("get_card_commitments", {
+    description:
+      "Compromissos observados de contas CREDIT: gastos efetivos POSTED, pendentes e futuras importadas separados; parcelas por mês, categorias e limites explícitos. Créditos classificados como despesa reduzem o gasto. Não prevê parcelas ausentes, não soma pagamento de fatura e não confunde ocupação observada com limite bancário.",
+    readOnly: true,
+    schema: CardCommitmentsQuerySchema,
+  }),
   get_cards: planningTool("get_cards", {
     description:
       "Cartões principais e adicionais identificados na origem; ids estáveis e suporte a include_hidden.",
@@ -547,9 +554,17 @@ export const planningTools = {
   }),
   get_investments: planningTool("get_investments", {
     description:
-      "Posições locais e importadas disponíveis. Variação de saldo não comprova rentabilidade.",
+      "Carteira do investidor: posições brutas/líquidas, resultado informado, resgate e alocação por classe/instituição, por moeda. Excluídos e resgatados não compõem totais; campos ausentes são desconhecidos. Não infere rentabilidade nem histórico.",
     readOnly: true,
-    schema: z.object({ ...scope }).strict(),
+    schema: z
+      .object({
+        ...scope,
+        currency: currency.optional(),
+        institutionId: id.optional(),
+        status: text.optional(),
+        type: text.optional(),
+      })
+      .strict(),
   }),
   get_loan_schedule: planningTool("get_loan_schedule", {
     description:

@@ -399,6 +399,7 @@ test("the source tables retain financial columns and typed transaction identific
     "balanceMinor",
     "balanceObservedAt",
     "currency",
+    "identity",
     "name",
     "type",
   ]);

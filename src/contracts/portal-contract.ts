@@ -1,6 +1,11 @@
 import { z } from "zod/v4";
 
-import { AccountType, ImportPhase, RunStatus } from "../domain";
+import {
+  AccountType,
+  FinancialIdentitySchema,
+  ImportPhase,
+  RunStatus,
+} from "../domain";
 import { HouseholdCatalogSchema } from "./household";
 import type { AccountConnectToken, PortalResponse } from "./portal.types";
 export const AccountFailureCodeSchema = z.enum([
@@ -30,6 +35,7 @@ export const PortalResponseSchema = z.object({
             balanceMinor: z.string().nullable(),
             balanceObservedAt: z.string().nullable(),
             currency: z.string(),
+            identity: FinancialIdentitySchema.nullish(),
             name: z.string(),
             type: z.enum([AccountType.BANK, AccountType.CREDIT]),
           })

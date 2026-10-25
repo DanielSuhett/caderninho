@@ -5,6 +5,7 @@ import {
   compareRules,
   detectSubscriptions,
   financialCharts,
+  investmentPortfolio,
   localDay,
   minorPresentation,
   monthDate,
@@ -18,6 +19,7 @@ import {
 } from "../../domain";
 import { type ProjectedPayment, recurrencePayments } from "./billing";
 import { effectiveBills } from "./bills.service";
+import { cardCommitments } from "./card-commitments.service";
 import { planningCursor } from "./cursor";
 import type {
   PlanningRepository,
@@ -98,7 +100,7 @@ export async function planningQuery(
   function owned<
     T extends {
       spaceId: string;
-      personId?: string;
+      personId?: string | undefined;
       accountId?: string | null;
       connectionId?: string | null;
     },
@@ -547,9 +549,24 @@ export async function planningQuery(
   }
 
   function handleGetInvestments(
-    _input: Extract<PlanningCommand, { tool: "get_investments" }>,
+    input: Extract<PlanningCommand, { tool: "get_investments" }>,
   ) {
-    return { records: owned(state.investments) };
+    return investmentPortfolio(
+      owned(state.investments).map((investment) => ({
+        ...investment,
+        identity: investment.identity ?? {
+          cardBrand: null,
+          institution:
+            Object.values(
+              snapshot.connections.find(
+                (connection) => connection.id === investment.connectionId,
+              )?.accounts ?? {},
+            ).find((account) => account.identity?.institution)?.identity
+              ?.institution ?? null,
+        },
+      })),
+      input,
+    );
   }
 
   function handleGetLoans(
@@ -892,6 +909,13 @@ export async function planningQuery(
   switch (command.tool) {
     case "get_subscriptions":
       return await handleGetSubscriptions(command);
+    case "get_card_commitments":
+      return cardCommitments({
+        query: command,
+        referenceDay: day,
+        repository,
+        snapshot,
+      });
     case "get_spaces":
       return handleGetSpaces(command);
     case "get_accounts":

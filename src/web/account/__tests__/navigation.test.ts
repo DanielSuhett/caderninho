@@ -13,6 +13,16 @@ await test("navigation only handles internal workspace destinations, retaining n
     ),
     true,
   );
+  assert.equal(
+    isWorkspaceUrl(
+      new URL(
+        "/account/investments?person=ana&space=personal&month=2026-10",
+        current,
+      ),
+      current,
+    ),
+    true,
+  );
   for (const destination of [
     "https://other.test/account",
     "/account/login",
@@ -37,6 +47,8 @@ await test("demo navigation keeps GET filters client-side without crossing the p
     "/demo/",
     "/demo/transactions?month=2026-10&text=mercado",
     "/demo/transactions/?month=2026-10&accountId=checking",
+    "/demo/investments?month=2026-10&currency=USD",
+    "/demo/investments/",
   ]) {
     assert.equal(isWorkspaceUrl(new URL(path, current), current), true, path);
   }

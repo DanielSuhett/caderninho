@@ -1,6 +1,7 @@
 export interface Person {
   id: string;
   name: string;
+  photo?: string | null | undefined;
 }
 export interface PluggyProfile {
   clientFingerprint: string | null;

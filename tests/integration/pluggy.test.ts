@@ -31,7 +31,7 @@ test("official SDK preserves numeric lexemes and only reads concrete account/tra
     if (url.pathname === "/items/c") {
       return Promise.resolve(
         Response.json({
-          connector: { id: 200, name: "Unused connector name" },
+          connector: { id: 200, name: "Synthetic bank" },
           id: "c",
           status: "UPDATED",
         }),
@@ -65,7 +65,7 @@ test("official SDK preserves numeric lexemes and only reads concrete account/tra
   });
   const source = adapter();
   assert.deepEqual(await source.connection("c"), {
-    connector: { id: "200" },
+    connector: { id: "200", name: "Synthetic bank" },
     id: "c",
   });
   const [a] = await source.accounts("c");

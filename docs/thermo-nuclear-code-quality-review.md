@@ -2,7 +2,10 @@
 
 Método: [thermo-nuclear-code-quality-review](https://github.com/cursor/plugins/blob/main/cursor-team-kit/skills/thermo-nuclear-code-quality-review/SKILL.md).
 Escopo: diff completo de `main@27869b9` até o draft #12. A rodada começa em
-`3f6bcf7`; os achados abaixo foram corrigidos na própria branch.
+`3f6bcf7`; os achados abaixo foram corrigidos na própria branch em `25359a1`.
+Os números de linhas e os 99 comandos abaixo registram essa rodada. A integração
+posterior com `main@17d037d`, incluindo o centésimo comando e as novas telas,
+está documentada na seção 8 da [auditoria](architecture-audit.md).
 
 ## Achados confirmados e correções
 
@@ -83,3 +86,9 @@ adicionados plugins de lint, dependências, casts, supressões ou novas camadas.
   do commit entregue fica registrada no PR.
 
 Esta revisão não comprova execução de Pluggy/OAuth externos ou de um host MCP real.
+
+
+Na integração final, o demo conserva os quatro handlers recebidos da main. A
+validação completa passou com 96 testes Node, 169 testes Cloudflare em 28 arquivos,
+build e runtime nativo de 10 mil e 100 mil registros. Os 100 schemas de entrada,
+metadados e allowlists coincidem com `main@17d037d`.

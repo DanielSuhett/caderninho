@@ -88,6 +88,7 @@ export async function publicationData(db: Database, input: Publication) {
           balanceMinor,
           balanceObservedAt,
           currency: account.currency,
+          identity: account.identity ?? previous?.identity ?? null,
           name: account.name,
           type: account.type,
         };

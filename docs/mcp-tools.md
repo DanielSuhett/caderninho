@@ -2,7 +2,7 @@
 
 Gerado por `npm run docs:mcp` a partir do registro de ferramentas.
 
-103 ferramentas: 33 consultas/prévias, 69 escritas locais e 1 operação de sincronização.
+104 ferramentas: 34 consultas/prévias, 69 escritas locais e 1 operação de sincronização.
 
 | Ferramenta | Operação | Schema de saída | Descrição |
 | --- | --- | --- | --- |
@@ -50,13 +50,14 @@ Gerado por `npm run docs:mcp` a partir do registro de ferramentas.
 | `get_accounts` | consulta/prévia | — | Contas e saldos com referência temporal; inclui contas manuais e preferências locais. |
 | `get_bills` | consulta/prévia | — | Faturas importadas, pagamentos bancários e marcação manual separada. |
 | `get_budget` | consulta/prévia | — | Orçamento configurado e consumo do ciclo vigente por moeda e categoria; informa valores sem classificação. |
+| `get_card_commitments` | consulta/prévia | sim | Compromissos observados de contas CREDIT: gastos efetivos POSTED, pendentes e futuras importadas separados; parcelas por mês, categorias e limites explícitos. Créditos classificados como despesa reduzem o gasto. Não prevê parcelas ausentes, não soma pagamento de fatura e não confunde ocupação observada com limite bancário. |
 | `get_cards` | consulta/prévia | — | Cartões principais e adicionais identificados na origem; ids estáveis e suporte a include_hidden. |
 | `get_categories` | consulta/prévia | — | Listar registros locais e importados, incluindo ocultos quando solicitado. |
 | `get_category_groups` | consulta/prévia | — | Listar agrupadores de categorias de um espaço; não são espaços financeiros. |
 | `get_goal_plan` | consulta/prévia | — | Quanto guardar por mês, arredondado para cima em unidades mínimas; sem presumir rendimento. |
 | `get_goals` | consulta/prévia | — | Metas locais com valor, prazo e vínculo patrimonial; use get_goal_plan para calcular aportes. |
 | `get_installments` | consulta/prévia | — | Planos manuais e candidatos derivados de metadados; agrupamento da origem é estimativa, não prova de pagamento. |
-| `get_investments` | consulta/prévia | — | Posições locais e importadas disponíveis. Variação de saldo não comprova rentabilidade. |
+| `get_investments` | consulta/prévia | sim | Carteira do investidor: posições brutas/líquidas, resultado informado, resgate e alocação por classe/instituição, por moeda. Excluídos e resgatados não compõem totais; campos ausentes são desconhecidos. Não infere rentabilidade nem histórico. |
 | `get_loan_schedule` | consulta/prévia | — | Cronograma SAC local e estado de conciliação de cada parcela. |
 | `get_loans` | consulta/prévia | — | Listar registros locais e importados, incluindo ocultos quando solicitado. |
 | `get_notification_preferences` | consulta/prévia | — | Preferências locais de avisos. deliveryConfigured=false informa que o envio não está configurado. |

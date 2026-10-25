@@ -9,6 +9,8 @@ links. [DESIGN.md](../DESIGN.md) e o [guia](design-system.md) governam a composi
 | --- | --- |
 | `/account` | Resumo completo por período/moeda, categorias, série mensal, recentes e contas/cartões |
 | `/account/transactions` | Table, filtros GET, Dialog de detalhes e parcelas |
+| `/account/cards` | Gastos do mês, categorias, limites e parcelas de um cartão ou de todos |
+| `/account/investments` | Carteira de ativos: posição bruta/líquida, resultado, resgate e composição por classe/instituição |
 | `/account/rules` | Condições, categoria, prioridade, preview, edição e composição com Flow sob demanda |
 | `/account/groups` | Grupos de planejamento, orçamento, categorias e etiquetas |
 | `/account/sync` | Rodadas, fases, estados, erros e referências históricas |
@@ -110,7 +112,7 @@ nulo e sinal divergente.
 
 Todas as páginas exigem sessão. Catálogo e histórico são leituras autenticadas;
 a consulta financeira usa POST com origem, JSON e CSRF validados, permitindo
-as leituras de contas, ocorrências, compras agrupadas, `get_overview`,
+as leituras de contas, ocorrências, compras agrupadas, `get_overview`, `get_card_commitments`,
 `generate_chart` restrito a `groupBy=month` e `preview_rule_import`. Essa allowlist
 é somente de leitura; escritas têm schema próprio. Nenhuma credencial é devolvida.
 
@@ -125,7 +127,7 @@ O [guia de componentes](design-system.md) define a composição das páginas. Ca
 
 ## Demo pública
 
-`/demo`, `/demo/transactions`, `/demo/rules` e `/demo/groups` são assets públicos
+`/demo`, `/demo/transactions`, `/demo/cards`, `/demo/investments`, `/demo/rules` e `/demo/groups` são assets públicos
 sem autenticação e sem consulta à API financeira privada. Compartilham
 WorkspaceFrame, SidebarFrame, FinancialDashboard, TransactionList e
 OrganizationView com seus editores e prévia. Ledger sintético de maio a outubro 2026,
@@ -169,6 +171,11 @@ ou atomicidade. Grupo novo tem Receitas/Despesas/Transferências e nenhuma conta
 mudar de grupo preserva mês, escolhe sua moeda e limpa conta/texto/direção.
 
 ## Agregação e apresentação
+
+A aba [Cartões](cards.md), em `/account/cards`, tem um recorte próprio de contas
+`CREDIT`: inclui compras sem categoria e separa limite atual, gastos confirmados,
+pendências e parcelas futuras. A rosca divide as compras antes dos estornos;
+não atribui categorias à ocupação do limite. A demo equivalente é `/demo/cards`.
 
 Resumo/categorias usam `get_overview`; a série usa `generate_chart` com
 `groupBy=month` e seis meses. O portal valida ambos pelos schemas de resposta.

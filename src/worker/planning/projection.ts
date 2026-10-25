@@ -4,6 +4,7 @@ import {
   CategoryKind,
   CLASSIFICATION_VERSION,
   connectionPartial,
+  type FinancialIdentity,
   fixedCategoryId,
   type PlanningAccount,
   PlanningError,
@@ -79,6 +80,7 @@ export function cardCatalog(snapshot: PlanningSnapshot, state: PlanningState) {
     {
       id: string;
       accountId: string;
+      identity: FinancialIdentity | null;
       number: string;
       name: string;
       hidden: boolean;
@@ -114,6 +116,7 @@ export function cardCatalog(snapshot: PlanningSnapshot, state: PlanningState) {
         deleted: setting?.deleted ?? false,
         hidden: setting?.hidden ?? account.hidden,
         id,
+        identity: account.identity ?? null,
         name: setting?.name ?? account.name,
         number,
         primary: number === main,
@@ -132,6 +135,7 @@ export interface Selection {
   direction?: string | undefined;
   from?: string | undefined;
   include_ignored?: boolean | undefined;
+  investments?: boolean;
   personId?: string | undefined;
   profileId?: string | undefined;
   spaceId: string;
@@ -372,15 +376,36 @@ export function planningCoverage(
   );
   const selectedAccounts = accounts(snapshot).filter(
     (row) =>
+      !selection.investments &&
       (row.spaceId === selection.spaceId || movedAccountIds.has(row.id)) &&
       (!selection.personId || row.personId === selection.personId) &&
-      (!selection.accountId || row.id === selection.accountId),
+      (!selection.accountId || row.id === selection.accountId) &&
+      (!selection.accountIds || selection.accountIds.includes(row.id)),
   );
   const connectionIds = new Set(
     selectedAccounts.flatMap((row) =>
       row.connectionId ? [row.connectionId] : [],
     ),
   );
+  const investments = selection.investments
+    ? snapshot.state.investments.filter((row) => {
+        const ownerId =
+          snapshot.owners.find(
+            (owner) => owner.connectionId === row.connectionId,
+          )?.personId ??
+          row.personId ??
+          "self";
+        return (
+          row.spaceId === selection.spaceId &&
+          (!selection.personId || ownerId === selection.personId)
+        );
+      })
+    : [];
+  for (const row of investments) {
+    if (row.connectionId) {
+      connectionIds.add(row.connectionId);
+    }
+  }
   const origins = snapshot.connections.filter((row) => {
     if (connectionIds.has(row.id)) {
       return true;
@@ -391,7 +416,7 @@ export function planningCoverage(
     return (
       !selection.accountId &&
       selection.spaceId === "personal" &&
-      !Object.keys(row.accounts).length &&
+      (selection.investments || !Object.keys(row.accounts).length) &&
       (!selection.personId || personId === selection.personId)
     );
   });
@@ -399,7 +424,10 @@ export function planningCoverage(
   let kind = "empty";
   if (origins.length) {
     kind = "imported";
-  } else if (selectedAccounts.some((row) => row.manual)) {
+  } else if (
+    selectedAccounts.some((row) => row.manual) ||
+    investments.some((row) => row.manual)
+  ) {
     kind = "local_only";
   }
   return {
