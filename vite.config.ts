@@ -68,9 +68,16 @@ function copyPortalAssets(): Plugin {
         recursive: true,
       });
       await Promise.all(
-        ["demo.js", "landing.js", "account.css"].map((name) =>
-          copyFile(new URL(name, output), new URL(name, site)),
-        ),
+        [
+          "demo.js",
+          "landing.js",
+          "account.css",
+          "social-card.png",
+          "social-card-open-source-v3.png",
+          "favicon.ico",
+          "favicon.png",
+          "apple-touch-icon.png",
+        ].map((name) => copyFile(new URL(name, output), new URL(name, site))),
       );
 
       const [standalone, components] = await Promise.all([

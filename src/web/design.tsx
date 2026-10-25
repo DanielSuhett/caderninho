@@ -1,6 +1,22 @@
 export function DesignHead() {
   return (
     <>
+      <link
+        href="/favicon.ico"
+        rel="icon"
+        sizes="16x16 32x32"
+      />
+      <link
+        href="/favicon.png"
+        rel="icon"
+        sizes="96x96"
+        type="image/png"
+      />
+      <link
+        href="/apple-touch-icon.png"
+        rel="apple-touch-icon"
+        sizes="180x180"
+      />
       <script
         async
         src="/theme.js"

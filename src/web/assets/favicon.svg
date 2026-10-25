@@ -1,0 +1,25 @@
+<svg
+  height="180"
+  viewBox="0 0 180 180"
+  width="180"
+  xmlns="http://www.w3.org/2000/svg"
+>
+  <title>Caderninho</title>
+  <rect
+    fill="#005aeb"
+    height="180"
+    rx="32"
+    width="180"
+  />
+  <text
+    fill="#ffffff"
+    font-family="Inter Variable, Inter, sans-serif"
+    font-size="116"
+    font-weight="600"
+    text-anchor="middle"
+    x="90"
+    y="132"
+  >
+    C
+  </text>
+</svg>

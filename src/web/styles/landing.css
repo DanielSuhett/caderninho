@@ -1,3 +1,6 @@
+:where(.hero-actions, .install-actions) > a {
+  min-height: 44px;
+}
 .network-client-guide a {
   display: inline-block;
   padding-block: 12px 0;
@@ -90,13 +93,19 @@
   padding-block: 56px 0;
 }
 .hero > h1,
+.hero > .hero-kicker,
 .hero > .hero-description,
 .hero > .hero-note {
   margin-inline: auto;
   text-align: center;
 }
+.hero > .hero-kicker {
+  margin-bottom: 16px;
+  font-size: 16px;
+  color: var(--text);
+}
 .hero > .hero-description {
-  max-width: 61ch;
+  max-width: 55ch;
   margin-top: 24px;
   font-size: 18px;
 }
@@ -107,9 +116,23 @@
   margin-top: 28px;
 }
 .hero > .hero-note {
-  margin-top: 20px;
+  max-width: 68ch;
+  margin-top: 8px;
   font-size: 14px;
   color: var(--muted);
+}
+.hero-source {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: fit-content;
+  min-height: 44px;
+  margin: 12px auto 0;
+  font-size: 14px;
+  color: var(--text);
+}
+.cost-condition {
+  margin-top: 20px;
 }
 .network-figure {
   padding: 32px;
@@ -914,6 +937,10 @@ summary {
   .hero-actions {
     gap: 12px;
     margin-top: 24px;
+  }
+  .hero-actions > a {
+    justify-content: center;
+    width: 100%;
   }
   .network-figure {
     padding: 20px 12px;

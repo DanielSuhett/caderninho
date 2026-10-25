@@ -170,3 +170,28 @@ alternativa para ausência ou falha de carregamento. PersonDirectory compartilha
 a identidade por ID, sem repetir imagens nos registros financeiros. As duas
 pessoas da demo usam as fotos fornecidas para ilustrar o produto. A edição em
 Conexões oferece prévia, troca, remoção e salvamento explícito.
+
+## Compartilhamento da landing
+
+O hero destaca “Código aberto. De graça.”, com a categoria “Suas finanças no
+ChatGPT e Claude”, demo como primeira ação e link para o repositório MIT. O texto
+próximo diferencia software grátis de serviços externos e da instalação própria.
+Custos aparecem antes da comparação técnica, com as condições do Free visíveis.
+
+O card social usa Inter, fundo escuro e um acento azul Kumo. “Código aberto” e
+“De graça” são os textos principais. A composição central de 1200 × 630 px mantém
+a mensagem principal dentro dos 630 px centrais para tolerar recortes quadrados.
+`src/web/assets/social-card.svg` é a fonte editável;
+`public/social-card-open-source-v3.png` é a exportação atual. A URL nova evita
+reutilizar o cache da arte anterior (`social-card.png`, mantida por compatibilidade).
+Ao editar a arte, exporte novamente o PNG com Inter Variable local.
+O favicon usa a inicial C em Inter sobre azul Kumo, sem alterar o nome em texto
+na navegação: ICO 16/32 px, PNG 96 px e Apple 180 px. A fonte editável é
+`src/web/assets/favicon.svg`.
+
+Título, descrição e metadados sociais ficam em `src/web/landing-metadata.tsx`.
+O site público entrega canonical, Open Graph, X Card e JSON-LD WebSite no HTML
+inicial; a landing das instalações usa `noindex,follow` e não anuncia o domínio
+público como sua própria URL. A categoria do produto aparece antes do título do hero. Consulte a [revisão SEO](docs/seo.md) para fontes,
+limites da prova e pendências de infraestrutura.
+Depois de publicar o site, conferir `https://usecaderninho.com/` no OpenGraph.xyz.

@@ -2,6 +2,11 @@ import { LayerCard } from "@cloudflare/kumo/components/layer-card";
 import { ArrowRightIcon, CheckIcon } from "@phosphor-icons/react";
 
 import { Document } from "./document";
+import {
+  LandingMetadata,
+  landingDescription,
+  landingTitle,
+} from "./landing-metadata";
 import { LandingPerformance } from "./landing-performance";
 import { LandingRuleExample } from "./landing-rule-example";
 import { McpStaticFlow } from "./mcp-steps";
@@ -22,12 +27,16 @@ const quotas = [
   { name: "KV · chaves escritas", quota: 1000, used: 12 },
 ];
 
-function InstallLink() {
+function InstallLink({
+  variant = "primary",
+}: {
+  variant?: "primary" | "secondary";
+} = {}) {
   return (
     <UiLink
       href={installUrl}
       size="lg"
-      variant="primary"
+      variant={variant}
     >
       Instalar na minha Cloudflare
     </UiLink>
@@ -44,32 +53,15 @@ export function landingPage({
       head={
         <>
           <meta
-            content="Seus bancos na sua Cloudflare, conectados a várias IAs por MCP. Consultas agregadas e uma arquitetura pensada para os planos gratuitos."
+            content={landingDescription}
             name="description"
           />
-          {!!publicSite && (
-            <>
-              <link
-                href="https://usecaderninho.com/"
-                rel="canonical"
-              />
-              <meta
-                content="website"
-                property="og:type"
-              />
-              <meta
-                content="https://usecaderninho.com/"
-                property="og:url"
-              />
-              <meta
-                content="Caderninho · Seus bancos. Sua escolha de IA."
-                property="og:title"
-              />
-              <meta
-                content="Vários bancos, uma base sua e vários assistentes conectados por MCP."
-                property="og:description"
-              />
-            </>
+          {!!publicSite && <LandingMetadata />}
+          {!publicSite && (
+            <meta
+              content="noindex,follow"
+              name="robots"
+            />
           )}
           <link
             href="/landing.css"
@@ -77,7 +69,7 @@ export function landingPage({
           />
         </>
       }
-      title="Caderninho · Seus bancos. Sua escolha de IA."
+      title={landingTitle}
     >
       <a
         className="skip"
@@ -95,7 +87,7 @@ export function landingPage({
             Caderninho
           </a>
           <nav aria-label="Navegação principal">
-            <a href="#conectar">Guia MCP</a>
+            <a href="#conectar">Conectar IA</a>
             <a
               className="nav-secondary"
               href="#regras"
@@ -131,28 +123,37 @@ export function landingPage({
             aria-labelledby="hero-title"
             className="hero"
           >
+            <p className="hero-kicker">Suas finanças no ChatGPT e Claude</p>
             <h1 id="hero-title">
-              Seus bancos.
+              Código aberto.
               <br />
-              Sua escolha de IA.
+              De graça.
             </h1>
             <p className="hero-description">
-              Seus bancos na sua Cloudflare. Converse com seus dados no ChatGPT,
-              no Claude ou em outro cliente MCP compatível.
+              Veja contas, cartões e investimentos em um só lugar. Consulte suas
+              finanças no painel ou converse com seus dados na IA que você
+              escolher.
             </p>
             <div className="hero-actions">
-              <InstallLink />
               <UiLink
-                href="#desempenho"
+                href="/demo?month=2026-10"
                 size="lg"
-                variant="secondary"
+                variant="primary"
               >
-                Ver a diferença
+                Explorar a demo
               </UiLink>
+              <InstallLink variant="secondary" />
             </div>
+            <a
+              className="hero-source"
+              href={repository}
+            >
+              Ver código no GitHub · licença MIT
+            </a>
             <p className="hero-note">
-              Código aberto. Pensado para rodar a custo zero nos planos
-              gratuitos.
+              Demo com dados fictícios, sem cadastro. Para usar seus dados,
+              instale na sua Cloudflare. Serviços externos têm planos e limites
+              próprios. <a href="#free-tier">Entenda os custos.</a>
             </p>
             <figure
               aria-labelledby="network-title"
@@ -305,6 +306,127 @@ export function landingPage({
               Cada cliente define seus modelos e planos e precisa oferecer MCP
               remoto com OAuth.
             </p>
+          </section>
+
+          <section
+            aria-labelledby="cost-title"
+            className="landing-section"
+            id="free-tier"
+          >
+            <div className="section-intro">
+              <h2 id="cost-title">
+                O Caderninho é grátis. E os outros custos?
+              </h2>
+              <p>
+                Sem assinatura do Caderninho. O código é aberto, sob licença
+                MIT: você pode usar, estudar e modificar. Hospedagem, conexão
+                bancária e IA são serviços independentes.
+              </p>
+            </div>
+            <LayerCard className="cost-surface">
+              <dl className="cost-list">
+                <div>
+                  <dt>Caderninho</dt>
+                  <dd className="cost-value">Grátis</dd>
+                  <dd>
+                    Software de código aberto.{" "}
+                    <a href={repository}>Veja o código e a licença MIT.</a>
+                  </dd>
+                </div>
+                <div>
+                  <dt>Cloudflare</dt>
+                  <dd className="cost-value">Free</dd>
+                  <dd>Workers, D1, KV e Workflows nas cotas gratuitas.</dd>
+                </div>
+                <div>
+                  <dt>Meu Pluggy</dt>
+                  <dd className="cost-value">Gratuito</dd>
+                  <dd>
+                    Seus próprios dados, até cinco conexões, sem uso comercial.
+                  </dd>
+                </div>
+                <div>
+                  <dt>Sua IA</dt>
+                  <dd className="cost-value">Você escolhe</dd>
+                  <dd>
+                    Use o cliente compatível que já tem. O plano de IA é
+                    independente.
+                  </dd>
+                </div>
+              </dl>
+            </LayerCard>
+            <p className="cost-condition">
+              Os planos gratuitos têm cotas. A operação completa no Cloudflare
+              Free ainda está em validação; não há garantia de custo zero para
+              toda instalação.
+            </p>
+            <details className="cost-details">
+              <summary>Cotas e condições do custo zero</summary>
+              <p>
+                Simulação diária: 555 transações, 100 consultas MCP, uma
+                sincronização sem novidades e seis renovações OAuth.
+              </p>
+              <div className="quota-table">
+                <table>
+                  <caption>Projeção diária de D1 e KV</caption>
+                  <thead>
+                    <tr>
+                      <th scope="col">Recurso</th>
+                      <th scope="col">Uso / cota Free</th>
+                      <th scope="col">Fração</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {quotas.map((row) => (
+                      <tr key={row.name}>
+                        <th scope="row">{row.name}</th>
+                        <td>
+                          {count.format(row.used)}
+                          <span> / {count.format(row.quota)}</span>
+                        </td>
+                        <td>{percent.format(row.used / row.quota)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p>
+                Projeção de 22 out 2026. As cotas são diárias e compartilhadas
+                pela conta. D1 conta linhas examinadas. Novas importações e
+                outras aplicações aumentam o consumo.
+              </p>
+              <p className="source-links">
+                <a href="https://developers.cloudflare.com/d1/platform/pricing/">
+                  Cotas D1
+                </a>
+                <a href="https://developers.cloudflare.com/kv/platform/pricing/">
+                  Cotas KV
+                </a>
+                <a href="https://developers.cloudflare.com/workers/platform/pricing/">
+                  Preços Workers
+                </a>
+                <a href="https://docs.pluggy.ai/en/docs/guides/meu-pluggy-personal-use">
+                  Uso pessoal Pluggy
+                </a>
+              </p>
+            </details>
+            <details className="cost-details">
+              <summary>Validação da operação no Free</summary>
+              <p>
+                A operação completa no Free e o primeiro deploy em conta nova
+                ainda estão em validação. Na importação local, páginas de 500
+                registros chegaram a 10,3 ms de CPU média, acima dos 10 ms por
+                etapa do Workflows Free.
+              </p>
+              <p>
+                Benchmark de 23 out 2026: 50 execuções Node 24 após cinco
+                aquecimentos, sem D1 ou HTTP. CPU em produção ainda não medida.{" "}
+                <a href="https://developers.cloudflare.com/workflows/reference/limits/">
+                  Ver limites do Workflows
+                </a>
+                .
+              </p>
+            </details>
           </section>
 
           <section
@@ -473,111 +595,6 @@ export function landingPage({
           </section>
 
           <section
-            aria-labelledby="cost-title"
-            className="landing-section"
-            id="free-tier"
-          >
-            <div className="section-intro">
-              <h2 id="cost-title">Pensado para rodar a custo zero.</h2>
-              <p>
-                Caderninho gratuito e código aberto. Cloudflare Free e Meu
-                Pluggy para uso pessoal, dentro das cotas dos fornecedores.
-              </p>
-            </div>
-            <LayerCard className="cost-surface">
-              <dl className="cost-list">
-                <div>
-                  <dt>Cloudflare</dt>
-                  <dd className="cost-value">Free</dd>
-                  <dd>Workers, D1, KV e Workflows nas cotas gratuitas.</dd>
-                </div>
-                <div>
-                  <dt>Meu Pluggy</dt>
-                  <dd className="cost-value">Gratuito</dd>
-                  <dd>
-                    Seus próprios dados, até cinco conexões, sem uso comercial.
-                  </dd>
-                </div>
-                <div>
-                  <dt>Sua IA</dt>
-                  <dd className="cost-value">Você escolhe</dd>
-                  <dd>
-                    Use o cliente compatível que já tem. O plano de IA é
-                    independente.
-                  </dd>
-                </div>
-              </dl>
-            </LayerCard>
-            <details className="cost-details">
-              <summary>Cotas e condições do custo zero</summary>
-              <p>
-                Simulação diária: 555 transações, 100 consultas MCP, uma
-                sincronização sem novidades e seis renovações OAuth.
-              </p>
-              <div className="quota-table">
-                <table>
-                  <caption>Projeção diária de D1 e KV</caption>
-                  <thead>
-                    <tr>
-                      <th scope="col">Recurso</th>
-                      <th scope="col">Uso / cota Free</th>
-                      <th scope="col">Fração</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {quotas.map((row) => (
-                      <tr key={row.name}>
-                        <th scope="row">{row.name}</th>
-                        <td>
-                          {count.format(row.used)}
-                          <span> / {count.format(row.quota)}</span>
-                        </td>
-                        <td>{percent.format(row.used / row.quota)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <p>
-                Projeção de 22 out 2026. As cotas são diárias e compartilhadas
-                pela conta. D1 conta linhas examinadas. Novas importações e
-                outras aplicações aumentam o consumo.
-              </p>
-              <p className="source-links">
-                <a href="https://developers.cloudflare.com/d1/platform/pricing/">
-                  Cotas D1
-                </a>
-                <a href="https://developers.cloudflare.com/kv/platform/pricing/">
-                  Cotas KV
-                </a>
-                <a href="https://developers.cloudflare.com/workers/platform/pricing/">
-                  Preços Workers
-                </a>
-                <a href="https://docs.pluggy.ai/en/docs/guides/meu-pluggy-personal-use">
-                  Uso pessoal Pluggy
-                </a>
-              </p>
-            </details>
-            <details className="cost-details">
-              <summary>Validação da operação no Free</summary>
-              <p>
-                A operação completa no Free e o primeiro deploy em conta nova
-                ainda estão em validação. Na importação local, páginas de 500
-                registros chegaram a 10,3 ms de CPU média, acima dos 10 ms por
-                etapa do Workflows Free.
-              </p>
-              <p>
-                Benchmark de 23 out 2026: 50 execuções Node 24 após cinco
-                aquecimentos, sem D1 ou HTTP. CPU em produção ainda não medida.{" "}
-                <a href="https://developers.cloudflare.com/workflows/reference/limits/">
-                  Ver limites do Workflows
-                </a>
-                .
-              </p>
-            </details>
-          </section>
-
-          <section
             aria-labelledby="faq-title"
             className="landing-section faq-section"
           >
@@ -585,6 +602,38 @@ export function landingPage({
               <h2 id="faq-title">Antes de conectar</h2>
             </div>
             <div className="faq-list">
+              <details>
+                <summary>
+                  É grátis mesmo? O que significa código aberto?
+                </summary>
+                <p>
+                  O software Caderninho é grátis, sem assinatura, e o código
+                  está no GitHub sob licença MIT. Você pode ler, modificar e
+                  hospedar sua própria cópia. Cloudflare, Meu Pluggy e o cliente
+                  de IA têm planos e limites próprios.{" "}
+                  <a href="#free-tier">Veja as condições de cada serviço.</a>
+                </p>
+              </details>
+              <details>
+                <summary>O que é o Caderninho?</summary>
+                <p>
+                  Um organizador de finanças pessoais de código aberto que você
+                  instala na sua Cloudflare. Reúne contas, cartões, transações e
+                  investimentos para consultar no painel ou em assistentes de
+                  IA. O MCP (Model Context Protocol) conecta esses assistentes à
+                  sua base, com acesso autorizado por você.
+                </p>
+              </details>
+              <details>
+                <summary>O que preciso para começar?</summary>
+                <p>
+                  Uma conta Cloudflare para instalar o Caderninho e uma conta
+                  Meu Pluggy para conectar os bancos. Para consultar por IA,
+                  escolha um cliente com MCP remoto e OAuth, como ChatGPT ou
+                  Claude. A disponibilidade depende do plano do cliente, da
+                  instituição financeira e da cobertura da Pluggy.
+                </p>
+              </details>
               <details>
                 <summary>
                   Sem lock-in significa que posso usar qualquer LLM?
@@ -624,13 +673,10 @@ export function landingPage({
             id="instalar"
           >
             <div>
-              <h2 id="install-title">
-                Uma base sua.
-                <br />A IA que você escolher.
-              </h2>
+              <h2 id="install-title">Instale o seu Caderninho.</h2>
               <p>
-                Instale o Caderninho, conecte seus bancos e autorize seus
-                assistentes.
+                O software é grátis e de código aberto. Você cuida da sua
+                instalação na Cloudflare e escolhe quais assistentes autorizar.
               </p>
             </div>
             <div className="install-actions">
