@@ -1,8 +1,11 @@
 import { tryCatch } from "../shared/result";
 
 const reduced = matchMedia("(prefers-reduced-motion: reduce)");
-const explanation = document.getElementById("mcp-flow");
-if (explanation) {
+for (const id of ["mcp-flow", "landing-rule", "landing-performance"]) {
+  const explanation = document.getElementById(id);
+  if (!explanation) {
+    continue;
+  }
   const load = new IntersectionObserver(
     async ([entry]) => {
       if (!entry?.isIntersecting) {
@@ -14,7 +17,13 @@ if (explanation) {
       if (error) {
         return;
       }
-      data.mountMcpFlow(explanation);
+      if (id === "mcp-flow") {
+        data.mountMcpFlow(explanation);
+      } else if (id === "landing-performance") {
+        data.mountLandingPerformance(explanation);
+      } else {
+        data.mountLandingRule(explanation);
+      }
     },
     { rootMargin: "240px" },
   );
@@ -33,19 +42,13 @@ if (!reduced.matches) {
         if (reduced.matches) {
           continue;
         }
-        entry.target.animate(
-          [
-            { opacity: 0.75, transform: "translateY(8px)" },
-            { opacity: 1, transform: "translateY(0)" },
-          ],
-          { duration: 280, easing: "cubic-bezier(0.16, 1, 0.3, 1)" },
-        );
+        entry.target.classList.add("landing-revealed");
       }
     },
     { threshold: 0.05 },
   );
   for (const section of document.querySelectorAll(
-    "main > section:not(.hero)",
+    "main > section:not(.hero) h2, .section-intro > p, .rule-stage, .freedom-list > div, .connection-guide > li, .cost-surface, .faq-list > details, .install-section",
   )) {
     reveal.observe(section);
   }
