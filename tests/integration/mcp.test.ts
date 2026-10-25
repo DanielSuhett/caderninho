@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { beforeEach, test } from "vitest";
 import { z } from "zod/v4";
 
+import { planningOutputSchemas } from "../../src/contracts/planning-results";
 import {
   Fault,
   FaultCode,
@@ -34,7 +35,15 @@ const wire = z.object({
         .array(z.object({ text: z.string(), type: z.string() }))
         .optional(),
       isError: z.boolean().optional(),
-      tools: z.array(z.object({ name: z.string() })).optional(),
+      structuredContent: z.record(z.string(), z.unknown()).optional(),
+      tools: z
+        .array(
+          z.object({
+            name: z.string(),
+            outputSchema: z.record(z.string(), z.unknown()).optional(),
+          }),
+        )
+        .optional(),
     })
     .optional(),
 });
@@ -442,10 +451,12 @@ test("MCP accumulates imported history and updates only matching source IDs", as
     "Updated by source",
   );
   assert.equal(page.records.find((row) => row.id === "B")?.category, "Updated");
-  assert.deepEqual(
-    page.records.find((row) => row.id === "B")?.identification?.merchant,
-    { cnpj: "00.000.000/0001-91", name: "Synthetic merchant" },
-  );
+  const updatedRecord = page.records.find((row) => row.id === "B");
+  assert.ok(updatedRecord?.identification);
+  assert.deepEqual(updatedRecord.identification.merchant, {
+    cnpj: "00.000.000/0001-91",
+    name: "Synthetic merchant",
+  });
   const totals = aggregate.parse(
     await call("caderninho_aggregate", { metric: "debits" }),
   );
@@ -526,7 +537,7 @@ test("MCP accumulates imported history and updates only matching source IDs", as
   assert.equal(partialTotal.partial, true);
 });
 
-test("OAuth exposes 100 tools and executes confirmed local writes with durable replay", async () => {
+test("OAuth exposes 102 tools and executes confirmed local writes with durable replay", async () => {
   const app = fixture();
   const token = await grant(app, cookies(await login(app)));
   async function rpc(method: string, params: Record<string, unknown>) {
@@ -554,6 +565,27 @@ test("OAuth exposes 100 tools and executes confirmed local writes with durable r
   }
   const listed = await rpc("tools/list", {});
   assert.equal(listed.result?.tools?.length, 102);
+  await Promise.all(
+    [...planningOutputSchemas].map(async ([name, schema]) => {
+      assert.ok(
+        listed.result?.tools?.find((tool) => tool.name === name)?.outputSchema,
+      );
+      const result = await rpc("tools/call", {
+        arguments: {
+          from: "2026-10-01",
+          to: "2026-10-24",
+          ...(name === "generate_chart" && { includeSvg: false, type: "bar" }),
+        },
+        name,
+      });
+      assert.equal(result.result?.isError, false);
+      assert.ok(schema.safeParse(result.result?.structuredContent).success);
+      assert.deepEqual(
+        result.result?.structuredContent,
+        JSON.parse(result.result?.content?.[0]?.text ?? "{}"),
+      );
+    }),
+  );
   const groupRequest = {
     arguments: {
       color: "#123456",

@@ -34,6 +34,7 @@ export {
   exactJSON,
   localDay,
   minor,
+  minorPresentation,
 } from "./exact";
 export { Fault } from "./fault.entity";
 export type {

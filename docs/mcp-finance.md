@@ -1,7 +1,6 @@
 # MCP financeiro: catálogo e decisões
 
-Catálogo local em 24/10/2026: 100 ferramentas, sendo quatro originais e 96 de
-planejamento e organização. A [conferência de paridade com o painel](mcp-front-parity.md)
+O [inventário gerado](mcp-tools.md) lista as ferramentas e sua contagem atual. A [conferência de paridade com o painel](mcp-front-parity.md)
 documenta o escopo, as correções e a evidência local dessa extensão.
 A pesquisa inicial de referência é de 22/10/2026, baseada em `061cefb`.
 Esta validação não publicou código nem aplicou migrações em uma instalação real.
@@ -17,7 +16,7 @@ não afirma paridade de assinatura com tools privadas ou habilitadas por plano.
 A Pluggy fornece contas, transações, faturas, investimentos e empréstimos, com
 cobertura dependente da instituição/conexão. Planejamento e edição são locais.
 As quatro tools `caderninho_*` continuam disponíveis com seus contratos originais.
-As 98 tools adicionais usam a visão efetiva, com sobreposições e dados manuais.
+As tools de planejamento usam a visão efetiva, com sobreposições e dados manuais.
 
 A extensão de [backoffice](backoffice.md) acrescentou `delete_space` e condições
 compostas em regras. O catálogo também inclui grupos de categorias,
@@ -42,7 +41,8 @@ Débito/crédito são magnitudes com direção separada. Moedas nunca são somad
 si. Valores desconhecidos permanecem `null`; subtotais conhecidos têm nomes
 próprios. Contas manuais exigem uma moeda suportada explicitamente.
 
-As consultas novas retornam `{data, partial, revision}`. `get_transactions` retorna
+As consultas retornam `{data, partial, revision}` e metadados de escopo, visão e
+qualidade. Consulte os [ajustes dos contratos e leituras](mcp-feedback-2026-10-24.md). `get_transactions` retorna
 até 500 registros, com cursor; qualquer alteração financeira concorrente exige
 reiniciar. Escritas por seleção/período são atômicas e recusam mais de 500 registros.
 Não há confirmação parcial de uma seleção maior. As escritas em D1 não refazem
@@ -137,7 +137,7 @@ espaço não chegam ao commit.
 | `preview_rule` | Simula o mesmo escopo e condições E/OU do painel sem salvar ou reclassificar; informa amostras, contagem, `partial`, `truncated` e revisão. |
 | `get_overview` | Saldos, entradas e saídas por moeda, sem tratar transferências e pagamentos de cartão como consumo. |
 | `get_spending_by_category` | Despesas classificadas por categoria; exclui transferências e itens ignorados. |
-| `get_spending_comparison` | Comparação com período anterior de igual duração. |
+| `get_spending_comparison` | Comparação com período anterior, mesmos dias do mês anterior ou intervalo explícito. |
 | `get_spending_pace` | Ritmo observado de despesas e projeção linear explicitamente estimada. |
 | `get_projection` | Projeção de saldo BANK com recorrências e vencimentos; informa premissas e desconhecidos. |
 | `get_bills` | Faturas importadas, pagamentos bancários e marcação manual separada. |

@@ -222,6 +222,11 @@ export async function fetchMcp(
             return {
               content: [{ text: JSON.stringify(payload), type: "text" }],
               isError: !!error,
+              ...(!error && {
+                structuredContent: z
+                  .record(z.string(), z.unknown())
+                  .parse(data),
+              }),
             };
           },
           { action },

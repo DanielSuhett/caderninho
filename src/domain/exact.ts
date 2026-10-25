@@ -9,6 +9,37 @@ const canonicalMinorPattern = /^-?(0|[1-9]\d{0,29})$/;
 const decimalPattern = /^[-+]?\d+(?:\.\d+)?(?:e[-+]?\d+)?$/i;
 const dayPattern = /^\d{4}-\d{2}-\d{2}$/;
 
+const currencyScales: Record<string, number> = {
+  ARS: 2,
+  AUD: 2,
+  BHD: 3,
+  BRL: 2,
+  CAD: 2,
+  CHF: 2,
+  CLP: 0,
+  EUR: 2,
+  GBP: 2,
+  JPY: 0,
+  KWD: 3,
+  USD: 2,
+};
+
+export function minorPresentation(amountMinor: string, currency: string) {
+  const scale = currencyScales[currency];
+  if (typeof scale !== "number") {
+    return { formattedAmount: `${amountMinor} ${currency} minor`, scale: null };
+  }
+  const negative = BigInt(amountMinor) < 0n;
+  const digits = amountMinor.replace("-", "").padStart(scale + 1, "0");
+  const whole = scale ? digits.slice(0, -scale) : digits;
+  const fraction = scale ? `,${digits.slice(-scale)}` : "";
+  const formattedWhole = new Intl.NumberFormat("pt-BR").format(BigInt(whole));
+  return {
+    formattedAmount: `${currency} ${negative ? "-" : ""}${formattedWhole}${fraction}`,
+    scale,
+  };
+}
+
 export function assertMinor(value: string) {
   if (!canonicalMinorPattern.test(value)) {
     throw new Error(
@@ -47,22 +78,7 @@ export function minor(value: MoneyInput, currency: string) {
   }
 
   // Explicit currency scales; an unknown currency is queryable, never silently assumed 2dp.
-  const scales: Record<string, number> = {
-    ARS: 2,
-    AUD: 2,
-    BHD: 3,
-    BRL: 2,
-    CAD: 2,
-    CHF: 2,
-    CLP: 0,
-    EUR: 2,
-    GBP: 2,
-    JPY: 0,
-    KWD: 3,
-    USD: 2,
-  };
-
-  const scale = scales[currency];
+  const scale = currencyScales[currency];
 
   if (typeof scale !== "number") {
     fail(FaultCode.CURRENCY_SCALE_UNSUPPORTED);

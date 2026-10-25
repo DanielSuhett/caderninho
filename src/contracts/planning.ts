@@ -44,6 +44,7 @@ const selection = {
     .regex(/^\d{4}$/)
     .optional(),
   categoryId: id.optional(),
+  currency: currency.optional(),
   direction: direction.optional(),
   from: day.optional(),
   include_ignored: z.boolean().default(false),
@@ -52,6 +53,7 @@ const selection = {
   text: z.string().max(240).optional(),
   to: day.optional(),
 };
+const analysisPeriod = { ...selection, from: day, to: day };
 const accountFields = {
   closeDay: z.number().int().min(1).max(31).optional(),
   creditLimitMinor: amount.optional(),
@@ -125,7 +127,7 @@ export const planningDefinitions = [
   },
   {
     description:
-      "Histórico efetivo com edições locais, filtros e paginação consistente. Não some páginas para calcular totais.",
+      "Histórico efetivo com edições locais e paginação consistente. Para últimas compras envie order=date_desc e limit=5; não some páginas para calcular totais.",
     name: "get_transactions",
     readOnly: true,
     schema: z
@@ -142,27 +144,37 @@ export const planningDefinitions = [
       "Saldos, entradas e saídas por moeda, sem tratar transferências e pagamentos de cartão como consumo.",
     name: "get_overview",
     readOnly: true,
-    schema: z.object({ ...period }).strict(),
+    schema: z.object({ ...analysisPeriod }).strict(),
   },
   {
     description:
       "Despesas classificadas por categoria; exclui transferências e itens ignorados.",
     name: "get_spending_by_category",
     readOnly: true,
-    schema: z.object({ ...period }).strict(),
+    schema: z.object({ ...analysisPeriod }).strict(),
   },
   {
-    description: "Comparação com período anterior de igual duração.",
+    description:
+      "Comparar gastos com período anterior de igual duração, mesmos dias do mês anterior ou intervalo explícito. Já inclui grupos e totais dos dois períodos.",
     name: "get_spending_comparison",
     readOnly: true,
-    schema: z.object({ ...period }).strict(),
+    schema: z
+      .object({
+        ...analysisPeriod,
+        comparison: z
+          .enum(["previous_period", "previous_month", "explicit"])
+          .default("previous_period"),
+        previousFrom: day.optional(),
+        previousTo: day.optional(),
+      })
+      .strict(),
   },
   {
     description:
       "Ritmo observado de despesas e projeção linear explicitamente estimada.",
     name: "get_spending_pace",
     readOnly: true,
-    schema: z.object({ ...period }).strict(),
+    schema: z.object({ ...analysisPeriod }).strict(),
   },
   {
     description:
@@ -230,56 +242,56 @@ export const planningDefinitions = [
   },
   {
     description:
-      "Consultar dados locais de planejamento e registros importados disponíveis.",
+      "Etiquetas locais do espaço, com IDs e nomes para filtrar e organizar transações.",
     name: "get_tags",
     readOnly: true,
     schema: z.object({ ...scope }).strict(),
   },
   {
     description:
-      "Consultar dados locais de planejamento e registros importados disponíveis.",
+      "Regras locais ordenadas por prioridade. Salvar não reaplica o histórico; use preview_rule antes de aplicar.",
     name: "get_rules",
     readOnly: true,
     schema: z.object({ ...scope }).strict(),
   },
   {
     description:
-      "Consultar dados locais de planejamento e registros importados disponíveis.",
+      "Compromissos recorrentes cadastrados. Não detecta automaticamente assinaturas no histórico.",
     name: "get_recurrences",
     readOnly: true,
     schema: z.object({ ...scope }).strict(),
   },
   {
     description:
-      "Consultar dados locais de planejamento e registros importados disponíveis.",
+      "Metas locais com valor, prazo e vínculo patrimonial; use get_goal_plan para calcular aportes.",
     name: "get_goals",
     readOnly: true,
     schema: z.object({ ...scope }).strict(),
   },
   {
     description:
-      "Consultar dados locais de planejamento e registros importados disponíveis.",
+      "Posições locais e importadas disponíveis. Variação de saldo não comprova rentabilidade.",
     name: "get_investments",
     readOnly: true,
     schema: z.object({ ...scope }).strict(),
   },
   {
     description:
-      "Consultar dados locais de planejamento e registros importados disponíveis.",
+      "Orçamento configurado e consumo do ciclo vigente por moeda e categoria; informa valores sem classificação.",
     name: "get_budget",
     readOnly: true,
     schema: z.object({ ...scope }).strict(),
   },
   {
     description:
-      "Consultar dados locais de planejamento e registros importados disponíveis.",
+      "Espaços locais e suas configurações de moeda, ciclo e orçamento.",
     name: "get_spaces",
     readOnly: true,
     schema: z.object({ ...scope }).strict(),
   },
   {
     description:
-      "Consultar dados locais de planejamento e registros importados disponíveis.",
+      "Preferências locais de avisos. deliveryConfigured=false informa que o envio não está configurado.",
     name: "get_notification_preferences",
     readOnly: true,
     schema: z.object({ ...scope }).strict(),
@@ -302,13 +314,14 @@ export const planningDefinitions = [
   },
   {
     description:
-      "Séries exatas por moeda para gráficos de barras, linhas ou rosca; valores inteiros em strings.",
+      "Séries exatas por moeda, com nomes e apresentação monetária. Use includeSvg=false para compor sua própria visualização; SVG estático é opcional.",
     name: "generate_chart",
     readOnly: true,
     schema: z
       .object({
-        ...period,
+        ...analysisPeriod,
         groupBy: z.enum(["category", "month"]).default("category"),
+        includeSvg: z.boolean().default(true),
         type: z.enum(["bar", "line", "doughnut"]),
       })
       .strict(),
@@ -624,7 +637,7 @@ export const planningDefinitions = [
     description: "Analisar despesas categorizadas e itens sem categoria.",
     name: "analyze_categories",
     readOnly: true,
-    schema: z.object({ ...period }).strict(),
+    schema: z.object({ ...analysisPeriod }).strict(),
   },
   {
     description: "Criar regra textual determinística de categorização.",

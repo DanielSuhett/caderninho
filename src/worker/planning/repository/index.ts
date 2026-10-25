@@ -1,4 +1,4 @@
-import { eq, gt, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, gte, lt, lte, or, sql } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 
 import { connectionPartial } from "../../../domain";
@@ -31,7 +31,82 @@ import {
   planningTransactionDetails,
   transactions,
 } from "../../schema";
-import type { PlanningRepository } from "../entity";
+import type {
+  PlanningRepository,
+  PlanningSnapshot,
+  TransactionRead,
+} from "../entity";
+
+function importedAccounts(
+  origins: PlanningSnapshot["connections"],
+  owners: PlanningSnapshot["owners"],
+  persons: PlanningSnapshot["people"],
+) {
+  return origins.flatMap((c) =>
+    Object.entries(c.accounts).map(([id, a]) => ({
+      ...a,
+      connectionId: c.id,
+      hidden: false,
+      id,
+      manual: false,
+      personId: owners.find((o) => o.connectionId === c.id)?.personId ?? "self",
+      personName:
+        persons.find(
+          (p) =>
+            p.id ===
+            (owners.find((o) => o.connectionId === c.id)?.personId ?? "self"),
+        )?.name ?? "Eu",
+      profileId:
+        owners.find((o) => o.connectionId === c.id)?.profileId ?? "default",
+      spaceId: "personal",
+    })),
+  );
+}
+
+function sourceFilter(selection?: TransactionRead) {
+  if (!selection) {
+    return;
+  }
+  const [accountId] = selection.accountIds;
+  return and(
+    selection.accountIds.length === 1 && accountId
+      ? eq(transactions.accountId, accountId)
+      : sql`${transactions.accountId} IN (SELECT value FROM json_each(${JSON.stringify(selection.accountIds)}))`,
+    selection.from ? gte(transactions.date, selection.from) : undefined,
+    selection.to ? lte(transactions.date, selection.to) : undefined,
+    selection.excludeIds.length
+      ? sql`${transactions.id} NOT IN (SELECT value FROM json_each(${JSON.stringify(selection.excludeIds)}))`
+      : undefined,
+  );
+}
+function sourceOrder(order: TransactionRead["order"]) {
+  const dated = order !== "id";
+  const descending = order === "date_desc";
+  const compare = descending ? lt : gt;
+  const sort = descending ? desc : asc;
+  return {
+    columns: dated
+      ? [sort(transactions.date), sort(transactions.id)]
+      : [asc(transactions.id)],
+    following(after?: string) {
+      if (!after) {
+        return;
+      }
+      if (!dated) {
+        return gt(transactions.id, after);
+      }
+      return or(
+        compare(transactions.date, after.slice(0, 10)),
+        and(
+          eq(transactions.date, after.slice(0, 10)),
+          compare(transactions.id, after.slice(11)),
+        ),
+      );
+    },
+    key: (row: import("../../../domain").TransactionProjection) =>
+      dated ? `${row.date}:${row.id}` : row.id,
+  };
+}
 
 function changedRows<T extends { id: string }>(before: T[], after: T[]) {
   const old = new Map(before.map((row) => [row.id, JSON.stringify(row)]));
@@ -418,7 +493,89 @@ export function createPlanningRepository(
       }
       await db.batch([required(writes[0]), ...writes.slice(1)]);
     },
-    async read() {
+    async read(tool) {
+      if (
+        tool &&
+        [
+          "get_tags",
+          "get_rules",
+          "get_categories",
+          "get_category_groups",
+          "get_spaces",
+          "get_notification_preferences",
+        ].includes(tool)
+      ) {
+        const [version, origins, spaces, settings, persons, owners] =
+          await db.batch([
+            db.select().from(planningRevision),
+            db.select().from(connections),
+            db.select().from(planningSpaces),
+            db.select().from(planningAccounts),
+            db.select().from(people),
+            db.select().from(connectionOwners),
+          ]);
+        const state: PlanningSnapshot["state"] = {
+          accounts: settings.map((row) => row.data),
+          billPayments: [],
+          cards: [],
+          categories: [],
+          categoryGroups: [],
+          contributions: [],
+          edits: [],
+          goals: [],
+          installments: [],
+          investments: [],
+          loans: [],
+          notifications: [],
+          recurrences: [],
+          rules: [],
+          schedules: [],
+          spaces: spaces.map((row) => row.data),
+          tags: [],
+        };
+        switch (tool) {
+          case "get_tags":
+            state.tags = (await db.select().from(planningTags)).map(
+              (row) => row.data,
+            );
+            break;
+          case "get_rules":
+            state.rules = (await db.select().from(planningRules)).map(
+              (row) => row.data,
+            );
+            break;
+          case "get_categories":
+            state.categories = (await db.select().from(planningCategories)).map(
+              (row) => row.data,
+            );
+            break;
+          case "get_category_groups":
+            state.categoryGroups = (
+              await db.select().from(planningCategoryGroups)
+            ).map((row) => row.data);
+            break;
+          case "get_notification_preferences":
+            state.notifications = (
+              await db.select().from(planningNotifications)
+            ).map((row) => row.data);
+            break;
+          default:
+            break;
+        }
+        return {
+          accountDetails: [],
+          accounts: importedAccounts(origins, owners, persons),
+          bills: [],
+          clefEnabled,
+          connections: origins,
+          owners,
+          partial: origins.some(connectionPartial),
+          people: persons,
+          revision: required(version[0]).revision,
+          state,
+          transactionDetails: [],
+        };
+      }
       const [
         version,
         origins,
@@ -472,30 +629,10 @@ export function createPlanningRepository(
       ]);
       return {
         accountDetails: accountDetails.map((r) => r.data),
-        accounts: origins.flatMap((c) =>
-          Object.entries(c.accounts).map(([id, a]) => ({
-            ...a,
-            connectionId: c.id,
-            hidden: false,
-            id,
-            manual: false,
-            personId:
-              owners.find((o) => o.connectionId === c.id)?.personId ?? "self",
-            personName:
-              persons.find(
-                (p) =>
-                  p.id ===
-                  (owners.find((o) => o.connectionId === c.id)?.personId ??
-                    "self"),
-              )?.name ?? "Eu",
-            profileId:
-              owners.find((o) => o.connectionId === c.id)?.profileId ??
-              "default",
-            spaceId: "personal",
-          })),
-        ),
+        accounts: importedAccounts(origins, owners, persons),
         bills: bills.map((r) => r.data),
         clefEnabled,
+        connections: origins,
         owners,
         partial: !origins.length || origins.some(connectionPartial),
         people: persons,
@@ -530,32 +667,42 @@ export function createPlanningRepository(
         .get();
     },
     revision,
-    async *transactions(ids) {
+    async *transactions(ids, selection) {
       if (ids) {
         if (ids.length) {
           yield await db
             .select()
             .from(transactions)
-            .where(inArray(transactions.id, ids));
+            .where(
+              sql`${transactions.id} IN (SELECT value FROM json_each(${JSON.stringify(ids)}))`,
+            );
         }
         return;
       }
+      if (selection && !selection.accountIds.length) {
+        return;
+      }
+      const order = sourceOrder(selection ? selection.order : "id");
+      const filter = sourceFilter(selection);
+      const pageSize = selection?.pageSize ?? 5000;
       async function* pages(
         after?: string,
       ): AsyncGenerator<import("../../../domain").TransactionProjection[]> {
         const rows = await db
           .select()
           .from(transactions)
-          .where(after === undefined ? undefined : gt(transactions.id, after))
-          .orderBy(transactions.id)
-          .limit(5000);
+          .where(and(filter, order.following(after)))
+          .orderBy(...order.columns)
+          .limit(pageSize);
         if (!rows.length) {
           return;
         }
         yield rows;
-        yield* pages(required(rows.at(-1)).id);
+        if (rows.length === pageSize) {
+          yield* pages(order.key(required(rows.at(-1))));
+        }
       }
-      yield* pages();
+      yield* pages(selection?.after);
     },
   };
 }

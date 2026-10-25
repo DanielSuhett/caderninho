@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { assertMinor, decimal, exactJSON, minor } from "..";
+import { assertMinor, decimal, exactJSON, minor, minorPresentation } from "..";
 
 const canonicalMinorErrorPattern = /canonical integer, at most 30 digits/;
 const invalidDecimalPattern = /INVALID_DECIMAL/;
@@ -109,4 +109,23 @@ await test("currency scales retain exact integers and reject excess precision wi
       moneyPrecisionUnsupportedPattern,
     );
   }
+});
+
+test("monetary presentation preserves exact fractions, negative cents and unknown currency scales", () => {
+  assert.deepEqual(minorPresentation("-1", "BRL"), {
+    formattedAmount: "BRL -0,01",
+    scale: 2,
+  });
+  assert.deepEqual(minorPresentation("1234", "KWD"), {
+    formattedAmount: "KWD 1,234",
+    scale: 3,
+  });
+  assert.deepEqual(minorPresentation("1234", "JPY"), {
+    formattedAmount: "JPY 1.234",
+    scale: 0,
+  });
+  assert.deepEqual(minorPresentation("1234", "XYZ"), {
+    formattedAmount: "1234 XYZ minor",
+    scale: null,
+  });
 });

@@ -14,8 +14,8 @@ export async function previewRule(
   let truncated = false;
   const bounded: PlanningRepository = {
     ...repository,
-    async *transactions() {
-      for await (const page of repository.transactions()) {
+    async *transactions(ids, selection) {
+      for await (const page of repository.transactions(ids, selection)) {
         const remaining = scanLimit - examined;
         const selected = page.slice(0, remaining);
         examined += selected.length;
