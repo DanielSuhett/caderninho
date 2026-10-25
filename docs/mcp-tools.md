@@ -2,7 +2,7 @@
 
 Gerado por `npm run docs:mcp` a partir do registro de ferramentas.
 
-102 ferramentas: 32 consultas/prévias, 69 escritas locais e 1 operação de sincronização.
+103 ferramentas: 33 consultas/prévias, 69 escritas locais e 1 operação de sincronização.
 
 | Ferramenta | Operação | Schema de saída | Descrição |
 | --- | --- | --- | --- |
@@ -108,3 +108,4 @@ Gerado por `npm run docs:mcp` a partir do registro de ferramentas.
 | `preview_rule` | consulta/prévia | — | Simular uma regra sem salvar nem reclassificar. Usa o mesmo escopo obrigatório, alternativas OU, condições E e dinheiro exato do painel. Informa contagem, amostras e limites de cobertura; truncated ou partial impedem tratar a contagem como definitiva. |
 | `preview_rule_import` | consulta/prévia | — | Conferir importação de JSON de regras compostas, categorias e duplicatas, sem gravar. Retorna revisão para confirmação. |
 | `import_rules` | escrita local | — | Importar JSON de regras compostas atomicamente no espaço confirmado. Preserva regras pessoais e duplicatas; exige a revisão da prévia. Não reaplica histórico. |
+| `get_card_commitments` | consulta/prévia | sim | Compromissos observados de contas CREDIT: gastos efetivos POSTED, pendentes e futuras importadas separados; parcelas por mês, categorias e limites explícitos. Créditos classificados como despesa reduzem o gasto. Não prevê parcelas ausentes, não soma pagamento de fatura e não confunde ocupação observada com limite bancário. |

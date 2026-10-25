@@ -1,5 +1,6 @@
 import { z } from "zod/v4";
 
+import { CardCommitmentsResponseSchema } from "./card-commitments";
 import { FinancialOverviewSchema, FinancialSummarySchema } from "./dashboard";
 
 const minor = z.string().regex(/^-?\d+$/);
@@ -62,6 +63,7 @@ function envelope<T extends z.ZodType>(data: T) {
 }
 
 export const planningOutputSchemas = new Map<string, z.ZodType>([
+  ["get_card_commitments", CardCommitmentsResponseSchema],
   [
     "get_overview",
     envelope(

@@ -7,6 +7,7 @@ import {
 } from "@cloudflare/kumo";
 import {
   ArrowSquareOutIcon,
+  ChartPieSliceIcon,
   FolderIcon,
   HouseIcon,
   ListChecksIcon,
@@ -48,10 +49,15 @@ const Organization = lazy(async () => {
   const { data, error } = await tryCatch(() => import("./demo-organization"));
   return { default: error ? WorkspacePageError : data.DemoOrganization };
 });
+const Investments = lazy(async () => {
+  const { data, error } = await tryCatch(() => import("./demo-investments"));
+  return { default: error ? WorkspacePageError : data.DemoInvestments };
+});
 const trailingSlash = /\/$/;
 const pages = [
   { icon: HouseIcon, label: "Visão geral", path: "" },
   { icon: ReceiptIcon, label: "Transações", path: "/transactions" },
+  { icon: ChartPieSliceIcon, label: "Investimentos", path: "/investments" },
   { icon: ListChecksIcon, label: "Regras", path: "/rules" },
   { icon: FolderIcon, label: "Grupos", path: "/groups" },
 ];
@@ -244,6 +250,7 @@ function Demo() {
   const organization =
     location.pathname.includes("/rules") ||
     location.pathname.includes("/groups");
+  const investments = location.pathname.includes("/investments");
   const params = new URLSearchParams(location.search);
   const unavailable = !session
     .spaces()
@@ -297,7 +304,15 @@ function Demo() {
                   />
                 </Suspense>
               )}
-              {!(unavailable || organization) && (
+              {!unavailable && investments && (
+                <Suspense fallback={<WorkspaceSkeleton />}>
+                  <Investments
+                    key={`${route}:${resetVersion}`}
+                    session={session}
+                  />
+                </Suspense>
+              )}
+              {!(unavailable || organization || investments) && (
                 <DemoFinancial
                   route={route}
                   session={session}

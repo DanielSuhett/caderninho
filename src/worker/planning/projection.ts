@@ -280,6 +280,7 @@ export function planningCoverage(
     (row) =>
       (row.spaceId === selection.spaceId || movedAccountIds.has(row.id)) &&
       (!selection.personId || row.personId === selection.personId) &&
+      (!selection.accountIds || selection.accountIds.includes(row.id)) &&
       (!selection.accountId || row.id === selection.accountId),
   );
   const connectionIds = new Set(

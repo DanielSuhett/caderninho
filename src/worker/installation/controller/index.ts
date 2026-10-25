@@ -88,6 +88,7 @@ export function installationRoutes(access: Hono<PortalEnv>) {
   app.get("/account", (c) => c.html(renderPage(accountPage())));
   for (const path of [
     "transactions",
+    "investments",
     "rules",
     "groups",
     "sync",

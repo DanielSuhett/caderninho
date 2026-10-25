@@ -33,17 +33,21 @@ function copyPortalAssets(): Plugin {
       await Promise.all(
         [output, site].map(async (destination) => {
           await Promise.all(
-            ["demo", "demo/transactions", "demo/rules", "demo/groups"].map(
-              async (path) => {
-                await mkdir(new URL(`${path}/`, destination), {
-                  recursive: true,
-                });
-                await writeFile(
-                  new URL(`${path}/index.html`, destination),
-                  renderPage(demoPage()),
-                );
-              },
-            ),
+            [
+              "demo",
+              "demo/transactions",
+              "demo/investments",
+              "demo/rules",
+              "demo/groups",
+            ].map(async (path) => {
+              await mkdir(new URL(`${path}/`, destination), {
+                recursive: true,
+              });
+              await writeFile(
+                new URL(`${path}/index.html`, destination),
+                renderPage(demoPage()),
+              );
+            }),
           );
         }),
       );

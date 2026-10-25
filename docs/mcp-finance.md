@@ -96,7 +96,7 @@ usam apenas dados sintéticos e não constituem prova dessas etapas.
 
 Sucesso retorna `structuredContent` com o mesmo objeto canônico do bloco textual
 JSON, preservado por compatibilidade. Essa serialização duplicada não economiza
-contexto por si só. Seis consultas analíticas têm `outputSchema`: `get_overview`,
+contexto por si só. Sete consultas analíticas têm `outputSchema`: `get_card_commitments`, `get_overview`,
 `get_spending_by_category`, `analyze_categories`, `get_spending_comparison`,
 `get_spending_pace` e `generate_chart`.
 
@@ -130,6 +130,7 @@ um registro extenso ou agrupamentos sem paginação podem produzir respostas gra
 | --- | --- |
 | Catálogo e categorias | `get_categories` com `include_hidden: true` reconstrói o catálogo, incluindo aparência e vínculos; nomes fixos são protegidos. |
 | Resumo e série mensal | `get_overview` e `generate_chart` agregam o período completo por moeda. |
+| Cartões e parcelamentos | `get_card_commitments` compartilha a consulta da aba Investimentos: gastos efetivos, parcelas observadas por mês, limites informados e categorias, com moedas separadas. Veja [a política de cálculo](investments.md). |
 | Ocorrências e compras | `get_transactions` lista registros; `get_transaction_purchases` usa o serviço do painel e agrupa antes de paginar. O valor é de uma parcela, não da compra inteira. |
 | Prévia e regras | `preview_rule` compartilha validadores/serviço com o painel: até 10 mil registros, cinco amostras, `partial` e `truncated`. Não escreve nem prevê a regra vencedora; `apply_rules` é explícito e atômico até 500 registros. |
 | Escritas locais | Categorias, agrupadores, regras e espaços usam os mesmos serviços. Excluir agrupador preserva categorias; excluir espaço exige ausência de vínculos e protege o pessoal. |
