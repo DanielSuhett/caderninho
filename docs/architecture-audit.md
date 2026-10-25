@@ -104,8 +104,12 @@ ausentes conservam seus status específicos.
 
 ## Validação da entrega
 
-`mise run check:quick` passa após as mudanças. A validação completa está em
-execução; seus resultados serão registrados antes de concluir o draft.
+`mise run check:quick` passa após as mudanças e após integrar a ferramenta de
+assinaturas. `mise run lint:fix` e `mise run format` convergem sem alterações.
+A validação completa usa `mise run check`: tipos gerados, TypeScript, formatação,
+lint, testes Node, integração Cloudflare, build e runtime nativo com 10 mil e
+100 mil registros, replay e persistência após reinício. O resultado da revisão
+atual está registrado no PR.
 
 A evidência desta entrega é local e sintética. Provedor Pluggy, OAuth com serviço
 externo, publicação Cloudflare e execução em um host MCP real exigem validações
