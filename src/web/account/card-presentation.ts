@@ -44,11 +44,9 @@ export function cardScope({
       .filter(Boolean)
       .join(" · "),
     hasFilters: !!(
-      accountId ||
       personId ||
       spaceId !== "personal" ||
       snapshot.people.length > 1 ||
-      accounts.length > 1 ||
       (catalog && catalog.spaces.length > 1)
     ),
   };

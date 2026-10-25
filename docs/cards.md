@@ -4,6 +4,11 @@
 parcelas recebidas. A demonstração pública em `/demo/cards` usa os mesmos
 componentes, o ledger sintético compartilhado e nenhuma conexão real.
 
+O seletor **Cartão** fica sempre visível acima dos valores, mesmo com uma única
+conta. Permite alternar entre Todos os cartões e uma conta específica. A seleção
+recalcula resumo, categorias, meses, parcelas e limites do recorte; preserva mês,
+pessoa, grupo e moeda, e reinicia a paginação. Pessoa e grupo ficam em Filtros.
+
 ## Gastos do mês
 
 O recorte usa grupo, pessoa, conta de cartão e moeda. Os totais percorrem todos

@@ -188,3 +188,40 @@ test("unknown money stays unknown and the authenticated portal validates its car
   });
   assert.equal(invalid.status, 400);
 });
+
+test("filtering one card changes every total and retains all card choices", async () => {
+  await collect(
+    source(
+      [
+        transaction({
+          amount: "-10",
+          creditCardMetadata: metadata,
+          id: "first-card",
+        }),
+        transaction({
+          accountId: "second",
+          amount: "-30",
+          creditCardMetadata: metadata,
+          id: "second-card",
+        }),
+      ],
+      [card, account({ ...card, id: "second", name: "Segundo cartão" })],
+    ),
+  );
+  const all = PortalCardsSchema.parse(await service().cards(query())).data;
+  const first = PortalCardsSchema.parse(
+    await service().cards(query({ accountId: "a" })),
+  ).data;
+  const second = PortalCardsSchema.parse(
+    await service().cards(query({ accountId: "second" })),
+  ).data;
+  assert.equal(all.confirmed.totalMinor, "4000");
+  assert.equal(first.confirmed.totalMinor, "1000");
+  assert.equal(second.confirmed.totalMinor, "3000");
+  assert.equal(first.months[0]?.confirmed.totalMinor, "1000");
+  assert.equal(second.months[0]?.confirmed.totalMinor, "3000");
+  assert.equal(first.installments[0]?.accountId, "a");
+  assert.equal(second.installments[0]?.accountId, "second");
+  assert.equal(first.accounts.length, 2);
+  assert.equal(second.accounts.length, 2);
+});

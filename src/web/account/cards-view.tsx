@@ -86,6 +86,19 @@ export function CardsView({
     target.searchParams.delete("cursor");
     navigateWorkspace(target);
   }, []);
+  const changeCard = useCallback((value: string | null) => {
+    if (value === null) {
+      return;
+    }
+    const target = new URL(location.href);
+    if (value) {
+      target.searchParams.set("accountId", value);
+    } else {
+      target.searchParams.delete("accountId");
+    }
+    target.searchParams.delete("cursor");
+    navigateWorkspace(target);
+  }, []);
   const result = resource.data;
   const data = result?.data;
   const monthHref = useCallback(
@@ -109,12 +122,40 @@ export function CardsView({
   const currencyControl =
     data && currencies.length > 1 ? (
       <Select
-        items={currencies.map((value) => ({ label: value, value }))}
+        items={currencies.map((value) => ({
+          label: <span className="text-sm">{value}</span>,
+          value,
+        }))}
         label="Moeda"
         onValueChange={changeCurrency}
         value={data.currency}
       />
     ) : null;
+  const cardControl = data?.accounts.length ? (
+    <Select
+      items={[
+        { label: <span className="text-sm">Todos os cartões</span>, value: "" },
+        ...data.accounts.map((account) => ({
+          label: (
+            <span className="text-sm">
+              {account.name}
+              {account.cardNumber ? ` · ${account.cardNumber}` : ""}
+            </span>
+          ),
+          value: account.id,
+        })),
+      ]}
+      label="Cartão"
+      onValueChange={changeCard}
+      value={accountId}
+    />
+  ) : null;
+  const controls = (
+    <div className="cards-toolbar-controls">
+      {cardControl}
+      {currencyControl}
+    </div>
+  );
   const nextParams = new URLSearchParams(location.search);
   nextParams.set("month", month);
   if (data) {
@@ -147,13 +188,9 @@ export function CardsView({
           {hasFilters ? (
             <WorkspaceFilters
               action={basePath}
-              activeCount={
-                Number(!!accountId) +
-                Number(!!personId) +
-                Number(spaceId !== "personal")
-              }
+              activeCount={Number(!!personId) + Number(spaceId !== "personal")}
               context={context}
-              leading={currencyControl}
+              leading={controls}
               showClear={!!(accountId || personId || spaceId !== "personal")}
             >
               <div className="cards-page cards-filter-fields">
@@ -164,20 +201,11 @@ export function CardsView({
                   person={snapshot.people.length > 1 || !!personId}
                   snapshot={snapshot}
                 />
-                {(data.accounts.length > 1 || !!accountId) && (
-                  <Select
-                    defaultValue={accountId}
-                    items={[
-                      { label: "Todos os cartões", value: "" },
-                      ...data.accounts.map((account) => ({
-                        label: `${account.name}${account.cardNumber ? ` · ${account.cardNumber}` : ""}`,
-                        value: account.id,
-                      })),
-                    ]}
-                    label="Cartão"
-                    name="accountId"
-                  />
-                )}
+                <input
+                  name="accountId"
+                  type="hidden"
+                  value={accountId}
+                />
                 <input
                   name="month"
                   type="hidden"
@@ -192,7 +220,7 @@ export function CardsView({
             </WorkspaceFilters>
           ) : (
             <div className="filter-toolbar">
-              {currencyControl}
+              {controls}
               <p className="filter-context">{context}</p>
             </div>
           )}

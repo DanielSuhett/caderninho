@@ -263,3 +263,11 @@
     overflow-wrap: anywhere;
   }
 }
+
+.cards-toolbar-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: flex-end;
+  max-width: 100%;
+}

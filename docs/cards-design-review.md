@@ -6,15 +6,24 @@ Direção: Kumo nativo, Inter, conteúdo e controles de Cartões em 14 px.
 
 O loop passou por composição, crítica independente de capturas e nova inspeção
 após correções. O designer aprovou os quatro ajustes, sem pendência material
-observável nas cinco capturas finais: valor/estado das parcelas à direita;
+observável nas capturas revisadas: valor/estado das parcelas à direita;
 mensagem única nos meses vazios; denominador explícito da rosca; maior peso para
-o gasto confirmado no celular. O filtro sem escolhas úteis também foi removido.
+o gasto confirmado no celular. Filtros avançados sem escolhas úteis são omitidos;
+o seletor Cartão permanece sempre visível, com Todos os cartões e seleção individual.
 
 1. **Resumo e limite — estável.** Gastos mensais distinguem confirmação,
    pendência e futuro. O limite declara sua base atual, independente do mês.
-   O contexto dispensa pessoa e filtro de opção única.
+   O contexto dispensa pessoa de opção única. O cartão é selecionado diretamente
+   na barra, preservando os demais filtros e reiniciando a paginação.
 
    ![Resumo e limite no desktop escuro](assets/cards/desktop-dark.jpg)
+
+   O seletor Cartão fica sempre visível, inclusive com uma conta. Selecionar uma
+   conta e voltar para Todos os cartões foi exercitado no navegador; os links
+   mensais mantêm a seleção. O designer conferiu descoberta e legibilidade na
+   largura efetiva de 527 px. O menu usa texto de 14 px, conferido no DOM.
+
+   ![Filtro de cartões com seleção individual](assets/cards/card-filter.jpg)
 
 2. **Categorias — estável.** Rosca usa as cores cadastradas e mostra seu
    denominador exato de compras confirmadas antes dos estornos. A tabela

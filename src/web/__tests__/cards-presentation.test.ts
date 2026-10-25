@@ -41,7 +41,7 @@ test("the card demo uses the shared ledger, reports only received months and sho
   assert.ok(html.includes("Sem parcelas recebidas"));
   assert.equal(html.includes("Parcela 13 de 12"), false);
 });
-test("the card scope omits filters with no meaningful choice and keeps a chosen owner or card removable", () => {
+test("the card scope keeps card selection inline and limits the filter dialog to owner or group choices", () => {
   const data = demoCards(query, initialDemoData);
   const scope = cardScope({
     catalog: workspaceFixture(),
@@ -58,7 +58,7 @@ test("the card scope omits filters with no meaningful choice and keeps a chosen 
       params: new URLSearchParams({ accountId: "demo-card" }),
       snapshot: demoPortalFixture(),
     }).hasFilters,
-    true,
+    false,
   );
   assert.equal(
     cardPercentage("900719925474099301", "1801439850948198602")?.label,
