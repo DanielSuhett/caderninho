@@ -1,174 +1,216 @@
 import { Flow } from "@cloudflare/kumo/components/flow";
-import { PauseIcon, PlayIcon } from "@phosphor-icons/react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  type MouseEvent,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { createRoot } from "react-dom/client";
 
+import { LandingPerformance } from "./landing-performance";
+import { LandingRuleExample } from "./landing-rule-example";
 import {
-  McpStepContent,
-  mcpNodeClass,
-  mcpSteps,
-  mcpSummary,
+  BankNode,
+  CaderninhoNode,
+  ClientNode,
+  McpClientGuide,
+  type McpClientId,
+  mcpBanks,
+  mcpClients,
+  networkNodeClass,
+  PluggyNode,
 } from "./mcp-steps";
-import { UiButton } from "./ui";
-
-const stepDuration = 2400;
 
 export function McpFlow() {
   const root = useRef<HTMLDivElement>(null);
-  const started = useRef(false);
-  const [horizontal, setHorizontal] = useState(
-    () => matchMedia("(min-width: 1100px)").matches,
-  );
-  const [reduced, setReduced] = useState(false);
-  const [visible, setVisible] = useState(false);
-  const [foreground, setForeground] = useState(!document.hidden);
-  const [playing, setPlaying] = useState(false);
-  const [step, setStep] = useState(-1);
-
+  const [wide, setWide] = useState(false);
+  const [selected, setSelected] = useState<McpClientId>("chatgpt");
   useEffect(() => {
     const element = root.current;
     if (!element) {
       return;
     }
-    const preference = matchMedia("(prefers-reduced-motion: reduce)");
-    const syncPreference = () => {
-      setReduced(preference.matches);
-      if (preference.matches) {
-        setPlaying(false);
-        setStep(-1);
-      }
-    };
-    syncPreference();
-    preference.addEventListener("change", syncPreference);
-    const orientation = matchMedia("(min-width: 1100px)");
-    const syncOrientation = () => setHorizontal(orientation.matches);
-    orientation.addEventListener("change", syncOrientation);
-    const visibility = new IntersectionObserver(
-      ([entry]) => {
-        const inView = entry?.isIntersecting ?? false;
-        setVisible(inView);
-        if (inView && !started.current && !preference.matches) {
-          started.current = true;
-          setStep(0);
-          setPlaying(true);
-        }
-      },
-      { threshold: 0.2 },
-    );
-    visibility.observe(element);
-    const foregroundChanged = () => setForeground(!document.hidden);
-    document.addEventListener("visibilitychange", foregroundChanged);
-    return () => {
-      preference.removeEventListener("change", syncPreference);
-      document.removeEventListener("visibilitychange", foregroundChanged);
-      orientation.removeEventListener("change", syncOrientation);
-      visibility.disconnect();
-    };
+    const observer = new ResizeObserver(([entry]) => {
+      setWide((entry?.contentRect.width ?? 0) >= 950);
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
   }, []);
-
-  useEffect(() => {
-    if (!playing || reduced || !visible || !foreground) {
-      return;
-    }
-    const timer = setTimeout(() => {
-      if (step === mcpSteps.length - 1) {
-        setPlaying(false);
-        return;
-      }
-      setStep((previous) => previous + 1);
-    }, stepDuration);
-    return () => clearTimeout(timer);
-  }, [playing, reduced, visible, foreground, step]);
-
-  const toggle = useCallback(() => {
-    started.current = true;
-    if (playing) {
-      setPlaying(false);
-      return;
-    }
-    setStep((previous) =>
-      previous < 0 || previous === mcpSteps.length - 1 ? 0 : previous,
+  const selectClient = useCallback((event: MouseEvent<HTMLButtonElement>) => {
+    const client = mcpClients.find(
+      (item) => item.id === event.currentTarget.dataset.client,
     );
-    setPlaying(true);
-  }, [playing]);
-  const showAll = useCallback(() => {
-    started.current = true;
-    setPlaying(false);
-    setStep(-1);
+    if (client) {
+      setSelected(client.id);
+    }
   }, []);
-  const current = mcpSteps[step];
-  let playLabel = "Reproduzir";
-  if (step === mcpSteps.length - 1) {
-    playLabel = "Repetir";
-  } else if (step >= 0) {
-    playLabel = "Continuar";
-  }
-  if (playing) {
-    playLabel = "Pausar";
-  }
   return (
     <div
-      className="mcp-flow"
-      data-orientation={horizontal ? "horizontal" : "vertical"}
-      data-playing={playing && visible && foreground && !reduced}
-      data-step={step}
+      className="mcp-network"
+      data-wide={wide}
       ref={root}
     >
-      <div className="mcp-playback">
-        <span className="mcp-step-count">
-          {current ? `${step + 1} / ${mcpSteps.length}` : "Fluxo completo"}
-        </span>
-        {!reduced && (
-          <fieldset
-            aria-label="Reprodução da ilustração"
-            className="mcp-controls"
-          >
-            <UiButton
-              icon={playing ? PauseIcon : PlayIcon}
-              onClick={toggle}
-              type="button"
-              variant="secondary"
-            >
-              {playLabel}
-            </UiButton>
-            <UiButton
-              onClick={showAll}
-              type="button"
-              variant="ghost"
-            >
-              Sem animação
-            </UiButton>
-          </fieldset>
-        )}
-      </div>
+      <p className="network-instruction">
+        Escolha um assistente para ver como conectar.
+      </p>
       <Flow
         align="center"
         canvas={false}
-        className="mcp-diagram"
-        orientation={horizontal ? "horizontal" : "vertical"}
+        className="network-diagram"
+        orientation={wide ? "horizontal" : "vertical"}
         padding={{ x: 4, y: 8 }}
       >
-        {mcpSteps.map((item, index) => (
+        {wide ? (
+          <Flow.Parallel>
+            {mcpBanks.map((name, index) => (
+              <Flow.Node
+                id={`bank-${index}`}
+                key={name}
+                render={<li className={networkNodeClass} />}
+              >
+                <BankNode name={name} />
+              </Flow.Node>
+            ))}
+          </Flow.Parallel>
+        ) : (
           <Flow.Node
-            id={item.id}
-            key={item.id}
-            render={
-              <li
-                aria-current={step === index ? "step" : undefined}
-                className={mcpNodeClass}
-                data-active={step === index}
-              />
-            }
+            id="banks"
+            render={<div className={`${networkNodeClass} network-banks`} />}
           >
-            <McpStepContent step={item} />
+            <p className="network-name">Seus bancos</p>
+            <ul className="network-mobile-banks">
+              {mcpBanks.map((name) => (
+                <li key={name}>
+                  <BankNode name={name} />
+                </li>
+              ))}
+            </ul>
+            <p className="network-description network-mobile-source">
+              Conectados pela Pluggy
+            </p>
           </Flow.Node>
-        ))}
+        )}
+        {!!wide && (
+          <Flow.Node
+            id="pluggy"
+            render={<div className={`${networkNodeClass} network-pluggy`} />}
+          >
+            <PluggyNode />
+          </Flow.Node>
+        )}
+        <Flow.Node
+          id="caderninho"
+          render={<div className={`${networkNodeClass} network-core`} />}
+        >
+          <CaderninhoNode />
+        </Flow.Node>
+        {wide ? (
+          <Flow.Parallel>
+            {mcpClients.map((client) => (
+              <Flow.Node
+                id={`client-${client.id}`}
+                key={client.id}
+                render={
+                  <button
+                    aria-controls="guia-do-cliente"
+                    aria-pressed={selected === client.id}
+                    className={`${networkNodeClass} network-client`}
+                    data-client={client.id}
+                    onClick={selectClient}
+                    type="button"
+                  />
+                }
+              >
+                <ClientNode client={client} />
+              </Flow.Node>
+            ))}
+          </Flow.Parallel>
+        ) : (
+          <Flow.Node
+            id="clients"
+            render={<div className={`${networkNodeClass} network-clients`} />}
+          >
+            <p className="network-name">Seus assistentes</p>
+            <div className="network-mobile-clients">
+              {mcpClients.map((client) => (
+                <button
+                  aria-controls="guia-do-cliente"
+                  aria-pressed={selected === client.id}
+                  className="network-client"
+                  data-client={client.id}
+                  key={client.id}
+                  onClick={selectClient}
+                  type="button"
+                >
+                  <ClientNode client={client} />
+                </button>
+              ))}
+            </div>
+          </Flow.Node>
+        )}
       </Flow>
-      <p className="mcp-caption">{current?.caption ?? mcpSummary}</p>
+      <McpClientGuide selected={selected} />
     </div>
   );
 }
 
 export function mountMcpFlow(element: HTMLElement) {
   createRoot(element).render(<McpFlow />);
+}
+
+function ResponsiveRuleExample() {
+  const root = useRef<HTMLDivElement>(null);
+  const [wide, setWide] = useState(false);
+  useEffect(() => {
+    const element = root.current;
+    if (!element) {
+      return;
+    }
+    const observer = new ResizeObserver(([entry]) => {
+      setWide((entry?.contentRect.width ?? 0) >= 800);
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+  return (
+    <div ref={root}>
+      <LandingRuleExample
+        interactive
+        wide={wide}
+      />
+    </div>
+  );
+}
+
+export function mountLandingRule(element: HTMLElement) {
+  createRoot(element).render(<ResponsiveRuleExample />);
+}
+
+function ResponsivePerformance() {
+  const root = useRef<HTMLDivElement>(null);
+  const [wide, setWide] = useState(false);
+  useEffect(() => {
+    const element = root.current;
+    if (!element) {
+      return;
+    }
+    const observer = new ResizeObserver(([entry]) => {
+      setWide((entry?.contentRect.width ?? 0) >= 880);
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+  return (
+    <div ref={root}>
+      <LandingPerformance
+        interactive
+        wide={wide}
+      />
+    </div>
+  );
+}
+
+export function mountLandingPerformance(element: HTMLElement) {
+  createRoot(element).render(<ResponsivePerformance />);
 }

@@ -16,6 +16,7 @@ import {
   type WorkspaceCatalog,
 } from "../../contracts";
 import { tryCatch } from "../../shared";
+import { randomId } from "../random-id";
 import { UiButton } from "../ui";
 import type { OrganizationApi } from "./account-api";
 import { BackofficeDialog } from "./backoffice-dialog";
@@ -124,7 +125,7 @@ function CategoryEditor({
       });
       const payload = JSON.stringify(fields);
       if (receipt.current.payload !== payload) {
-        receipt.current = { key: crypto.randomUUID(), payload };
+        receipt.current = { key: randomId(), payload };
       }
       const input = PortalMutationSchema.safeParse({
         command: {

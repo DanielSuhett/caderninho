@@ -19,6 +19,7 @@ import {
   type WorkspaceCatalog,
 } from "../../contracts";
 import { tryCatch } from "../../shared";
+import { randomId } from "../random-id";
 import { UiButton } from "../ui";
 import type { OrganizationApi } from "./account-api";
 import { BackofficeDialog } from "./backoffice-dialog";
@@ -185,13 +186,13 @@ export function RuleEditor({
         conditions: [
           {
             field: "description",
-            id: crypto.randomUUID(),
+            id: randomId(),
             operator: "contains",
             value: term,
           },
-          { ...preset.direction, id: crypto.randomUUID() },
+          { ...preset.direction, id: randomId() },
         ],
-        id: crypto.randomUUID(),
+        id: randomId(),
       })),
     );
   }, []);
@@ -199,7 +200,7 @@ export function RuleEditor({
     setDirty(true);
     setAlternatives((previous) => [
       ...previous,
-      { conditions: [conditionDraft()], id: crypto.randomUUID() },
+      { conditions: [conditionDraft()], id: randomId() },
     ]);
   }, []);
   const removeAlternative = useCallback(
@@ -272,7 +273,7 @@ export function RuleEditor({
       };
       const payload = JSON.stringify(values);
       if (receipt.current.payload !== payload) {
-        receipt.current = { key: crypto.randomUUID(), payload };
+        receipt.current = { key: randomId(), payload };
       }
       const parsed = PortalMutationSchema.safeParse({
         command: {

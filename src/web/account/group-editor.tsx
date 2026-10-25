@@ -15,6 +15,7 @@ import {
   type WorkspaceCatalog,
 } from "../../contracts";
 import { tryCatch } from "../../shared";
+import { randomId } from "../random-id";
 import type { OrganizationApi } from "./account-api";
 import { BackofficeDialog } from "./backoffice-dialog";
 
@@ -61,7 +62,7 @@ export function GroupEditor({
       };
       const payload = JSON.stringify(fields);
       if (receipt.current.payload !== payload) {
-        receipt.current = { key: crypto.randomUUID(), payload };
+        receipt.current = { key: randomId(), payload };
       }
       const input = PortalMutationSchema.safeParse({
         command: {
@@ -239,7 +240,7 @@ export function DeleteOrganizationItem({
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const request = useRef<AbortController | null>(null);
-  const [key] = useState(() => crypto.randomUUID());
+  const [key] = useState(() => randomId());
   useEffect(() => () => request.current?.abort(), []);
   const remove = useCallback(async () => {
     if (request.current) {

@@ -1,5 +1,6 @@
 import { RulePreviewSchema, type WorkspaceCatalog } from "../../contracts";
 import { minor, type RuleCondition } from "../../domain";
+import { randomId } from "../random-id";
 
 export interface DraftCondition {
   field: string;
@@ -32,7 +33,7 @@ export function conditionDraft(field = "description"): DraftCondition {
   };
   return {
     field,
-    id: crypto.randomUUID(),
+    id: randomId(),
     operator: operators[field] ?? "equals",
     value: values[field] ?? "",
   };
@@ -62,13 +63,13 @@ export function initialAlternatives(
   return source.map((alternative) => ({
     conditions: alternative.conditions.map((condition) => ({
       ...condition,
-      id: crypto.randomUUID(),
+      id: randomId(),
       value:
         condition.field === "amount"
           ? amountInput(condition.value, rule?.filter?.currency ?? "BRL")
           : condition.value,
     })),
-    id: crypto.randomUUID(),
+    id: randomId(),
   }));
 }
 export function parseRuleDraft(input: {
