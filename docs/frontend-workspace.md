@@ -15,7 +15,7 @@ links. [DESIGN.md](../DESIGN.md) e o [guia](design-system.md) governam a composi
 | `/account/groups` | Grupos de planejamento, orçamento, categorias e etiquetas |
 | `/account/sync` | Rodadas, fases, estados, erros e referências históricas |
 | `/account/audit` | Autorizações, requisições, ferramentas, modelos declarados e bytes |
-| `/account/connections` | Pessoas, perfis Pluggy, conexão/importação e URL MCP |
+| `/account/connections` | Pessoas/bancos, nome/foto, credenciais, importação após Pessoas e URL MCP |
 | `/account/design-system` | Referência viva com os componentes reais e dados fictícios |
 
 ## Escopo e consulta
@@ -56,8 +56,10 @@ sobrescrever uma atualização mais recente da mesma chave. Falhas não são arm
 Skeleton
 aparece após 150 ms. Não persistir esse cache financeiro no navegador.
 
-A confirmação do widget pede a primeira importação uma única vez, mesmo com
-callbacks repetidos após 24 horas. Durante a execução e com a aba visível, o
+A confirmação do widget registra o banco com `deferImport: true`. Ao concluir
+Pessoas, o loading pede somente as primeiras importações ainda não admitidas.
+O contrato antigo de registro sem essa opção preserva a importação imediata.
+O cron atualiza apenas bancos cuja primeira importação já foi admitida. Durante a execução e com a aba visível, o
 monitor consulta a cada dois segundos; falhas aumentam o intervalo até 30 segundos
 e suspendem após cinco erros. Retorno à aba ou atualização manual reconcilia o
 estado. Ler status não inicia importação.
@@ -76,7 +78,7 @@ O diagrama conserva a semântica do motor e não executa nem grava operações.
 A composição visual segue o [guia de componentes](design-system.md#composição-de-regras).
 
 Visão geral começa pelo resumo financeiro do período. Saldos importados são
-estoques da última observação, separados dos movimentos mensais e da dívida do cartão. Conexões concentra configuração, primeira
+estoques da última observação, separados dos movimentos mensais e da dívida do cartão. Pessoas concentra configuração, bancos, primeira
 importação, consulta parcial e recuperação. Fases e erros permanecem visíveis.
 Autorizações precedem métricas na auditoria. Banner conserva erros/parcialidade;
 Toasty confirma gravações concluídas. Importação usa Loader sem percentagem fictícia.
@@ -90,7 +92,7 @@ ficam vinculados à rodada desde a admissão; corrigir titularidade depois não
 reescreve essas referências. Nomes são resolvidos pelo cadastro atual.
 
 O contador mostra **etapas confirmadas**, nunca quantidade de transações. A lista
-usa páginas de 25 rodadas, ordem de admissão decrescente, filtros de pessoa/estado
+usa páginas de 25 rodadas, ordem de admissão decrescente, filtros de pessoa/estado/conexão
 e atualização explícita. Consultar a página não inicia sincronização.
 
 ## Segurança e validação

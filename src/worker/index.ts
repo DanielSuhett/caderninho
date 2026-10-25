@@ -4,7 +4,7 @@ import { FaultCode } from "../domain";
 import { tryCatch } from "../shared";
 import { authenticatedFetch } from "./auth/controller";
 import type { Bindings } from "./bindings";
-import { syncService } from "./composition";
+import { installationService, syncService } from "./composition";
 import { failureStatus, requestCategory } from "./http";
 import { fetchMcp } from "./mcp";
 import {
@@ -74,7 +74,15 @@ const worker = {
         const { data, error } = await tryCatch(async () => {
           await syncService(env).recover();
           phase = SpanName.scheduled;
-          await syncService(env, () => new Date(event.scheduledTime)).request();
+          const state = await installationService(env).state();
+          const ids = state.connections
+            .filter((connection) => connection.importStatus !== null)
+            .map((connection) => connection.id);
+          if (ids.length) {
+            await syncService(env, () => new Date(event.scheduledTime)).request(
+              ids,
+            );
+          }
         });
         if (error) {
           const fields: SafeFields = {

@@ -81,6 +81,7 @@ export const AccountConnectTokenSchema = z.object({
 }) satisfies z.ZodType<AccountConnectToken>;
 export const AccountActionSchema = z.object({ csrf: z.string() }).strict();
 export const ItemActionSchema = AccountActionSchema.extend({
+  deferImport: z.boolean().default(false),
   itemId: z.string().min(1).max(160),
   profileId: z.string().min(1).max(128).default("default"),
 });

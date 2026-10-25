@@ -32,13 +32,12 @@ export function HouseholdPanel({
             id="household-heading"
             tabIndex={-1}
           >
-            Pessoas e perfis Pluggy
+            Ajustes avançados
           </h2>
         </div>
       </div>
       <p>
-        Edite nomes e fotos ou atualize as credenciais das contas cadastradas.
-        Para incluir outra pessoa e conta Pluggy, use “Adicionar conexão”.
+        Atualize acessos existentes. Novos bancos reutilizam o acesso da pessoa.
       </p>
       <div className="people-editor">
         {snapshot.people.map((person) => (

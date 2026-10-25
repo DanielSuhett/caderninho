@@ -1,6 +1,8 @@
-# Informe os três valores no formulário Deploy to Cloudflare.
+# Defina apenas ADMIN_PASSWORD no formulário Deploy to Cloudflare.
 # Para desenvolvimento local, copie para .dev.vars e use apenas fixtures.
 ADMIN_PASSWORD=
+# O onboarding configura Pluggy por pessoa dentro da instalação.
+# Fallback opcional para instalações que já usam secrets de ambiente:
 PLUGGY_CLIENT_ID=
 PLUGGY_CLIENT_SECRET=
 

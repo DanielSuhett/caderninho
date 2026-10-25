@@ -57,6 +57,7 @@ export function createAccountApi(
           itemId?: string;
           profileId?: string;
           connectionIds?: string[];
+          deferImport?: boolean;
         }
       | HouseholdCommand
       | { csrf: string; command: PortalMutation }
@@ -110,6 +111,7 @@ export function createAccountApi(
         itemId?: string;
         profileId?: string;
         connectionIds?: string[];
+        deferImport?: boolean;
       } = {},
     ) => {
       await request(`/${action}`, signal, { csrf, ...selection });

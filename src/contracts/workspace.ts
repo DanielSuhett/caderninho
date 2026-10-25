@@ -204,6 +204,7 @@ export function parsePortalQueryResult<Tool extends keyof PortalQueryResults>(
 
 export const SyncHistorySelectionSchema = z
   .object({
+    connectionId: id.optional(),
     cursor: z.string().max(4096).optional(),
     limit: z.coerce.number().int().min(1).max(100).default(25),
     personId: id.optional(),

@@ -4,109 +4,125 @@ import test from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import type { ConnectionInfo, PortalResponse } from "../../contracts";
+import type { ConnectionInfo } from "../../contracts";
 import { connectionFixture, portalFixture } from "../../fixtures/workspace";
-import {
-  ConnectionJourney,
-  importFailureMessage,
-  journeyConnection,
-} from "../account/connection-journey";
+import { importFailureMessage } from "../account/connection-journey";
+import { bankAppearance, SetupBanks } from "../account/setup-banks";
+import { initialImportIds, SetupImport } from "../account/setup-import";
 
-const announcementPattern = /<p class="sr-only" role="status">(.*?)<\/p>/;
-const timePattern = /2026|13:06|Estado consultado|Consultado em/;
-const setupPattern = /Configurar ou reativar perfil|Conectar Meu Pluggy/;
-const phasePattern = /Importando transações/;
-const credentialPattern = /perfil|autorização/;
-const connection = connectionFixture();
-
-function render(connections: ConnectionInfo[], configured = true) {
-  const snapshot: PortalResponse = portalFixture({ configured, connections });
+function render(connections: ConnectionInfo[]) {
   return renderToStaticMarkup(
-    createElement(ConnectionJourney, {
-      activity: null,
-      cancel: () => undefined,
-      connect: () => undefined,
-      manage: () => undefined,
-      observedAt: "2026-10-23T13:06:56Z",
+    createElement(SetupImport, {
+      busy: false,
+      command: () => undefined,
+      complete: () => undefined,
       readError: false,
-      snapshot,
+      refresh: () => undefined,
+      snapshot: portalFixture({ connections }),
     }),
   );
 }
-test("identified accounts alone do not unlock a transaction CTA; published data unlocks partial consultation", () => {
+
+test("import setup keeps published data available but does not claim identified accounts are imported", () => {
+  const connection = connectionFixture();
   const initial = render([connection]);
   assert.ok(initial.includes("Importando transações"));
-  assert.ok(initial.includes("1 conta identificada"));
+  assert.ok(initial.includes("0 de 1 bancos importados"));
   assert.ok(initial.includes("Aguardando os primeiros lançamentos"));
-  assert.equal(initial.includes("Ver transações disponíveis"), false);
+  assert.equal(initial.includes("Consultar dados disponíveis"), false);
   const partial = render([{ ...connection, hasTransactions: true }]);
   assert.ok(partial.includes("Histórico parcial"));
-  assert.ok(partial.includes("Ver transações disponíveis"));
-  assert.equal((partial.match(/Histórico parcial/g) ?? []).length, 1);
-  assert.ok(partial.includes("Consultado em"));
-  assert.ok(
-    partial.indexOf("Consultado em") <
-      partial.indexOf("Detalhes da importação"),
-  );
-  const announcement = partial.match(announcementPattern)?.[1];
-  assert.match(announcement ?? "", phasePattern);
-  assert.doesNotMatch(announcement ?? "", timePattern);
-});
-test("a confirmed empty import is a legitimate consultable result even if another profile is not configured", () => {
-  const html = render(
-    [
-      {
-        ...connection,
-        importStatus: "succeeded",
-        lastSuccessAt: "2026-10-23T13:07:02Z",
-        partial: false,
-      },
-    ],
-    false,
-  );
-  assert.ok(html.includes("Importação concluída"));
-  assert.ok(html.includes("Nenhuma transação foi retornada"));
-  assert.ok(html.includes("Ver transações"));
-  assert.doesNotMatch(html, setupPattern);
-});
-test("existing consultation takes precedence over an unrelated failed connection, independent of page filters", () => {
-  const available = {
-    ...connection,
-    hasTransactions: true,
-    importStatus: "succeeded" as const,
-    lastSuccessAt: "2026-10-23T13:07:02Z",
-  };
-  const failed = {
-    ...connection,
-    id: "other",
-    importStatus: "failed" as const,
-  };
-  assert.equal(journeyConnection([failed, available])?.id, available.id);
-  assert.ok(render([]).includes("Conecte seu primeiro banco"));
-  assert.ok(render([]).includes("primeira importação começa automaticamente"));
+  assert.ok(partial.includes("Consultar dados disponíveis"));
 });
 
-test("import failure recovery distinguishes a provider timeout from a rejected authorization", () => {
-  assert.ok(
-    importFailureMessage("UPSTREAM_TIMEOUT").includes("demorou a responder"),
+test("initial queue spans people, resumes only unadmitted banks and leaves completed or paused origins untouched", () => {
+  const snapshot = portalFixture({
+    connections: [
+      connectionFixture({
+        id: "saved",
+        importStatus: "succeeded",
+        personId: "self",
+      }),
+      connectionFixture({ id: "first", importStatus: null, personId: "self" }),
+      connectionFixture({
+        id: "second",
+        importStatus: null,
+        personId: "other",
+        profileId: "other",
+      }),
+      connectionFixture({ id: "active", importStatus: "running" }),
+      connectionFixture({
+        id: "paused",
+        importStatus: null,
+        profileId: "paused",
+      }),
+    ],
+  });
+  snapshot.profiles.push(
+    {
+      configured: true,
+      connectionCount: 1,
+      enabled: true,
+      id: "other",
+      name: "Outro acesso",
+      personId: "other",
+    },
+    {
+      configured: true,
+      connectionCount: 1,
+      enabled: false,
+      id: "paused",
+      name: "Pausado",
+      personId: "other",
+    },
   );
-  assert.doesNotMatch(
-    importFailureMessage("UPSTREAM_TIMEOUT"),
-    credentialPattern,
+  assert.deepEqual(initialImportIds(snapshot), ["first", "second"]);
+  assert.deepEqual(
+    initialImportIds({
+      ...snapshot,
+      connections: snapshot.connections.map((connection) =>
+        connection.id === "first"
+          ? { ...connection, importStatus: "succeeded" as const }
+          : connection,
+      ),
+    }),
+    ["second"],
   );
-  assert.match(importFailureMessage("UPSTREAM_AUTH"), credentialPattern);
-  assert.doesNotMatch(
-    importFailureMessage("INTERNAL_ERROR"),
-    credentialPattern,
+});
+
+test("bank identity uses provider institution metadata, never a guess from the account name", () => {
+  assert.equal(
+    bankAppearance(connectionFixture({ accounts: {} })).name,
+    "Banco autorizado",
   );
+  assert.equal(bankAppearance(connectionFixture()).identity?.institution, null);
+  const html = renderToStaticMarkup(
+    createElement(SetupBanks, {
+      connections: [connectionFixture({ importStatus: null })],
+    }),
+  );
+  assert.ok(html.includes("Não importado"));
+  assert.equal(html.includes("Conectado · histórico importado"), false);
+});
+
+test("confirmed empty imports are complete; failures preserve data and expose the actual retry window", () => {
+  const complete = connectionFixture({
+    importStatus: "succeeded",
+    partial: false,
+  });
+  assert.ok(render([complete]).includes("1 de 1 bancos importados"));
   const html = render([
     {
-      ...connection,
-      hasTransactions: true,
+      ...complete,
       importError: "UPSTREAM_TIMEOUT",
       importStatus: "failed",
+      lastSuccessAt: "2026-10-23T12:00:00Z",
+      nextEligibleAt: "2099-10-26T12:00:00Z",
     },
   ]);
-  assert.ok(html.includes("Ver transações disponíveis"));
-  assert.ok(html.includes("Código: UPSTREAM_TIMEOUT"));
+  assert.ok(html.includes("demorou a responder"));
+  assert.ok(html.includes("Nova tentativa a partir de"));
+  assert.ok(html.includes("Consultar dados disponíveis"));
+  assert.equal(html.includes("Tentar novamente"), false);
+  assert.ok(importFailureMessage("UPSTREAM_AUTH").includes("autorização"));
 });

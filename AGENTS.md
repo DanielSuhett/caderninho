@@ -75,6 +75,33 @@
 - Preserve contratos públicos. Deploy, merge, migração real e remoção de dados
   remotos exigem instrução explícita separada.
 
+## Frontend: revisar a experiência inteira
+
+1. Leia [DESIGN.md](DESIGN.md), especialmente “Minimalismo em toda a experiência”,
+   e os guias de componentes e da área. Preserve o contrato atual de Kumo,
+   tipografia, semântica financeira e acessibilidade. O feedback de minimalismo
+   é global; não o trate como exceção exclusiva de Pessoas ou de uma rota.
+2. Antes de uma revisão global, inventarie as rotas, tarefas, componentes
+   compartilhados, diálogos e estados alcançáveis. Percorra a jornada desde a
+   entrada até a conclusão, incluindo voltar, cancelar, erro e retomada. Uma
+   correção local é válida para um pedido local; não encerre um pedido global
+   após atualizar só o primeiro exemplo.
+3. Simplifique hierarquia, cópia, estados e posicionamento das ações. Use ícones
+   para ações secundárias familiares, com nome acessível e Tooltip por foco;
+   preserve rótulos quando necessários à decisão. Remova repetições e pilhas de
+   botões largos. Ajuda sob demanda não pode ocultar erro, consentimento ou
+   contexto indispensável. Não obtenha densidade encolhendo a fonte.
+4. Faça mudanças nos componentes compartilhados quando houver repetição real
+   e confira seus consumidores. Preserve contratos, credenciais, rascunhos,
+   identidade, precisão financeira, progresso e limites de autorização. POC
+   continua isolada até instrução explícita para alterar o produto; documentação
+   de uma proposta não comprova sua implementação.
+5. Valide cada superfície alterada no navegador, em tamanho normal e estreito,
+   nos dois temas, com teclado e estados relevantes. Entregue uma matriz por
+   página/estado: revisado, alterado, sem mudança necessária ou não validado,
+   com justificativa e evidência. Registre limites e checks executados; não
+   declare revisão global com páginas omitidas ou apenas build aprovado.
+
 ## Processo de desenvolvimento
 
 1. Confira `git status` e o diff; preserve alterações existentes. Consulte a

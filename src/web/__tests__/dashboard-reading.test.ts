@@ -95,7 +95,9 @@ test("the overview preserves zero card balances and their meaning without repeat
   assert.ok(html.includes("Cartão · não é dinheiro disponível"));
   assert.equal(html.includes("22/10/2026"), false);
   assert.equal(html.includes("Importação concluída"), false);
-  assert.ok(render(snapshot, "connections").includes("Importação concluída"));
+  assert.ok(
+    render(snapshot, "connections").includes("Conectado · histórico importado"),
+  );
 });
 test("a partial or unrelated unconfigured profile does not block the saved accounts", () => {
   const html = renderBalances({
@@ -124,11 +126,11 @@ test("a partial or unrelated unconfigured profile does not block the saved accou
 });
 test("an installation without imported data still exposes the first connection action", () => {
   const html = render({ ...snapshot, connections: [] });
-  assert.ok(html.includes("Conecte seu primeiro banco"));
-  assert.ok(html.includes("Conectar Meu Pluggy"));
+  assert.ok(html.includes("Nome e foto"));
+  assert.ok(html.includes("Salvar pessoa"));
 });
 
-test("connections keep partial data consultable with one progress warning", () => {
+test("connections show active import state without claiming completion", () => {
   const html = render(
     {
       ...snapshot,
@@ -140,11 +142,7 @@ test("connections keep partial data consultable with one progress warning", () =
     },
     "connections",
   );
-  assert.ok(
-    html.includes(
-      "Histórico parcial. Os dados já recebidos continuam disponíveis.",
-    ),
-  );
-  assert.ok(html.includes("Ver transações disponíveis"));
-  assert.equal((html.match(/Histórico parcial/g) ?? []).length, 1);
+  assert.ok(html.includes("Importando"));
+  assert.ok(html.includes('href="/account/transactions"'));
+  assert.equal(html.includes("Conectado · histórico importado"), false);
 });

@@ -7,19 +7,21 @@ pelo Meu Pluggy e consulte o histórico no ChatGPT ou Claude.
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/DanielSuhett/caderninho)
 
-1. **Instale.** Clique no botão, confirme o nome do Worker e informe os três campos abaixo. Mantenha a raiz do repositório, build `npm run build` e deploy `npm run deploy`.
-2. **Conecte seus bancos.** Abra `/account`, entre com sua senha e use **Conectar Meu Pluggy**. Depois escolha **Importar esta visão**.
+1. **Instale.** Clique no botão, confirme o nome do Worker e defina somente `ADMIN_PASSWORD`. Mantenha a raiz do repositório, build `npm run build` e deploy `npm run deploy`.
+2. **Cadastre as pessoas e bancos.** Abra `/account`, entre com sua senha e informe nome/foto. Configure Client ID e Client Secret no próprio Caderninho. Autorize cada banco pelo Meu Pluggy; os próximos reutilizam o mesmo acesso. Ao concluir Pessoas, a importação começa e abre Consultar ao terminar.
 3. **Conecte seu assistente.** No painel, copie o endereço `/mcp`, adicione-o ao ChatGPT ou Claude com OAuth e confirme a autorização.
 
 | Campo do deploy | O que informar |
 | --- | --- |
 | `ADMIN_PASSWORD` | Uma senha pessoal de 16 a 256 caracteres. Guarde no seu gerenciador de senhas. |
-| `PLUGGY_CLIENT_ID` | Client ID da sua aplicação no [painel Pluggy](https://dashboard.pluggy.ai/). |
-| `PLUGGY_CLIENT_SECRET` | Client Secret da mesma aplicação. |
 
 Conecte os bancos em [Meu Pluggy](https://meu.pluggy.ai/) antes de importá-los.
-Os três valores ficam nos secrets da sua Cloudflare. Nenhuma chave técnica precisa
-ser gerada manualmente. O painel permite cadastrar várias pessoas e perfis Pluggy autorizados. Consulte [pessoas e perfis](docs/household.md).
+A senha fica nos secrets da Cloudflare. O Client ID e o Client Secret da sua
+aplicação no [painel Pluggy](https://dashboard.pluggy.ai/) são validados e guardados
+no cofre privado da instalação. Outra pessoa usa o próprio acesso Meu Pluggy;
+uma pessoa pode autorizar vários bancos. Instalações que já usam secrets Pluggy
+de ambiente continuam funcionando. Consulte [pessoas e bancos](docs/household.md).
+Os cenários conferidos e os limites da validação estão em [onboarding](docs/onboarding.md).
 
 O projeto está em pré-produção. `migrations/0001_initial.sql` cria o modelo
 completo para um banco novo, incluindo planejamento, pessoas, fotos, histórico

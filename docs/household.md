@@ -1,40 +1,47 @@
-# Pessoas e múltiplos perfis Pluggy
+# Pessoas e bancos
 
 Uma instalação tem um administrador e um conjunto de autorizações MCP.
 Ela reúne fontes de várias pessoas. Identificação de titularidade não
 é controle de acesso: painel e assistentes autorizados enxergam toda a instalação.
 
-## Organizar no dashboard
+## Organizar em Pessoas
 
-1. Em **Conexões**, use **Adicionar conexão**. Escolha o titular ou adicione outra
-   pessoa no próprio wizard, independentemente do filtro herdado na página.
-2. Escolha uma conta Pluggy já cadastrada para esse titular ou informe o nome,
-   Client ID e Client Secret de outra aplicação. O servidor valida antes de salvar;
-   uma nova pessoa e seu perfil são confirmados no mesmo batch D1.
-3. Use **Abrir Meu Pluggy**. Cada pessoa autoriza suas instituições no fluxo do
-   provedor. O perfil validado permanece disponível se a janela for fechada.
-4. Use **Importar esta visão**. Os botões de pessoas filtram contas e conexões;
-   “Todos” reúne os titulares sem somar moedas ou tratar limite/cartão como saldo.
-5. Para corrigir um titular, expanda **Alterar titular** na conexão. Todo o histórico
-   e os produtos daquela conexão acompanham a atribuição, sem reimportar ou mudar
-   credenciais. Não é alteração do titular no banco.
+1. No primeiro acesso a `/account`, salve nome e foto opcional. Depois informe
+   Client ID e Client Secret na própria instalação. A validação precede o cofre;
+   campos recusados permanecem no formulário e o segredo é limpo ao salvar.
+2. Em **Pessoas** (`/account/connections`), + autoriza um banco pelo Meu Pluggy.
+   Os próximos bancos reutilizam o acesso da pessoa, com autorização própria.
+   Outra pessoa começa por nome/foto e usa o próprio acesso Meu Pluggy.
+3. A seta **Concluir pessoas e importar** inicia os bancos ainda não admitidos,
+   de todas as pessoas. O cron também aguarda a primeira admissão explícita;
+   leituras nunca iniciam importação. O loading usa estado e fases reais e abre
+   Consultar ao concluir. Recarregar mantém os pedidos existentes.
+4. Em **Consultar**, copie a URL MCP para ChatGPT ou Claude e autorize via OAuth.
+   Mostrar instruções ou copiar a URL não confirma que um assistente foi conectado.
+5. Caneta edita nome/foto; relógio abre o histórico filtrado daquela conexão.
+   Ajustes reúne pausa/credenciais existentes, reautorização, correção de titular
+   e revogação de assistentes. Esses dados e perfis anteriores são preservados.
 
-Cada perfil pode ser renomeado, pausado ou ter seu segredo atualizado. Pausar
-impede novas admissões; uma execução em curso pode parar na próxima leitura,
-preservando páginas já publicadas. Reativar respeita a janela original de 24h.
-Para trocar a aplicação (Client ID), crie outro perfil: a identidade de um perfil
-que já recebeu credenciais não pode ser alterada. Não há exclusão de histórico,
-pessoas ou perfis nesta interface.
+A jornada oferece um acesso principal por pessoa, com vários bancos. Instalações
+anteriores que possuem vários perfis continuam legíveis em Ajustes; esta mudança
+não apaga ou funde credenciais. O Client ID identifica a aplicação, não comprova
+identidade da conta Meu Pluggy. A interface não promete uma verificação de titular
+que o provedor não ofereceu.
 
-Falhas de validação aparecem junto ao formulário, com foco no aviso e orientação
-específica para credenciais recusadas, aplicação já cadastrada ou indisponibilidade.
-Os campos permanecem preenchidos quando o cadastro é rejeitado. Uma falha ao
-atualizar a lista depois de salvar é informada como cadastro salvo; não solicita
-que o usuário recrie a pessoa ou o perfil.
+Pausar impede novas admissões; uma execução em curso pode parar na próxima leitura,
+preservando páginas publicadas. Atualizar um segredo exige o Client ID original.
+Falhas respeitam a janela de 24h: o loading informa a próxima elegibilidade, sem
+reiniciar uma execução terminal ou apagar o histórico. Fotos persistem no D1,
+com preparação local e os limites do contrato. Rascunhos do onboarding bloqueiam
+navegação e fechamento até salvar ou cancelar.
 
-No frontend, `use-connection-wizard.ts` controla etapas, validação e envio;
-`connection-wizard-view.tsx` contém somente a apresentação. A edição de perfis
-usa `use-household-editor.ts`, separada do layout em `household-view.tsx`.
+O instalador solicita apenas `ADMIN_PASSWORD`. Credenciais Pluggy são validadas
+no servidor e ficam no cofre privado já existente. Secrets Pluggy de ambiente
+continuam como fallback das instalações anteriores; nenhum secret real é removido.
+
+No frontend, `use-people-setup.ts` controla a navegação e os formulários;
+`dashboard-view.tsx` apresenta a jornada. `setup-import.tsx` acompanha a fila real;
+`use-household-editor.ts` mantém os ajustes avançados existentes.
 
 ## O limite do provedor
 

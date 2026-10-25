@@ -19,11 +19,13 @@ export function PersonEditor({
   person,
   busy,
   onSubmit,
+  changed,
   children,
 }: {
   person: Person;
   busy: boolean;
   onSubmit: (event: FormEvent<HTMLFormElement>) => Promise<void>;
+  changed?: () => void;
   children?: ReactNode;
 }) {
   const [photo, setPhoto] = useState(person.photo ?? null);
@@ -32,9 +34,10 @@ export function PersonEditor({
   const input = useRef<HTMLInputElement>(null);
   const choose = useCallback(() => input.current?.click(), []);
   const remove = useCallback(() => {
+    changed?.();
     setPhoto(null);
     setErrorMessage("");
-  }, []);
+  }, [changed]);
   const changePhoto = useCallback(
     async (event: ChangeEvent<HTMLInputElement>) => {
       const file = event.currentTarget.files?.[0];
@@ -59,6 +62,7 @@ export function PersonEditor({
   return (
     <form
       data-id={person.id}
+      onChangeCapture={changed}
       onSubmit={onSubmit}
     >
       <fieldset
@@ -113,6 +117,7 @@ export function PersonEditor({
           <UiButton
             disabled={busy || processing}
             type="submit"
+            variant="primary"
           >
             {processing ? "Preparando foto…" : "Salvar pessoa"}
           </UiButton>

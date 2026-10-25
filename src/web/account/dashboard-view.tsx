@@ -1,170 +1,120 @@
-import { Badge } from "@cloudflare/kumo/components/badge";
 import { Banner } from "@cloudflare/kumo/components/banner";
 import { ClipboardText } from "@cloudflare/kumo/components/clipboard-text";
-import { Link } from "@cloudflare/kumo/components/link";
+import { Input } from "@cloudflare/kumo/components/input";
+import { Loader } from "@cloudflare/kumo/components/loader";
 import { Select } from "@cloudflare/kumo/components/select";
+import {
+  ArrowRightIcon,
+  GearIcon,
+  PencilSimpleIcon,
+  PlusIcon,
+  QuestionIcon,
+  UserPlusIcon,
+} from "@phosphor-icons/react";
 import { type FormEvent, type MouseEvent, useCallback, useState } from "react";
 
 import type { HouseholdCommand, PortalResponse } from "../../contracts";
-import { UiButton } from "../ui";
+import { UiButton, UiLink } from "../ui";
 import type { ManagementOutcome } from "./account-feedback";
 import { BackofficeDialog } from "./backoffice-dialog";
-import {
-  type ConnectionActivity,
-  ConnectionJourney,
-  importFailureMessage,
-} from "./connection-journey";
-import { ConnectionWizard } from "./connection-wizard";
+import type { ConnectionActivity } from "./connection-journey";
 import { DisclosureItem } from "./disclosure-item";
 import { HouseholdPanel } from "./household-view";
-import { dayLabel } from "./workspace-resource";
-import {
-  RefreshButton,
-  WorkspaceFilters,
-  WorkspaceHeading,
-} from "./workspace-ui";
+import { PersonEditor } from "./person-editor";
+import { PersonIdentity } from "./person-identity";
+import { SetupBanks } from "./setup-banks";
+import { SetupIconButton } from "./setup-icon-button";
+import { SetupImport } from "./setup-import";
+import { SetupStep, usePeopleSetup } from "./use-people-setup";
+import { WorkspaceHeading } from "./workspace-ui";
 
-const importLabels = {
-  failed: "Precisa de atenção",
-  pending: "Na fila",
-  running: "Importando",
-  succeeded: "Atualizada",
-};
-function timestamp(value: string | null) {
-  if (value?.length === 10) {
-    return dayLabel(value);
-  }
-  return value
-    ? new Date(value).toLocaleString("pt-BR")
-    : "Ainda não importada";
-}
-function DashboardMessage({
-  message,
-  readError,
-  partial,
-}: {
-  message: string;
-  readError: boolean;
-  partial: boolean;
-}) {
-  const content =
-    message ||
-    (readError &&
-      "Não foi possível atualizar o status. Os dados salvos continuam disponíveis.") ||
-    (partial && (
-      <>
-        Histórico parcial.{" "}
-        <Link href="/account/connections">Conferir conexões</Link>.
-      </>
-    ));
-  if (!content) {
-    return null;
-  }
-  return (
-    <Banner
-      className="feedback"
-      description={content}
-      role="status"
-      variant={readError ? "error" : "secondary"}
-    />
-  );
-}
-
-export function DashboardView(props: {
-  snapshot: PortalResponse;
-  section: "overview" | "connections";
-  busy: boolean;
-  message: string;
+export interface DashboardProps {
   activity: ConnectionActivity | null;
-  observedAt: string | null;
-  readError: boolean;
+  busy: boolean;
   cancel: () => void;
-  refresh: () => void;
-  personId: string;
-  connect: (profileId: string, id?: string) => void;
   command: (action: string, ids?: string[]) => void;
+  connect: (profileId: string, id?: string) => void;
   manage: (input: HouseholdCommand) => Promise<ManagementOutcome>;
-}) {
-  const {
-    snapshot,
-    busy,
-    personId,
-    command,
-    manage,
-    connect: openConnection,
-  } = props;
-  const [revokeAll, setRevokeAll] = useState(false);
-  const askRevokeAll = useCallback(() => setRevokeAll(true), []);
-  const cancelRevokeAll = useCallback(() => setRevokeAll(false), []);
-  const confirmRevokeAll = useCallback(() => {
-    command("disconnect-assistants");
-    setRevokeAll(false);
-  }, [command]);
-  const [managementOpen, setManagementOpen] = useState(
-    props.section === "connections",
+  message: string;
+  observedAt: string | null;
+  personId: string;
+  readError: boolean;
+  refresh: () => void;
+  section: "overview" | "connections";
+  snapshot: PortalResponse;
+}
+
+export function DashboardView(props: DashboardProps) {
+  const { snapshot, busy, activity } = props;
+  const model = usePeopleSetup(props);
+  const [help, setHelp] = useState(false);
+  const [settings, setSettings] = useState(false);
+  const [revoke, setRevoke] = useState(false);
+  const toggleHelp = useCallback(() => setHelp((value) => !value), []);
+  const toggleSettings = useCallback(() => setSettings((value) => !value), []);
+  const showRevoke = useCallback(() => setRevoke(true), []);
+  const closeRevoke = useCallback(() => setRevoke(false), []);
+  const confirmRevoke = useCallback(() => {
+    props.command("disconnect-assistants");
+    setRevoke(false);
+  }, [props.command]);
+  const people = useCallback(() => model.go(SetupStep.people), [model.go]);
+  const importing = useCallback(
+    () => model.go(SetupStep.importing),
+    [model.go],
   );
-  const [wizardOpen, setWizardOpen] = useState(!snapshot.configured);
-  const startWizard = useCallback(() => setWizardOpen(true), []);
-  const closeWizard = useCallback(() => setWizardOpen(false), []);
-  const hasResult = snapshot.connections.some(
-    (c) => c.hasTransactions || c.lastSuccessAt,
-  );
-  const visible = snapshot.connections.filter(
-    (c) => !personId || c.personId === personId,
-  );
-  const readyProfiles = new Set(
-    snapshot.profiles.filter((p) => p.enabled && p.configured).map((p) => p.id),
-  );
-  const importable = visible.filter((c) =>
-    readyProfiles.has(c.profileId ?? "default"),
+  const assistant = useCallback(() => {
+    if (
+      snapshot.connections.some(
+        (connection) =>
+          !connection.importStatus ||
+          connection.importStatus === "pending" ||
+          connection.importStatus === "running",
+      )
+    ) {
+      model.go(SetupStep.importing);
+      return;
+    }
+    model.go(SetupStep.assistant);
+  }, [model.go, snapshot.connections]);
+  const finishImport = useCallback(
+    () => model.go(SetupStep.assistant),
+    [model.go],
   );
   const assign = useCallback(
     async (event: FormEvent<HTMLFormElement>) => {
       event.preventDefault();
       const form = event.currentTarget;
       const { id } = form.dataset;
-      if (!id) {
-        return;
+      if (id) {
+        await props.manage({
+          action: "assign_connection",
+          connectionId: id,
+          csrf: snapshot.csrf,
+          personId: String(new FormData(form).get("personId")),
+        });
       }
-      await manage({
-        action: "assign_connection",
-        connectionId: id,
-        csrf: snapshot.csrf,
-        personId: String(new FormData(form).get("personId")),
-      });
     },
-    [manage, snapshot.csrf],
+    [props.manage, snapshot.csrf],
   );
-
-  const action = useCallback(
-    (event: MouseEvent<HTMLButtonElement>) => {
-      const { value } = event.currentTarget;
-      command(
-        value,
-        value === "sync" ? importable.map((c) => c.id) : undefined,
-      );
-    },
-    [command, importable],
-  );
-  const reconnect = useCallback(
-    (event: MouseEvent<HTMLButtonElement>) =>
-      openConnection(
-        event.currentTarget.dataset.profile ?? "default",
-        event.currentTarget.value,
-      ),
-    [openConnection],
-  );
+  const labels = {
+    assistant: "Consultar",
+    credentials: "Seu acesso Pluggy",
+    import: "Importar",
+    people: "Pessoas",
+    person: model.person ? "Nome e foto" : "Outra pessoa",
+  };
   return (
-    <div className="finance-dashboard">
+    <div className="finance-dashboard setup-page">
       <BackofficeDialog
         busy={busy}
-        close={cancelRevokeAll}
+        close={closeRevoke}
         dirty={false}
-        open={revokeAll}
+        open={revoke}
         presentation="confirmation"
         primaryAction={{
           children: "Confirmar revogação",
-          onClick: confirmRevokeAll,
+          onClick: confirmRevoke,
           type: "button",
           variant: "destructive",
         }}
@@ -175,278 +125,496 @@ export function DashboardView(props: {
           desta instalação serão preservados.
         </p>
       </BackofficeDialog>
-
-      <WorkspaceHeading
-        title={props.section === "overview" ? "Visão geral" : "Conexões"}
+      <nav
+        aria-label="Primeiros passos"
+        className="setup-navigation"
       >
-        {props.section === "connections" && (
+        <UiButton
+          aria-current={
+            model.step !== SetupStep.importing &&
+            model.step !== SetupStep.assistant
+              ? "step"
+              : undefined
+          }
+          onClick={people}
+          type="button"
+          variant="outline"
+        >
+          Pessoas
+        </UiButton>
+        <UiButton
+          aria-current={model.step === SetupStep.importing ? "step" : undefined}
+          disabled={!snapshot.connections.length || busy}
+          onClick={importing}
+          type="button"
+          variant="outline"
+        >
+          Importar
+        </UiButton>
+        <UiButton
+          aria-current={model.step === SetupStep.assistant ? "step" : undefined}
+          disabled={!snapshot.connections.length || busy}
+          onClick={assistant}
+          type="button"
+          variant="outline"
+        >
+          Consultar
+        </UiButton>
+      </nav>
+      <WorkspaceHeading title={labels[model.step]}>
+        {model.step === SetupStep.people && (
+          <SetupActions
+            help={help}
+            model={model}
+            props={props}
+            settings={settings}
+            toggleHelp={toggleHelp}
+            toggleSettings={toggleSettings}
+          />
+        )}
+      </WorkspaceHeading>
+      <SetupNotice
+        model={model}
+        props={props}
+      />
+      <ConnectingBank
+        activity={activity}
+        cancel={props.cancel}
+      />
+      {model.step === SetupStep.person && (
+        <section className="setup-form">
+          {model.selectedId === "new" && (
+            <p>Cada pessoa conecta a própria conta Meu Pluggy.</p>
+          )}
+          <PersonEditor
+            busy={busy}
+            changed={model.markDirty}
+            onSubmit={model.savePerson}
+            person={model.person ?? { id: "new", name: "" }}
+          />
           <UiButton
             disabled={busy}
-            onClick={startWizard}
+            onClick={model.cancelForm}
             type="button"
-            variant="primary"
+            variant="outline"
           >
-            Adicionar conexão
+            Cancelar
           </UiButton>
-        )}
-        <RefreshButton
-          disabled={busy}
-          label="Atualizar status da importação"
-          onClick={props.refresh}
-        />
-      </WorkspaceHeading>
-      {!!wizardOpen && (
-        <ConnectionWizard
-          activity={props.activity}
-          busy={busy}
-          cancel={props.cancel}
-          close={closeWizard}
-          connect={openConnection}
-          manage={manage}
-          message={props.message}
-          personId={personId}
-          snapshot={snapshot}
-        />
+        </section>
       )}
-      {!wizardOpen && (props.section === "connections" || !hasResult) && (
-        <ConnectionJourney
-          activity={props.activity}
-          cancel={props.cancel}
-          connect={openConnection}
-          manage={startWizard}
-          observedAt={props.observedAt}
-          readError={props.readError}
-          snapshot={snapshot}
-        />
-      )}
-      {hasResult && (props.section === "overview" || managementOpen) && (
-        <WorkspaceFilters
-          action={
-            props.section === "overview" ? "/account" : "/account/connections"
-          }
-          context={
-            snapshot.people.find((p) => p.id === personId)?.name ??
-            "Todas as pessoas"
-          }
+      {model.step === SetupStep.credentials && (
+        <form
+          className="setup-form"
+          onChangeCapture={model.markDirty}
+          onSubmit={model.saveCredentials}
         >
-          <Select
-            className="w-full"
-            defaultValue={personId}
-            items={[
-              { label: "Todas as pessoas", value: "" },
-              ...snapshot.people.map((p) => ({ label: p.name, value: p.id })),
-            ]}
-            label="Pessoa"
-            name="person"
+          <p>
+            Configure o acesso de {model.person?.name}. Ele será reutilizado
+            para os próximos bancos.
+          </p>
+          <Input
+            autoComplete="off"
+            label="Client ID"
+            maxLength={200}
+            name="clientId"
+            required
           />
-          <input
-            name="space"
-            type="hidden"
-            value={
-              new URLSearchParams(location.search).get("space") ?? "personal"
-            }
+          <Input
+            autoComplete="new-password"
+            label="Client Secret"
+            maxLength={512}
+            name="clientSecret"
+            required
+            type="password"
           />
-        </WorkspaceFilters>
-      )}
-      <DashboardMessage
-        message={props.message}
-        partial={props.section === "overview" && visible.some((c) => c.partial)}
-        readError={props.section === "overview" && hasResult && props.readError}
-      />
-      {props.section === "connections" && (
-        <>
-          <DisclosureItem
-            className="journey-management"
-            onOpenChange={setManagementOpen}
-            open={managementOpen}
-            summary={<>Gerenciar conexões e perfis</>}
+          <div className="draft-actions">
+            <UiButton
+              disabled={busy}
+              onClick={model.cancelForm}
+              type="button"
+              variant="outline"
+            >
+              Cancelar
+            </UiButton>
+            <UiButton
+              disabled={busy}
+              type="submit"
+              variant="primary"
+            >
+              {busy ? "Validando…" : "Validar e conectar banco"}
+            </UiButton>
+          </div>
+          <a
+            href="https://dashboard.pluggy.ai/"
+            rel="noreferrer"
+            target="_blank"
           >
-            <section aria-labelledby="connections-heading">
-              <div className="section-heading">
-                <h2
-                  id="connections-heading"
-                  tabIndex={-1}
-                >
-                  Conexões e atualização
-                </h2>
-                <UiButton
-                  disabled={busy || !importable.length}
-                  onClick={action}
-                  type="button"
-                  value="sync"
-                  variant="secondary"
-                >
-                  Importar esta visão
-                </UiButton>
-              </div>
-              {importable.length < visible.length && (
-                <Banner
-                  className="feedback"
-                  description={
-                    <>
-                      Perfis pausados ou sem credenciais ficam fora desta
-                      importação. Seus dados continuam visíveis.
-                    </>
-                  }
-                  variant="alert"
-                />
-              )}
-              <div className="connection-list">
-                {visible.map((c) => (
-                  <article
-                    className="connection-row"
-                    key={c.id}
-                  >
-                    <div>
-                      <Badge
-                        variant={
-                          (
-                            {
-                              failed: "error",
-                              pending: "warning",
-                              running: "info",
-                              succeeded: "success",
-                            } as const
-                          )[c.importStatus ?? "pending"]
-                        }
-                      >
-                        {c.importStatus
-                          ? importLabels[c.importStatus]
-                          : "Não importada"}
-                      </Badge>
-                      <h3>
-                        {c.personName}{" "}
-                        <span className="muted">/ {c.profileName}</span>
-                      </h3>
-                      <p>
-                        {Object.values(c.accounts)
-                          .map((a) => a.name)
-                          .join(" · ") ||
-                          "Conexão aguardando primeira importação"}
-                      </p>
-                      <p className="muted">
-                        Última importação: {timestamp(c.lastSuccessAt)}
-                        <br />
-                        Nova importação a partir de:{" "}
-                        {c.nextEligibleAt
-                          ? timestamp(c.nextEligibleAt)
-                          : "Disponível agora"}
-                      </p>
-                      {!!c.importError && (
-                        <Banner
-                          className="feedback"
-                          description={
-                            <>
-                              {importFailureMessage(c.importError)}
-                              <br />
-                              Código: {c.importError}.
-                            </>
-                          }
-                          variant="error"
-                        />
-                      )}
-                    </div>
-                    <div className="connection-actions">
-                      <UiButton
-                        data-profile={c.profileId ?? "default"}
-                        disabled={
-                          busy || !readyProfiles.has(c.profileId ?? "default")
-                        }
-                        onClick={reconnect}
-                        type="button"
-                        value={c.id}
-                        variant="secondary"
-                      >
-                        Reautorizar conexão
-                      </UiButton>
-                      <DisclosureItem summary={<>Alterar titular</>}>
-                        <form
-                          data-id={c.id}
-                          onSubmit={assign}
-                        >
-                          <Select
-                            className="w-full"
-                            defaultValue={c.personId ?? "self"}
-                            id={`owner-${c.id}`}
-                            items={[
-                              ...snapshot.people.map((p) => ({
-                                label: p.name,
-                                value: p.id,
-                              })),
-                            ]}
-                            label="Pessoa desta conexão"
-                            name="personId"
-                          />
-                          <p className="muted">
-                            Reatribui o histórico desta conexão. Não altera o
-                            titular na instituição nem as credenciais.
-                          </p>
-                          <UiButton
-                            disabled={busy}
-                            type="submit"
-                          >
-                            Salvar titular
-                          </UiButton>
-                        </form>
-                      </DisclosureItem>
-                    </div>
-                  </article>
-                ))}
-              </div>
-            </section>
-            <DisclosureItem summary={<>Editar titulares e credenciais</>}>
-              <HouseholdPanel
-                busy={busy}
-                manage={props.manage}
-                snapshot={snapshot}
-              />
-            </DisclosureItem>
-          </DisclosureItem>
-          <DisclosureItem
-            className="journey-assistants"
-            summary={<>Conectar meu assistente MCP</>}
-          >
-            <p>
-              Autorizar um assistente dá acesso aos dados de toda a instalação.
-            </p>
-            <ClipboardText
-              className="mcp-address"
-              labels={{ copyAction: "Copiar URL MCP" }}
-              text={`${snapshot.origin}/mcp`}
-              tooltip={{
-                copiedText: "URL MCP copiada.",
-                text: "Copiar URL MCP",
-              }}
-            />
-            <p className="muted">
-              Se a cópia não estiver disponível, selecione a URL acima.
-            </p>
-            <DisclosureItem summary={<>Gerenciar acesso dos assistentes</>}>
-              <p>
-                A revogação exige uma nova autorização. Contas e histórico
-                permanecem salvos.
-              </p>
-              <UiButton
-                disabled={busy}
-                onClick={askRevokeAll}
-                tone="danger"
-                type="button"
-                value="disconnect-assistants"
-                variant="secondary"
-              >
-                Revogar todos os assistentes
-              </UiButton>
-            </DisclosureItem>
-          </DisclosureItem>
-        </>
+            Obter credenciais na Pluggy
+          </a>
+        </form>
       )}
-      {props.section === "overview" && !hasResult && (
-        <p>
-          <Link href="/account/connections">
-            Gerenciar pessoas e perfis Pluggy
-          </Link>
-        </p>
+      {model.step === SetupStep.people && (
+        <PeopleBanks
+          assign={assign}
+          help={help}
+          model={model}
+          props={props}
+          settings={settings}
+          showRevoke={showRevoke}
+        />
+      )}
+      {model.step === SetupStep.importing && (
+        <SetupImport
+          busy={busy}
+          command={props.command}
+          complete={finishImport}
+          readError={props.readError}
+          refresh={props.refresh}
+          snapshot={snapshot}
+        />
+      )}
+      {model.step === SetupStep.assistant && (
+        <AssistantSetup snapshot={snapshot} />
+      )}
+      {model.step !== SetupStep.importing && (
+        <UiLink
+          href="/account/transactions"
+          variant="outline"
+        >
+          Continuar depois
+        </UiLink>
       )}
     </div>
+  );
+}
+
+function AssistantSetup({ snapshot }: { snapshot: PortalResponse }) {
+  const [assistant, setAssistant] = useState("ChatGPT");
+  const chooseAssistant = useCallback(
+    (event: MouseEvent<HTMLButtonElement>) =>
+      setAssistant(event.currentTarget.value),
+    [],
+  );
+  return (
+    <section
+      aria-label="Conectar assistente"
+      className="setup-form"
+    >
+      <div className="draft-actions">
+        <UiButton
+          aria-pressed={assistant === "ChatGPT"}
+          onClick={chooseAssistant}
+          type="button"
+          value="ChatGPT"
+          variant="outline"
+        >
+          ChatGPT
+        </UiButton>
+        <UiButton
+          aria-pressed={assistant === "Claude"}
+          onClick={chooseAssistant}
+          type="button"
+          value="Claude"
+          variant="outline"
+        >
+          Claude
+        </UiButton>
+      </div>
+      <p>
+        Adicione um conector MCP nas configurações de apps do {assistant},
+        usando OAuth e este endereço:
+      </p>
+      <ClipboardText
+        className="mcp-address"
+        labels={{ copyAction: "Copiar URL MCP" }}
+        text={`${snapshot.origin}/mcp`}
+        tooltip={{ copiedText: "URL MCP copiada.", text: "Copiar URL MCP" }}
+      />
+      <p>
+        Autorize no seu Caderninho. O assistente terá acesso aos dados de toda
+        esta instalação.
+      </p>
+      <UiLink
+        href="/account"
+        variant="primary"
+      >
+        Abrir meu painel
+      </UiLink>
+    </section>
+  );
+}
+
+function PeopleBanks({
+  props,
+  model,
+  help,
+  settings,
+  assign,
+  showRevoke,
+}: {
+  props: DashboardProps;
+  model: ReturnType<typeof usePeopleSetup>;
+  help: boolean;
+  settings: boolean;
+  assign: (event: FormEvent<HTMLFormElement>) => Promise<void>;
+  showRevoke: () => void;
+}) {
+  const { snapshot, busy } = props;
+  const reconnect = useCallback(
+    (event: MouseEvent<HTMLButtonElement>) =>
+      props.connect(
+        event.currentTarget.dataset.profile ?? "default",
+        event.currentTarget.value,
+      ),
+    [props.connect],
+  );
+
+  return (
+    <>
+      <div className="setup-person-bar">
+        <fieldset
+          aria-label="Pessoas"
+          className="setup-person-picker"
+        >
+          {snapshot.people.length === 1 && model.person ? (
+            <PersonIdentity person={model.person} />
+          ) : (
+            snapshot.people.map((person) => (
+              <UiButton
+                aria-pressed={model.selectedId === person.id}
+                key={person.id}
+                onClick={model.selectPerson}
+                type="button"
+                value={person.id}
+                variant={
+                  model.selectedId === person.id ? "secondary" : "outline"
+                }
+              >
+                <PersonIdentity
+                  compact
+                  person={person}
+                />
+              </UiButton>
+            ))
+          )}
+        </fieldset>
+        <SetupIconButton
+          disabled={busy || !model.person}
+          label="Editar nome e foto"
+          onClick={model.editPerson}
+        >
+          <PencilSimpleIcon size={20} />
+        </SetupIconButton>
+      </div>
+      {help === true && (
+        <p>
+          Conecte seus bancos no{" "}
+          <a
+            href="https://meu.pluggy.ai/"
+            rel="noreferrer"
+            target="_blank"
+          >
+            Meu Pluggy
+          </a>
+          . Autorize um banco por vez usando o mesmo acesso. Outra pessoa
+          precisa da própria conta Meu Pluggy.
+        </p>
+      )}
+      <SetupBanks connections={model.connections} />
+      {settings === true && (
+        <section
+          aria-label="Ajustes avançados"
+          className="setup-settings"
+        >
+          <HouseholdPanel
+            busy={busy}
+            manage={props.manage}
+            snapshot={snapshot}
+          />
+          {snapshot.connections.map((connection) => (
+            <DisclosureItem
+              key={connection.id}
+              summary={<>Ajustar conexão de {connection.personName}</>}
+            >
+              <UiButton
+                data-profile={connection.profileId ?? "default"}
+                disabled={busy}
+                onClick={reconnect}
+                type="button"
+                value={connection.id}
+              >
+                Reautorizar banco
+              </UiButton>
+              <form
+                data-id={connection.id}
+                onSubmit={assign}
+              >
+                <Select
+                  defaultValue={connection.personId ?? "self"}
+                  items={snapshot.people.map((person) => ({
+                    label: person.name,
+                    value: person.id,
+                  }))}
+                  label="Pessoa desta conexão"
+                  name="personId"
+                />
+                <p>
+                  Altera a organização do histórico; não muda o titular no banco
+                  ou as credenciais.
+                </p>
+                <UiButton
+                  disabled={busy}
+                  type="submit"
+                >
+                  Salvar titular
+                </UiButton>
+              </form>
+            </DisclosureItem>
+          ))}
+          <UiButton
+            disabled={busy}
+            onClick={showRevoke}
+            tone="danger"
+            type="button"
+          >
+            Revogar todos os assistentes
+          </UiButton>
+        </section>
+      )}
+    </>
+  );
+}
+
+function SetupActions({
+  props,
+  model,
+  help,
+  settings,
+  toggleHelp,
+  toggleSettings,
+}: {
+  props: DashboardProps;
+  model: ReturnType<typeof usePeopleSetup>;
+  help: boolean;
+  settings: boolean;
+  toggleHelp: () => void;
+  toggleSettings: () => void;
+}) {
+  const { snapshot, busy } = props;
+  return (
+    <fieldset
+      aria-label="Ações de pessoas e bancos"
+      className="setup-actions"
+    >
+      <SetupIconButton
+        disabled={busy}
+        label="Adicionar banco"
+        onClick={model.addBank}
+      >
+        <PlusIcon size={20} />
+      </SetupIconButton>
+      {!!snapshot.connections.length && (
+        <SetupIconButton
+          disabled={busy}
+          label="Adicionar outra pessoa"
+          onClick={model.addPerson}
+        >
+          <UserPlusIcon size={20} />
+        </SetupIconButton>
+      )}
+      <SetupIconButton
+        aria-expanded={help}
+        label="Como conectar bancos"
+        onClick={toggleHelp}
+      >
+        <QuestionIcon size={20} />
+      </SetupIconButton>
+      <SetupIconButton
+        aria-expanded={settings}
+        label="Ajustes de pessoas e credenciais"
+        onClick={toggleSettings}
+      >
+        <GearIcon size={20} />
+      </SetupIconButton>
+      {!!snapshot.connections.length && (
+        <SetupIconButton
+          disabled={busy}
+          label="Concluir pessoas e importar"
+          onClick={model.finishPeople}
+          variant="primary"
+        >
+          <ArrowRightIcon size={20} />
+        </SetupIconButton>
+      )}
+    </fieldset>
+  );
+}
+
+function SetupNotice({
+  props,
+  model,
+}: {
+  props: DashboardProps;
+  model: ReturnType<typeof usePeopleSetup>;
+}) {
+  const message =
+    model.issue ||
+    props.message ||
+    (props.readError
+      ? "Não foi possível atualizar o status. Os dados salvos continuam disponíveis."
+      : "");
+  if (!message) {
+    return null;
+  }
+  return (
+    <div
+      ref={model.notice}
+      tabIndex={-1}
+    >
+      <Banner
+        description={message}
+        role={model.issue ? "alert" : "status"}
+        variant={model.issue || props.readError ? "error" : "secondary"}
+      />
+    </div>
+  );
+}
+function ConnectingBank({
+  activity,
+  cancel,
+}: {
+  activity: ConnectionActivity | null;
+  cancel: () => void;
+}) {
+  if (!activity) {
+    return null;
+  }
+  return (
+    <section
+      className="setup-activity"
+      role="status"
+    >
+      <Loader
+        aria-label="Conectando banco"
+        size="base"
+      />
+      <p>
+        {
+          {
+            opening: "Abrindo Meu Pluggy…",
+            registering: "Registrando banco…",
+            widget: "Autorize o banco na janela do Meu Pluggy.",
+          }[activity.stage]
+        }
+      </p>
+      {activity.stage !== "registering" && (
+        <UiButton
+          onClick={cancel}
+          type="button"
+        >
+          Fechar janela
+        </UiButton>
+      )}
+    </section>
   );
 }

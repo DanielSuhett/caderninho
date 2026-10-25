@@ -164,7 +164,7 @@ const pages = [
   },
   {
     icon: BankIcon,
-    name: "Conexões",
+    name: "Pessoas",
     path: "/account/connections",
   },
   { icon: ShieldCheckIcon, name: "Auditoria MCP", path: "/account/audit" },

@@ -34,6 +34,9 @@ export function createSyncHistoryRepository(binding: D1Database) {
         .leftJoin(pluggyProfiles, eq(pluggyProfiles.id, syncHistory.profileId))
         .where(
           and(
+            input.connectionId
+              ? eq(syncHistory.connectionId, input.connectionId)
+              : undefined,
             input.personId
               ? eq(syncHistory.personId, input.personId)
               : undefined,

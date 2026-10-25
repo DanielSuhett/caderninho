@@ -75,6 +75,69 @@ Regras recolhidas mostram contagens absolutas de alternativas/condições. Açõ
 vêm antes da composição; contexto, prioridade e políticas não se repetem no Flow.
 Erros oferecem uma recuperação principal, com alternativas sob demanda.
 
+## Minimalismo em toda a experiência
+
+Direção reforçada pelo usuário em 25/10/2026. Aplica-se à jornada completa:
+onboarding, páginas públicas, painel, demo, formulários, detalhes, diálogos e
+estados intermediários. Compactar Pessoas na POC não significa que as demais
+telas foram revisadas. Cada superfície precisa responder à sua tarefa; não
+copiar a mesma barra de ícones para contextos diferentes.
+
+1. **Mostrar só o necessário para decidir e agir.** Título identifica a tarefa;
+   corpo, metadados e rodapé não repetem a mesma explicação. Remover instruções
+   óbvias, resumos duplicados, diretórios repetidos e molduras sem função.
+   Simplificar composição e passos antes de reduzir fontes ou espaçamento.
+2. **Manter ações compactas e previsíveis.** Ações de gestão ficam próximas do
+   título ou do item, com hierarquia discreta. Caneta edita, relógio abre
+   histórico e + adiciona; ícones equivalentes conservam significado e posição.
+   Não empilhar botões secundários ocupando a largura da página. Uma ação
+   primária pode manter verbo visível e largura adequada à tarefa, sobretudo
+   em formulários móveis. Ícones não substituem clareza em ações pouco familiares,
+   destrutivas ou que envolvem consentimento.
+3. **Representar identidade e estado sem frases repetidas.** Preferir logo,
+   nome e um estado compacto alinhado à direita. Um dot ou uma label curta pode
+   representar conexão normal, com nome acessível e contexto sob demanda.
+   Conexão, importação concluída, pendência e falha têm significados distintos;
+   não usar verde de sucesso para cobrir uma etapa ainda incompleta. Falha,
+   parcialidade, desatualização relevante e recuperação ficam visíveis.
+   Não pulsar um estado concluído; movimento indica atividade real.
+4. **Expor detalhes quando necessários.** Ajuda, histórico técnico e opções
+   avançadas entram por Tooltip, Collapsible ou Dialog adequados. Não esconder
+   instruções indispensáveis para concluir um formulário, consequências,
+   consentimento ou erro dentro de um tooltip. Pessoa ou conta única dispensa
+   seletor; seletores com escolhas reais mostram avatar/nome de forma compacta.
+5. **Preservar a continuidade da jornada.** Não pedir novamente dados já
+   disponíveis nem reexibir tarefas concluídas como novas. Uma conta Meu Pluggy
+   por pessoa admite vários bancos e autorizações próprias; adicionar banco
+   reutiliza as credenciais configuradas. A proposta de onboarding agrupa pessoas
+   e bancos antes da importação. Alterações visuais preservam rascunhos, voltar,
+   retomada, dados já importados e estados parciais, sem inventar sucesso.
+
+### Critérios complementares de revisão
+
+- **Descoberta e acessibilidade:** todo botão de ícone tem nome acessível;
+  Tooltip funciona por foco e ponteiro. Controles funcionam por teclado, têm
+  foco visível e área de acionamento adequada; na barra compacta da POC, 40 ×
+  40 CSS px. Informação crítica não depende só de cor ou hover. Redução de
+  movimento é respeitada.
+- **Consistência com significado:** reutilizar componentes Kumo, tokens e
+  identidades existentes. Mesma ação usa o mesmo nome e ícone, sem duplicar
+  controles na mesma tarefa. Bancos usam `connector.imageUrl` verificado, com
+  fallback; pessoas usam foto ou iniciais. Não adivinhar logos pelo nome.
+- **Responsividade e densidade:** reordenar e quebrar grupos sem rolagem
+  horizontal da página ou CTAs secundários gigantes. Testar nomes e valores
+  longos, uma e várias pessoas/contas. Preservar a tipografia de 16/14 px e a
+  leitura de valores exatos; ícones compactos não justificam texto ilegível.
+- **Feedback proporcional:** carregamento, vazio, erro, sucesso e retomada têm
+  tratamento próprio e uma próxima ação clara. Progresso representa trabalho
+  real; evitar spinners intermináveis, animação decorativa e percentuais
+  inventados. Atualização e falha não apagam dados já disponíveis.
+- **Simplicidade verificável:** remover conteúdo e passos sem função antes de
+  criar componentes ou abstrações. Medir lentidão observada; não usar skeletons
+  ou animações para encobrir trabalho redundante. Registrar páginas e estados
+  realmente vistos, incluindo os não validados. Uma captura bonita de uma rota
+  não comprova a qualidade da experiência inteira.
+
 ## Contratos preservados
 
 URLs, âncoras, nomes de campos e textos legais seguem os contratos existentes.

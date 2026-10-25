@@ -49,7 +49,7 @@ export function SyncHistoryView({
   const load = useCallback(
     (signal: AbortSignal, fresh = false) => {
       const query = new URLSearchParams({ limit: "25" });
-      for (const key of ["cursor", "status"]) {
+      for (const key of ["cursor", "status", "connectionId"]) {
         const value = params.get(key);
         if (value) {
           query.set(key, value);
@@ -87,6 +87,13 @@ export function SyncHistoryView({
           "Todas as pessoas"
         }
       >
+        {!!params.get("connectionId") && (
+          <input
+            name="connectionId"
+            type="hidden"
+            value={params.get("connectionId") ?? ""}
+          />
+        )}
         <Select
           defaultValue={params.get("person") ?? ""}
           items={[

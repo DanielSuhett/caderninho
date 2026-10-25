@@ -103,6 +103,7 @@ export function AccountView() {
         itemId?: string;
         profileId?: string;
         connectionIds?: string[];
+        deferImport?: boolean;
       } = {},
     ) => {
       const signal = lifetime.current?.signal;
@@ -240,7 +241,11 @@ export function AccountView() {
               );
               release(!closeError);
               setActivity({ profileId, stage: "registering" });
-              await command("items", { itemId: id, profileId });
+              await command("items", {
+                deferImport: true,
+                itemId: id,
+                profileId,
+              });
               if (!signal.aborted) {
                 setActivity(null);
               }

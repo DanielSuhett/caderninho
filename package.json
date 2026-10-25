@@ -71,12 +71,6 @@
       },
       "ADMIN_PASSWORD": {
         "description": "Escolha uma senha pessoal de 16 a 256 caracteres para abrir seu painel. Guarde-a no seu gerenciador de senhas."
-      },
-      "PLUGGY_CLIENT_ID": {
-        "description": "Client ID da sua aplicação no [painel Pluggy](https://dashboard.pluggy.ai/). Use a mesma aplicação das suas conexões pessoais."
-      },
-      "PLUGGY_CLIENT_SECRET": {
-        "description": "Client Secret da mesma aplicação no [painel Pluggy](https://dashboard.pluggy.ai/). Será guardado como secret deste Worker."
       }
     }
   }
