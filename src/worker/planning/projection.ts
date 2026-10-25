@@ -1,16 +1,20 @@
 import type { PlanningCommand } from "../../contracts";
-import type {
-  PlanningAccount,
-  PlanningState,
-  PlanningTransaction,
-  TransactionProjection,
-} from "../../domain";
 import {
+  AccountType,
+  CategoryKind,
   CLASSIFICATION_VERSION,
   connectionPartial,
   fixedCategoryId,
+  type PlanningAccount,
   PlanningError,
+  type PlanningState,
+  type PlanningTransaction,
   pluggyCategory,
+  TransactionDirection,
+  type TransactionEdit,
+  type TransactionOrder,
+  type TransactionProjection,
+  TransactionStatus,
   transactionMatchesText,
 } from "../../domain";
 import type { PlanningRepository, PlanningSnapshot } from "./entity";
@@ -65,7 +69,7 @@ export function accounts(
             ?.name ?? "Eu",
         profileId: null,
         spaceId: row.spaceId,
-        type: row.type ?? "BANK",
+        type: row.type ?? AccountType.BANK,
       })),
   ];
 }
@@ -84,7 +88,7 @@ export function cardCatalog(snapshot: PlanningSnapshot, state: PlanningState) {
     }
   >();
   for (const account of accounts(snapshot, state).filter(
-    (a) => a.type === "CREDIT",
+    (a) => a.type === AccountType.CREDIT,
   )) {
     const settings = state.accounts.find((a) => a.id === account.id);
     const main =
@@ -205,7 +209,7 @@ export function validateSelection(
   return { accountList, accountMap, space };
 }
 export function transactionStream(
-  repository: PlanningRepository,
+  repository: Pick<PlanningRepository, "transactions">,
   snapshot: PlanningSnapshot,
   state = snapshot.state,
 ) {
@@ -268,7 +272,7 @@ export function transactionStream(
         details.get(row.id)?.cardNumber === selection.cardNumber)
     );
   }
-  function manualProjection(edit: import("../../domain").TransactionEdit) {
+  function manualProjection(edit: TransactionEdit) {
     const account = found(accountMap.get(edit.accountId ?? ""));
     return effective({
       accountId: account.id,
@@ -277,9 +281,9 @@ export function transactionStream(
       currency: account.currency,
       date: edit.date ?? "",
       description: edit.description ?? "",
-      direction: edit.direction ?? "DEBIT",
+      direction: edit.direction ?? TransactionDirection.DEBIT,
       id: edit.id,
-      status: edit.status ?? "POSTED",
+      status: edit.status ?? TransactionStatus.POSTED,
     });
   }
   function* manualRows(selection: Selection, ids?: string[]) {
@@ -320,7 +324,7 @@ export function transactionStream(
   return async function* (
     selection: Selection,
     ids?: string[],
-    page?: { order: "id" | "date_desc"; after: string; limit: number },
+    page?: { order: TransactionOrder; after: string; limit: number },
   ) {
     validatePeriod(selection);
     yield* manualRows(selection, ids);
@@ -436,9 +440,9 @@ export function classification(row: PlanningTransaction, state: PlanningState) {
     // A loan advance is neither income nor a negative repayment expense.
     if (
       row.category === fixedCategoryId(row.spaceId, "financiamento") &&
-      row.direction === "CREDIT"
+      row.direction === TransactionDirection.CREDIT
     ) {
-      return "transfer";
+      return CategoryKind.transfer;
     }
     return category.kind;
   }

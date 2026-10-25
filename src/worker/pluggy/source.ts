@@ -1,22 +1,16 @@
 import { z } from "zod/v4";
 
-import type { FinancialSource } from "../../domain";
 import {
   Fault,
   FaultCode,
+  type FinancialSource,
   ProviderAccountSchema,
   ProviderConnectionSchema,
   ProviderTransactionSchema,
 } from "../../domain";
-import { HttpFailureKind, httpResponseFailure, tryCatch } from "../../shared";
+import { type HttpFailureKind, HttpRequestError, tryCatch } from "../../shared";
 import type { PersonalPluggyClient } from "./client.adapter";
 
-const transportFaults = new Map<string, FaultCode>([
-  [FaultCode.UPSTREAM_REDIRECT, FaultCode.UPSTREAM_REDIRECT],
-  [FaultCode.UPSTREAM_TOO_LARGE, FaultCode.UPSTREAM_TOO_LARGE],
-  ["ETIMEDOUT", FaultCode.UPSTREAM_TIMEOUT],
-  ["ERR_BODY_PARSE_FAILURE", FaultCode.INVALID_RESPONSE],
-]);
 const httpFaults: Record<HttpFailureKind, FaultCode> = {
   forbidden: FaultCode.UPSTREAM_FORBIDDEN,
   invalid_request: FaultCode.UPSTREAM_INVALID_REQUEST,
@@ -32,37 +26,15 @@ const httpFaults: Record<HttpFailureKind, FaultCode> = {
 };
 
 // Translate only transport metadata into public faults. Upstream bodies, URLs and credentials
-// stay inside the SDK error and never become a Fault cause, message, detail or log.
+// never become a Fault cause, message, detail or log.
 export async function sdkResult<T>(operation: () => Promise<T>): Promise<T> {
   const { data, error } = await tryCatch(operation);
   if (!error) {
     return data;
   }
-  const upstream = z
-    .object({
-      code: z.string().optional(),
-      response: z
-        .object({
-          headers: z.object({
-            "retry-after": z
-              .union([z.string(), z.array(z.string())])
-              .optional(),
-          }),
-          statusCode: z.number(),
-        })
-        .optional(),
-    })
-    .parse(error);
-  const retry = upstream.response?.headers["retry-after"];
-  const failure =
-    upstream.response &&
-    httpResponseFailure({
-      status: upstream.response.statusCode,
-      ...(typeof retry === "string" && { retryAfter: retry }),
-    });
+  const failure = error instanceof HttpRequestError ? error.failure : undefined;
   const fault = new Fault(
-    transportFaults.get(upstream.code ?? "") ??
-      httpFaults[failure?.kind ?? HttpFailureKind.network],
+    failure ? httpFaults[failure.kind] : FaultCode.UPSTREAM_UNAVAILABLE,
   );
   if (failure?.retryAfterSeconds !== undefined) {
     fault.details = { retryAfterSeconds: failure.retryAfterSeconds };

@@ -9,6 +9,11 @@ import {
   PortalTransactionQuerySchema,
   type WorkspaceCatalog,
 } from "../../contracts";
+import {
+  TransactionDirection,
+  TransactionOrder,
+  TransactionStatus,
+} from "../../domain";
 import { UiCheckbox } from "../ui";
 import type { createAccountApi } from "./account-api";
 import { CursorPagination } from "./cursor-pagination";
@@ -37,7 +42,7 @@ export function TransactionsView({
       const query = PortalTransactionQuerySchema.parse({
         future: params.get("future") === "on",
         limit: 50,
-        order: "date_desc",
+        order: TransactionOrder.date_desc,
         spaceId,
         tool: "get_portal_transactions",
         ...Object.fromEntries(
@@ -138,8 +143,8 @@ export function TransactionsView({
                 defaultValue={params.get("direction") ?? ""}
                 items={[
                   { label: "Entradas e saídas", value: "" },
-                  { label: "Saídas", value: "DEBIT" },
-                  { label: "Entradas", value: "CREDIT" },
+                  { label: "Saídas", value: TransactionDirection.DEBIT },
+                  { label: "Entradas", value: TransactionDirection.CREDIT },
                 ]}
                 label="Movimento"
                 name="direction"
@@ -170,8 +175,14 @@ export function TransactionsView({
                 defaultValue={params.get("status") ?? ""}
                 items={[
                   { label: "Todos", value: "" },
-                  { label: "Registradas na origem", value: "POSTED" },
-                  { label: "Pendentes na origem", value: "PENDING" },
+                  {
+                    label: "Registradas na origem",
+                    value: TransactionStatus.POSTED,
+                  },
+                  {
+                    label: "Pendentes na origem",
+                    value: TransactionStatus.PENDING,
+                  },
                 ]}
                 label="Estado"
                 name="status"

@@ -5,9 +5,12 @@ import type {
   PortalTransactionQuery,
 } from "../../contracts";
 import {
+  AccountType,
   localDay,
   monthDate,
+  type PlanningTransaction,
   type TransactionDetails,
+  TransactionDirection,
   transactionMatchesText,
 } from "../../domain";
 import { planningCursor } from "./cursor";
@@ -24,7 +27,7 @@ function installmentKey(row: InstallmentRow) {
     return null;
   }
   if (
-    row.direction !== "DEBIT" ||
+    row.direction !== TransactionDirection.DEBIT ||
     row.totalInstallments < 2 ||
     row.installmentNumber < 1 ||
     row.installmentNumber > row.totalInstallments
@@ -101,7 +104,7 @@ function matches(
 }
 
 function record(
-  row: import("../../domain").PlanningTransaction,
+  row: PlanningTransaction,
   details: TransactionDetails | undefined,
 ): InstallmentRow {
   return {
@@ -147,7 +150,7 @@ export async function portalTransactions(
   );
   const creditAccounts = new Set(
     accountList
-      .filter((account) => account.type === "CREDIT")
+      .filter((account) => account.type === AccountType.CREDIT)
       .map((account) => account.id),
   );
   const groups = new Map<string, InstallmentRow[]>();

@@ -1,6 +1,11 @@
 import { z } from "zod/v4";
 
-import { type CommitResult, Fault, FaultCode } from "../../../domain";
+import {
+  type CommitResult,
+  Fault,
+  FaultCode,
+  RunStatus,
+} from "../../../domain";
 import { rateLimitRetry, tryCatch } from "../../../shared";
 import type { Bindings } from "../../bindings";
 import { synchronizationDependencies } from "../../composition";
@@ -111,10 +116,10 @@ export class FinanceWorkflow extends WorkflowEntrypoint<
           }
           const state = await dependencies.repository.read(event.payload.runId);
           let outcome: Outcome = Outcome.deferred;
-          if (state.status === "succeeded") {
+          if (state.status === RunStatus.succeeded) {
             outcome = Outcome.completed;
           }
-          if (state.status === "failed") {
+          if (state.status === RunStatus.failed) {
             outcome = Outcome.failed;
           }
           span.annotate({ outcome });

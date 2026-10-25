@@ -31,8 +31,10 @@ import type {
   Tag,
   TransactionClassification,
   TransactionDetails,
+  TransactionDirection,
   TransactionEdit,
   TransactionIdentification,
+  TransactionStatus,
 } from "../../domain";
 export const connections = sqliteTable(
   "connections",
@@ -72,12 +74,12 @@ export const transactions = sqliteTable(
     currency: text("currency").notNull(),
     date: text("date").notNull(),
     description: text("description").notNull(),
-    direction: text("direction").$type<"DEBIT" | "CREDIT">().notNull(),
+    direction: text("direction").$type<TransactionDirection>().notNull(),
     id: text("id").primaryKey(),
     identification: text("identification", {
       mode: "json",
     }).$type<TransactionIdentification>(),
-    status: text("status").$type<"PENDING" | "POSTED">().notNull(),
+    status: text("status").$type<TransactionStatus>().notNull(),
   },
   (t) => [
     check(

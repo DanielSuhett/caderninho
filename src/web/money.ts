@@ -1,8 +1,14 @@
-export type MoneyTone = "income" | "expense" | "neutral";
+import { TransactionDirection } from "../domain";
+export const MoneyTone = {
+  expense: "expense",
+  income: "income",
+  neutral: "neutral",
+} as const;
+export type MoneyTone = (typeof MoneyTone)[keyof typeof MoneyTone];
 
 export function transactionTone(row: {
   amountMinor: string | null;
-  direction: "CREDIT" | "DEBIT";
+  direction: TransactionDirection;
   ignored: boolean;
 }): MoneyTone {
   if (
@@ -10,9 +16,11 @@ export function transactionTone(row: {
     row.amountMinor === null ||
     BigInt(row.amountMinor) === 0n
   ) {
-    return "neutral";
+    return MoneyTone.neutral;
   }
-  return row.direction === "CREDIT" ? "income" : "expense";
+  return row.direction === TransactionDirection.CREDIT
+    ? MoneyTone.income
+    : MoneyTone.expense;
 }
 
 export function formatBalance(value: string | null, currency: string) {

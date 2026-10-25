@@ -1,5 +1,9 @@
 import type { WorkspaceCatalog } from "../../contracts";
-import type { RuleCondition } from "../../domain";
+import {
+  type RuleCondition,
+  RuleOperator,
+  TransactionDirection,
+} from "../../domain";
 import { formatBalance } from "../money";
 import type { CategoryAppearance } from "./category-appearance";
 import { conditionFields } from "./rule-draft";
@@ -118,21 +122,21 @@ export function buildRuleComposition({
   if (rule.accountId) {
     required.push({
       field: "accountId",
-      operator: "equals",
+      operator: RuleOperator.equals,
       value: rule.accountId,
     });
   }
   if (rule.direction) {
     required.push({
       field: "direction",
-      operator: "equals",
+      operator: RuleOperator.equals,
       value: rule.direction,
     });
   }
   if (rule.filter && rule.text) {
     required.push({
       field: "description",
-      operator: "contains",
+      operator: RuleOperator.contains,
       value: rule.text,
     });
   }
@@ -146,7 +150,7 @@ export function buildRuleComposition({
       conditions: [
         {
           field: "description",
-          operator: "contains",
+          operator: RuleOperator.contains,
           value: rule.text,
         } as const,
       ],
@@ -178,10 +182,10 @@ export function ruleSummary({ rule }: { rule: RuleSource }) {
   const { alternatives } = rule.filter;
   const conditions = alternatives.flatMap((row) => row.conditions);
   const description = conditions.find(
-    (c) => c.field === "description" && c.operator === "contains",
+    (c) => c.field === "description" && c.operator === RuleOperator.contains,
   );
   const direction = conditions.find(
-    (c) => c.field === "direction" && c.operator === "equals",
+    (c) => c.field === "direction" && c.operator === RuleOperator.equals,
   );
   if (
     alternatives.length === 1 &&
@@ -190,7 +194,8 @@ export function ruleSummary({ rule }: { rule: RuleSource }) {
   ) {
     let movement = "Transações";
     if (direction) {
-      movement = direction.value === "DEBIT" ? "Saídas" : "Entradas";
+      movement =
+        direction.value === TransactionDirection.DEBIT ? "Saídas" : "Entradas";
     }
     return `${movement} com “${description.value}”`;
   }

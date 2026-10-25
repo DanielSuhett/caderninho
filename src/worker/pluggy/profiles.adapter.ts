@@ -1,5 +1,11 @@
-import type { FinancialSource, PluggyProfile } from "../../domain";
-import { DEFAULT_PROFILE, scopedSourceId, sourceIdentity } from "../../domain";
+import {
+  DEFAULT_PROFILE,
+  type FinancialSource,
+  type PluggyProfile,
+  ProductKind,
+  scopedSourceId,
+  sourceIdentity,
+} from "../../domain";
 import { hash } from "../../shared";
 import type { CredentialVault, HouseholdRepository } from "../household";
 import { createPluggyAdapter } from "./adapter";
@@ -76,7 +82,7 @@ export function createProfileSource(input: {
         ...request,
         id: upstreamId,
       });
-      if (page.kind === "bills") {
+      if (page.kind === ProductKind.bills) {
         return {
           ...page,
           records: page.records.map((row) => ({
@@ -86,7 +92,7 @@ export function createProfileSource(input: {
           })),
         };
       }
-      if (page.kind === "investments") {
+      if (page.kind === ProductKind.investments) {
         return {
           ...page,
           records: page.records.map((row) => ({

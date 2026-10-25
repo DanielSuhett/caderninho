@@ -102,10 +102,35 @@ ausentes conservam seus status específicos.
 | Uma leitura antiga podia sobrescrever uma atualização mais recente do mesmo filtro. | O cache identifica a requisição corrente por chave; mantém expiração, limite e invalidação por escrita. O teste demonstra a corrida e sua correção. |
 | Faltavam proteções para dependências dos contratos em domínio/shared e para entradas de planning/household em entities/repositories. | Restrições nativas do Biome cobrem esses caminhos, sem plugins ou supressões. Probes temporários confirmaram os diagnósticos e foram removidos. |
 
+### 6. Imports, enums e escrita de código
+
+A revisão adicional percorreu os 186 arquivos TypeScript/TSX de produto, sem os
+tipos gerados, código vendorizado e testes. A inspeção dos 822 imports estáticos
+não encontrou ciclos de execução nem imports duplicados, pelo próprio barrel ou
+fora das convenções de caminho após as correções. A composição, controllers,
+adapters e contratos de entity mantêm suas entradas específicas.
+
+| Achado | Correção |
+| --- | --- |
+| Valores financeiros e de planejamento eram repetidos em tipos, schemas e decisões. | Quinze enums com objetos `as const`, junto aos conceitos: conta, direção, estado, espaço, categoria, canal, produto, ordenação, agrupamentos, gráfico, fase de importação, operadores de regra, admissão e tom monetário. `RunStatus` existente também é reutilizado. Valores e ordem dos schemas públicos foram preservados. |
+| Imports de tipos estavam espalhados em 25 expressões inline e havia declarações duplicadas por módulo. | Tipos nomeados no topo e um import por origem; tipos que acompanham valores usam `type` inline. Imports dinâmicos reais das telas permanecem. `FaultCode` fica com `Fault`, removendo o arquivo genérico `enums.ts`. |
+| O client Pluggy transformava `HttpRequestError` em um objeto genérico que o source revalidava e traduzia de volta. | O mesmo erro tipado atravessa o adapter; uma tabela completa traduz a falha HTTP para `Fault`. A limpeza da chave após 401 e os metadados seguros de retry permanecem. |
+| JSON já decodificado sofria validação genérica antes de seu schema específico; catálogo controlado era revalidado no demo. | Retorno `unknown` no decoder HTTP e schemas específicos na entrada. O catálogo conserva seus tipos concretos com `satisfies`. Configuração HTTP herdada deixa de ser repetida. |
+| Wrappers, estado e mapas não acrescentavam comportamento. | `UiField` removido, wizard e view reunidos, estado `request` sem leitores removido e variantes de auditoria diretas. `transactionStream` pede somente a leitura de transações, dispensando cópia do repository no preview. A dupla verificação da fase de produtos também sai. |
+
+Nomes de campos, textos e valores abertos de terceiros continuam strings.
+Rascunhos de formulários podem representar entradas ainda inválidas; não recebem
+casts para satisfazer enums. As uniões discriminadas e os `switch` preservam o
+narrowing, e o lint nativo continua sem novas supressões ou plugins.
+
 ## Validação da entrega
 
 `mise run check:quick` passa após as mudanças e após integrar a ferramenta de
 assinaturas. `mise run lint:fix` e `mise run format` convergem sem alterações.
+A revisão adicional de imports, enums e simplificações também passou por
+`mise run check`: 80 testes Node, 156 testes Cloudflare em 26 arquivos, build e
+runtime nativo com 10 mil e 100 mil registros. A comparação dos 99 contratos
+continua idêntica à base `27869b9`, inclusive a ordem das opções dos schemas.
 A validação completa usa `mise run check`: tipos gerados, TypeScript, formatação,
 lint, testes Node, integração Cloudflare, build e runtime nativo com 10 mil e
 100 mil registros, replay e persistência após reinício. O resultado da revisão

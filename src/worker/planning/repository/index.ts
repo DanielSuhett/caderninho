@@ -1,7 +1,11 @@
 import { and, asc, desc, eq, gt, gte, lt, lte, or, sql } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 
-import { connectionPartial } from "../../../domain";
+import {
+  connectionPartial,
+  TransactionOrder,
+  type TransactionProjection,
+} from "../../../domain";
 import { database, required } from "../../database";
 import {
   connectionOwners,
@@ -80,8 +84,8 @@ function sourceFilter(selection?: TransactionRead) {
   );
 }
 function sourceOrder(order: TransactionRead["order"]) {
-  const dated = order !== "id";
-  const descending = order === "date_desc";
+  const dated = order !== TransactionOrder.id;
+  const descending = order === TransactionOrder.date_desc;
   const compare = descending ? lt : gt;
   const sort = descending ? desc : asc;
   return {
@@ -103,7 +107,7 @@ function sourceOrder(order: TransactionRead["order"]) {
         ),
       );
     },
-    key: (row: import("../../../domain").TransactionProjection) =>
+    key: (row: TransactionProjection) =>
       dated ? `${row.date}:${row.id}` : row.id,
   };
 }
@@ -677,7 +681,7 @@ export function createPlanningRepository(
       const pageSize = selection?.pageSize ?? 5000;
       async function* pages(
         after?: string,
-      ): AsyncGenerator<import("../../../domain").TransactionProjection[]> {
+      ): AsyncGenerator<TransactionProjection[]> {
         const rows = await db
           .select()
           .from(transactions)

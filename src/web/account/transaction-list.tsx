@@ -10,6 +10,7 @@ import type {
   PortalTransactionListSchema,
   TransactionListSchema,
 } from "../../contracts";
+import { TransactionDirection, TransactionStatus } from "../../domain";
 import { formatBalance, type MoneyTone, transactionTone } from "../money";
 import { MoneyValue } from "../money-value";
 import { UiButton } from "../ui";
@@ -35,7 +36,8 @@ function amountLabel(row: Transaction) {
     return `Valor indisponível · ${row.currency}`;
   }
   const label = formatBalance(row.amountMinor, row.currency);
-  return row.direction === "CREDIT" && BigInt(row.amountMinor) > 0n
+  return row.direction === TransactionDirection.CREDIT &&
+    BigInt(row.amountMinor) > 0n
     ? `+${label}`
     : label;
 }
@@ -62,8 +64,8 @@ function directionIsExplicit(row: Transaction) {
   }
   const amount = BigInt(row.amountMinor);
   return (
-    (row.direction === "DEBIT" && amount < 0n) ||
-    (row.direction === "CREDIT" && amount > 0n)
+    (row.direction === TransactionDirection.DEBIT && amount < 0n) ||
+    (row.direction === TransactionDirection.CREDIT && amount > 0n)
   );
 }
 
@@ -224,7 +226,7 @@ function TransactionItem({
           <span
             className={directionIsExplicit(row) ? "sr-only" : "table-secondary"}
           >
-            {row.direction === "DEBIT" ? "Saída" : "Entrada"}
+            {row.direction === TransactionDirection.DEBIT ? "Saída" : "Entrada"}
           </span>
           {current !== null && total !== null && (
             <span className="table-secondary">
@@ -282,7 +284,9 @@ export function TransactionDetailContent({
             tone={transactionTone(row)}
           />
         </strong>
-        <span>{row.direction === "DEBIT" ? "Saída" : "Entrada"}</span>
+        <span>
+          {row.direction === TransactionDirection.DEBIT ? "Saída" : "Entrada"}
+        </span>
       </p>
       {row.ignored === true && (
         <Banner
@@ -320,12 +324,12 @@ function transactionStates(
 ) {
   const anchorDate = "anchorDate" in row ? row.anchorDate : row.date;
   const pending = installments.filter(
-    (item) => item.status === "PENDING",
+    (item) => item.status === TransactionStatus.PENDING,
   ).length;
   const future = installments.filter(
     (item) => !!referenceDay && item.date > referenceDay,
   ).length;
-  let pendingLabel = row.status === "PENDING" ? "Pendente" : "";
+  let pendingLabel = row.status === TransactionStatus.PENDING ? "Pendente" : "";
   if (pending > 0) {
     pendingLabel = plural(pending, "pendente", "pendentes");
   }
@@ -373,7 +377,7 @@ function InstallmentSchedule({
               />
             </strong>
             <span className="installment-states">
-              {item.status === "PENDING"
+              {item.status === TransactionStatus.PENDING
                 ? "Pendente na origem"
                 : "Registrada na origem"}
               {!!referenceDay && item.date > referenceDay && " · Futura"}
@@ -472,7 +476,7 @@ function TransactionDetails({
         <div>
           <dt>Estado deste registro</dt>
           <dd>
-            {row.status === "PENDING"
+            {row.status === TransactionStatus.PENDING
               ? "Pendente na origem"
               : "Registrada na origem"}
           </dd>

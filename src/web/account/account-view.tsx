@@ -13,19 +13,18 @@ import {
 import { useWorkspaceNavigation } from "./account-navigation";
 import { createConnectWidget } from "./connect-widget";
 import type { ConnectionActivity } from "./connection-journey";
+import type { DashboardView as DashboardComponent } from "./dashboard-view";
 import { createImportMonitor } from "./import-monitor";
 import { WorkspacePageError } from "./workspace-page";
 import { WorkspaceView } from "./workspace-view";
 
-const DashboardView = lazy<typeof import("./dashboard-view").DashboardView>(
-  async () => {
-    const { data, error } = await tryCatch(() => import("./dashboard-view"));
-    if (error) {
-      return { default: WorkspacePageError };
-    }
-    return { default: data.DashboardView };
-  },
-);
+const DashboardView = lazy<typeof DashboardComponent>(async () => {
+  const { data, error } = await tryCatch(() => import("./dashboard-view"));
+  if (error) {
+    return { default: WorkspacePageError };
+  }
+  return { default: data.DashboardView };
+});
 
 export function AccountView() {
   const route = useWorkspaceNavigation();

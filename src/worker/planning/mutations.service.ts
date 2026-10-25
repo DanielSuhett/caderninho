@@ -3,21 +3,25 @@ import type {
   PlanningMutation,
   RuleImportResult,
 } from "../../contracts";
-import type {
-  AccountSettings,
-  PlanningState,
-  Rule,
-  TransactionEdit,
-} from "../../domain";
 import {
+  type AccountSettings,
+  AccountType,
   activeRules,
+  CategoryKind,
   categoryCatalog,
   localDay,
   monthDate,
+  type PlanningAccount,
   PlanningError,
+  type PlanningState,
+  type PlanningTransaction,
+  type Rule,
   resolveRuleImportCategory,
   ruleMatches,
   sacSchedule,
+  TransactionDirection,
+  type TransactionEdit,
+  TransactionStatus,
 } from "../../domain";
 import { hash } from "../../shared";
 import { effectiveBills } from "./bills.service";
@@ -93,7 +97,7 @@ export async function planningMutation(
     input: Extract<PlanningCommand, { tool: "create_manual_account" }>,
   ) {
     if (
-      input.type !== "CREDIT" &&
+      input.type !== AccountType.CREDIT &&
       (input.closeDay || input.dueDay || input.creditLimitMinor)
     ) {
       throw new Error(PlanningError.CARD_REQUIRED);
@@ -140,7 +144,7 @@ export async function planningMutation(
       if (!row.manual) {
         throw new Error(PlanningError.SOURCE_READ_ONLY);
       }
-      if (row.type !== "CREDIT") {
+      if (row.type !== AccountType.CREDIT) {
         throw new Error(PlanningError.CARD_REQUIRED);
       }
     }
@@ -397,7 +401,7 @@ export async function planningMutation(
     const rules = activeRules(
       state.rules.filter((r) => r.spaceId === input.spaceId),
     );
-    function changeRow(row: import("../../domain").PlanningTransaction) {
+    function changeRow(row: PlanningTransaction) {
       const patch = edit(row.id, row.accountId);
       switch (input.tool) {
         case "delete_transaction":
@@ -440,7 +444,7 @@ export async function planningMutation(
   ) {
     const target = account(input.accountId);
     const config = settings(target.id);
-    if (!target.manual || target.type !== "CREDIT") {
+    if (!target.manual || target.type !== AccountType.CREDIT) {
       throw new Error(PlanningError.MANUAL_CARD_REQUIRED);
     }
     if (!(config.closeDay && config.dueDay)) {
@@ -473,7 +477,7 @@ export async function planningMutation(
       amountMinor: row.amountMinor,
       categoryId: row.categoryId,
       currency: target.currency,
-      direction: "DEBIT",
+      direction: TransactionDirection.DEBIT,
       endDate: monthDate(row.startDate, row.total - row.current),
       id: uuid(),
       installmentId: id,
@@ -1235,15 +1239,15 @@ export async function planningMutation(
       throw new Error(PlanningError.PAYMENT_ORDER);
     }
     const target = account(input.accountId);
-    if (target.type !== "BANK" || target.currency !== loan.currency) {
+    if (target.type !== AccountType.BANK || target.currency !== loan.currency) {
       throw new Error(PlanningError.CURRENCY_MISMATCH);
     }
     if (input.transactionId) {
       const row = found((await selected([input.transactionId]))[0]);
       if (
         row.accountId !== target.id ||
-        row.direction !== "DEBIT" ||
-        row.status !== "POSTED" ||
+        row.direction !== TransactionDirection.DEBIT ||
+        row.status !== TransactionStatus.POSTED ||
         row.currency !== loan.currency ||
         row.amountMinor === null ||
         BigInt(row.amountMinor.replace("-", "")) !== BigInt(payment.amountMinor)
@@ -1266,11 +1270,11 @@ export async function planningMutation(
         currency: loan.currency,
         date: localDay(new Date(now)),
         description: loan.name,
-        direction: "DEBIT",
+        direction: TransactionDirection.DEBIT,
         id,
         manual: true,
         spaceId: input.spaceId,
-        status: "POSTED",
+        status: TransactionStatus.POSTED,
       });
       payment.transactionId = id;
       payment.createdTransaction = true;
@@ -1368,7 +1372,7 @@ export async function planningMutation(
     const catalog = categoryCatalog(id);
     state.categories.push(...catalog.categories);
     state.categoryGroups.push(...catalog.categoryGroups);
-    for (const kind of ["income", "expense"] as const) {
+    for (const kind of [CategoryKind.income, CategoryKind.expense] as const) {
       state.categories.push({
         color: "#64748b",
         groupId: null,
@@ -1447,10 +1451,7 @@ export async function planningMutation(
     return { deleted: true, id: input.id };
   }
 
-  function moveTarget(
-    target: import("../../domain").PlanningAccount,
-    targetSpaceId: string,
-  ) {
+  function moveTarget(target: PlanningAccount, targetSpaceId: string) {
     settings(target.id).spaceId = targetSpaceId;
     for (const row of state.edits.filter((t) => t.accountId === target.id)) {
       row.spaceId = targetSpaceId;

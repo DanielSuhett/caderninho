@@ -1,5 +1,5 @@
 import { accountingDay, assertMinor, decimal, minor } from "./exact";
-import { Fault } from "./fault.entity";
+import { Fault, FaultCode } from "./fault.entity";
 import type {
   AccountProjection,
   TransactionProjection,
@@ -7,6 +7,7 @@ import type {
 import type {
   MoneyInput,
   ProviderAccount,
+  ProviderBoleto,
   ProviderTransaction,
 } from "./provider.entity";
 import type { TransactionIdentification } from "./transaction.entity";
@@ -24,9 +25,8 @@ export function normalizeMoney(value: MoneyInput, currency: string) {
   } catch (error) {
     if (
       error instanceof Fault &&
-      ["CURRENCY_SCALE_UNSUPPORTED", "MONEY_PRECISION_UNSUPPORTED"].some(
-        (code) => code === error.code,
-      )
+      (error.code === FaultCode.CURRENCY_SCALE_UNSUPPORTED ||
+        error.code === FaultCode.MONEY_PRECISION_UNSUPPORTED)
     ) {
       return null;
     }
@@ -176,10 +176,7 @@ function normalizePayment(
   };
 }
 
-function normalizeBoleto(
-  boleto: import("./provider.entity").ProviderBoleto | null,
-  currency: string,
-) {
+function normalizeBoleto(boleto: ProviderBoleto | null, currency: string) {
   if (!boleto) {
     return null;
   }

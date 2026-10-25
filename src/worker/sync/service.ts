@@ -1,20 +1,26 @@
 import { z } from "zod/v4";
 
 import {
+  AccountType,
   assertPersonalConnector,
   CLASSIFICATION_VERSION,
   CLEF_MIN_CONFIDENCE,
   classificationState,
+  ImportPhase,
   normalizeAccount,
   normalizeTransaction,
+  RunStatus,
+  type TransactionProjection,
 } from "../../domain";
 import { hash, tryCatch } from "../../shared";
-import type {
-  ImportDependencies,
-  SyncRun,
-  SyncServiceDependencies,
+import {
+  AdmissionStatus,
+  type ImportDependencies,
+  importFailure,
+  type Publication,
+  type SyncRun,
+  type SyncServiceDependencies,
 } from "./entity";
-import { importFailure } from "./entity";
 
 async function unique<T extends { id: string }>(records: T[]) {
   const seen = new Map<string, T>();
@@ -52,9 +58,11 @@ function afterTransactions(
   dependencies: ImportDependencies,
 ): SyncRun["checkpoint"]["phase"] {
   if (dependencies.source.products) {
-    return "investments";
+    return ImportPhase.investments;
   }
-  return dependencies.classifier ? "classification" : "finish";
+  return dependencies.classifier
+    ? ImportPhase.classification
+    : ImportPhase.finish;
 }
 async function importAccounts(dependencies: ImportDependencies, run: SyncRun) {
   const { repository, source, now } = dependencies;
@@ -71,7 +79,7 @@ async function importAccounts(dependencies: ImportDependencies, run: SyncRun) {
     next: {
       accountId: first?.id ?? null,
       cursor: null,
-      phase: first ? "transactions" : afterTransactions(dependencies),
+      phase: first ? ImportPhase.transactions : afterTransactions(dependencies),
     },
     now: now(),
     run,
@@ -110,7 +118,9 @@ async function importTransactions(
     next: {
       accountId: following,
       cursor: page.next,
-      phase: following ? "transactions" : afterTransactions(dependencies),
+      phase: following
+        ? ImportPhase.transactions
+        : afterTransactions(dependencies),
     },
     now: now(),
     run,
@@ -120,24 +130,27 @@ async function importTransactions(
 function afterProducts(
   classifier: ImportDependencies["classifier"],
 ): SyncRun["checkpoint"]["phase"] {
-  return classifier ? "classification" : "finish";
+  return classifier ? ImportPhase.classification : ImportPhase.finish;
 }
 async function importProducts(
   { repository, source, now, classifier }: ImportDependencies,
   run: SyncRun,
 ) {
   const { phase } = run.checkpoint;
-  if (!(source.products && ["investments", "loans", "bills"].includes(phase))) {
-    throw new Error("INVALID_CHECKPOINT");
-  }
-  if (phase !== "investments" && phase !== "loans" && phase !== "bills") {
+  if (
+    !source.products ||
+    (phase !== ImportPhase.investments &&
+      phase !== ImportPhase.loans &&
+      phase !== ImportPhase.bills)
+  ) {
     throw new Error("INVALID_CHECKPOINT");
   }
   const page = Number(run.checkpoint.cursor ?? "1");
   if (!Number.isSafeInteger(page) || page < 1) {
     throw new Error("INVALID_CHECKPOINT");
   }
-  const id = phase === "bills" ? run.checkpoint.accountId : run.connectionId;
+  const id =
+    phase === ImportPhase.bills ? run.checkpoint.accountId : run.connectionId;
   if (!id) {
     throw new Error("INVALID_CHECKPOINT");
   }
@@ -160,19 +173,21 @@ async function importProducts(
   if (products.next !== null) {
     return repository.publish({ done: false, next, now: now(), products, run });
   }
-  if (phase === "investments") {
-    next = { accountId: null, cursor: null, phase: "loans" };
+  if (phase === ImportPhase.investments) {
+    next = { accountId: null, cursor: null, phase: ImportPhase.loans };
   } else {
     const saved = await repository.connectionAccounts(run.connectionId);
     const cards = Object.entries(saved)
-      .filter(([, a]) => a.type === "CREDIT")
+      .filter(([, a]) => a.type === AccountType.CREDIT)
       .map(([key]) => key)
       .sort();
-    const following = cards.find((key) => phase === "loans" || key > id);
+    const following = cards.find(
+      (key) => phase === ImportPhase.loans || key > id,
+    );
     next = {
       accountId: following ?? null,
       cursor: null,
-      phase: following ? "bills" : afterProducts(classifier),
+      phase: following ? ImportPhase.bills : afterProducts(classifier),
     };
   }
   return repository.publish({ done: false, next, now: now(), products, run });
@@ -182,12 +197,10 @@ const ClassificationCursorSchema = z.object({
   id: z.string(),
 });
 async function classifyPage(
-  page: import("../../domain").TransactionProjection[],
+  page: TransactionProjection[],
   classifier: NonNullable<ImportDependencies["classifier"]>,
 ) {
-  const classifications: NonNullable<
-    import("./entity").Publication["classifications"]
-  > = [];
+  const classifications: NonNullable<Publication["classifications"]> = [];
   const decisions = new Map<
     string,
     Awaited<ReturnType<NonNullable<ImportDependencies["classifier"]>>>
@@ -242,13 +255,11 @@ async function classifyTransactions(
     await repository.connectionAccounts(run.connectionId),
   ).sort();
   const accountId = run.checkpoint.accountId ?? accountIds[0];
-  const classifications: NonNullable<
-    import("./entity").Publication["classifications"]
-  > = [];
+  const classifications: NonNullable<Publication["classifications"]> = [];
   let next: SyncRun["checkpoint"] = {
     accountId: null,
     cursor: null,
-    phase: "finish",
+    phase: ImportPhase.finish,
   };
   if (accountId && classifier) {
     const after = run.checkpoint.cursor
@@ -262,10 +273,14 @@ async function classifyTransactions(
       next = {
         accountId,
         cursor: JSON.stringify({ date: last.date, id: last.id }),
-        phase: "classification",
+        phase: ImportPhase.classification,
       };
     } else if (following) {
-      next = { accountId: following, cursor: null, phase: "classification" };
+      next = {
+        accountId: following,
+        cursor: null,
+        phase: ImportPhase.classification,
+      };
     }
   }
   return repository.publish({
@@ -282,27 +297,29 @@ async function importPage(dependencies: ImportDependencies, run: SyncRun) {
   if (replay.id === run.id && replay.sequence === run.sequence + 1) {
     return {
       checkpoint: replay.checkpoint,
-      done: replay.status === "succeeded" || replay.status === "failed",
+      done:
+        replay.status === RunStatus.succeeded ||
+        replay.status === RunStatus.failed,
       sequence: replay.sequence,
     };
   }
   if (
     replay.id !== run.id ||
     replay.sequence !== run.sequence ||
-    replay.status !== "running"
+    replay.status !== RunStatus.running
   ) {
     throw new Error("STALE_COMMIT");
   }
   switch (run.checkpoint.phase) {
-    case "accounts":
+    case ImportPhase.accounts:
       return importAccounts(dependencies, run);
-    case "transactions":
+    case ImportPhase.transactions:
       return importTransactions(dependencies, run);
-    case "classification":
+    case ImportPhase.classification:
       return classifyTransactions(dependencies, run);
-    case "investments":
-    case "loans":
-    case "bills":
+    case ImportPhase.investments:
+    case ImportPhase.loans:
+    case ImportPhase.bills:
       return importProducts(dependencies, run);
     default: {
       const [current, saved] = await Promise.all([
@@ -330,7 +347,7 @@ export async function runImport(
   await repository.start(id);
   async function next(): Promise<void> {
     const run = await repository.read(id);
-    if (run.status !== "running") {
+    if (run.status !== RunStatus.running) {
       return;
     }
     await steps.do(`page-${run.sequence}`, () => importPage(dependencies, run));
@@ -365,7 +382,7 @@ export function createSyncService({
     if (error) {
       return {
         dispatchPending:
-          run.status === "pending" && (await dispatch(run.id)) ? 1 : 0,
+          run.status === RunStatus.pending && (await dispatch(run.id)) ? 1 : 0,
         failed: 0,
         statusUnavailable: 1,
       };
@@ -405,7 +422,8 @@ export function createSyncService({
       const pending = await Promise.all(
         admissions.map((admission) =>
           admission.importId &&
-          (admission.status === "started" || admission.status === "working")
+          (admission.status === AdmissionStatus.started ||
+            admission.status === AdmissionStatus.working)
             ? dispatch(admission.importId)
             : false,
         ),

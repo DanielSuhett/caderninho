@@ -1,3 +1,10 @@
+export const ChartType = {
+  bar: "bar",
+  doughnut: "doughnut",
+  line: "line",
+} as const;
+export type ChartType = (typeof ChartType)[keyof typeof ChartType];
+
 const xmlCharacters = /[&<>"']/g;
 const entities: Record<string, string> = {
   "'": "&apos;",
@@ -11,7 +18,7 @@ function escapeXml(value: string) {
 }
 const palette = ["#2563eb", "#0f766e", "#b45309", "#be123c", "#7c3aed"];
 export function financialCharts(input: {
-  type: "bar" | "line" | "doughnut";
+  type: ChartType;
   groups: {
     currency: string;
     group: string;
@@ -51,13 +58,13 @@ export function financialCharts(input: {
         const y = 60 + index * 28;
         const label = `${escapeXml(row.label ?? row.group)}: ${escapeXml(row.formattedAmount ?? `${row.amountMinor} ${currency} minor`)}`;
         const color = palette[index % palette.length] ?? "#2563eb";
-        if (input.type === "doughnut") {
+        if (input.type === ChartType.doughnut) {
           const share = ringShare(amount, magnitude, total);
           const shape = `<circle cx="160" cy="160" r="100" pathLength="100" fill="none" stroke="${color}" stroke-width="40" stroke-dasharray="${share} ${100 - share}" stroke-dashoffset="${-cumulative}" transform="rotate(-90 160 160)"><title>${label}</title></circle><text x="310" y="${y}" fill="${color}">${label}</text>`;
           cumulative += share;
           return shape;
         }
-        if (input.type === "line") {
+        if (input.type === ChartType.line) {
           points.push(
             `${60 + index * spacing},${210 - (amount < 0n ? -width : width) / 2}`,
           );
@@ -70,10 +77,10 @@ export function financialCharts(input: {
     const height = Math.max(
       350,
       rows.length * 28 + 80,
-      input.type === "line" ? rows.length * 20 + 460 : 0,
+      input.type === ChartType.line ? rows.length * 20 + 460 : 0,
     );
     const line =
-      input.type === "line"
+      input.type === ChartType.line
         ? `<polyline points="${points.join(" ")}" fill="none" stroke="#2563eb" stroke-width="3"/>`
         : "";
     return {

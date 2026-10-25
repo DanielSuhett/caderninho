@@ -3,6 +3,7 @@ import { Select } from "@cloudflare/kumo/components/select";
 import { useCallback, useState } from "react";
 
 import type { PortalResponse } from "../../contracts";
+import { ChartType, SpendingGroupBy, TransactionOrder } from "../../domain";
 import { tryCatch } from "../../shared";
 import type { createAccountApi } from "./account-api";
 import { navigateWorkspace } from "./account-navigation";
@@ -54,9 +55,9 @@ export function OverviewView({
               tool: "generate_chart",
               ...scope,
               from: `${shiftMonth(month, -5)}-01`,
-              groupBy: "month",
+              groupBy: SpendingGroupBy.month,
               to: queryPeriod.to,
-              type: "line",
+              type: ChartType.line,
             },
             snapshot.csrf,
             signal,
@@ -71,7 +72,7 @@ export function OverviewView({
             ...queryPeriod,
             future: false,
             limit: 6,
-            order: "date_desc",
+            order: TransactionOrder.date_desc,
           },
           snapshot.csrf,
           signal,

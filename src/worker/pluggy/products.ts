@@ -1,7 +1,11 @@
 import { z } from "zod/v4";
 
-import type { ProductKind, ProductPage } from "../../domain";
-import { accountingDay, normalizeMoney } from "../../domain";
+import {
+  accountingDay,
+  normalizeMoney,
+  ProductKind,
+  type ProductPage,
+} from "../../domain";
 import type { PersonalPluggyClient } from "./client.adapter";
 import { sdkResult } from "./source";
 
@@ -86,7 +90,7 @@ export async function productPage(
   input: { kind: ProductKind; id: string; page: number; observedAt: string },
 ): Promise<ProductPage> {
   switch (input.kind) {
-    case "investments": {
+    case ProductKind.investments: {
       const page = pageSchema(investment).parse(
         await sdkResult(() =>
           client.fetchInvestments(input.id, undefined, {
@@ -117,7 +121,7 @@ export async function productPage(
         }),
       };
     }
-    case "loans": {
+    case ProductKind.loans: {
       const page = pageSchema(loan).parse(
         await sdkResult(() =>
           client.fetchLoans(input.id, { page: input.page, pageSize: 100 }),
@@ -155,7 +159,7 @@ export async function productPage(
         }),
       };
     }
-    case "bills": {
+    case ProductKind.bills: {
       const page = pageSchema(bill).parse(
         await sdkResult(() =>
           client.fetchCreditCardBills(input.id, {

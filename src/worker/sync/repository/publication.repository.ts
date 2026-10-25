@@ -1,7 +1,12 @@
 import { eq, sql } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 
-import type { AccountMap, AccountMetadata } from "../../../domain";
+import {
+  type AccountMap,
+  type AccountMetadata,
+  ProductKind,
+  type TransactionProjection,
+} from "../../../domain";
 import { type database, required } from "../../database";
 import {
   connections,
@@ -288,7 +293,7 @@ function productMetadata(db: Database, input: Publication) {
       );
     }
   }
-  if (input.products?.kind === "bills") {
+  if (input.products?.kind === ProductKind.bills) {
     for (const bill of input.products.records) {
       edits.push(
         db
@@ -301,7 +306,7 @@ function productMetadata(db: Database, input: Publication) {
       );
     }
   }
-  if (input.products?.kind === "investments") {
+  if (input.products?.kind === ProductKind.investments) {
     for (const row of input.products.records) {
       const data = row;
       edits.push(
@@ -317,7 +322,7 @@ function productMetadata(db: Database, input: Publication) {
       );
     }
   }
-  if (input.products?.kind === "loans") {
+  if (input.products?.kind === ProductKind.loans) {
     for (const row of input.products.records) {
       const data = row;
       edits.push(
@@ -337,10 +342,7 @@ function productMetadata(db: Database, input: Publication) {
   return edits;
 }
 
-function transactionMetadata(
-  db: Database,
-  transaction: import("../../../domain").TransactionProjection,
-) {
+function transactionMetadata(db: Database, transaction: TransactionProjection) {
   const edits: BatchItem<"sqlite">[] = [];
   if (!transaction.details) {
     return [

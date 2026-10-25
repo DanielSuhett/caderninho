@@ -1,6 +1,11 @@
 import { type ChangeEvent, useCallback, useState } from "react";
 
-import { ruleMatches } from "../domain";
+import {
+  RuleOperator,
+  ruleMatches,
+  TransactionDirection,
+  TransactionStatus,
+} from "../domain";
 import { RuleFlow } from "./account/rule-flow";
 import { StaticRuleComposition } from "./account/rule-flow-content";
 import {
@@ -11,18 +16,26 @@ import { formatBalance } from "./money";
 
 const rule = {
   accountId: null,
-  direction: "DEBIT",
+  direction: TransactionDirection.DEBIT,
   filter: {
     alternatives: [
       {
         conditions: [
-          { field: "description", operator: "contains", value: "mercado" },
-          { field: "amount", operator: "gte", value: "10000" },
+          {
+            field: "description",
+            operator: RuleOperator.contains,
+            value: "mercado",
+          },
+          { field: "amount", operator: RuleOperator.gte, value: "10000" },
         ],
       },
       {
         conditions: [
-          { field: "description", operator: "contains", value: "feira" },
+          {
+            field: "description",
+            operator: RuleOperator.contains,
+            value: "feira",
+          },
         ],
       },
     ],
@@ -67,9 +80,9 @@ export function LandingRuleExample({
       accountId: "landing-example",
       currency: "BRL",
       date: "2026-10-24",
-      direction: "DEBIT",
+      direction: TransactionDirection.DEBIT,
       personId: "landing-example",
-      status: "POSTED",
+      status: TransactionStatus.POSTED,
     },
     rule,
   );

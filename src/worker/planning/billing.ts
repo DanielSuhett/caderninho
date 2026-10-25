@@ -1,5 +1,9 @@
-import type { AccountSettings, Recurrence } from "../../domain";
-import { monthDate, PlanningError } from "../../domain";
+import {
+  type AccountSettings,
+  monthDate,
+  PlanningError,
+  type Recurrence,
+} from "../../domain";
 
 export interface ProjectedPayment {
   accountId: string | null;

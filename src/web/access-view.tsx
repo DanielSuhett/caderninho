@@ -1,8 +1,9 @@
 import { Banner } from "@cloudflare/kumo/components/banner";
+import { Input } from "@cloudflare/kumo/components/input";
 import { LayerCard } from "@cloudflare/kumo/components/layer-card";
 
 import { PublicLayout } from "./public-layout";
-import { UiButton, UiField } from "./ui";
+import { UiButton } from "./ui";
 
 export function accessPage({
   origin,
@@ -77,7 +78,7 @@ export function accessPage({
                   type="hidden"
                   value={target}
                 />
-                <UiField
+                <Input
                   aria-describedby={error ? "login-error" : undefined}
                   aria-invalid={error === "Senha inválida." ? true : undefined}
                   autoComplete="current-password"

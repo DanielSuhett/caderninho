@@ -19,7 +19,7 @@ import { DeleteOrganizationItem, GroupEditor } from "./group-editor";
 import { RuleComposition } from "./rule-composition";
 import { RuleEditor } from "./rule-editor";
 import { RuleImporter } from "./rule-importer";
-import { ruleSummary } from "./rule-presentation";
+import { type RuleSource, ruleSummary } from "./rule-presentation";
 import { EmptyView, ScopeFields } from "./workspace-filters";
 import {
   ResourceFeedback,
@@ -580,12 +580,7 @@ function OrganizationActions({
 }
 
 function ruleTransactionsHref(
-  rule: {
-    filter?: unknown;
-    text: string;
-    accountId: string | null;
-    direction: string | null;
-  },
+  rule: RuleSource,
   scope: URLSearchParams,
   basePath: string,
 ) {
@@ -605,6 +600,6 @@ function ruleTransactionsHref(
   return `${basePath}/transactions?${params}`;
 }
 
-function ruleLinkLabel(rule: { filter?: unknown }) {
+function ruleLinkLabel(rule: RuleSource) {
   return rule.filter ? "Ver transações do grupo" : "Ver correspondências";
 }

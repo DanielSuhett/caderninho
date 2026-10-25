@@ -1,5 +1,11 @@
 import type { FinancialOverview, FinancialSummary } from "../contracts";
-import { transactionMatchesText } from "../domain";
+import {
+  AccountType,
+  CategoryKind,
+  SpendingGroupBy,
+  TransactionStatus,
+  transactionMatchesText,
+} from "../domain";
 import {
   type DemoRecord,
   demoAccounts,
@@ -37,7 +43,7 @@ function totalAmount(value: bigint, unknown: number) {
 function summarize(
   from: string,
   to: string,
-  groupBy: "category" | "month",
+  groupBy: SpendingGroupBy,
   data: DemoData,
 ): FinancialSummary {
   const rows = data.records.filter(
@@ -45,7 +51,7 @@ function summarize(
       row.date >= from &&
       row.date <= to &&
       row.date <= demoReferenceDay &&
-      row.status === "POSTED" &&
+      row.status === TransactionStatus.POSTED &&
       !row.ignored,
   );
   const groups = new Map<
@@ -69,20 +75,22 @@ function summarize(
       const kind = data.categories.find(
         (category) => category.id === row.category,
       )?.kind;
-      if (kind === "income") {
+      if (kind === CategoryKind.income) {
         income += amount;
       }
-      if (kind === "expense") {
+      if (kind === CategoryKind.expense) {
         expense -= amount;
         const group =
-          groupBy === "month" ? row.date.slice(0, 7) : (row.category ?? "");
+          groupBy === SpendingGroupBy.month
+            ? row.date.slice(0, 7)
+            : (row.category ?? "");
         const key = `${currency}:${group}`;
         const previous = groups.get(key)?.amount ?? 0n;
         groups.set(key, { amount: previous - amount, currency, group });
       }
       if (
         data.accounts.find((account) => account.id === row.accountId)?.type ===
-        "BANK"
+        AccountType.BANK
       ) {
         flow += amount;
       }

@@ -1,10 +1,10 @@
 import type { z } from "zod/v4";
 
-import type { PortalQuery, PortalQueryResults } from "../contracts";
-import {
-  type PortalMutationSchema,
-  type WorkspaceCatalog,
-  WorkspaceCatalogSchema,
+import type {
+  PortalMutationSchema,
+  PortalQuery,
+  PortalQueryResults,
+  WorkspaceCatalog,
 } from "../contracts";
 import { activeRules, categoryCatalog, ruleMatches } from "../domain";
 import {
@@ -227,15 +227,11 @@ export function createDemoSession({
             type,
           },
         ];
-        groups.set(
-          id,
-          WorkspaceCatalogSchema.parse({
-            ...categoryCatalog(id),
-            rules: [],
-            spaces: [],
-            tags: [],
-          }),
-        );
+        groups.set(id, {
+          ...categoryCatalog(id),
+          rules: [],
+          tags: [],
+        } satisfies Group);
         break;
       }
       case "update_space": {

@@ -12,8 +12,7 @@ export async function previewRule(
   found(snapshot.state.spaces.find((space) => space.id === input.spaceId));
   let examined = 0;
   let truncated = false;
-  const bounded: PlanningRepository = {
-    ...repository,
+  const bounded: Pick<PlanningRepository, "transactions"> = {
     async *transactions(ids, selection) {
       for await (const page of repository.transactions(ids, selection)) {
         const remaining = scanLimit - examined;

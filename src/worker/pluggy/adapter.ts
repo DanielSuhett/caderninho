@@ -1,5 +1,4 @@
-import type { ProductKind } from "../../domain";
-import { PluggyCredentialsSchema } from "../../domain";
+import { PluggyCredentialsSchema, type ProductKind } from "../../domain";
 import { PersonalPluggyClient } from "./client.adapter";
 import { productPage } from "./products";
 import { connectToken, financialSource } from "./source";

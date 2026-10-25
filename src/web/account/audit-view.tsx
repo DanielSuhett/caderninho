@@ -201,17 +201,7 @@ export function AuditView({
           className="feedback"
           description={message}
           role="status"
-          variant={
-            (
-              {
-                error: "error",
-                info: "default",
-                neutral: "secondary",
-                success: "secondary",
-                warning: "alert",
-              } as const
-            )[messageTone]
-          }
+          variant={messageTone === "error" ? "error" : "secondary"}
         />
       )}
       {!!data && (
@@ -538,19 +528,9 @@ export function AuditView({
                               <Table.Cell data-label="Resultado">
                                 <Badge
                                   variant={
-                                    (
-                                      {
-                                        error: "error",
-                                        info: "info",
-                                        neutral: "secondary",
-                                        success: "success",
-                                        warning: "warning",
-                                      } as const
-                                    )[
-                                      row.outcome === "failed"
-                                        ? "error"
-                                        : "neutral"
-                                    ]
+                                    row.outcome === "failed"
+                                      ? "error"
+                                      : "secondary"
                                   }
                                 >
                                   {outcomes[row.outcome]} · HTTP {row.status}

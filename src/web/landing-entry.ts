@@ -1,4 +1,4 @@
-import { tryCatch } from "../shared/result";
+import { tryCatch } from "../shared";
 
 const reduced = matchMedia("(prefers-reduced-motion: reduce)");
 for (const id of ["mcp-flow", "landing-rule", "landing-performance"]) {

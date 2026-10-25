@@ -1,5 +1,12 @@
-import type { TransactionProjection } from "./finance.entity";
-import type { Category, CategoryGroup } from "./planning.entity";
+import {
+  TransactionDirection,
+  type TransactionProjection,
+} from "./finance.entity";
+import {
+  type Category,
+  type CategoryGroup,
+  CategoryKind,
+} from "./planning.entity";
 
 export const CategoryIcon = {
   activity: "activity",
@@ -313,17 +320,14 @@ export function fixedCategoryId(spaceId: string, key: FixedCategoryKey) {
 }
 function categoryKind(key: FixedCategoryKey): Category["kind"] {
   if (key === "salario-renda") {
-    return "income";
+    return CategoryKind.income;
   }
   if (key === "transferencias" || key === "investimentos") {
-    return "transfer";
+    return CategoryKind.transfer;
   }
-  return "expense";
+  return CategoryKind.expense;
 }
-export function categoryCatalog(spaceId: string): {
-  categories: Category[];
-  categoryGroups: CategoryGroup[];
-} {
+export function categoryCatalog(spaceId: string) {
   const categoryGroups = defaultCategoryGroups.map((group) => ({
     color: group.color,
     icon: group.icon,
@@ -332,22 +336,26 @@ export function categoryCatalog(spaceId: string): {
     spaceId,
   }));
   const categories = fixedCategories.map(
-    (category): Category => ({
-      color:
-        defaultCategoryGroups.find((group) => group.key === category.group)
-          ?.color ?? "#64748b",
-      groupId: `${spaceId}:group:${category.group}`,
-      hidden: false,
-      icon: category.icon,
-      id: fixedCategoryId(spaceId, category.key),
-      kind: categoryKind(category.key),
-      limitMinor: null,
-      name: category.name,
-      spaceId,
-      system: true,
-    }),
+    (category) =>
+      ({
+        color:
+          defaultCategoryGroups.find((group) => group.key === category.group)
+            ?.color ?? "#64748b",
+        groupId: `${spaceId}:group:${category.group}`,
+        hidden: false,
+        icon: category.icon,
+        id: fixedCategoryId(spaceId, category.key),
+        kind: categoryKind(category.key),
+        limitMinor: null,
+        name: category.name,
+        spaceId,
+        system: true,
+      }) satisfies Category,
   );
-  return { categories, categoryGroups };
+  return { categories, categoryGroups } satisfies {
+    categories: Category[];
+    categoryGroups: CategoryGroup[];
+  };
 }
 
 // All labels in Pluggy's published category tree, plus names used by older categorizers.
@@ -589,7 +597,7 @@ export function classificationState(row: TransactionProjection) {
   const identity = row.identification;
   return {
     counterparty:
-      row.direction === "DEBIT"
+      row.direction === TransactionDirection.DEBIT
         ? (identity?.paymentData?.receiver?.name ?? null)
         : (identity?.paymentData?.payer?.name ?? null),
     description: row.description,

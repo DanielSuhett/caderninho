@@ -1,9 +1,9 @@
-import type {
-  PlanningCommand,
-  PlanningQuery,
-  PortalTransactionQuery,
+import {
+  isPlanningQuery,
+  type PlanningCommand,
+  type PlanningQuery,
+  type PortalTransactionQuery,
 } from "../../contracts";
-import { isPlanningQuery } from "../../contracts";
 import { PlanningError } from "../../domain";
 import { hash, tryCatch } from "../../shared";
 import type {

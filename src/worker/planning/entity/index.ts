@@ -6,6 +6,7 @@ import type {
   PlanningAccount,
   PlanningState,
   TransactionDetails,
+  TransactionOrder,
   TransactionProjection,
 } from "../../../domain";
 import type { connections } from "../../schema";
@@ -28,7 +29,7 @@ export interface TransactionRead {
   after?: string | undefined;
   excludeIds: string[];
   from?: string | undefined;
-  order?: "id" | "date_desc" | undefined;
+  order?: TransactionOrder | undefined;
   pageSize?: number | undefined;
   to?: string | undefined;
 }

@@ -1,6 +1,13 @@
 import { z } from "zod/v4";
 
-import { SubscriptionCadence, type SubscriptionCandidate } from "../domain";
+import {
+  ChartType,
+  SpendingGroupBy,
+  SubscriptionCadence,
+  type SubscriptionCandidate,
+  TransactionDirection,
+  TransactionStatus,
+} from "../domain";
 import { FinancialOverviewSchema, FinancialSummarySchema } from "./dashboard";
 
 const minor = z.string().regex(/^-?\d+$/);
@@ -9,12 +16,16 @@ const selection = z.looseObject({
   cardNumber: z.string().optional(),
   categoryId: z.string().optional(),
   currency: z.string().optional(),
-  direction: z.enum(["DEBIT", "CREDIT"]).optional(),
+  direction: z
+    .enum([TransactionDirection.DEBIT, TransactionDirection.CREDIT])
+    .optional(),
   from: z.iso.date(),
   include_ignored: z.boolean(),
   personId: z.string().optional(),
   spaceId: z.string(),
-  status: z.enum(["PENDING", "POSTED"]).optional(),
+  status: z
+    .enum([TransactionStatus.PENDING, TransactionStatus.POSTED])
+    .optional(),
   tagId: z.string().optional(),
   text: z.string().optional(),
   to: z.iso.date(),
@@ -22,7 +33,7 @@ const selection = z.looseObject({
 const summary = FinancialSummarySchema.extend({
   dateBasis: z.literal("transaction"),
   eligibility: z.object({
-    status: z.literal("POSTED"),
+    status: z.literal(TransactionStatus.POSTED),
     throughDay: z.iso.date(),
   }),
   groups: z.array(
@@ -146,8 +157,8 @@ export const planningOutputSchemas = new Map<string, z.ZodType>([
             svg: z.string(),
           }),
         ),
-        groupBy: z.enum(["category", "month"]),
-        type: z.enum(["bar", "line", "doughnut"]),
+        groupBy: z.enum([SpendingGroupBy.category, SpendingGroupBy.month]),
+        type: z.enum([ChartType.bar, ChartType.line, ChartType.doughnut]),
       }),
     ),
   ],

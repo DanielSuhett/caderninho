@@ -47,8 +47,6 @@ export function createAccountApi(
         },
       ],
     },
-    redirect: "manual",
-    retry: 0,
   });
   const request = async (
     path: string,
@@ -75,7 +73,6 @@ export function createAccountApi(
         client,
         input: `${origin}/api/account${path}`,
         options: {
-          headers: { Accept: "application/json" },
           signal,
           ...(body && { json: body, method: "POST" }),
           maxResponseSize: 1_000_000,
@@ -115,12 +112,7 @@ export function createAccountApi(
         connectionIds?: string[];
       } = {},
     ) => {
-      z.json().parse(
-        await request(`/${action}`, signal, {
-          csrf,
-          ...selection,
-        }),
-      );
+      await request(`/${action}`, signal, { csrf, ...selection });
     },
     history: async (
       query: URLSearchParams,
@@ -140,7 +132,7 @@ export function createAccountApi(
       command: PortalMutation,
       csrf: string,
       signal: AbortSignal,
-    ) => z.json().parse(await request("/planning", signal, { command, csrf })),
+    ) => request("/planning", signal, { command, csrf }),
     previewRule: async (input: RulePreviewInput, signal: AbortSignal) =>
       RulePreviewResultSchema.parse(
         await request("/rule-preview", signal, input),

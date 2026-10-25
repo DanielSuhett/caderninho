@@ -1,12 +1,15 @@
 import { and, desc, eq, inArray, type SQL, sql } from "drizzle-orm";
 
-import type {
-  AggregateQuery,
-  Metric,
-  TransactionFilter,
-  TransactionQuery,
+import {
+  type AggregateQuery,
+  connectionPartial,
+  type Metric,
+  MetricDefinition,
+  TransactionDirection,
+  type TransactionFilter,
+  type TransactionQuery,
+  TransactionStatus,
 } from "../../../domain";
-import { connectionPartial, MetricDefinition } from "../../../domain";
 import { hash } from "../../../shared";
 import { database } from "../../database";
 import {
@@ -223,12 +226,15 @@ export function createFinancialRepository(
       const eligible =
         input.metric === "count"
           ? undefined
-          : and(eq(t.status, "POSTED"), sql`${t.date}<=${referenceDay}`);
+          : and(
+              eq(t.status, TransactionStatus.POSTED),
+              sql`${t.date}<=${referenceDay}`,
+            );
       const metricFilters: Record<Metric, SQL | undefined> = {
         cash_flow: accountMembership(input.filter, true),
         count: undefined,
-        credits: eq(t.direction, "CREDIT"),
-        debits: eq(t.direction, "DEBIT"),
+        credits: eq(t.direction, TransactionDirection.CREDIT),
+        debits: eq(t.direction, TransactionDirection.DEBIT),
       };
       const metricFilter = metricFilters[input.metric];
       let amount: SQL<string | null> = absolute;

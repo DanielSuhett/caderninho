@@ -1,6 +1,6 @@
 import { and, eq, exists, inArray, isNull, lte, or, sql } from "drizzle-orm";
 
-import { IMPORT_INTERVAL } from "../../../domain";
+import { IMPORT_INTERVAL, ImportPhase, RunStatus } from "../../../domain";
 import { tryCatch } from "../../../shared";
 import { database, required } from "../../database";
 import {
@@ -9,12 +9,18 @@ import {
   pluggyProfiles,
   transactions,
 } from "../../schema";
-import type { Admission, SyncRepository, SyncRun } from "../entity";
+import {
+  type Admission,
+  AdmissionStatus,
+  type SyncRepository,
+  type SyncRun,
+} from "../entity";
 import { publicationData } from "./publication.repository";
 
 const profileEnabled = (connectionId: string) =>
   sql<number>`EXISTS(SELECT 1 FROM ${connectionOwners} JOIN ${pluggyProfiles} ON ${pluggyProfiles.id}=${connectionOwners.profileId} WHERE ${connectionOwners.connectionId}=${connectionId} AND ${pluggyProfiles.enabled}=1)`;
-const active = () => inArray(connections.importStatus, ["pending", "running"]);
+const active = () =>
+  inArray(connections.importStatus, [RunStatus.pending, RunStatus.running]);
 const runFields = {
   id: connections.id,
   importAdmittedAt: connections.importAdmittedAt,
@@ -54,11 +60,16 @@ function replay(saved: SyncRun, expected: SyncRun) {
   if (saved.sequence === expected.sequence + 1) {
     return {
       checkpoint: saved.checkpoint,
-      done: saved.status === "succeeded" || saved.status === "failed",
+      done:
+        saved.status === RunStatus.succeeded ||
+        saved.status === RunStatus.failed,
       sequence: saved.sequence,
     };
   }
-  if (saved.sequence !== expected.sequence || saved.status !== "running") {
+  if (
+    saved.sequence !== expected.sequence ||
+    saved.status !== RunStatus.running
+  ) {
     throw new Error("STALE_COMMIT");
   }
   return null;
@@ -111,12 +122,12 @@ export function createSyncRepository(binding: D1Database): SyncRepository {
                 importCheckpoint: {
                   accountId: null,
                   cursor: null,
-                  phase: "accounts",
+                  phase: ImportPhase.accounts,
                 },
                 importError: null,
                 importId: id,
                 importSequence: 0,
-                importStatus: "pending",
+                importStatus: RunStatus.pending,
               })
               .where(
                 and(
@@ -127,7 +138,10 @@ export function createSyncRepository(binding: D1Database): SyncRepository {
                     : undefined,
                   or(
                     isNull(connections.importStatus),
-                    inArray(connections.importStatus, ["failed", "succeeded"]),
+                    inArray(connections.importStatus, [
+                      RunStatus.failed,
+                      RunStatus.succeeded,
+                    ]),
                   ),
                   or(
                     isNull(connections.importAdmittedAt),
@@ -149,16 +163,16 @@ export function createSyncRepository(binding: D1Database): SyncRepository {
               .where(eq(connections.id, connectionId)),
           ]);
           const row = required(rows[0]);
-          let status: Admission["status"] = "cooldown";
+          let status: Admission["status"] = AdmissionStatus.cooldown;
           if (!required(profiles[0]).enabled) {
-            status = "paused";
+            status = AdmissionStatus.paused;
           } else if (row.importId === id) {
-            status = "started";
+            status = AdmissionStatus.started;
           } else if (
-            row.importStatus === "pending" ||
-            row.importStatus === "running"
+            row.importStatus === RunStatus.pending ||
+            row.importStatus === RunStatus.running
           ) {
-            status = "working";
+            status = AdmissionStatus.working;
           }
           return {
             connectionId,
@@ -200,7 +214,7 @@ export function createSyncRepository(binding: D1Database): SyncRepository {
     async fail(id, code) {
       await db
         .update(connections)
-        .set({ importError: code, importStatus: "failed" })
+        .set({ importError: code, importStatus: RunStatus.failed })
         .where(and(eq(connections.importId, id), active()));
     },
     async publish(input) {
@@ -218,7 +232,7 @@ export function createSyncRepository(binding: D1Database): SyncRepository {
             and(
               eq(connections.id, run.connectionId),
               eq(connections.importId, run.id),
-              eq(connections.importStatus, "running"),
+              eq(connections.importStatus, RunStatus.running),
               eq(connections.importSequence, run.sequence),
             ),
           ),
@@ -233,7 +247,9 @@ export function createSyncRepository(binding: D1Database): SyncRepository {
           target: connections.id,
         });
       const data = await publicationData(db, input);
-      const terminalStatus = input.error ? "failed" : "succeeded";
+      const terminalStatus = input.error
+        ? RunStatus.failed
+        : RunStatus.succeeded;
       const { data: _data, error } = await tryCatch(() =>
         db.batch([
           guard,
@@ -243,7 +259,7 @@ export function createSyncRepository(binding: D1Database): SyncRepository {
             .set({
               importCheckpoint: next,
               importError: input.error ?? null,
-              importStatus: done ? terminalStatus : "running",
+              importStatus: done ? terminalStatus : RunStatus.running,
               ...(done && !input.error && { lastSuccessAt: now }),
             })
             .where(eq(connections.id, run.connectionId)),
@@ -262,11 +278,11 @@ export function createSyncRepository(binding: D1Database): SyncRepository {
     async start(id) {
       await db
         .update(connections)
-        .set({ importStatus: "running" })
+        .set({ importStatus: RunStatus.running })
         .where(
           and(
             eq(connections.importId, id),
-            eq(connections.importStatus, "pending"),
+            eq(connections.importStatus, RunStatus.pending),
           ),
         );
     },

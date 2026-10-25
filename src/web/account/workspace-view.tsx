@@ -23,6 +23,12 @@ import {
 import type { PortalResponse } from "../../contracts";
 import { tryCatch } from "../../shared";
 import type { createAccountApi } from "./account-api";
+import type { AuditView as AuditComponent } from "./audit-view";
+import type { DesignSystemView as DesignSystemComponent } from "./design-system-view";
+import type { OrganizationView as OrganizationComponent } from "./organization-view";
+import type { OverviewView as OverviewComponent } from "./overview-view";
+import type { SyncHistoryView as SyncHistoryComponent } from "./sync-history-view";
+import type { TransactionsView as TransactionsComponent } from "./transactions-view";
 import { WorkspacePageError } from "./workspace-page";
 import { scopedHref } from "./workspace-resource";
 import { SidebarFrame, WorkspaceFrame } from "./workspace-shell";
@@ -70,25 +76,19 @@ const loadTransactions = async () => {
   }
   return { default: data.TransactionsView };
 };
-const OverviewView = memo(
-  lazy<typeof import("./overview-view").OverviewView>(loadOverview),
-);
-const AuditView = memo(
-  lazy<typeof import("./audit-view").AuditView>(loadAudit),
-);
+const OverviewView = memo(lazy<typeof OverviewComponent>(loadOverview));
+const AuditView = memo(lazy<typeof AuditComponent>(loadAudit));
 const DesignSystemView = memo(
-  lazy<typeof import("./design-system-view").DesignSystemView>(
-    loadDesignSystem,
-  ),
+  lazy<typeof DesignSystemComponent>(loadDesignSystem),
 );
 const OrganizationView = memo(
-  lazy<typeof import("./organization-view").OrganizationView>(loadOrganization),
+  lazy<typeof OrganizationComponent>(loadOrganization),
 );
 const SyncHistoryView = memo(
-  lazy<typeof import("./sync-history-view").SyncHistoryView>(loadSyncHistory),
+  lazy<typeof SyncHistoryComponent>(loadSyncHistory),
 );
 const TransactionsView = memo(
-  lazy<typeof import("./transactions-view").TransactionsView>(loadTransactions),
+  lazy<typeof TransactionsComponent>(loadTransactions),
 );
 const pageLoaders: Record<string, (() => Promise<unknown>) | undefined> = {
   "/account": loadOverview,

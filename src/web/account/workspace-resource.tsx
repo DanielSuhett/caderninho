@@ -15,8 +15,7 @@ export function useResource<T>(
     data: T | undefined;
     error: boolean;
     loading: boolean;
-    request: number;
-  }>({ data: undefined, error: false, loading: true, request: 0 });
+  }>({ data: undefined, error: false, loading: true });
   const retry = useCallback(() => setVersion((value) => value + 1), []);
   useEffect(() => {
     const controller = new AbortController();
@@ -26,7 +25,6 @@ export function useResource<T>(
       data: sameQuery ? previous.data : undefined,
       error: false,
       loading: true,
-      request: version,
     }));
     tryCatch(() => load(controller.signal, version > 0)).then(
       ({ data, error }) => {
@@ -38,11 +36,10 @@ export function useResource<T>(
             data: previous.data,
             error: true,
             loading: false,
-            request: version,
           }));
           return;
         }
-        setState({ data, error: false, loading: false, request: version });
+        setState({ data, error: false, loading: false });
       },
       () => undefined,
     );

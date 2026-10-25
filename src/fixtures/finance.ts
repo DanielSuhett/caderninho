@@ -1,12 +1,19 @@
 import type { z } from "zod/v4";
 
-import type {
-  FinancialOverview,
-  PortalTransactionListSchema,
-  WorkspaceCatalog,
+import {
+  type FinancialOverview,
+  type PortalTransactionListSchema,
+  type WorkspaceCatalog,
+  WorkspaceCatalogSchema,
 } from "../contracts";
-import { WorkspaceCatalogSchema } from "../contracts";
-import { categoryCatalog, monthDate } from "../domain";
+import {
+  AccountType,
+  categoryCatalog,
+  monthDate,
+  TransactionDirection,
+  TransactionStatus,
+} from "../domain";
+
 export const demoReferenceDay = "2026-10-24";
 export const demoPeople = [{ id: "demo-person", name: "Pessoa de exemplo" }];
 const demoCategoryIds = new Map([
@@ -44,7 +51,7 @@ export const demoAccounts: FinancialOverview["accounts"] = [
     manual: false,
     name: "Conta principal",
     personId: "demo-person",
-    type: "BANK",
+    type: AccountType.BANK,
   },
   {
     balanceMinor: "2500000",
@@ -55,7 +62,7 @@ export const demoAccounts: FinancialOverview["accounts"] = [
     manual: false,
     name: "Reserva",
     personId: "demo-person",
-    type: "BANK",
+    type: AccountType.BANK,
   },
   {
     balanceMinor: "-238760",
@@ -66,7 +73,7 @@ export const demoAccounts: FinancialOverview["accounts"] = [
     manual: false,
     name: "Cartão pessoal",
     personId: "demo-person",
-    type: "CREDIT",
+    type: AccountType.CREDIT,
   },
   {
     balanceMinor: "184050",
@@ -77,7 +84,7 @@ export const demoAccounts: FinancialOverview["accounts"] = [
     manual: false,
     name: "Conta internacional",
     personId: "demo-person",
-    type: "BANK",
+    type: AccountType.BANK,
   },
 ];
 export type DemoRecord = z.infer<
@@ -97,7 +104,7 @@ export function transactionFixture(
     currency: "BRL",
     date,
     description: "Compra de exemplo",
-    direction: "DEBIT",
+    direction: TransactionDirection.DEBIT,
     id: "synthetic-transaction",
     identification: null,
     ignored: false,
@@ -107,7 +114,7 @@ export function transactionFixture(
     personId: "demo-person",
     personName: "Pessoa de exemplo",
     purchaseDate: null,
-    status: "POSTED",
+    status: TransactionStatus.POSTED,
     totalInstallments: null,
     ...input,
   };
@@ -135,7 +142,7 @@ export const demoLedger = [0, 1, 2, 3, 4, 5].flatMap((index) => {
       category: "salary",
       day: 2,
       description: "Salário",
-      direction: "CREDIT",
+      direction: TransactionDirection.CREDIT,
     },
     {
       amountMinor: "-245000",
@@ -188,7 +195,7 @@ export const demoLedger = [0, 1, 2, 3, 4, 5].flatMap((index) => {
       category: "transfer",
       day: 13,
       description: "Reserva recebida",
-      direction: "CREDIT",
+      direction: TransactionDirection.CREDIT,
     },
     {
       amountMinor: "-32476",
@@ -212,7 +219,7 @@ export const demoLedger = [0, 1, 2, 3, 4, 5].flatMap((index) => {
       category: "market",
       day: 18,
       description: "Estorno de mercado",
-      direction: "CREDIT",
+      direction: TransactionDirection.CREDIT,
     },
     {
       accountId: "demo-card",
@@ -233,7 +240,7 @@ export const demoLedger = [0, 1, 2, 3, 4, 5].flatMap((index) => {
       category: null,
       day: 22,
       description: "Transferência recebida",
-      direction: "CREDIT",
+      direction: TransactionDirection.CREDIT,
     },
     {
       accountId: "demo-usd",
@@ -261,7 +268,7 @@ export const demoLedger = [0, 1, 2, 3, 4, 5].flatMap((index) => {
         day: 24,
         description: "Compra em processamento",
         month,
-        status: "PENDING",
+        status: TransactionStatus.PENDING,
       }),
       transaction({
         accountId: "demo-card",
@@ -270,7 +277,7 @@ export const demoLedger = [0, 1, 2, 3, 4, 5].flatMap((index) => {
         day: 27,
         description: "Parcela prevista",
         month,
-        status: "PENDING",
+        status: TransactionStatus.PENDING,
       }),
     ]);
 });

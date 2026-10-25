@@ -1,40 +1,55 @@
 import { z } from "zod/v4";
 
+import {
+  RuleOperator,
+  TransactionDirection,
+  TransactionStatus,
+} from "../domain";
+
 const value = z.string().trim().min(1).max(160);
-const comparison = z.enum(["equals", "gte", "lte"]);
+const comparison = z.enum([
+  RuleOperator.equals,
+  RuleOperator.gte,
+  RuleOperator.lte,
+]);
 export const RuleConditionSchema = z.discriminatedUnion("field", [
   z
     .object({
       field: z.literal("description"),
-      operator: z.enum(["contains", "not_contains", "equals", "starts_with"]),
+      operator: z.enum([
+        RuleOperator.contains,
+        RuleOperator.not_contains,
+        RuleOperator.equals,
+        RuleOperator.starts_with,
+      ]),
       value,
     })
     .strict(),
   z
     .object({
       field: z.literal("direction"),
-      operator: z.literal("equals"),
-      value: z.enum(["DEBIT", "CREDIT"]),
+      operator: z.literal(RuleOperator.equals),
+      value: z.enum([TransactionDirection.DEBIT, TransactionDirection.CREDIT]),
     })
     .strict(),
   z
     .object({
       field: z.literal("status"),
-      operator: z.literal("equals"),
-      value: z.enum(["POSTED", "PENDING"]),
+      operator: z.literal(RuleOperator.equals),
+      value: z.enum([TransactionStatus.POSTED, TransactionStatus.PENDING]),
     })
     .strict(),
   z
     .object({
       field: z.literal("accountId"),
-      operator: z.literal("equals"),
+      operator: z.literal(RuleOperator.equals),
       value,
     })
     .strict(),
   z
     .object({
       field: z.literal("personId"),
-      operator: z.literal("equals"),
+      operator: z.literal(RuleOperator.equals),
       value,
     })
     .strict(),
@@ -87,7 +102,10 @@ export const RuleFieldsSchema = z
   .object({
     accountId: z.string().min(1).max(160).nullable().default(null),
     categoryId: z.string().min(1).max(160),
-    direction: z.enum(["DEBIT", "CREDIT"]).nullable().default(null),
+    direction: z
+      .enum([TransactionDirection.DEBIT, TransactionDirection.CREDIT])
+      .nullable()
+      .default(null),
     enabled: z.boolean().default(true),
     filter: RuleFilterSchema.nullable().default(null),
     name: z.string().trim().min(1).max(240),
@@ -98,7 +116,10 @@ export const RuleFieldsSchema = z
 export const RulePreviewQuerySchema = z
   .object({
     accountId: value.nullable().default(null),
-    direction: z.enum(["DEBIT", "CREDIT"]).nullable().default(null),
+    direction: z
+      .enum([TransactionDirection.DEBIT, TransactionDirection.CREDIT])
+      .nullable()
+      .default(null),
     filter: RuleFilterSchema.nullable().default(null),
     spaceId: value,
     text: z.string().max(240).default(""),

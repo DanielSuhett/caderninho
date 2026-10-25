@@ -3,9 +3,14 @@ import { z } from "zod/v4";
 import {
   CategoryColorSchema,
   CategoryIconSchema,
+  CategoryKind,
   RunStatus,
+  SpaceType,
+  SpendingGroupBy,
   TransactionClassificationSchema,
+  TransactionDirection,
   TransactionIdentificationSchema,
+  TransactionStatus,
 } from "../domain";
 import {
   FinancialOverviewResponseSchema,
@@ -41,7 +46,7 @@ export const PortalQuerySchema = z
         tool: z.literal("get_overview"),
       }),
       planningTools.generate_chart.schema.extend({
-        groupBy: z.literal("month"),
+        groupBy: z.literal(SpendingGroupBy.month),
         tool: z.literal("generate_chart"),
       }),
       PortalTransactionQuerySchema,
@@ -67,7 +72,11 @@ const SpaceListSchema = z.object({
         currency: z.string(),
         monthlyBudgetMinor: minor,
         monthStartDay: z.number(),
-        type: z.enum(["personal", "family", "business"]),
+        type: z.enum([
+          SpaceType.personal,
+          SpaceType.family,
+          SpaceType.business,
+        ]),
       }),
     ),
   }),
@@ -80,7 +89,11 @@ const CategoryListSchema = z.object({
         groupId: id.nullable().default(null),
         hidden: z.boolean(),
         icon: CategoryIconSchema.default("shopping"),
-        kind: z.enum(["income", "expense", "transfer"]),
+        kind: z.enum([
+          CategoryKind.income,
+          CategoryKind.expense,
+          CategoryKind.transfer,
+        ]),
         limitMinor: minor,
         system: z.boolean().default(false),
       }),
@@ -96,7 +109,9 @@ const RuleListSchema = z.object({
       named.extend({
         accountId: id.nullable(),
         categoryId: id,
-        direction: z.enum(["DEBIT", "CREDIT"]).nullable(),
+        direction: z
+          .enum([TransactionDirection.DEBIT, TransactionDirection.CREDIT])
+          .nullable(),
         enabled: z.boolean(),
         filter: RuleFilterSchema.nullable().optional(),
         pack: ImportedRuleOriginSchema.optional(),
@@ -119,14 +134,14 @@ const TransactionRecordSchema = z.object({
   currency: z.string(),
   date: z.string(),
   description: z.string(),
-  direction: z.enum(["DEBIT", "CREDIT"]),
+  direction: z.enum([TransactionDirection.DEBIT, TransactionDirection.CREDIT]),
   id,
   identification: TransactionIdentificationSchema.nullish(),
   ignored: z.boolean(),
   manual: z.boolean(),
   personId: id,
   personName: z.string(),
-  status: z.enum(["POSTED", "PENDING"]),
+  status: z.enum([TransactionStatus.POSTED, TransactionStatus.PENDING]),
 });
 export const TransactionListSchema = z.object({
   data: z.object({

@@ -11,6 +11,7 @@ import { Switch } from "@cloudflare/kumo/components/switch";
 import { useKumoToastManager } from "@cloudflare/kumo/components/toast";
 import { useCallback, useState } from "react";
 
+import { TransactionDirection, TransactionStatus } from "../../domain";
 import { UiButton } from "../ui";
 import { BackofficeDialog } from "./backoffice-dialog";
 import { DesignPalette } from "./design-palette";
@@ -30,7 +31,7 @@ const sampleInstallment = {
   currency: "BRL",
   date: "2026-10-01",
   description: "Hospedagem · exemplo",
-  direction: "DEBIT" as const,
+  direction: TransactionDirection.DEBIT,
   id: "demo-installment-1",
   ignored: false,
   installmentNumber: 1,
@@ -38,7 +39,7 @@ const sampleInstallment = {
   personId: "demo-ana",
   personName: "Ana (exemplo)",
   purchaseDate: "2026-10-01",
-  status: "POSTED" as const,
+  status: TransactionStatus.POSTED,
   totalInstallments: 3,
 };
 const samplePurchase = {
@@ -52,14 +53,14 @@ const samplePurchase = {
       date: "2026-11-01",
       id: "demo-installment-2",
       installmentNumber: 2,
-      status: "PENDING" as const,
+      status: TransactionStatus.PENDING,
     },
     {
       ...sampleInstallment,
       date: "2026-12-01",
       id: "demo-installment-3",
       installmentNumber: 3,
-      status: "PENDING" as const,
+      status: TransactionStatus.PENDING,
     },
   ],
 };

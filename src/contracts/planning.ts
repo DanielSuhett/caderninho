@@ -1,6 +1,18 @@
 import { z } from "zod/v4";
 
-import { CategoryColorSchema, CategoryIconSchema } from "../domain";
+import {
+  AccountType,
+  CategoryColorSchema,
+  CategoryIconSchema,
+  CategoryKind,
+  ChartType,
+  NotificationChannel,
+  SpaceType,
+  SpendingGroupBy,
+  TransactionDirection,
+  TransactionOrder,
+  TransactionStatus,
+} from "../domain";
 import { RuleImportFields } from "./rule-import";
 import { RuleFieldsSchema, RulePreviewQuerySchema } from "./rules";
 
@@ -22,7 +34,10 @@ const currency = z.enum([
   "KWD",
 ]);
 const day = z.iso.date();
-const direction = z.enum(["DEBIT", "CREDIT"]);
+const direction = z.enum([
+  TransactionDirection.DEBIT,
+  TransactionDirection.CREDIT,
+]);
 const scope = { personId: id.optional(), spaceId: id.default("personal") };
 const mutation = {
   confirmed: z.literal(true),
@@ -48,7 +63,9 @@ const selection = {
   direction: direction.optional(),
   from: day.optional(),
   include_ignored: z.boolean().default(false),
-  status: z.enum(["PENDING", "POSTED"]).optional(),
+  status: z
+    .enum([TransactionStatus.PENDING, TransactionStatus.POSTED])
+    .optional(),
   tagId: id.optional(),
   text: z.string().max(240).optional(),
   to: day.optional(),
@@ -69,7 +86,9 @@ const transactionFields = {
   description: text.optional(),
   direction: direction.optional(),
   ignored: z.boolean().optional(),
-  status: z.enum(["PENDING", "POSTED"]).optional(),
+  status: z
+    .enum([TransactionStatus.PENDING, TransactionStatus.POSTED])
+    .optional(),
 };
 const recurrenceFields = {
   accountId: id,
@@ -185,7 +204,11 @@ export const planningTools = {
       .object({
         ...mutation,
         ...categoryAppearance,
-        kind: z.enum(["income", "expense", "transfer"]),
+        kind: z.enum([
+          CategoryKind.income,
+          CategoryKind.expense,
+          CategoryKind.transfer,
+        ]),
         name: text,
       })
       .strict(),
@@ -220,7 +243,7 @@ export const planningTools = {
         name: text,
         openingBalanceMinor: amount.default("0"),
         personId: id.optional(),
-        type: z.enum(["BANK", "CREDIT"]),
+        type: z.enum([AccountType.BANK, AccountType.CREDIT]),
       })
       .strict(),
   },
@@ -288,7 +311,9 @@ export const planningTools = {
         icon: text.default("wallet"),
         monthStartDay: z.number().int().min(1).max(28).default(1),
         name: text,
-        type: z.enum(["personal", "business", "family"]).default("personal"),
+        type: z
+          .enum([SpaceType.personal, SpaceType.business, SpaceType.family])
+          .default(SpaceType.personal),
       })
       .strict(),
   },
@@ -310,7 +335,9 @@ export const planningTools = {
         description: text,
         direction,
         recurrenceId: id.optional(),
-        status: z.enum(["PENDING", "POSTED"]).default("POSTED"),
+        status: z
+          .enum([TransactionStatus.PENDING, TransactionStatus.POSTED])
+          .default(TransactionStatus.POSTED),
       })
       .strict(),
   },
@@ -414,9 +441,11 @@ export const planningTools = {
     schema: z
       .object({
         ...analysisPeriod,
-        groupBy: z.enum(["category", "month"]).default("category"),
+        groupBy: z
+          .enum([SpendingGroupBy.category, SpendingGroupBy.month])
+          .default(SpendingGroupBy.category),
         includeSvg: z.boolean().default(true),
-        type: z.enum(["bar", "line", "doughnut"]),
+        type: z.enum([ChartType.bar, ChartType.line, ChartType.doughnut]),
       })
       .strict(),
   },
@@ -611,7 +640,9 @@ export const planningTools = {
         cursor: z.string().max(4096).optional(),
         future: z.boolean().default(false),
         limit: z.number().int().min(1).max(500).default(100),
-        order: z.literal("date_desc").default("date_desc"),
+        order: z
+          .literal(TransactionOrder.date_desc)
+          .default(TransactionOrder.date_desc),
       })
       .omit({ cardNumber: true, tagId: true })
       .strict(),
@@ -625,7 +656,9 @@ export const planningTools = {
         ...selection,
         cursor: z.string().max(4096).optional(),
         limit: z.number().int().min(1).max(500).default(100),
-        order: z.enum(["id", "date_desc"]).default("id"),
+        order: z
+          .enum([TransactionOrder.id, TransactionOrder.date_desc])
+          .default(TransactionOrder.id),
       })
       .strict(),
   },
@@ -793,7 +826,7 @@ export const planningTools = {
     schema: z
       .object({
         ...mutation,
-        channel: z.enum(["email", "push"]),
+        channel: z.enum([NotificationChannel.email, NotificationChannel.push]),
         enabled: z.boolean(),
         event: text,
       })
@@ -921,7 +954,9 @@ export const planningTools = {
         id,
         monthStartDay: z.number().int().min(1).max(28).optional(),
         name: text.optional(),
-        type: z.enum(["personal", "business", "family"]).optional(),
+        type: z
+          .enum([SpaceType.personal, SpaceType.business, SpaceType.family])
+          .optional(),
       })
       .strict(),
   },

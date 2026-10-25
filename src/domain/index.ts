@@ -20,13 +20,12 @@ export {
   FixedCategoryKeySchema,
   TransactionClassificationSchema,
 } from "./category.schema";
-export { financialCharts } from "./chart.entity";
+export { ChartType, financialCharts } from "./chart.entity";
 export {
   assertPersonalConnector,
   connectionPartial,
   PERSONAL_CONNECTOR_ID,
 } from "./connection.entity";
-export { FaultCode } from "./enums";
 export {
   accountingDay,
   assertMinor,
@@ -36,12 +35,17 @@ export {
   minor,
   minorPresentation,
 } from "./exact";
-export { Fault } from "./fault.entity";
+export { Fault, FaultCode } from "./fault.entity";
 export type {
   AccountMap,
   AccountMetadata,
   AccountProjection,
   TransactionProjection,
+} from "./finance.entity";
+export {
+  AccountType,
+  TransactionDirection,
+  TransactionStatus,
 } from "./finance.entity";
 export {
   normalizeAccount,
@@ -77,7 +81,6 @@ export type {
   PlanningAccount,
   PlanningState,
   PlanningTransaction,
-  ProductKind,
   ProductPage,
   Recurrence,
   Rule,
@@ -87,7 +90,14 @@ export type {
   TransactionDetails,
   TransactionEdit,
 } from "./planning.entity";
-export { monthDate, sacSchedule } from "./planning.entity";
+export {
+  CategoryKind,
+  monthDate,
+  NotificationChannel,
+  ProductKind,
+  SpaceType,
+  sacSchedule,
+} from "./planning.entity";
 export { PlanningError } from "./planning-errors.entity";
 export type {
   ProviderAccount,
@@ -106,12 +116,19 @@ export type {
   TransactionFilter,
   TransactionQuery,
 } from "./query.entity";
-export { Metric, MetricDefinition } from "./query.entity";
+export {
+  AggregateGroupBy,
+  Metric,
+  MetricDefinition,
+  SpendingGroupBy,
+  TransactionOrder,
+} from "./query.entity";
 export { resolveRuleImportCategory } from "./rule-import.entity";
 export type { RuleCondition, RuleFilter } from "./rules.entity";
 export {
   activeRules,
   compareRules,
+  RuleOperator,
   ruleMatches,
   ruleText,
 } from "./rules.entity";
@@ -121,7 +138,7 @@ export {
   SubscriptionCadence,
 } from "./subscription.entity";
 export type { Checkpoint, CommitResult, FinancialSource } from "./sync.entity";
-export { IMPORT_INTERVAL, RunStatus } from "./sync.entity";
+export { IMPORT_INTERVAL, ImportPhase, RunStatus } from "./sync.entity";
 export type {
   TransactionCard,
   TransactionIdentification,

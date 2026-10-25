@@ -1,5 +1,6 @@
 import { z } from "zod/v4";
 
+import { CategoryKind } from "../domain";
 import { RuleFieldsSchema } from "./rules";
 
 export const RULE_IMPORT_MAX_BYTES = 65_536;
@@ -22,7 +23,11 @@ export const RuleImportPackageSchema = z
         z
           .object({
             key,
-            kind: z.enum(["income", "expense", "transfer"]),
+            kind: z.enum([
+              CategoryKind.income,
+              CategoryKind.expense,
+              CategoryKind.transfer,
+            ]),
             name: z.string().trim().min(1).max(240),
           })
           .strict(),
@@ -89,7 +94,11 @@ export const RuleImportResultSchema = z.object({
     z.object({
       id: z.string().nullable(),
       key: z.string(),
-      kind: z.enum(["income", "expense", "transfer"]),
+      kind: z.enum([
+        CategoryKind.income,
+        CategoryKind.expense,
+        CategoryKind.transfer,
+      ]),
       name: z.string(),
       status: z.enum(["create", "existing", "ambiguous", "invalid", "unused"]),
     }),

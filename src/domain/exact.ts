@@ -1,8 +1,7 @@
 import Big from "big.js";
 import { parse } from "lossless-json";
 
-import { FaultCode } from "./enums";
-import { fail } from "./fault.entity";
+import { FaultCode, fail } from "./fault.entity";
 import type { MoneyInput } from "./provider.entity";
 
 const canonicalMinorPattern = /^-?(0|[1-9]\d{0,29})$/;

@@ -15,11 +15,13 @@ import type {
   FinancialSummary,
   PortalTransactionListSchema,
 } from "../../contracts";
+import { AccountType } from "../../domain";
 import { tryCatch } from "../../shared";
 import { formatBalance, type MoneyTone } from "../money";
 import type { CategoryAppearance } from "./category-appearance";
 import { DisclosureItem } from "./disclosure-item";
 import { categoryVolumes, summaryCurrency } from "./financial-presentation";
+import type { MonthlySpendingChart } from "./monthly-spending-chart";
 import { TransactionList } from "./transaction-list";
 import { dayLabel } from "./workspace-resource";
 
@@ -54,9 +56,7 @@ function ChartUnavailable({
     </div>
   );
 }
-const MonthlyChart = lazy<
-  typeof import("./monthly-spending-chart").MonthlySpendingChart
->(async () => {
+const MonthlyChart = lazy<typeof MonthlySpendingChart>(async () => {
   const { data, error } = await tryCatch(
     () => import("./monthly-spending-chart"),
   );
@@ -438,7 +438,7 @@ export function AccountBalances({
               <>
                 <span className="record-title bank-heading">
                   <span className="financial-account-icon">
-                    {account.type === "CREDIT" ? (
+                    {account.type === AccountType.CREDIT ? (
                       <CreditCardIcon
                         aria-hidden
                         size={20}
@@ -456,7 +456,7 @@ export function AccountBalances({
                   {formatBalance(account.balanceMinor, account.currency)}
                 </span>
                 <span className="record-meta">
-                  {account.type === "CREDIT" && (
+                  {account.type === AccountType.CREDIT && (
                     <span>Cartão · não é dinheiro disponível</span>
                   )}
                   <span>

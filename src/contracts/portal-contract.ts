@@ -1,6 +1,6 @@
 import { z } from "zod/v4";
 
-import { RunStatus } from "../domain";
+import { AccountType, ImportPhase, RunStatus } from "../domain";
 import { HouseholdCatalogSchema } from "./household";
 import type { AccountConnectToken, PortalResponse } from "./portal.types";
 export const AccountFailureCodeSchema = z.enum([
@@ -31,7 +31,7 @@ export const PortalResponseSchema = z.object({
             balanceObservedAt: z.string().nullable(),
             currency: z.string(),
             name: z.string(),
-            type: z.enum(["BANK", "CREDIT"]),
+            type: z.enum([AccountType.BANK, AccountType.CREDIT]),
           })
           .strict(),
       ),
@@ -41,13 +41,13 @@ export const PortalResponseSchema = z.object({
         .object({
           accountId: z.string().nullable(),
           phase: z.enum([
-            "accounts",
-            "transactions",
-            "investments",
-            "loans",
-            "bills",
-            "classification",
-            "finish",
+            ImportPhase.accounts,
+            ImportPhase.transactions,
+            ImportPhase.investments,
+            ImportPhase.loans,
+            ImportPhase.bills,
+            ImportPhase.classification,
+            ImportPhase.finish,
           ]),
         })
         .nullable(),
