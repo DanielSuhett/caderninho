@@ -67,6 +67,11 @@ projeto Cloudflare Pages separado da instalação financeira. O build
 painel, links de entrada, MCP, Functions ou bindings de dados. As referências
 das medições ficam em blocos expansíveis.
 
+O projeto Pages `usecaderninho` publica automaticamente os commits da `main`
+pelo GitHub. Na configuração de build do Pages, mantenha a raiz do repositório,
+comando `npm run build:portal` e diretório de saída `dist/site`. O diretório
+`dist` contém também o portal e o pacote do Worker; não é a raiz do site público.
+
 Para republicar somente o site, use `npm run deploy:site` com acesso de escrita
 ao Pages. A configuração está em `site/wrangler.jsonc`. Esse comando não
 publica o Worker financeiro nem aplica migrações. As cotas mensais mostradas
