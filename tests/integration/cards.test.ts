@@ -156,6 +156,42 @@ test("installment pagination keeps exact complete totals and rejects cursors reu
   );
 });
 
+test("installment pagination uses binary ID order without repeats and stops at the last page", async () => {
+  const ids = Array.from(
+    { length: 60 },
+    (_, index) => `${index % 2 ? "a" : "B"}${String(index).padStart(3, "0")}`,
+  );
+  await collect(
+    source(
+      ids.map((id) =>
+        transaction({
+          creditCardMetadata: metadata,
+          date: "2026-10-05",
+          id,
+        }),
+      ),
+      [card],
+    ),
+  );
+  const first = PortalCardsSchema.parse(await service().cards(query())).data;
+  assert.equal(first.installments.length, 50);
+  assert.ok(first.nextCursor);
+  const second = PortalCardsSchema.parse(
+    await service().cards(query({ cursor: first.nextCursor })),
+  ).data;
+  assert.equal(second.installments.length, 10);
+  assert.equal(second.nextCursor, null);
+  const received = [...first.installments, ...second.installments].map(
+    (row) => row.id,
+  );
+  assert.equal(new Set(received).size, 60);
+  assert.deepEqual(new Set(received), new Set(ids));
+  assert.equal(first.installments[0]?.id, "a059");
+  assert.equal(first.installments.at(-1)?.id, "B020");
+  assert.equal(second.installments[0]?.id, "B018");
+  assert.equal(second.installments.at(-1)?.id, "B000");
+});
+
 test("unknown money stays unknown and the authenticated portal validates its card query", async () => {
   await collect(
     source(

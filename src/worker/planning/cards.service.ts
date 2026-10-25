@@ -161,7 +161,15 @@ export async function portalCards(
       continue;
     }
     installments.push(installmentRecord(row, extra, referenceDay));
-    installments.sort((a, b) => key(b).localeCompare(key(a)));
+    // Keep binary ordering aligned with the cursor comparison above.
+    installments.sort((a, b) => {
+      const left = key(a);
+      const right = key(b);
+      if (left === right) {
+        return 0;
+      }
+      return left < right ? 1 : -1;
+    });
     if (installments.length > 51) {
       installments.pop();
     }
