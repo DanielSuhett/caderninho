@@ -5,26 +5,59 @@ import { beforeEach, test } from "vitest";
 import {
   FinancialOverviewResponseSchema,
   MonthlySpendingResponseSchema,
+  PlanningCommandSchema,
   PortalTransactionListSchema,
   SyncHistoryResultSchema,
   TransactionListSchema,
   WorkspaceCatalogSchema,
 } from "../../src/contracts";
-import { createInstallationRepository } from "../../src/worker/installation/repository";
+import { createPlanningService } from "../../src/worker/planning";
+import { createPlanningRepository } from "../../src/worker/planning/repository";
 import { createSyncRepository } from "../../src/worker/sync/repository";
 import { createSyncHistoryRepository } from "../../src/worker/sync/repository/history.repository";
-import {
-  command,
-  cookies,
-  fixture,
-  login,
-  testMigrations,
-} from "./access-fixture";
+import { command, cookies, fixture, login } from "./access-fixture";
 import { account, collect, setup, source, transaction } from "./fixture";
-import { applyD1Migrations, reset } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 
 beforeEach(setup);
+
+test("purchase cursors require a restart when the financial day changes", async () => {
+  await collect(
+    source([
+      transaction({ date: "2026-10-22", id: "old" }),
+      transaction({ date: "2026-10-23", id: "current" }),
+      transaction({ date: "2026-10-24", id: "next-day" }),
+    ]),
+  );
+  let now = new Date("2026-10-24T02:59:59Z");
+  const service = createPlanningService(
+    createPlanningRepository(env.DB),
+    () => now,
+  );
+  const input = {
+    limit: 1,
+    spaceId: "personal",
+    tool: "get_transaction_purchases",
+  };
+  const first = PortalTransactionListSchema.parse(
+    await service.execute(PlanningCommandSchema.parse(input)),
+  );
+  assert.equal(first.data.referenceDay, "2026-10-23");
+  assert.equal(first.data.records[0]?.id, "current");
+  assert.ok(first.data.cursor);
+  now = new Date("2026-10-24T03:00:00Z");
+  await assert.rejects(
+    service.execute(
+      PlanningCommandSchema.parse({ ...input, cursor: first.data.cursor }),
+    ),
+    { message: "RESTART_REQUIRED" },
+  );
+  const fresh = PortalTransactionListSchema.parse(
+    await service.execute(PlanningCommandSchema.parse(input)),
+  );
+  assert.equal(fresh.data.referenceDay, "2026-10-24");
+  assert.equal(fresh.data.records[0]?.id, "next-day");
+});
 
 test("run history survives later imports, preserves admission ownership and paginates without duplicate retries", async () => {
   const history = createSyncHistoryRepository(env.DB);
@@ -86,20 +119,6 @@ test("durable failures record the committed checkpoint and atomic publication gu
     }),
   );
   assert.deepEqual((await history.query({ limit: 25 })).records, page.records);
-});
-
-test("migration recovers only the latest legacy run without inventing an end time", async () => {
-  await reset();
-  await applyD1Migrations(env.DB, testMigrations.slice(0, 3));
-  await createInstallationRepository(env.DB).register("c");
-  await env.DB.prepare(
-    "UPDATE connections SET import_id='old-run',import_status='failed',import_admitted_at='2026-10-01T00:00:00.000Z',import_error='INVALID_RESPONSE' WHERE id='c'",
-  ).run();
-  await applyD1Migrations(env.DB, testMigrations.slice(3));
-  const page = await createSyncHistoryRepository(env.DB).query({ limit: 25 });
-  assert.equal(page.records.length, 1);
-  assert.equal(page.records[0]?.legacy, true);
-  assert.equal(page.records[0]?.finishedAt, null);
 });
 
 test("workspace routes require session, query CSRF and an explicit read-only tool allowlist", async () => {

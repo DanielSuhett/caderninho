@@ -1,11 +1,12 @@
 import type { FinancialOverview, FinancialSummary } from "../../contracts";
+import { AccountType } from "../../domain";
 
 export function summaryCurrency(summary: FinancialOverview, currency: string) {
   const total = summary.totals.find((item) => item.currency === currency);
   const accounts = summary.accounts.filter(
     (account) => account.currency === currency && !account.hidden,
   );
-  const banks = accounts.filter((account) => account.type === "BANK");
+  const banks = accounts.filter((account) => account.type === AccountType.BANK);
   const unknownBalances = banks.some(
     (account) => account.balanceMinor === null,
   );

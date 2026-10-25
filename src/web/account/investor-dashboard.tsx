@@ -1,4 +1,6 @@
-import { Badge, Empty, LayerCard } from "@cloudflare/kumo";
+import { Badge } from "@cloudflare/kumo/components/badge";
+import { Empty } from "@cloudflare/kumo/components/empty";
+import { LayerCard } from "@cloudflare/kumo/components/layer-card";
 import { lazy, Suspense } from "react";
 
 import type {

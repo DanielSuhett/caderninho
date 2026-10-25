@@ -26,10 +26,10 @@ const metadata = {
   purchaseDate: "2026-10-05",
   totalInstallments: 3,
 };
-function service() {
+function service(day = "2026-10-24T15:00:00Z") {
   return createPlanningService(
     createPlanningRepository(env.DB),
-    () => new Date("2026-10-24T15:00:00Z"),
+    () => new Date(day),
   );
 }
 const query = (input: Record<string, unknown> = {}) =>
@@ -154,6 +154,10 @@ test("installment pagination keeps exact complete totals and rejects cursors reu
     service().cards(query({ cursor: first.nextCursor, month: "2026-11" })),
     { message: "RESTART_REQUIRED" },
   );
+  await assert.rejects(
+    service("2026-10-25T03:00:00Z").cards(query({ cursor: first.nextCursor })),
+    { message: "RESTART_REQUIRED" },
+  );
 });
 
 test("installment pagination uses binary ID order without repeats and stops at the last page", async () => {
@@ -223,6 +227,14 @@ test("unknown money stays unknown and the authenticated portal validates its car
     query: { ...query(), month: "2026-13" },
   });
   assert.equal(invalid.status, 400);
+  const malformed = await Promise.all(
+    ["%", "{", "[]"].map((cursor) =>
+      command(app, cookie, "query", {
+        query: query({ cursor }),
+      }),
+    ),
+  );
+  assert.ok(malformed.every((reply) => reply.status === 400));
 });
 
 test("filtering one card changes every total and retains all card choices", async () => {

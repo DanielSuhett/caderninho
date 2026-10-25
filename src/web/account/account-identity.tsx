@@ -1,4 +1,4 @@
-import { Tooltip } from "@cloudflare/kumo";
+import { Tooltip } from "@cloudflare/kumo/components/tooltip";
 import { BankIcon, CreditCardIcon } from "@phosphor-icons/react";
 import { useEffect, useRef, useState } from "react";
 

@@ -1,13 +1,11 @@
-import {
-  Badge,
-  Empty,
-  InlineCopyText,
-  LayerCard,
-  Link,
-  Meter,
-  SkeletonLine,
-  Table,
-} from "@cloudflare/kumo";
+import { Badge } from "@cloudflare/kumo/components/badge";
+import { Empty } from "@cloudflare/kumo/components/empty";
+import { InlineCopyText } from "@cloudflare/kumo/components/inline-copy-text";
+import { LayerCard } from "@cloudflare/kumo/components/layer-card";
+import { Link } from "@cloudflare/kumo/components/link";
+import { SkeletonLine } from "@cloudflare/kumo/components/loader";
+import { Meter } from "@cloudflare/kumo/components/meter";
+import { Table } from "@cloudflare/kumo/components/table";
 import { lazy, Suspense, useMemo } from "react";
 import type { z } from "zod/v4";
 
@@ -16,6 +14,7 @@ import type {
   FinancialSummary,
   PortalTransactionListSchema,
 } from "../../contracts";
+import { AccountType } from "../../domain";
 import { tryCatch } from "../../shared";
 import { formatBalance } from "../money";
 import { AccountIdentity } from "./account-identity";
@@ -24,6 +23,7 @@ import { DisclosureItem } from "./disclosure-item";
 import { FinancialMetric } from "./financial-metric";
 import { categoryVolumes, summaryCurrency } from "./financial-presentation";
 import { InfoTip } from "./info-tip";
+import type { MonthlySpendingChart } from "./monthly-spending-chart";
 import { TransactionList } from "./transaction-list";
 import { dayLabel } from "./workspace-resource";
 
@@ -58,9 +58,7 @@ function ChartUnavailable({
     </div>
   );
 }
-const MonthlyChart = lazy<
-  typeof import("./monthly-spending-chart").MonthlySpendingChart
->(async () => {
+const MonthlyChart = lazy<typeof MonthlySpendingChart>(async () => {
   const { data, error } = await tryCatch(
     () => import("./monthly-spending-chart"),
   );
@@ -424,7 +422,7 @@ export function AccountBalances({
                   {formatBalance(account.balanceMinor, account.currency)}
                 </span>
                 <span className="record-meta">
-                  {account.type === "CREDIT" && (
+                  {account.type === AccountType.CREDIT && (
                     <span>Cartão · não é dinheiro disponível</span>
                   )}
                   <span>

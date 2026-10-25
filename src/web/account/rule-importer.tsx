@@ -1,4 +1,5 @@
-import { Banner, Select } from "@cloudflare/kumo";
+import { Banner } from "@cloudflare/kumo/components/banner";
+import { Select } from "@cloudflare/kumo/components/select";
 import {
   type ChangeEvent,
   useCallback,
@@ -7,13 +8,11 @@ import {
   useRef,
   useState,
 } from "react";
-import { z } from "zod/v4";
 
-import {
-  type RuleImportPackage,
-  type RuleImportResult,
-  RuleImportResultSchema,
-  type WorkspaceCatalog,
+import type {
+  RuleImportPackage,
+  RuleImportResult,
+  WorkspaceCatalog,
 } from "../../contracts";
 import { HttpRequestError, tryCatch } from "../../shared";
 import { randomId } from "../random-id";
@@ -129,16 +128,14 @@ export function RuleImporter({
     setBusy("preview");
     const { data, error } = await tryCatch(
       async () =>
-        z
-          .object({ data: RuleImportResultSchema })
-          .parse(
-            await api.query(
-              { categoryIds, pack, spaceId, tool: "preview_rule_import" },
-              csrf,
-              controller.signal,
-              true,
-            ),
-          ).data,
+        (
+          await api.query(
+            { categoryIds, pack, spaceId, tool: "preview_rule_import" },
+            csrf,
+            controller.signal,
+            true,
+          )
+        ).data,
     );
     if (controller.signal.aborted) {
       return;

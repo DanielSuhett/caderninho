@@ -1,12 +1,9 @@
-import { Banner, Select } from "@cloudflare/kumo";
+import { Banner } from "@cloudflare/kumo/components/banner";
+import { Select } from "@cloudflare/kumo/components/select";
 import { useCallback, useState } from "react";
 
-import {
-  FinancialOverviewResponseSchema,
-  MonthlySpendingResponseSchema,
-  type PortalResponse,
-  PortalTransactionListSchema,
-} from "../../contracts";
+import type { PortalResponse } from "../../contracts";
+import { ChartType, SpendingGroupBy, TransactionOrder } from "../../domain";
 import { tryCatch } from "../../shared";
 import type { createAccountApi } from "./account-api";
 import { navigateWorkspace } from "./account-navigation";
@@ -49,21 +46,19 @@ export function OverviewView({
           signal,
           fresh,
         ),
-        tryCatch(async () =>
-          MonthlySpendingResponseSchema.parse(
-            await api.query(
-              {
-                tool: "generate_chart",
-                ...scope,
-                from: `${shiftMonth(month, -5)}-01`,
-                groupBy: "month",
-                to: queryPeriod.to,
-                type: "line",
-              },
-              snapshot.csrf,
-              signal,
-              fresh,
-            ),
+        tryCatch(() =>
+          api.query(
+            {
+              tool: "generate_chart",
+              ...scope,
+              from: `${shiftMonth(month, -5)}-01`,
+              groupBy: SpendingGroupBy.month,
+              to: queryPeriod.to,
+              type: ChartType.line,
+            },
+            snapshot.csrf,
+            signal,
+            fresh,
           ),
         ),
         api.catalog(spaceId, signal, fresh),
@@ -74,7 +69,7 @@ export function OverviewView({
             ...queryPeriod,
             future: false,
             limit: 6,
-            order: "date_desc",
+            order: TransactionOrder.date_desc,
           },
           snapshot.csrf,
           signal,
@@ -84,8 +79,9 @@ export function OverviewView({
       return {
         catalog,
         monthly: monthly.error ? null : monthly.data.data,
-        overview: FinancialOverviewResponseSchema.parse(overview).data,
-        recent: PortalTransactionListSchema.parse(recent),
+        observedAt: new Date().toISOString(),
+        overview: overview.data,
+        recent,
       };
     },
     [api, month, personId, snapshot.csrf, spaceId],

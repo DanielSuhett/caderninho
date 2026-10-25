@@ -31,8 +31,10 @@ import type {
   Tag,
   TransactionClassification,
   TransactionDetails,
+  TransactionDirection,
   TransactionEdit,
   TransactionIdentification,
+  TransactionStatus,
 } from "../../domain";
 export const connections = sqliteTable(
   "connections",
@@ -72,12 +74,12 @@ export const transactions = sqliteTable(
     currency: text("currency").notNull(),
     date: text("date").notNull(),
     description: text("description").notNull(),
-    direction: text("direction").$type<"DEBIT" | "CREDIT">().notNull(),
+    direction: text("direction").$type<TransactionDirection>().notNull(),
     id: text("id").primaryKey(),
     identification: text("identification", {
       mode: "json",
     }).$type<TransactionIdentification>(),
-    status: text("status").$type<"PENDING" | "POSTED">().notNull(),
+    status: text("status").$type<TransactionStatus>().notNull(),
   },
   (t) => [
     check(
@@ -198,7 +200,9 @@ export const planningReceipts = sqliteTable("planning_receipts", {
   createdAt: text("created_at").notNull(),
   digest: text("digest").notNull(),
   id: text("id").primaryKey(),
-  result: text("result", { mode: "json" }).$type<unknown>().notNull(),
+  result: text("result", { mode: "json" })
+    .$type<Record<string, unknown>>()
+    .notNull(),
 });
 
 export const people = sqliteTable("people", {
@@ -236,7 +240,6 @@ export const syncHistory = sqliteTable(
     error: text("error"),
     finishedAt: text("finished_at"),
     id: text("id").primaryKey(),
-    legacy: integer("legacy", { mode: "boolean" }).notNull().default(false),
     personId: text("person_id").notNull(),
     phase: text("phase"),
     profileId: text("profile_id").notNull(),

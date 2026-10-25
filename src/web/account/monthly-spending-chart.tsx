@@ -9,6 +9,7 @@ import { CanvasRenderer } from "echarts/renderers";
 import { useMemo } from "react";
 
 import type { FinancialSummary } from "../../contracts";
+import { ChartType } from "../../domain";
 import { formatBalance } from "../money";
 import { useTheme } from "../use-theme";
 import { monthLabel } from "./dashboard-period";
@@ -52,7 +53,7 @@ export function MonthlySpendingChart({
             name: `Despesas · ${currency}`,
             symbol: "circle",
             symbolSize: 7,
-            type: "line",
+            type: ChartType.line,
           },
         ],
         textStyle: { fontFamily: "Inter, sans-serif", fontSize: 14 },

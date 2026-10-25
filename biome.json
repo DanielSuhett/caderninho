@@ -355,7 +355,9 @@
                       "**/auth",
                       "**/finance",
                       "**/sync",
-                      "**/index"
+                      "**/index",
+                      "**/planning",
+                      "**/household"
                     ],
                     "message": "Use o indice de entity para portas; os indices publicos da aplicacao expoem services."
                   },
@@ -455,7 +457,9 @@
                       "**/auth",
                       "**/finance",
                       "**/sync",
-                      "**/index"
+                      "**/index",
+                      "**/planning",
+                      "**/household"
                     ],
                     "message": "Use o indice de entity para portas; os indices publicos da aplicacao expoem services."
                   },
@@ -529,6 +533,66 @@
     },
     {
       "includes": [
+        "src/domain/**/*.ts",
+        "src/shared/**/*.ts",
+        "!src/**/__tests__/**"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": ["@/**", "#*/**"],
+                    "message": "Use caminhos relativos para os modulos locais."
+                  },
+                  {
+                    "group": [
+                      "./**/*.ts",
+                      "./**/*.tsx",
+                      "../**/*.ts",
+                      "../**/*.tsx"
+                    ],
+                    "message": "Omita .ts e .tsx nos imports de codigo do projeto."
+                  },
+                  {
+                    "group": [
+                      "**/worker/**",
+                      "**/web/**",
+                      "drizzle-orm",
+                      "drizzle-orm/**"
+                    ],
+                    "message": "Dominio, contratos e utilitarios nao dependem do Worker, da UI ou do banco."
+                  },
+                  {
+                    "group": [
+                      "./index",
+                      "../index",
+                      "./**/index",
+                      "../**/index"
+                    ],
+                    "message": "Importe o diretorio do modulo; omita /index."
+                  },
+                  {
+                    "group": [
+                      "**/contracts",
+                      "**/contracts/**",
+                      "**/domain",
+                      "**/domain/**"
+                    ],
+                    "message": "Dominio e utilitarios nao dependem de contratos de transporte; shared permanece independente do dominio."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": [
         "src/web/**/*.ts",
         "src/web/**/*.tsx",
         "!src/web/**/__tests__/**"
@@ -565,6 +629,10 @@
                       "../**/index"
                     ],
                     "message": "Importe o diretorio do modulo; omita /index."
+                  },
+                  {
+                    "group": ["@cloudflare/kumo"],
+                    "message": "Use a entrada especifica de @cloudflare/kumo; o barrel inclui dependencias de navegador no Worker."
                   }
                 ]
               }

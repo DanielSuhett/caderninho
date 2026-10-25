@@ -1,5 +1,10 @@
 import { z } from "zod/v4";
 
+import {
+  AccountType,
+  TransactionDirection,
+  TransactionStatus,
+} from "./finance.entity";
 import type {
   Credentials,
   ProviderAccount,
@@ -44,7 +49,7 @@ export const ProviderAccountSchema = z.object({
   itemId: z.string().min(1),
   name: z.string(),
   number: z.string().nullish(),
-  type: z.enum(["BANK", "CREDIT"]),
+  type: z.enum([AccountType.BANK, AccountType.CREDIT]),
 }) satisfies z.ZodType<ProviderAccount>;
 export const ProviderTransactionSchema = z.object({
   accountId: z.string().min(1),
@@ -90,7 +95,9 @@ export const ProviderTransactionSchema = z.object({
     .nullish(),
   providerCode: z.string().nullish(),
   providerId: z.string().nullish(),
-  status: z.enum(["PENDING", "POSTED"]).default("POSTED"),
-  type: z.enum(["DEBIT", "CREDIT"]),
+  status: z
+    .enum([TransactionStatus.PENDING, TransactionStatus.POSTED])
+    .default(TransactionStatus.POSTED),
+  type: z.enum([TransactionDirection.DEBIT, TransactionDirection.CREDIT]),
   updatedAt: z.string().nullish(),
 }) satisfies z.ZodType<ProviderTransaction>;

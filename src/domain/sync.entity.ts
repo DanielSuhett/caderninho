@@ -11,17 +11,20 @@ export const RunStatus = {
   succeeded: "succeeded",
 } as const;
 export type RunStatus = (typeof RunStatus)[keyof typeof RunStatus];
+export const ImportPhase = {
+  accounts: "accounts",
+  bills: "bills",
+  classification: "classification",
+  finish: "finish",
+  investments: "investments",
+  loans: "loans",
+  transactions: "transactions",
+} as const;
+export type ImportPhase = (typeof ImportPhase)[keyof typeof ImportPhase];
 export interface Checkpoint {
   accountId: string | null;
   cursor: string | null;
-  phase:
-    | "accounts"
-    | "transactions"
-    | "investments"
-    | "loans"
-    | "bills"
-    | "classification"
-    | "finish";
+  phase: ImportPhase;
 }
 export interface CommitResult {
   checkpoint: Checkpoint;

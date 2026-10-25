@@ -212,17 +212,18 @@ export default {
           ? new Date(`2026-10-0${day}T00:00:00.000Z`)
           : new Date();
       return Response.json(
-        await createSyncService(
-          createSyncRepository(env.DB),
-          {
+        await createSyncService({
+          assertConfigured: async () => undefined,
+          now,
+          repository: createSyncRepository(env.DB),
+          workflow: {
             create: async (runId) => {
               await env.FINANCE.create({ id: runId, params: { runId } });
             },
             status: async (runId) =>
               (await (await env.FINANCE.get(runId)).status()).status,
           },
-          now,
-        ).request([id]),
+        }).request([id]),
       );
     }
     if (path === "/query" && request.method === "POST") {

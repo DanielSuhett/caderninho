@@ -52,14 +52,13 @@ rótulos; dados parciais e valores ausentes continuam explícitos.
 
 ## Persistência e evidência
 
-Metadados usam JSON existente, sem migração SQL. A sincronização conserva grupo
-e inclusão editados pela pessoa. Posições antigas continuam legíveis e recebem
+Metadados ficam no JSON tipado do modelo de planejamento. A sincronização conserva grupo
+e inclusão editados pela pessoa. Posições sem detalhes continuam legíveis e recebem
 novos campos quando a origem os retornar em uma sincronização posterior.
 
 Testes sintéticos cobrem importação, contrato MCP/portal, precisão monetária,
-moedas, ausência, filtros, exclusões e resgates. A [revisão visual](financial-design-review.md)
-registra capturas e limites. Não houve deploy, conexão Pluggy/OAuth real ou
-validação em host MCP externo.
+moedas, ausência, filtros, exclusões e resgates. Esses testes não comprovam
+conexão Pluggy/OAuth real ou execução em um host MCP externo.
 
 Fontes: [Investment](https://docs.pluggy.ai/en/docs/products/investments) e
 [List investments](https://docs.pluggy.ai/en/reference/investment/investments-list).

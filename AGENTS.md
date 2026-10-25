@@ -23,7 +23,9 @@
   explícitas com `null`, `undefined` e o sentinel definido pelo contrato.
 - Prefira enums para conjuntos fechados de valores do produto. Siga o padrão
   existente de objetos `as const` e uniões derivadas, compatível com TypeScript
-  executável no Node. Reutilize-os em schemas, tipos e consumidores; mantenha
+  executável no Node. Declare-os no entity do conceito, junto de suas regras;
+  evite arquivos genéricos de enums. Reutilize-os em schemas, tipos e consumidores;
+  preserve os valores e a ordem das opções dos contratos existentes. Mantenha
   nomes de propriedades, textos livres e valores abertos de terceiros como strings.
 - Mantenha funções relacionadas próximas. Extraia para isolar I/O, políticas ou
   repetição relevante; não crie um helper por booleano, camadas genéricas ou DI
@@ -59,8 +61,11 @@
   de camada; adapters de provedor, OAuth e Workflow permanecem explícitos.
   O Biome bloqueia imports entre camadas, inclusive em novos helpers. Use caminhos
   relativos sem extensões `.ts`/`.tsx` nem o sufixo `/index`. Consuma outros módulos
-  pelo seu `index.ts`, com exports nomeados explícitos. Dentro do módulo, importe
-  implementações diretamente para evitar ciclos pelo próprio barrel. Persistência,
+  pelo seu `index.ts`, com exports nomeados explícitos. Agrupe imports do mesmo
+  módulo; use `type` inline junto de valores e `import type` para somente tipos.
+  Mantenha tipos importados no topo; reserve `import()` para carregamento dinâmico.
+  Dentro do módulo, importe implementações diretamente para evitar ciclos pelo
+  próprio barrel. Persistência,
   transporte, composição e logger têm entradas separadas; índices de aplicação
   expõem casos de uso e contratos. Execute scripts e testes Node com o loader `tsx`
   pelos comandos npm/mise, que resolvem os índices de diretórios em ESM.

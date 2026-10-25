@@ -1,6 +1,9 @@
 import type { CardCommitments, CardCommitmentsQuery } from "../../contracts";
-import type { PlanningTransaction, TransactionDetails } from "../../domain";
-import { monthDate } from "../../domain";
+import {
+  monthDate,
+  type PlanningTransaction,
+  type TransactionDetails,
+} from "../../domain";
 import type { PlanningRepository, PlanningSnapshot } from "./entity";
 import { accounts, classification, transactionStream } from "./projection";
 
@@ -215,7 +218,7 @@ export async function cardCommitments(input: {
     if (operation === "PAGAMENTO_FATURA") {
       return;
     }
-    const kind = classification(row, snapshot.state, operation);
+    const kind = classification(row, snapshot.state);
     if (kind !== "expense" && kind !== "unclassified") {
       return;
     }

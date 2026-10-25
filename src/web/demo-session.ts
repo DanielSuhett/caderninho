@@ -1,11 +1,10 @@
 import type { z } from "zod/v4";
 
-import {
-  PortalCardsQuerySchema,
-  type PortalMutationSchema,
-  type PortalQuerySchema,
-  type WorkspaceCatalog,
-  WorkspaceCatalogSchema,
+import type {
+  PortalMutationSchema,
+  PortalQuery,
+  PortalQueryResults,
+  WorkspaceCatalog,
 } from "../contracts";
 import {
   activeRules,
@@ -29,13 +28,10 @@ import type { DemoData } from "./demo-data";
 import { randomId } from "./random-id";
 
 function demoCommitments(
-  query: Extract<
-    z.input<typeof PortalQuerySchema>["query"],
-    { tool: "get_card_commitments" }
-  >,
+  query: Extract<PortalQuery, { tool: "get_card_commitments" }>,
   categories: WorkspaceCatalog["categories"],
   revision: number,
-) {
+): PortalQueryResults["get_card_commitments"] {
   const fixture = cardCommitmentsFixture(
     { month: query.month ?? "2026-10" },
     query,
@@ -290,15 +286,11 @@ export function createDemoSession({
             type,
           },
         ];
-        groups.set(
-          id,
-          WorkspaceCatalogSchema.parse({
-            ...categoryCatalog(id),
-            rules: [],
-            spaces: [],
-            tags: [],
-          }),
-        );
+        groups.set(id, {
+          ...categoryCatalog(id),
+          rules: [],
+          tags: [],
+        } satisfies Group);
         break;
       }
       case "update_space": {
@@ -342,6 +334,54 @@ export function createDemoSession({
         throw new Error("UNSUPPORTED_DEMO_OPERATION");
     }
   }
+  const queries: Partial<{
+    [Tool in keyof PortalQueryResults]: (
+      query: PortalQuery & { tool: Tool },
+    ) => PortalQueryResults[Tool];
+  }> = {
+    get_accounts: (query) => ({
+      data: {
+        records: view(query.spaceId).accounts.map((account) => ({
+          id: account.id,
+          identity: account.identity,
+          name: account.name,
+          personId: account.personId,
+          personName:
+            demoPeople.find((person) => person.id === account.personId)?.name ??
+            "Pessoa de exemplo",
+          type: account.type,
+        })),
+      },
+    }),
+    get_card_commitments: (query) =>
+      demoCommitments(
+        query,
+        view(query.spaceId ?? "personal").categories,
+        revision,
+      ),
+    get_investments: (query) => ({
+      data: investmentPortfolio(
+        demoInvestments.filter(
+          (row) =>
+            row.spaceId === query.spaceId &&
+            (!query.personId || row.personId === query.personId),
+        ),
+        query,
+      ),
+      partial: false,
+    }),
+    get_portal_cards: (query) => ({
+      data: demoCards(
+        {
+          ...query,
+          currency: query.currency ?? "BRL",
+          spaceId: query.spaceId ?? "personal",
+        },
+        view(query.spaceId ?? "personal"),
+      ),
+      partial: false,
+    }),
+  };
   const api: OrganizationApi = {
     catalog: (spaceId, signal) =>
       local(signal, () =>
@@ -402,54 +442,11 @@ export function createDemoSession({
       }),
     query: (query, _csrf, signal) =>
       local(signal, () => {
-        if (query.tool === "get_card_commitments") {
-          return demoCommitments(
-            query,
-            view(query.spaceId ?? "personal").categories,
-            revision,
-          );
-        }
-
-        if (query.tool === "get_portal_cards") {
-          return {
-            data: demoCards(
-              PortalCardsQuerySchema.parse(query),
-              view(query.spaceId),
-            ),
-            partial: false,
-          };
-        }
-        if (query.tool === "get_investments") {
-          return {
-            data: investmentPortfolio(
-              demoInvestments.filter(
-                (row) =>
-                  row.spaceId === query.spaceId &&
-                  (!query.personId || row.personId === query.personId),
-              ),
-              query,
-            ),
-            partial: false,
-          };
-        }
-
-        if (query.tool !== "get_accounts") {
+        const read = queries[query.tool];
+        if (!read) {
           throw new Error("UNSUPPORTED_DEMO_OPERATION");
         }
-        return {
-          data: {
-            records: view(query.spaceId).accounts.map((account) => ({
-              id: account.id,
-              identity: account.identity,
-              name: account.name,
-              personId: account.personId,
-              personName:
-                demoPeople.find((person) => person.id === account.personId)
-                  ?.name ?? "Pessoa de exemplo",
-              type: account.type,
-            })),
-          },
-        };
+        return read(query);
       }),
   };
   return {

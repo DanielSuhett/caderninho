@@ -1,12 +1,9 @@
-import {
-  Badge,
-  KumoLocaleProvider,
-  Select,
-  Sidebar,
-  Toasty,
-  Tooltip,
-  TooltipProvider,
-} from "@cloudflare/kumo";
+import { Badge } from "@cloudflare/kumo/components/badge";
+import { Select } from "@cloudflare/kumo/components/select";
+import { Sidebar } from "@cloudflare/kumo/components/sidebar";
+import { Toasty } from "@cloudflare/kumo/components/toast";
+import { Tooltip, TooltipProvider } from "@cloudflare/kumo/components/tooltip";
+import { KumoLocaleProvider } from "@cloudflare/kumo/utils";
 import {
   ArrowSquareOutIcon,
   ChartPieSliceIcon,

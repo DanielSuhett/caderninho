@@ -1,4 +1,9 @@
 import type {
+  AccountType,
+  TransactionDirection,
+  TransactionStatus,
+} from "./finance.entity";
+import type {
   TransactionCard,
   TransactionMerchant,
   TransactionPayment,
@@ -54,7 +59,7 @@ export interface ProviderAccount {
   itemId: string;
   name: string;
   number?: string | null | undefined;
-  type: "BANK" | "CREDIT";
+  type: AccountType;
 }
 export interface ProviderTransaction {
   accountId: string;
@@ -77,8 +82,8 @@ export interface ProviderTransaction {
   paymentData?: ProviderPayment | null | undefined;
   providerCode?: string | null | undefined;
   providerId?: string | null | undefined;
-  status: "PENDING" | "POSTED";
-  type: "DEBIT" | "CREDIT";
+  status: TransactionStatus;
+  type: TransactionDirection;
   updatedAt?: string | null | undefined;
 }
 export interface TransactionPage {

@@ -1,12 +1,19 @@
-import type {
-  PlanningCommand,
-  PortalCardsQuery,
-  PortalTransactionQuery,
+import {
+  isPlanningQuery,
+  type PlanningCommand,
+  type PlanningQuery,
+  type PortalCardsQuery,
+  type PortalTransactionQuery,
 } from "../../contracts";
-import { planningDefinitions } from "../../contracts";
+import { AccountType, PlanningError } from "../../domain";
 import { hash, tryCatch } from "../../shared";
 import { portalCards } from "./cards.service";
-import type { PlanningRepository, PlanningSnapshot } from "./entity";
+import type {
+  PlanningRead,
+  PlanningRepository,
+  PlanningResult,
+  PlanningSnapshot,
+} from "./entity";
 import { planningMutation } from "./mutations.service";
 import { portalTransactions } from "./portal-transactions.service";
 import {
@@ -18,9 +25,14 @@ import {
 import { planningQuery } from "./queries.service";
 import { previewRule } from "./rule-preview.service";
 
-const reads = new Set<string>(
-  planningDefinitions.filter((d) => d.readOnly).map((d) => d.name),
-);
+const catalogReads = new Map<PlanningQuery["tool"], PlanningRead>([
+  ["get_tags", "tags"],
+  ["get_rules", "rules"],
+  ["get_categories", "categories"],
+  ["get_category_groups", "categoryGroups"],
+  ["get_spaces", "spaces"],
+  ["get_notification_preferences", "notifications"],
+]);
 function readContext(snapshot: PlanningSnapshot, selection: Selection) {
   const coverage = planningCoverage(snapshot, selection);
   return {
@@ -42,7 +54,7 @@ function readSelection(snapshot: PlanningSnapshot, input: PlanningCommand) {
   }
   if (input.tool === "get_card_commitments") {
     selection.accountIds = accounts(snapshot)
-      .filter((account) => account.type === "CREDIT")
+      .filter((account) => account.type === AccountType.CREDIT)
       .map((account) => account.id);
   }
   return selection;
@@ -54,7 +66,7 @@ export function createPlanningService(
   async function receipt(key: string, digest: string) {
     const prior = await repository.receipt(key);
     if (prior && prior.digest !== digest) {
-      throw new Error("IDEMPOTENCY_CONFLICT");
+      throw new Error(PlanningError.IDEMPOTENCY_CONFLICT);
     }
     return prior;
   }
@@ -69,7 +81,7 @@ export function createPlanningService(
       return prior.result;
     }
     if ((await repository.revision()) !== input.revision) {
-      throw new Error("RESTART_REQUIRED");
+      throw new Error(PlanningError.RESTART_REQUIRED);
     }
     throw input.error;
   }
@@ -79,14 +91,14 @@ export function createPlanningService(
     snapshot.partial = context.partial;
     const result = await portalTransactions(input, snapshot, repository, now());
     if ((await repository.revision()) !== snapshot.revision) {
-      throw new Error("RESTART_REQUIRED");
+      throw new Error(PlanningError.RESTART_REQUIRED);
     }
     return {
       ...context,
       data: result,
     };
   }
-  function query(input: PlanningCommand, snapshot: PlanningSnapshot) {
+  function query(input: PlanningQuery, snapshot: PlanningSnapshot) {
     if (input.tool === "preview_rule_import") {
       return planningMutation(input, {
         now: now().toISOString(),
@@ -110,11 +122,11 @@ export function createPlanningService(
           .map((account) => account.id),
       });
       if ((await repository.revision()) !== snapshot.revision) {
-        throw new Error("RESTART_REQUIRED");
+        throw new Error(PlanningError.RESTART_REQUIRED);
       }
       return { ...context, data };
     },
-    async execute(input: PlanningCommand): Promise<unknown> {
+    async execute(input: PlanningCommand): Promise<PlanningResult> {
       if (input.tool === "preview_rule") {
         const result = await previewRule(repository, input);
         return {
@@ -126,35 +138,31 @@ export function createPlanningService(
       if (input.tool === "get_transaction_purchases") {
         return purchases({ ...input, tool: "get_portal_transactions" });
       }
-      const digest = await hash(input);
-      if ("idempotency_key" in input) {
-        const prior = await receipt(input.idempotency_key, digest);
-        if (prior) {
-          return prior.result;
-        }
-      }
-      const snapshot = await repository.read(
-        reads.has(input.tool) ? input.tool : undefined,
-      );
-      if (reads.has(input.tool)) {
+      if (isPlanningQuery(input)) {
+        const snapshot = await repository.read(catalogReads.get(input.tool));
         const context = readContext(snapshot, readSelection(snapshot, input));
         snapshot.partial = context.partial;
         const result = await query(input, snapshot);
         if ((await repository.revision()) !== snapshot.revision) {
-          throw new Error("RESTART_REQUIRED");
+          throw new Error(PlanningError.RESTART_REQUIRED);
         }
         return { ...context, data: result };
       }
-      if (!("idempotency_key" in input)) {
-        throw new Error("CONFIRMATION_REQUIRED");
+      const digest = await hash(input);
+      const prior = await receipt(input.idempotency_key, digest);
+      if (prior) {
+        return prior.result;
       }
+      const snapshot = await repository.read();
       const state = structuredClone(snapshot.state);
-      const result = await planningMutation(input, {
-        now: now().toISOString(),
-        repository,
-        snapshot,
-        state,
-      });
+      const result = {
+        ...(await planningMutation(input, {
+          now: now().toISOString(),
+          repository,
+          snapshot,
+          state,
+        })),
+      };
       const { data: _data, error } = await tryCatch(() =>
         repository.commit({
           before: snapshot,

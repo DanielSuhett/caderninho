@@ -1,16 +1,36 @@
+import type { TransactionDirection, TransactionStatus } from "./finance.entity";
+
+export const TransactionOrder = { date_desc: "date_desc", id: "id" } as const;
+export type TransactionOrder =
+  (typeof TransactionOrder)[keyof typeof TransactionOrder];
+
+export const SpendingGroupBy = {
+  category: "category",
+  month: "month",
+} as const;
+export type SpendingGroupBy =
+  (typeof SpendingGroupBy)[keyof typeof SpendingGroupBy];
+
+export const AggregateGroupBy = {
+  account: "account",
+  ...SpendingGroupBy,
+} as const;
+export type AggregateGroupBy =
+  (typeof AggregateGroupBy)[keyof typeof AggregateGroupBy];
+
 export interface TransactionFilter {
   accountIds?: string[] | undefined;
   category?: string | undefined;
   connectionIds?: string[] | undefined;
   currency?: string | undefined;
   description?: string | undefined;
-  direction?: "DEBIT" | "CREDIT" | undefined;
+  direction?: TransactionDirection | undefined;
   from?: string | undefined;
   maxAmountMinor?: string | undefined;
   minAmountMinor?: string | undefined;
   personId?: string | undefined;
   profileId?: string | undefined;
-  status?: "PENDING" | "POSTED" | undefined;
+  status?: TransactionStatus | undefined;
   to?: string | undefined;
 }
 export interface Cursor {
@@ -34,7 +54,7 @@ export const Metric = {
 export type Metric = (typeof Metric)[keyof typeof Metric];
 export interface AggregateQuery {
   filter?: TransactionFilter | undefined;
-  groupBy?: "account" | "category" | "month" | undefined;
+  groupBy?: AggregateGroupBy | undefined;
   metric: Metric;
 }
 

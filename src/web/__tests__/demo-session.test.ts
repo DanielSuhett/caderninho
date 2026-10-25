@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
+  CardCommitmentsResponseSchema,
   InvestmentListSchema,
+  PortalCardsSchema,
   type PortalMutation,
   RulePreviewSchema,
 } from "../../contracts";
@@ -387,4 +389,27 @@ test("investment demo shares the MCP portfolio contract, owner and institution f
     ),
   );
   assert.equal(other.data.records.length, 0);
+});
+
+test("demo keeps both card views available through the typed query API with default scope and currency", async () => {
+  const session = createDemoSession();
+  const cards = PortalCardsSchema.parse(
+    await session.api.query(
+      { month: "2026-10", tool: "get_portal_cards" },
+      "synthetic",
+      signal,
+    ),
+  );
+  const commitments = CardCommitmentsResponseSchema.parse(
+    await session.api.query(
+      { tool: "get_card_commitments" },
+      "synthetic",
+      signal,
+    ),
+  );
+  assert.equal(cards.data.currency, "BRL");
+  assert.ok(cards.data.accounts.length);
+  assert.ok(cards.data.installments.length);
+  assert.equal(commitments.scope.spaceId, "personal");
+  assert.ok(commitments.data.totals.length);
 });

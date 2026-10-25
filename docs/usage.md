@@ -12,7 +12,7 @@ regras, grupos e histórico de sincronizações.
 O dashboard reúne as contas de titulares distintos e permite alternar entre uma
 pessoa e “Todos”. Cadastre pessoas e credenciais em **Pessoas e perfis Pluggy**;
 selecione o perfil antes de conectar. O [guia de titularidade](household.md) explica
-migração, filtros MCP, correção de titular, pausa e limites da Pluggy.
+configuração, filtros MCP, correção de titular, pausa e limites da Pluggy.
 
 ## Importações
 
@@ -189,7 +189,7 @@ No MCP, `get_investments` aceita `spaceId`, `personId`, `currency`, `type`,
 `net`, `original`, `profit`, `withdrawal`, `byType` e `byInstitution`.
 Cada medida informa `totalMinor`, `knownMinor` e `unknownCount`. Campos monetários
 são strings inteiras em unidades menores. Zero é conhecido; ausência não é zero.
-`amountMinor` continua sendo a posição bruta, preservando o contrato anterior.
+`amountMinor` representa a posição bruta.
 `details` conserva valores, taxas e datas fornecidos pela Pluggy; `identity`
 conserva instituição e logo validado. Reimportações preservam grupo e inclusão.
 
@@ -207,7 +207,5 @@ volta às iniciais e também precisa ser salvo. JPEG, PNG e WebP de até 5 MB s�
 aceitos; o navegador recorta e reduz a foto para 160 × 160 px antes de enviar.
 A imagem fica no banco privado da instalação, sem serviços externos de avatar.
 
-A migração aditiva `0011_person_photos.sql` acrescenta a coluna opcional em
-`people`. Nomes e perfis existentes são preservados. A atualização precisa dessa
-migração antes de executar o novo Worker; o comando de deploy já aplica as
-migrações. Nenhuma migração remota foi aplicada nesta implementação.
+A foto fica na coluna opcional `people.photo`, criada no schema inicial. Atualizar
+nome ou foto não altera os vínculos financeiros da pessoa.

@@ -34,7 +34,12 @@ lint; o completo acrescenta testes, build dry-run e runtime local D1/Workflow.
 
 `types` regenera bindings usando somente os nomes de secrets de
 `.dev.vars.example`; `types:check` confere sem reescrever. `migrate:local` usa
-somente D1 local. Deploy é separado e inclui migração remota.
+somente D1 local. Deploy é separado e inclui inicialização do D1 remoto.
+
+Enquanto o projeto estiver em pré-produção, mantenha o modelo inicial completo
+em `migrations/0001_initial.sql` e seus tipos em `src/worker/schema/index.ts`.
+Não acrescente upgrades ou backfills para schemas experimentais descartados.
+Os testes iniciam bancos novos com esse mesmo schema.
 
 ## Ferramentas e revisão
 
@@ -48,6 +53,11 @@ Não desative regras nem use `--unsafe` global para eliminar diagnósticos.
 convergir sem alterações. Preserve comentários e imports com efeitos colaterais.
 O lint verifica dependências entre camadas; a revisão ainda deve conferir a
 localização das decisões de produto e o uso de `tryCatch` descrito em AGENTS.
+
+Domínio e shared não importam contratos de transporte. Entities e repositories
+não consomem os índices de aplicação de planning/household. No frontend, importe
+Kumo pela entrada específica, como `@cloudflare/kumo/components/banner`;
+o barrel principal carrega dependências de navegador nas páginas do Worker.
 
 Use `shared/logger` e siga o [roteiro de observabilidade](docs/observability.md).
 Não registre secrets, dados financeiros ou texto arbitrário de exceções.

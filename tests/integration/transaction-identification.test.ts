@@ -12,18 +12,56 @@ import {
 } from "../../src/fixtures/transaction-identification";
 import { createFinancialService } from "../../src/worker/finance";
 import { createFinancialRepository } from "../../src/worker/finance/repository";
-import {
-  command,
-  cookies,
-  fixture,
-  login,
-  testMigrations,
-} from "./access-fixture";
-import { collect, setup, source, transaction } from "./fixture";
-import { applyD1Migrations, reset } from "cloudflare:test";
+import { command, cookies, fixture, login } from "./access-fixture";
+import { account, collect, setup, source, transaction } from "./fixture";
 import { env } from "cloudflare:workers";
 
 beforeEach(setup);
+
+for (const description of ["Compra sintética", "synthetic ".repeat(60_000)]) {
+  test(`reimport clears withdrawn source card metadata atomically (${description.length} characters)`, async () => {
+    const accounts = [account({ type: "CREDIT" })];
+    const rows = [1, 2].map((installmentNumber) =>
+      transaction({
+        creditCardMetadata: {
+          cardNumber: "1234",
+          installmentNumber,
+          purchaseDate: "2024-01-01",
+          totalInstallments: 2,
+        },
+        date: `2024-0${installmentNumber}-01`,
+        description,
+        id: `installment-${installmentNumber}`,
+      }),
+    );
+    await collect(source(rows, accounts));
+    const app = fixture();
+    const cookie = cookies(await login(app));
+    const purchases = async () => {
+      const response = await command(app, cookie, "query", {
+        query: { spaceId: "personal", tool: "get_portal_transactions" },
+      });
+      assert.equal(response.status, 200);
+      return PortalTransactionListSchema.parse(await response.json()).data
+        .records;
+    };
+    assert.equal((await purchases())[0]?.installments.length, 2);
+    await collect(
+      source(
+        rows.map((row) => ({ ...row, creditCardMetadata: null })),
+        accounts,
+      ),
+      "2026-10-02T00:00:00Z",
+    );
+    const updated = await purchases();
+    assert.equal(updated.length, 2);
+    for (const row of updated) {
+      assert.equal(row.cardNumber, null);
+      assert.equal(row.purchaseDate, null);
+      assert.deepEqual(row.installments, []);
+    }
+  });
+}
 
 test("identification survives atomic import, financial queries, portal/MCP planning queries and metadata-only reimports", async () => {
   const row = transaction({ ...transactionIdentificationInput });
@@ -84,47 +122,4 @@ test("large-page scalar writes preserve identification exactly", async () => {
   const [row] = (await finance.query({ limit: 1 })).records;
   assert.equal(row?.description, description);
   assert.deepEqual(row?.identification, transactionIdentification);
-});
-
-test("migration preserves existing transactions and backfills the available card metadata", async () => {
-  await reset();
-  await applyD1Migrations(
-    env.DB,
-    testMigrations.filter((migration) => migration.name < "0008"),
-  );
-  await env.DB.prepare(
-    "INSERT INTO transactions(id,account_id,date,status,direction,currency,amount_minor,description,category) VALUES('old','a','2026-10-01','POSTED','DEBIT','BRL','-100','Old','Groceries')",
-  ).run();
-  await env.DB.prepare(
-    "INSERT INTO planning_transactionDetails(id,data) VALUES('old',?)",
-  )
-    .bind(
-      JSON.stringify({
-        accountId: "a",
-        billId: "old-bill",
-        cardNumber: "1234",
-        id: "old",
-        installmentNumber: 1,
-        operationType: "CARTAO",
-        purchaseDate: "2026-10-01",
-        totalInstallments: 2,
-      }),
-    )
-    .run();
-  await applyD1Migrations(env.DB, testMigrations);
-  const old = await env.DB.prepare(
-    "SELECT amount_minor,identification FROM transactions WHERE id='old'",
-  ).first<{ amount_minor: string; identification: string }>();
-  assert.equal(old?.amount_minor, "-100");
-  assert.ok(old);
-  assert.deepEqual(JSON.parse(old.identification), {
-    creditCardMetadata: {
-      billId: "old-bill",
-      cardNumber: "1234",
-      installmentNumber: 1,
-      purchaseDate: "2026-10-01",
-      totalInstallments: 2,
-    },
-    operationType: "CARTAO",
-  });
 });

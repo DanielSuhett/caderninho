@@ -1,8 +1,13 @@
-import { Banner, LayerCard, Link, Loader, Select } from "@cloudflare/kumo";
+import { Banner } from "@cloudflare/kumo/components/banner";
+import { LayerCard } from "@cloudflare/kumo/components/layer-card";
+import { Link } from "@cloudflare/kumo/components/link";
+import { Loader } from "@cloudflare/kumo/components/loader";
+import { Select } from "@cloudflare/kumo/components/select";
 import { CheckCircleIcon } from "@phosphor-icons/react";
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 
 import type { ConnectionInfo, PortalResponse } from "../../contracts";
+import { RunStatus } from "../../domain";
 import { UiButton, UiLink } from "../ui";
 import { DisclosureItem } from "./disclosure-item";
 import { momentLabel } from "./workspace-resource";
@@ -26,7 +31,9 @@ export function journeyConnection(connections: ConnectionInfo[]) {
   );
   return (
     connections.find(
-      (c) => c.importStatus === "pending" || c.importStatus === "running",
+      (c) =>
+        c.importStatus === RunStatus.pending ||
+        c.importStatus === RunStatus.running,
     ) ??
     recent.find((c) => c.hasTransactions || c.lastSuccessAt) ??
     recent[0]
@@ -45,7 +52,7 @@ function journeyTitle(
     }[activity.stage];
   }
   if (
-    connection?.importStatus === "running" &&
+    connection?.importStatus === RunStatus.running &&
     connection.importCheckpoint?.phase
   ) {
     return phases[connection.importCheckpoint.phase];
@@ -260,10 +267,10 @@ function ImportJourney({
   manage: () => void;
 }) {
   const active =
-    connection.importStatus === "running" ||
-    connection.importStatus === "pending";
-  const done = connection.importStatus === "succeeded";
-  const partial = active || connection.importStatus === "failed";
+    connection.importStatus === RunStatus.running ||
+    connection.importStatus === RunStatus.pending;
+  const done = connection.importStatus === RunStatus.succeeded;
+  const partial = active || connection.importStatus === RunStatus.failed;
   return (
     <>
       <p className="journey-origin">
@@ -277,7 +284,7 @@ function ImportJourney({
           Consultado em {momentLabel(observedAt)}.
         </p>
       )}
-      {connection.importStatus === "failed" && (
+      {connection.importStatus === RunStatus.failed && (
         <Banner
           className="feedback"
           description={importFailureMessage(connection.importError)}
@@ -374,8 +381,8 @@ export function ConnectionJourney({
   const connection = journeyConnection(snapshot.connections);
   const title = journeyTitle(snapshot, connection, activity);
   const active =
-    connection?.importStatus === "running" ||
-    connection?.importStatus === "pending";
+    connection?.importStatus === RunStatus.running ||
+    connection?.importStatus === RunStatus.pending;
   let content = (
     <ConnectProfile
       connect={connect}
@@ -421,7 +428,7 @@ export function ConnectionJourney({
             size="base"
           />
         )}
-        {!activity && connection?.importStatus === "succeeded" && (
+        {!activity && connection?.importStatus === RunStatus.succeeded && (
           <CheckCircleIcon
             aria-hidden="true"
             className="journey-success"

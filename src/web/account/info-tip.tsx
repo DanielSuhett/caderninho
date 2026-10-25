@@ -1,4 +1,4 @@
-import { Tooltip } from "@cloudflare/kumo";
+import { Tooltip } from "@cloudflare/kumo/components/tooltip";
 import { InfoIcon } from "@phosphor-icons/react";
 import type { ReactNode } from "react";
 

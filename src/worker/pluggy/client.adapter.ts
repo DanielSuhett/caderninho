@@ -1,9 +1,8 @@
 import { PluggyClient } from "pluggy-sdk";
 import { z } from "zod/v4";
 
-import { exactJSON, FaultCode } from "../../domain";
+import { exactJSON } from "../../domain";
 import {
-  type HttpFailure,
   HttpFailureKind,
   HttpRequestError,
   httpClient,
@@ -15,36 +14,6 @@ type QueryParameters = Record<
   string,
   number | number[] | string | string[] | boolean
 >;
-
-const transportCodes: Record<HttpFailureKind, string> = {
-  forbidden: "UPSTREAM_HTTP_ERROR",
-  invalid_request: "UPSTREAM_HTTP_ERROR",
-  invalid_response: "ERR_BODY_PARSE_FAILURE",
-  network: "UPSTREAM_HTTP_ERROR",
-  not_found: "UPSTREAM_HTTP_ERROR",
-  rate_limit: "UPSTREAM_HTTP_ERROR",
-  redirect: FaultCode.UPSTREAM_REDIRECT,
-  server: "UPSTREAM_HTTP_ERROR",
-  timeout: "ETIMEDOUT",
-  too_large: FaultCode.UPSTREAM_TOO_LARGE,
-  unauthorized: "UPSTREAM_HTTP_ERROR",
-};
-
-function transportError(failure: HttpFailure) {
-  const code = transportCodes[failure.kind];
-  return Object.assign(new Error(code), {
-    code,
-    ...(failure.status !== null &&
-      failure.status !== undefined && {
-        response: {
-          headers: {
-            "retry-after": failure.retryAfter ?? "",
-          },
-          statusCode: failure.status,
-        },
-      }),
-  });
-}
 
 // Keep the official SDK endpoint methods; adapt its protected transport to Fetch.
 // Upstream bodies and credentials never enter errors or logs.
@@ -129,11 +98,11 @@ export class PersonalPluggyClient extends PluggyClient {
       }),
     );
     if (error) {
-      if (error instanceof HttpRequestError) {
-        if (error.failure.kind === HttpFailureKind.unauthorized) {
-          this.cachedKey = "";
-        }
-        throw transportError(error.failure);
+      if (
+        error instanceof HttpRequestError &&
+        error.failure.kind === HttpFailureKind.unauthorized
+      ) {
+        this.cachedKey = "";
       }
       throw error;
     }

@@ -1,5 +1,32 @@
 import type { CategoryIcon } from "./category.entity";
-import type { AccountMetadata, TransactionProjection } from "./finance.entity";
+import type {
+  AccountMetadata,
+  AccountType,
+  TransactionDirection,
+  TransactionProjection,
+  TransactionStatus,
+} from "./finance.entity";
+import type { FinancialIdentity } from "./financial-identity.entity";
+import type { InvestmentDetails } from "./investment.entity";
+import type { RuleFilter } from "./rules.entity";
+
+export const SpaceType = {
+  business: "business",
+  family: "family",
+  personal: "personal",
+} as const;
+export type SpaceType = (typeof SpaceType)[keyof typeof SpaceType];
+
+export const CategoryKind = {
+  expense: "expense",
+  income: "income",
+  transfer: "transfer",
+} as const;
+export type CategoryKind = (typeof CategoryKind)[keyof typeof CategoryKind];
+
+export const NotificationChannel = { email: "email", push: "push" } as const;
+export type NotificationChannel =
+  (typeof NotificationChannel)[keyof typeof NotificationChannel];
 
 export interface Space {
   budgetEnabled: boolean;
@@ -10,7 +37,7 @@ export interface Space {
   monthlyBudgetMinor: string | null;
   monthStartDay: number;
   name: string;
-  type: "personal" | "business" | "family";
+  type: SpaceType;
 }
 export interface AccountSettings {
   closeDay?: number;
@@ -25,7 +52,7 @@ export interface AccountSettings {
   personId?: string;
   primaryCard?: string;
   spaceId: string;
-  type?: "BANK" | "CREDIT";
+  type?: AccountType;
 }
 export interface CardSettings {
   accountId: string;
@@ -43,14 +70,14 @@ export interface TransactionEdit {
   date?: string;
   deleted?: boolean;
   description?: string;
-  direction?: "DEBIT" | "CREDIT";
+  direction?: TransactionDirection;
   goalId?: string | null;
   id: string;
   ignored?: boolean;
   manual: boolean;
   recurrenceId?: string;
   spaceId?: string;
-  status?: "PENDING" | "POSTED";
+  status?: TransactionStatus;
   tagIds?: string[];
 }
 export interface Category {
@@ -59,7 +86,7 @@ export interface Category {
   hidden: boolean;
   icon?: CategoryIcon;
   id: string;
-  kind: "income" | "expense" | "transfer";
+  kind: CategoryKind;
   limitMinor: string | null;
   name: string;
   spaceId: string;
@@ -81,9 +108,9 @@ export interface Tag {
 export interface Rule {
   accountId: string | null;
   categoryId: string;
-  direction: "DEBIT" | "CREDIT" | null;
+  direction: TransactionDirection | null;
   enabled: boolean;
-  filter?: import("./rules.entity").RuleFilter | null;
+  filter?: RuleFilter | null;
   id: string;
   name: string;
   pack?: { id: string; key: string; version: number };
@@ -97,7 +124,7 @@ export interface Recurrence {
   amountMinor: string;
   categoryId: string | null;
   currency: string;
-  direction: "DEBIT" | "CREDIT";
+  direction: TransactionDirection;
   endDate: string | null;
   id: string;
   installmentId: string | null;
@@ -144,12 +171,9 @@ export interface Investment {
   connectionId: string | null;
   currency: string;
   date: string | null;
-  details?: import("./investment.entity").InvestmentDetails | null | undefined;
+  details?: InvestmentDetails | null | undefined;
   id: string;
-  identity?:
-    | import("./financial-identity.entity").FinancialIdentity
-    | null
-    | undefined;
+  identity?: FinancialIdentity | null | undefined;
   included: boolean;
   manual: boolean;
   name: string;
@@ -202,7 +226,7 @@ export interface BillPayment {
   updatedAt: string;
 }
 export interface NotificationPreference {
-  channel: "email" | "push";
+  channel: NotificationChannel;
   enabled: boolean;
   event: string;
   id: string;
@@ -305,8 +329,17 @@ export function sacSchedule(input: {
   });
 }
 
-export type ProductKind = "investments" | "loans" | "bills";
+export const ProductKind = {
+  bills: "bills",
+  investments: "investments",
+  loans: "loans",
+} as const;
+export type ProductKind = (typeof ProductKind)[keyof typeof ProductKind];
 export type ProductPage =
-  | { kind: "investments"; next: number | null; records: Investment[] }
-  | { kind: "loans"; next: number | null; records: Loan[] }
-  | { kind: "bills"; next: number | null; records: Bill[] };
+  | {
+      kind: typeof ProductKind.investments;
+      next: number | null;
+      records: Investment[];
+    }
+  | { kind: typeof ProductKind.loans; next: number | null; records: Loan[] }
+  | { kind: typeof ProductKind.bills; next: number | null; records: Bill[] };

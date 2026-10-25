@@ -1,4 +1,4 @@
-import { Select } from "@cloudflare/kumo";
+import { Select } from "@cloudflare/kumo/components/select";
 
 import type { WorkspaceCatalog } from "../contracts";
 import { demoPeople, demoReferenceDay } from "../fixtures/finance";

@@ -1,18 +1,12 @@
-import {
-  Badge,
-  DropdownMenu,
-  InlineCopyText,
-  LayerCard,
-  Select,
-  useKumoToastManager,
-} from "@cloudflare/kumo";
+import { Badge } from "@cloudflare/kumo/components/badge";
+import { DropdownMenu } from "@cloudflare/kumo/components/dropdown";
+import { InlineCopyText } from "@cloudflare/kumo/components/inline-copy-text";
+import { LayerCard } from "@cloudflare/kumo/components/layer-card";
+import { Select } from "@cloudflare/kumo/components/select";
+import { useKumoToastManager } from "@cloudflare/kumo/components/toast";
 import { type MouseEvent, type ReactNode, useCallback, useState } from "react";
 
-import {
-  AccountListSchema,
-  type PortalResponse,
-  type WorkspaceCatalog,
-} from "../../contracts";
+import type { PortalResponse, WorkspaceCatalog } from "../../contracts";
 import { formatBalance } from "../money";
 import { UiButton } from "../ui";
 import type { OrganizationApi } from "./account-api";
@@ -25,7 +19,7 @@ import { DeleteOrganizationItem, GroupEditor } from "./group-editor";
 import { RuleComposition } from "./rule-composition";
 import { RuleEditor } from "./rule-editor";
 import { RuleImporter } from "./rule-importer";
-import { ruleSummary } from "./rule-presentation";
+import { type RuleSource, ruleSummary } from "./rule-presentation";
 import { EmptyView, ScopeFields } from "./workspace-filters";
 import {
   ResourceFeedback,
@@ -96,7 +90,7 @@ export function OrganizationView({
       ]);
       return {
         ...catalog,
-        accounts: AccountListSchema.parse(accountList).data.records,
+        accounts: accountList.data.records,
       };
     },
     [api, spaceId, snapshot.csrf],
@@ -586,12 +580,7 @@ function OrganizationActions({
 }
 
 function ruleTransactionsHref(
-  rule: {
-    filter?: unknown;
-    text: string;
-    accountId: string | null;
-    direction: string | null;
-  },
+  rule: RuleSource,
   scope: URLSearchParams,
   basePath: string,
 ) {
@@ -611,6 +600,6 @@ function ruleTransactionsHref(
   return `${basePath}/transactions?${params}`;
 }
 
-function ruleLinkLabel(rule: { filter?: unknown }) {
+function ruleLinkLabel(rule: RuleSource) {
   return rule.filter ? "Ver transações do grupo" : "Ver correspondências";
 }

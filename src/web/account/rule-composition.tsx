@@ -1,12 +1,13 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 
-import { tryCatch } from "../../shared/result";
+import { tryCatch } from "../../shared";
+import type { RuleFlow } from "./rule-flow";
 import { StaticRuleComposition } from "./rule-flow-content";
 import { buildRuleComposition } from "./rule-presentation";
 
 import "./rule-flow.css";
 
-const Diagram = lazy<typeof import("./rule-flow").RuleFlow>(async () => {
+const Diagram = lazy<typeof RuleFlow>(async () => {
   const { data, error } = await tryCatch(() => import("./rule-flow"));
   if (error) {
     return { default: StaticRuleComposition };

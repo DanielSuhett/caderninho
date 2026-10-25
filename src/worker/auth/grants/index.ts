@@ -16,10 +16,11 @@ export async function revokeAssistantGrants(
     }
   }
   await readPage();
-  await grants.reduce(async (previous, grant) => {
-    await previous;
-    await provider.revokeGrant(grant, "owner");
-  }, Promise.resolve());
+  await grants.reduce(
+    (previous, grant) =>
+      previous.then(() => provider.revokeGrant(grant, "owner")),
+    Promise.resolve(),
+  );
 }
 
 export async function assistantGrants(

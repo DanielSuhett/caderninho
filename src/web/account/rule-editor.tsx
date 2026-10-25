@@ -1,4 +1,7 @@
-import { Banner, Input, Select, Switch } from "@cloudflare/kumo";
+import { Banner } from "@cloudflare/kumo/components/banner";
+import { Input } from "@cloudflare/kumo/components/input";
+import { Select } from "@cloudflare/kumo/components/select";
+import { Switch } from "@cloudflare/kumo/components/switch";
 import { PlusIcon, TrashIcon } from "@phosphor-icons/react";
 import {
   type ChangeEvent,
@@ -18,6 +21,12 @@ import {
   type PortalResponse,
   type WorkspaceCatalog,
 } from "../../contracts";
+import {
+  CategoryKind,
+  RuleOperator,
+  TransactionDirection,
+  TransactionStatus,
+} from "../../domain";
 import { tryCatch } from "../../shared";
 import { randomId } from "../random-id";
 import { UiButton } from "../ui";
@@ -44,7 +53,8 @@ function initialLegacyText(rule?: Rule) {
 function initialCategory(rule: Rule | undefined, catalog: WorkspaceCatalog) {
   return (
     rule?.categoryId ??
-    catalog.categories.find((c) => !c.hidden && c.kind === "expense")?.id ??
+    catalog.categories.find((c) => !c.hidden && c.kind === CategoryKind.expense)
+      ?.id ??
     ""
   );
 }
@@ -187,7 +197,7 @@ export function RuleEditor({
           {
             field: "description",
             id: randomId(),
-            operator: "contains",
+            operator: RuleOperator.contains,
             value: term,
           },
           { ...preset.direction, id: randomId() },
@@ -464,8 +474,8 @@ export function RuleEditor({
                 className="w-full"
                 items={[
                   { label: "Todos", value: "" },
-                  { label: "Saída", value: "DEBIT" },
-                  { label: "Entrada", value: "CREDIT" },
+                  { label: "Saída", value: TransactionDirection.DEBIT },
+                  { label: "Entrada", value: TransactionDirection.CREDIT },
                 ]}
                 label="Movimento obrigatório"
                 name="legacyDirection"
@@ -527,17 +537,29 @@ export function RuleEditor({
                     items={[
                       ...(condition.field === "description"
                         ? [
-                            { label: "contém", value: "contains" },
-                            { label: "não contém", value: "not_contains" },
-                            { label: "é igual a", value: "equals" },
-                            { label: "começa com", value: "starts_with" },
+                            { label: "contém", value: RuleOperator.contains },
+                            {
+                              label: "não contém",
+                              value: RuleOperator.not_contains,
+                            },
+                            { label: "é igual a", value: RuleOperator.equals },
+                            {
+                              label: "começa com",
+                              value: RuleOperator.starts_with,
+                            },
                           ]
                         : [
-                            { label: "é igual a", value: "equals" },
+                            { label: "é igual a", value: RuleOperator.equals },
                             ...(["date", "amount"].includes(condition.field)
                               ? [
-                                  { label: "maior ou igual", value: "gte" },
-                                  { label: "menor ou igual", value: "lte" },
+                                  {
+                                    label: "maior ou igual",
+                                    value: RuleOperator.gte,
+                                  },
+                                  {
+                                    label: "menor ou igual",
+                                    value: RuleOperator.lte,
+                                  },
                                 ]
                               : []),
                           ]),
@@ -692,13 +714,13 @@ function ConditionValue({
       name: `${account.name} · ${account.personName}`,
     })),
     direction: [
-      { id: "DEBIT", name: "Saída" },
-      { id: "CREDIT", name: "Entrada" },
+      { id: TransactionDirection.DEBIT, name: "Saída" },
+      { id: TransactionDirection.CREDIT, name: "Entrada" },
     ],
     personId: snapshot.people,
     status: [
-      { id: "POSTED", name: "Confirmada" },
-      { id: "PENDING", name: "Pendente" },
+      { id: TransactionStatus.POSTED, name: "Confirmada" },
+      { id: TransactionStatus.PENDING, name: "Pendente" },
     ],
   };
   const choices = options[condition.field];

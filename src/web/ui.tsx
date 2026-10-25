@@ -1,6 +1,5 @@
 import { Button, LinkButton } from "@cloudflare/kumo/components/button";
 import { Checkbox } from "@cloudflare/kumo/components/checkbox";
-import { Input } from "@cloudflare/kumo/components/input";
 import { type ComponentProps, useState } from "react";
 
 interface DataAttributes {
@@ -30,12 +29,6 @@ export function UiLink(props: ComponentProps<typeof LinkButton>) {
       {...props}
     />
   );
-}
-
-export function UiField(
-  props: ComponentProps<typeof Input> & { label: string },
-) {
-  return <Input {...props} />;
 }
 
 // Kumo 2.14 exposes a controlled Checkbox. This adapter provides native-form defaults.

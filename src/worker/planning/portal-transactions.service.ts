@@ -1,24 +1,21 @@
 import type { z } from "zod/v4";
 
-import {
-  PlanningCursorSchema,
-  type PortalTransactionListSchema,
-  type PortalTransactionQuery,
+import type {
+  PortalTransactionListSchema,
+  PortalTransactionQuery,
 } from "../../contracts";
 import {
+  AccountType,
   localDay,
   monthDate,
+  type PlanningTransaction,
   type TransactionDetails,
+  TransactionDirection,
   transactionMatchesText,
 } from "../../domain";
-import { hash } from "../../shared";
+import { planningCursor } from "./cursor";
 import type { PlanningRepository, PlanningSnapshot } from "./entity";
-import {
-  accounts,
-  found,
-  transactionStream,
-  validatePeriod,
-} from "./projection";
+import { found, transactionStream, validateSelection } from "./projection";
 
 type PageRow = z.infer<
   typeof PortalTransactionListSchema
@@ -30,7 +27,7 @@ function installmentKey(row: InstallmentRow) {
     return null;
   }
   if (
-    row.direction !== "DEBIT" ||
+    row.direction !== TransactionDirection.DEBIT ||
     row.totalInstallments < 2 ||
     row.installmentNumber < 1 ||
     row.installmentNumber > row.totalInstallments
@@ -107,7 +104,7 @@ function matches(
 }
 
 function record(
-  row: import("../../domain").PlanningTransaction,
+  row: PlanningTransaction,
   details: TransactionDetails | undefined,
 ): InstallmentRow {
   return {
@@ -139,26 +136,21 @@ export async function portalTransactions(
   repository: PlanningRepository,
   now: Date,
 ) {
-  validatePeriod(input);
-  const { cursor, limit, tool: _tool, ...filter } = input;
-  const scope = await hash(filter);
-  let after = "";
-  if (cursor) {
-    const decoded = PlanningCursorSchema.parse(
-      JSON.parse(decodeURIComponent(cursor)),
-    );
-    if (decoded[0] !== snapshot.revision || decoded[1] !== scope) {
-      throw new Error("RESTART_REQUIRED");
-    }
-    [, , after] = decoded;
-  }
+  const { accountList } = validateSelection(input, snapshot);
   const day = localDay(now);
+  const { cursor, limit, tool: _tool, ...filter } = input;
+  const cursorState = await planningCursor({
+    cursor,
+    filter: { ...filter, referenceDay: day },
+    revision: snapshot.revision,
+  });
+  const { after } = cursorState;
   const details = new Map(
     snapshot.transactionDetails.map((item) => [item.id, item]),
   );
   const creditAccounts = new Set(
-    accounts(snapshot)
-      .filter((account) => account.type === "CREDIT")
+    accountList
+      .filter((account) => account.type === AccountType.CREDIT)
       .map((account) => account.id),
   );
   const groups = new Map<string, InstallmentRow[]>();
@@ -208,6 +200,7 @@ export async function portalTransactions(
   const stream = transactionStream(repository, snapshot);
   for await (const page of stream({
     accountId: input.accountId,
+    currency: input.currency,
     include_ignored: input.include_ignored,
     personId: input.personId,
     spaceId: input.spaceId,
@@ -239,12 +232,7 @@ export async function portalTransactions(
   const records = selected.slice(0, limit).map((item) => item.row);
   const last = records.at(-1);
   return {
-    cursor:
-      more && last
-        ? encodeURIComponent(
-            JSON.stringify([snapshot.revision, scope, key(last)]),
-          )
-        : null,
+    cursor: more && last ? cursorState.encode(key(last)) : null,
     records,
     referenceDay: day,
   };

@@ -1,10 +1,10 @@
-import {
-  PlanningCursorSchema,
-  type PortalCardInstallment,
-  type PortalCards,
-  type PortalCardsQuery,
+import type {
+  PortalCardInstallment,
+  PortalCards,
+  PortalCardsQuery,
 } from "../../contracts";
 import {
+  AccountType,
   allocatedCredit,
   cardChargeStatus,
   createCardActivity,
@@ -15,7 +15,7 @@ import {
   type PlanningTransaction,
   type TransactionDetails,
 } from "../../domain";
-import { hash } from "../../shared";
+import { planningCursor } from "./cursor";
 import type { PlanningRepository, PlanningSnapshot } from "./entity";
 import { accounts, found, transactionStream } from "./projection";
 
@@ -49,7 +49,7 @@ function selectedCards(
   }
   const selected = accounts(snapshot).filter(
     (account) =>
-      account.type === "CREDIT" &&
+      account.type === AccountType.CREDIT &&
       account.spaceId === input.spaceId &&
       (!input.personId || account.personId === input.personId),
   );
@@ -79,30 +79,19 @@ function selectedCards(
   });
 }
 
-async function cardPage(input: PortalCardsQuery, revision: number) {
-  const { cursor, ...selection } = input;
-  const scope = await hash(selection);
-  let after = "";
-  if (cursor) {
-    const decoded = PlanningCursorSchema.parse(
-      JSON.parse(decodeURIComponent(cursor)),
-    );
-    if (decoded[0] !== revision || decoded[1] !== scope) {
-      throw new Error("RESTART_REQUIRED");
-    }
-    after = decoded[2] ?? "";
-  }
-  return { after, scope };
-}
-
 export async function portalCards(
   input: PortalCardsQuery,
   snapshot: PlanningSnapshot,
   repository: PlanningRepository,
   now: Date,
 ): Promise<PortalCards> {
-  const { scope, after } = await cardPage(input, snapshot.revision);
   const referenceDay = localDay(now);
+  const { cursor, ...selection } = input;
+  const { after, encode } = await planningCursor({
+    cursor,
+    filter: { ...selection, referenceDay },
+    revision: snapshot.revision,
+  });
   const activity = createCardActivity({ month: input.month, referenceDay });
   const availableCards = selectedCards(input, snapshot);
   const cardAccounts = availableCards.filter(
@@ -184,12 +173,7 @@ export async function portalCards(
     currency: input.currency,
     installments: records,
     month: input.month,
-    nextCursor:
-      installments.length > 50 && last
-        ? encodeURIComponent(
-            JSON.stringify([snapshot.revision, scope, key(last)]),
-          )
-        : null,
+    nextCursor: installments.length > 50 && last ? encode(key(last)) : null,
     referenceDay,
   };
 }

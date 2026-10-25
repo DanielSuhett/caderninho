@@ -1,28 +1,15 @@
 import assert from "node:assert/strict";
 
-import { test } from "vitest";
-import { z } from "zod/v4";
+import { beforeEach, test } from "vitest";
 
 import { createSyncRepository } from "../../src/worker/sync/repository";
 import { createSyncHistoryRepository } from "../../src/worker/sync/repository/history.repository";
-import { applyD1Migrations, reset } from "cloudflare:test";
+import { setup } from "./fixture";
 import { env } from "cloudflare:workers";
 
-const migrations = z
-  .object({
-    TEST_MIGRATIONS: z.array(
-      z.object({ name: z.string(), queries: z.array(z.string()) }),
-    ),
-  })
-  .parse(env).TEST_MIGRATIONS;
+beforeEach(setup);
 
-test("query indexes upgrade populated databases and bound history/status and tied audit scans", async () => {
-  await reset();
-  const indexMigration = migrations.findIndex((migration) =>
-    migration.name.startsWith("0007"),
-  );
-  assert.ok(indexMigration >= 0);
-  await applyD1Migrations(env.DB, migrations.slice(0, indexMigration));
+test("initial schema bounds history/status and tied audit scans with complete stable pages", async () => {
   await env.DB.prepare(`WITH RECURSIVE records(i) AS (
     VALUES(0) UNION ALL SELECT i+1 FROM records WHERE i<9999
   ) INSERT INTO sync_history(id,connection_id,person_id,profile_id,admitted_at,status,sequence)
@@ -39,18 +26,11 @@ test("query indexes upgrade populated databases and bound history/status and tie
   const audit =
     "SELECT * FROM mcp_audit WHERE started_at>='2026-10-01' ORDER BY started_at DESC,id DESC LIMIT 50";
   const queries = [history, personal, audit];
-  const before = await env.DB.batch(
+  const results = await env.DB.batch(
     queries.map((query) => env.DB.prepare(query)),
   );
-  await applyD1Migrations(env.DB, migrations.slice(indexMigration));
-  const after = await env.DB.batch(
-    queries.map((query) => env.DB.prepare(query)),
-  );
-  for (const [i, result] of after.entries()) {
-    const prior = before[i];
-    assert.ok(prior);
-    assert.deepEqual(result.results, prior.results);
-    assert.ok(result.meta.rows_read < prior.meta.rows_read);
+  for (const [i, result] of results.entries()) {
+    assert.equal(result.results.length, i === 2 ? 50 : 26);
     assert.ok(result.meta.rows_read <= (i === 1 ? 110 : 51));
   }
   const repository = createSyncHistoryRepository(env.DB);
@@ -74,8 +54,6 @@ test("query indexes upgrade populated databases and bound history/status and tie
 });
 
 test("late classification pages use an index range instead of rescanning previous transactions", async () => {
-  await reset();
-  await applyD1Migrations(env.DB, migrations);
   await env.DB.prepare(`WITH RECURSIVE records(i) AS (
     VALUES(0) UNION ALL SELECT i+1 FROM records WHERE i<9999
   ) INSERT INTO transactions(id,account_id,date,amount_minor,currency,direction,status,description)

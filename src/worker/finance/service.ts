@@ -1,5 +1,8 @@
-import type { AggregateQuery, TransactionQuery } from "../../domain";
-import { localDay } from "../../domain";
+import {
+  type AggregateQuery,
+  localDay,
+  type TransactionQuery,
+} from "../../domain";
 import { hash } from "../../shared";
 import type { FinancialRepository } from "./entity";
 

@@ -1,7 +1,11 @@
 import { and, asc, desc, eq, gt, gte, lt, lte, or, sql } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 
-import { connectionPartial } from "../../../domain";
+import {
+  connectionPartial,
+  TransactionOrder,
+  type TransactionProjection,
+} from "../../../domain";
 import { database, required } from "../../database";
 import {
   connectionOwners,
@@ -80,8 +84,8 @@ function sourceFilter(selection?: TransactionRead) {
   );
 }
 function sourceOrder(order: TransactionRead["order"]) {
-  const dated = order !== "id";
-  const descending = order === "date_desc";
+  const dated = order !== TransactionOrder.id;
+  const descending = order === TransactionOrder.date_desc;
   const compare = descending ? lt : gt;
   const sort = descending ? desc : asc;
   return {
@@ -103,7 +107,7 @@ function sourceOrder(order: TransactionRead["order"]) {
         ),
       );
     },
-    key: (row: import("../../../domain").TransactionProjection) =>
+    key: (row: TransactionProjection) =>
       dated ? `${row.date}:${row.id}` : row.id,
   };
 }
@@ -493,18 +497,8 @@ export function createPlanningRepository(
       }
       await db.batch([required(writes[0]), ...writes.slice(1)]);
     },
-    async read(tool) {
-      if (
-        tool &&
-        [
-          "get_tags",
-          "get_rules",
-          "get_categories",
-          "get_category_groups",
-          "get_spaces",
-          "get_notification_preferences",
-        ].includes(tool)
-      ) {
+    async read(resource) {
+      if (resource) {
         const [version, origins, spaces, settings, persons, owners] =
           await db.batch([
             db.select().from(planningRevision),
@@ -533,28 +527,28 @@ export function createPlanningRepository(
           spaces: spaces.map((row) => row.data),
           tags: [],
         };
-        switch (tool) {
-          case "get_tags":
+        switch (resource) {
+          case "tags":
             state.tags = (await db.select().from(planningTags)).map(
               (row) => row.data,
             );
             break;
-          case "get_rules":
+          case "rules":
             state.rules = (await db.select().from(planningRules)).map(
               (row) => row.data,
             );
             break;
-          case "get_categories":
+          case "categories":
             state.categories = (await db.select().from(planningCategories)).map(
               (row) => row.data,
             );
             break;
-          case "get_category_groups":
+          case "categoryGroups":
             state.categoryGroups = (
               await db.select().from(planningCategoryGroups)
             ).map((row) => row.data);
             break;
-          case "get_notification_preferences":
+          case "notifications":
             state.notifications = (
               await db.select().from(planningNotifications)
             ).map((row) => row.data);
@@ -687,7 +681,7 @@ export function createPlanningRepository(
       const pageSize = selection?.pageSize ?? 5000;
       async function* pages(
         after?: string,
-      ): AsyncGenerator<import("../../../domain").TransactionProjection[]> {
+      ): AsyncGenerator<TransactionProjection[]> {
         const rows = await db
           .select()
           .from(transactions)

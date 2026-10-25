@@ -1,7 +1,3 @@
-> Cartões compartilha métricas, limites e identidade visual com Investimentos
-> e Visão geral. Mantém o recorte mensal, a inclusão de compras sem categoria
-> e a paginação de parcelas. Consulte [a revisão integrada](financial-design-review.md).
-
 # Cartões e parcelamentos
 
 `/account/cards` reúne os gastos das contas `CREDIT`, os limites importados e as
@@ -58,7 +54,7 @@ parcelas. Nenhuma descrição é analisada para inventar um parcelamento.
 
 Os detalhes mostram até 50 parcelas por página do mês escolhido, com data da
 compra original, cartão, categoria, número e estado. O cursor inclui revisão e
-filtros; mudança de escopo ou revisão exige reiniciar. Datas de compra ausentes
+filtros e dia financeiro; mudança de escopo, revisão ou dia exige reiniciar. Datas de compra ausentes
 permanecem identificadas, sem inferência.
 
 Uma célula vazia significa que nenhuma parcela foi recebida. Parcelas ausentes
@@ -74,7 +70,6 @@ Pluggy. O serviço usa a projeção efetiva existente, com leitura incremental e
 detalhes limitados; valida a revisão depois da consulta.
 
 O gráfico usa Kumo Chart e ECharts PieChart carregados sob demanda. Conteúdo e
-controles desta aba usam 14 px conforme a solicitação, preservando Inter e os
-temas nativos. A [revisão de design](cards-design-review.md) registra o loop de
-crítica e seus limites. Testes locais usam apenas dados sintéticos; não comprovam
+controles desta aba usam 14 px, Inter e temas nativos. Testes locais usam apenas
+dados sintéticos; não comprovam
 disponibilidade de limites em uma instituição real ou deploy.

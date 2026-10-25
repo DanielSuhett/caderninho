@@ -1,17 +1,19 @@
-import type {
-  AccountMap,
-  AccountProjection,
-  Checkpoint,
-  CommitResult,
-  classificationState,
-  FinancialSource,
-  FixedCategoryKey,
-  ProductPage,
-  RunStatus,
-  TransactionClassification,
-  TransactionProjection,
+import {
+  type AccountMap,
+  type AccountProjection,
+  type Checkpoint,
+  type CommitResult,
+  type classificationState,
+  Fault,
+  FaultCode,
+  type FinancialSource,
+  type FixedCategoryKey,
+  type ProductPage,
+  type RunStatus,
+  type TransactionClassification,
+  type TransactionProjection,
 } from "../../../domain";
-import { Fault, FaultCode } from "../../../domain";
+
 export interface SyncRun {
   admittedAt: string;
   checkpoint: Checkpoint;
@@ -20,11 +22,19 @@ export interface SyncRun {
   sequence: number;
   status: RunStatus;
 }
+export const AdmissionStatus = {
+  cooldown: "cooldown",
+  paused: "paused",
+  started: "started",
+  working: "working",
+} as const;
+export type AdmissionStatus =
+  (typeof AdmissionStatus)[keyof typeof AdmissionStatus];
 export interface Admission {
   connectionId: string;
   importId: string | null;
   nextEligibleAt: string | null;
-  status: "started" | "working" | "cooldown" | "paused";
+  status: AdmissionStatus;
 }
 export interface Publication {
   accounts?: AccountProjection[];
@@ -113,4 +123,16 @@ export function importFailure(error: Error) {
     return FaultCode.INVALID_RESPONSE;
   }
   return importErrors.has(error.message) ? error.message : "IMPORT_FAILED";
+}
+
+export interface SyncServiceDependencies {
+  assertConfigured: (connectionIds?: string[]) => Promise<void>;
+  now?: () => Date;
+  report?: (counts: {
+    dispatchPending: number;
+    statusUnavailable: number;
+    failed: number;
+  }) => void;
+  repository: SyncRepository;
+  workflow: WorkflowPort;
 }

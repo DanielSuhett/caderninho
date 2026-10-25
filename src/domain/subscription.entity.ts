@@ -1,4 +1,8 @@
-import type { TransactionProjection } from "./finance.entity";
+import {
+  TransactionDirection,
+  type TransactionProjection,
+  TransactionStatus,
+} from "./finance.entity";
 import { monthDate } from "./planning.entity";
 
 export const SubscriptionCadence = {
@@ -74,8 +78,8 @@ function groupCharges(transactions: TransactionProjection[]) {
     const operation =
       row.identification?.operationType ?? row.details?.operationType;
     if (
-      row.status !== "POSTED" ||
-      row.direction !== "DEBIT" ||
+      row.status !== TransactionStatus.POSTED ||
+      row.direction !== TransactionDirection.DEBIT ||
       row.amountMinor === null ||
       chargeAmount(row) === 0n ||
       (card?.totalInstallments ?? row.details?.totalInstallments ?? 0) > 1 ||

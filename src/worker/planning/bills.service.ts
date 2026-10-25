@@ -1,5 +1,10 @@
-import type { Bill, PlanningState } from "../../domain";
-import { monthDate } from "../../domain";
+import {
+  AccountType,
+  type Bill,
+  monthDate,
+  type PlanningState,
+  TransactionDirection,
+} from "../../domain";
 import { billingDate, recurrencePayments } from "./billing";
 import type { PlanningRepository, PlanningSnapshot } from "./entity";
 import { accounts, transactionStream } from "./projection";
@@ -16,7 +21,10 @@ export async function effectiveBills(context: {
   const catalog = accounts(snapshot, state);
   const settings = new Map(
     state.accounts
-      .filter((a) => a.manual && a.type === "CREDIT" && a.closeDay && a.dueDay)
+      .filter(
+        (a) =>
+          a.manual && a.type === AccountType.CREDIT && a.closeDay && a.dueDay,
+      )
       .map((a) => [a.id, a]),
   );
   const derived = new Map<string, Bill>();
@@ -54,7 +62,8 @@ export async function effectiveBills(context: {
     } else {
       const amount = BigInt(amountMinor.replace("-", ""));
       bill.amountMinor = (
-        BigInt(bill.amountMinor) + (direction === "DEBIT" ? amount : -amount)
+        BigInt(bill.amountMinor) +
+        (direction === TransactionDirection.DEBIT ? amount : -amount)
       ).toString();
     }
     derived.set(id, bill);

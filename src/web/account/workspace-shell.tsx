@@ -1,4 +1,4 @@
-import { Sidebar, useSidebar } from "@cloudflare/kumo";
+import { Sidebar, useSidebar } from "@cloudflare/kumo/components/sidebar";
 import { NotebookIcon } from "@phosphor-icons/react";
 import {
   type KeyboardEvent,

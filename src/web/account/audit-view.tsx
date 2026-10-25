@@ -1,13 +1,11 @@
-import {
-  Badge,
-  Banner,
-  InlineCopyText,
-  LayerCard,
-  Link,
-  Meter,
-  Select,
-  Table,
-} from "@cloudflare/kumo";
+import { Badge } from "@cloudflare/kumo/components/badge";
+import { Banner } from "@cloudflare/kumo/components/banner";
+import { InlineCopyText } from "@cloudflare/kumo/components/inline-copy-text";
+import { LayerCard } from "@cloudflare/kumo/components/layer-card";
+import { Link } from "@cloudflare/kumo/components/link";
+import { Meter } from "@cloudflare/kumo/components/meter";
+import { Select } from "@cloudflare/kumo/components/select";
+import { Table } from "@cloudflare/kumo/components/table";
 import {
   type MouseEvent,
   useCallback,
@@ -203,17 +201,7 @@ export function AuditView({
           className="feedback"
           description={message}
           role="status"
-          variant={
-            (
-              {
-                error: "error",
-                info: "default",
-                neutral: "secondary",
-                success: "secondary",
-                warning: "alert",
-              } as const
-            )[messageTone]
-          }
+          variant={messageTone === "error" ? "error" : "secondary"}
         />
       )}
       {!!data && (
@@ -540,19 +528,9 @@ export function AuditView({
                               <Table.Cell data-label="Resultado">
                                 <Badge
                                   variant={
-                                    (
-                                      {
-                                        error: "error",
-                                        info: "info",
-                                        neutral: "secondary",
-                                        success: "success",
-                                        warning: "warning",
-                                      } as const
-                                    )[
-                                      row.outcome === "failed"
-                                        ? "error"
-                                        : "neutral"
-                                    ]
+                                    row.outcome === "failed"
+                                      ? "error"
+                                      : "secondary"
                                   }
                                 >
                                   {outcomes[row.outcome]} · HTTP {row.status}

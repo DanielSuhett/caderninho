@@ -1,7 +1,7 @@
-import type { PlanningCommand } from "../../contracts";
-import { PlanningCursorSchema } from "../../contracts";
-import type { PlanningState, PlanningTransaction } from "../../domain";
+import type { PlanningCommand, PlanningQuery } from "../../contracts";
 import {
+  AccountType,
+  CategoryKind,
   compareRules,
   detectSubscriptions,
   financialCharts,
@@ -9,14 +9,25 @@ import {
   localDay,
   minorPresentation,
   monthDate,
+  PlanningError,
+  type PlanningTransaction,
+  SpendingGroupBy,
+  TransactionDirection,
+  TransactionOrder,
+  type TransactionProjection,
+  TransactionStatus,
 } from "../../domain";
-import { hash } from "../../shared";
 import { type ProjectedPayment, recurrencePayments } from "./billing";
 import { effectiveBills } from "./bills.service";
 import { cardCommitments } from "./card-commitments.service";
-import type { PlanningRepository, PlanningSnapshot } from "./entity";
+import { planningCursor } from "./cursor";
+import type {
+  PlanningRepository,
+  PlanningResult,
+  PlanningSnapshot,
+} from "./entity";
 import {
-  accounts,
+  cardCatalog,
   classification,
   found,
   inSpace,
@@ -24,6 +35,7 @@ import {
   type Selection,
   transactionStream,
   validatePeriod,
+  validateSelection,
 } from "./projection";
 
 interface Totals {
@@ -50,8 +62,8 @@ const absolute = (value: string) => {
   const amount = BigInt(value);
   return amount < 0n ? -amount : amount;
 };
-function transactionOrder(order: "id" | "date_desc", after: string) {
-  const descending = order === "date_desc";
+function transactionOrder(order: TransactionOrder, after: string) {
+  const descending = order === TransactionOrder.date_desc;
   const key = (row: PlanningTransaction) =>
     descending ? `${row.date}:${row.id}` : row.id;
   return {
@@ -62,108 +74,27 @@ function transactionOrder(order: "id" | "date_desc", after: string) {
     key,
   };
 }
-export function cardCatalog(snapshot: PlanningSnapshot, state: PlanningState) {
-  const result = new Map<
-    string,
-    {
-      id: string;
-      accountId: string;
-      identity: import("../../domain").FinancialIdentity | null;
-      number: string;
-      name: string;
-      hidden: boolean;
-      deleted: boolean;
-      primary: boolean;
-      spaceId: string;
-    }
-  >();
-  for (const account of accounts(snapshot, state).filter(
-    (a) => a.type === "CREDIT",
-  )) {
-    const settings = state.accounts.find((a) => a.id === account.id);
-    const main =
-      settings?.primaryCard ??
-      snapshot.accountDetails.find((a) => a.id === account.id)?.cardNumber ??
-      "main";
-    const numbers = new Set([
-      main,
-      snapshot.accountDetails.find((a) => a.id === account.id)?.cardNumber ??
-        "main",
-    ]);
-    // Additional card membership is recorded by the provider adapter as accountId:number.
-    for (const setting of state.cards.filter(
-      (c) => c.accountId === account.id,
-    )) {
-      numbers.add(setting.number);
-    }
-    for (const number of numbers) {
-      const id = `${account.id}:${number}`;
-      const setting = state.cards.find((c) => c.id === id);
-      result.set(id, {
-        accountId: account.id,
-        deleted: setting?.deleted ?? false,
-        hidden: setting?.hidden ?? account.hidden,
-        id,
-        identity: account.identity ?? null,
-        name: setting?.name ?? account.name,
-        number,
-        primary: number === main,
-        spaceId: account.spaceId,
-      });
-    }
-  }
-  return [...result.values()];
-}
-function validateSelection(
-  selection: Selection,
-  snapshot: PlanningSnapshot,
-  accountMap: Map<string, import("../../domain").PlanningAccount>,
-) {
-  if (selection.accountId) {
-    const account = found(accountMap.get(selection.accountId));
-    const moved = snapshot.state.edits.some(
-      (edit) =>
-        edit.accountId === account.id &&
-        edit.spaceId === selection.spaceId &&
-        !edit.deleted,
-    );
-    if (
-      (account.spaceId !== selection.spaceId && !moved) ||
-      (selection.personId && account.personId !== selection.personId)
-    ) {
-      throw new Error("SPACE_MISMATCH");
-    }
-  }
-  if (selection.categoryId) {
-    inSpace(snapshot.state.categories, selection.categoryId, selection.spaceId);
-  }
-  if (selection.tagId) {
-    inSpace(snapshot.state.tags, selection.tagId, selection.spaceId);
-  }
-}
 export async function planningQuery(
-  command: PlanningCommand,
+  command: PlanningQuery,
   snapshot: PlanningSnapshot,
   repository: PlanningRepository,
   now: Date,
-): Promise<unknown> {
+): Promise<PlanningResult> {
   const { state } = snapshot;
   const day = localDay(now);
-  const space = found(state.spaces.find((s) => s.id === command.spaceId));
-  const allAccounts = accounts(snapshot);
-  const personId = "personId" in command ? command.personId : undefined;
-  if (personId && !snapshot.people.some((p) => p.id === personId)) {
-    throw new Error("NOT_FOUND");
-  }
+  const querySelection = planningSelection(command);
+  const {
+    space,
+    accountMap,
+    accountList: allAccounts,
+  } = validateSelection(querySelection, snapshot);
+  const { personId } = querySelection;
   const allTransactions = transactionStream(repository, snapshot);
-  const stream = (selection: import("./projection").Selection) =>
+  const stream = (selection: Selection) =>
     allTransactions({ ...selection, ...(personId && { personId }) });
   const metadata = new Map(
     snapshot.transactionDetails.map((row) => [row.id, row]),
   );
-  const accountMap = new Map(allAccounts.map((row) => [row.id, row]));
-  const querySelection = planningSelection(command);
-  validateSelection(querySelection, snapshot, accountMap);
   const scoped = <T extends { spaceId: string }>(rows: T[]) =>
     rows.filter((row) => row.spaceId === command.spaceId);
   function owned<
@@ -223,7 +154,7 @@ export async function planningQuery(
       const account = map.get(row.accountId);
       if (
         !account?.manual ||
-        row.status !== "POSTED" ||
+        row.status !== TransactionStatus.POSTED ||
         row.date > day ||
         row.amountMinor === null
       ) {
@@ -232,8 +163,8 @@ export async function planningQuery(
       if (row.recurrenceId) {
         matched.add(`${row.recurrenceId}:${row.date.slice(0, 7)}`);
       }
-      const cashSign = row.direction === "DEBIT" ? -1n : 1n;
-      const sign = account.type === "CREDIT" ? -cashSign : cashSign;
+      const cashSign = row.direction === TransactionDirection.DEBIT ? -1n : 1n;
+      const sign = account.type === AccountType.CREDIT ? -cashSign : cashSign;
       account.balanceMinor = (
         BigInt(account.balanceMinor ?? "0") +
         sign * absolute(row.amountMinor)
@@ -278,19 +209,20 @@ export async function planningQuery(
     });
   }
   function addExpense(
-    row: import("../../domain").PlanningTransaction,
+    row: PlanningTransaction,
     total: Totals,
     groups: Map<
       string,
       { currency: string; group: string; amount: bigint; unknown: number }
     >,
-    groupBy: "category" | "month",
+    groupBy: SpendingGroupBy,
   ) {
     const magnitude = absolute(row.amountMinor ?? "0");
-    const expense = row.direction === "DEBIT" ? magnitude : -magnitude;
+    const expense =
+      row.direction === TransactionDirection.DEBIT ? magnitude : -magnitude;
     total.expense += expense;
     const group =
-      groupBy === "month"
+      groupBy === SpendingGroupBy.month
         ? row.date.slice(0, 7)
         : (row.category ?? "unclassified");
     const key = JSON.stringify([row.currency, group]);
@@ -304,22 +236,18 @@ export async function planningQuery(
     groups.set(key, item);
   }
   function addSummaryRow(
-    row: import("../../domain").PlanningTransaction,
+    row: PlanningTransaction,
     totals: Map<string, Totals>,
     groups: Map<
       string,
       { currency: string; group: string; amount: bigint; unknown: number }
     >,
-    groupBy: "category" | "month",
+    groupBy: SpendingGroupBy,
   ) {
     const total = totals.get(row.currency) ?? emptyTotals();
     totals.set(row.currency, total);
     total.count += 1;
-    const kind = classification(
-      row,
-      state,
-      metadata.get(row.id)?.operationType ?? null,
-    );
+    const kind = classification(row, state);
     if (kind === "unclassified") {
       total.unclassified += 1;
       if (row.amountMinor === null) {
@@ -333,19 +261,21 @@ export async function planningQuery(
       return;
     }
     const amount = absolute(row.amountMinor);
-    if (accountMap.get(row.accountId)?.type === "BANK") {
-      total.cashFlow += row.direction === "DEBIT" ? -amount : amount;
+    if (accountMap.get(row.accountId)?.type === AccountType.BANK) {
+      total.cashFlow +=
+        row.direction === TransactionDirection.DEBIT ? -amount : amount;
     }
-    if (kind === "income") {
-      total.income += row.direction === "CREDIT" ? amount : -amount;
+    if (kind === CategoryKind.income) {
+      total.income +=
+        row.direction === TransactionDirection.CREDIT ? amount : -amount;
     }
-    if (kind === "expense") {
+    if (kind === CategoryKind.expense) {
       addExpense(row, total, groups, groupBy);
     }
   }
   async function summaries(
     intervals: { from: string; to: string }[],
-    groupBy: "category" | "month" = "category",
+    groupBy: SpendingGroupBy = SpendingGroupBy.category,
   ) {
     for (const interval of intervals) {
       validatePeriod(interval);
@@ -368,7 +298,7 @@ export async function planningQuery(
       from: firstDay,
       to: lastDay,
     })) {
-      if (row.status !== "POSTED" || row.date > day) {
+      if (row.status !== TransactionStatus.POSTED || row.date > day) {
         continue;
       }
       for (const interval of periods) {
@@ -381,7 +311,7 @@ export async function planningQuery(
       classification:
         "Only explicit local income/expense categories; unclassified bank movements are reported separately.",
       dateBasis: "transaction",
-      eligibility: { status: "POSTED", throughDay: day },
+      eligibility: { status: TransactionStatus.POSTED, throughDay: day },
       from,
       groups: [...groups.values()].map((g) => ({
         amountMinor: g.amount.toString(),
@@ -389,11 +319,11 @@ export async function planningQuery(
         currency: g.currency,
         group: g.group,
         label:
-          groupBy === "category"
+          groupBy === SpendingGroupBy.category
             ? (state.categories.find((category) => category.id === g.group)
                 ?.name ?? "Sem classificação")
             : g.group,
-        ...(groupBy === "category" && {
+        ...(groupBy === SpendingGroupBy.category && {
           categoryId: g.group,
           categoryName:
             state.categories.find((category) => category.id === g.group)
@@ -428,7 +358,7 @@ export async function planningQuery(
   async function summary(
     from: string,
     to: string,
-    groupBy: "category" | "month" = "category",
+    groupBy: SpendingGroupBy = SpendingGroupBy.category,
   ) {
     return found((await summaries([{ from, to }], groupBy))[0]);
   }
@@ -438,7 +368,7 @@ export async function planningQuery(
     for await (const row of stream({
       include_ignored: true,
       spaceId: command.spaceId,
-      status: "POSTED",
+      status: TransactionStatus.POSTED,
       to: day,
     })) {
       if (row.recurrenceId) {
@@ -453,7 +383,7 @@ export async function planningQuery(
           amountMinor: bill.amountMinor,
           currency: bill.currency,
           date: bill.dueDate,
-          direction: "DEBIT",
+          direction: TransactionDirection.DEBIT,
           id: bill.id,
           kind: "bill",
         });
@@ -463,7 +393,7 @@ export async function planningQuery(
       ...owned(state.recurrences)
         .filter(
           ({ active, accountId }) =>
-            active && accountMap.get(accountId)?.type !== "CREDIT",
+            active && accountMap.get(accountId)?.type !== AccountType.CREDIT,
         )
         .flatMap((r) =>
           recurrencePayments(r, from, to).filter(
@@ -484,7 +414,7 @@ export async function planningQuery(
           amountMinor: payment.amountMinor,
           currency: loan.currency,
           date: payment.date,
-          direction: "DEBIT",
+          direction: TransactionDirection.DEBIT,
           id: payment.id,
           kind: "loan",
         });
@@ -528,22 +458,13 @@ export async function planningQuery(
   ) {
     validatePeriod(input);
     const { cursor, limit, tool: _tool, ...filter } = input;
-    const scope = await hash(filter);
-    let after = "";
-    if (cursor) {
-      const decoded = PlanningCursorSchema.parse(
-        JSON.parse(decodeURIComponent(cursor)),
-      );
-      if (
-        decoded.length !== 3 ||
-        decoded[0] !== snapshot.revision ||
-        decoded[1] !== scope
-      ) {
-        throw new Error("RESTART_REQUIRED");
-      }
-      after = decoded[2] ?? "";
-    }
-    const rows: import("../../domain").PlanningTransaction[] = [];
+    const cursorState = await planningCursor({
+      cursor,
+      filter,
+      revision: snapshot.revision,
+    });
+    const { after } = cursorState;
+    const rows: PlanningTransaction[] = [];
     const order = transactionOrder(input.order, after);
     for await (const row of allTransactions(input, undefined, {
       after,
@@ -562,13 +483,7 @@ export async function planningQuery(
     const records = rows.slice(0, limit);
     return {
       cursor: more
-        ? encodeURIComponent(
-            JSON.stringify([
-              snapshot.revision,
-              scope,
-              order.key(found(records.at(-1))),
-            ]),
-          )
+        ? cursorState.encode(order.key(found(records.at(-1))))
         : null,
       partial: snapshot.partial,
       records,
@@ -838,11 +753,11 @@ export async function planningQuery(
     }
     if (input.comparison === "explicit") {
       if (!(input.previousFrom && input.previousTo)) {
-        throw new Error("INVALID_PERIOD");
+        throw new Error(PlanningError.INVALID_PERIOD);
       }
       ({ previousFrom, previousTo } = input);
     } else if (input.previousFrom || input.previousTo) {
-      throw new Error("INVALID_PERIOD");
+      throw new Error(PlanningError.INVALID_PERIOD);
     }
     const [current, previous] = await summaries([
       input,
@@ -896,11 +811,15 @@ export async function planningQuery(
   ) {
     validatePeriod(input);
     if (input.from < day) {
-      throw new Error("PROJECTION_REQUIRES_CURRENT_OR_FUTURE_PERIOD");
+      throw new Error(
+        PlanningError.PROJECTION_REQUIRES_CURRENT_OR_FUTURE_PERIOD,
+      );
     }
     const base = await balances();
     const projection = new Map<string, { balance: bigint; unknown: number }>();
-    for (const account of base.filter((a) => a.type === "BANK" && !a.hidden)) {
+    for (const account of base.filter(
+      (a) => a.type === AccountType.BANK && !a.hidden,
+    )) {
       const item = projection.get(account.currency) ?? {
         balance: 0n,
         unknown: 0,
@@ -916,7 +835,7 @@ export async function planningQuery(
     for (const event of events) {
       if (
         event.accountId &&
-        accountMap.get(event.accountId)?.type === "CREDIT" &&
+        accountMap.get(event.accountId)?.type === AccountType.CREDIT &&
         event.kind !== "bill"
       ) {
         continue;
@@ -929,7 +848,8 @@ export async function planningQuery(
         item.unknown += 1;
       } else {
         item.balance +=
-          (event.direction === "DEBIT" ? -1n : 1n) * BigInt(event.amountMinor);
+          (event.direction === TransactionDirection.DEBIT ? -1n : 1n) *
+          BigInt(event.amountMinor);
       }
       projection.set(event.currency, item);
     }
@@ -955,7 +875,7 @@ export async function planningQuery(
     const to = input.to && input.to < day ? input.to : day;
     const from = input.from ?? monthDate(to, -12);
     validatePeriod({ from, to });
-    const transactions: import("../../domain").TransactionProjection[] = [];
+    const transactions: TransactionProjection[] = [];
     const scanLimit = 10_000;
     let scannedCount = 0;
     let truncated = false;
@@ -966,8 +886,8 @@ export async function planningQuery(
       }
       scannedCount += 1;
       const details = metadata.get(row.id);
-      const kind = classification(row, state, details?.operationType ?? null);
-      if (kind !== "transfer" && kind !== "income") {
+      const kind = classification(row, state);
+      if (kind !== CategoryKind.transfer && kind !== CategoryKind.income) {
         transactions.push({ ...row, ...(details && { details }) });
       }
     }
@@ -1048,6 +968,6 @@ export async function planningQuery(
     case "get_projection":
       return await handleGetProjection(command);
     default:
-      throw new Error("UNKNOWN_TOOL");
+      throw new Error(PlanningError.UNKNOWN_TOOL);
   }
 }

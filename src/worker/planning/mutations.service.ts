@@ -1,47 +1,56 @@
-import type { PlanningCommand, RuleImportResult } from "../../contracts";
 import type {
-  AccountSettings,
-  PlanningState,
-  Rule,
-  TransactionEdit,
-} from "../../domain";
+  PlanningCommand,
+  PlanningMutation,
+  RuleImportResult,
+} from "../../contracts";
 import {
+  type AccountSettings,
+  AccountType,
   activeRules,
+  CategoryKind,
   categoryCatalog,
   localDay,
   monthDate,
+  type PlanningAccount,
+  PlanningError,
+  type PlanningState,
+  type PlanningTransaction,
+  type Rule,
   resolveRuleImportCategory,
   ruleMatches,
   sacSchedule,
+  TransactionDirection,
+  type TransactionEdit,
+  TransactionStatus,
 } from "../../domain";
 import { hash } from "../../shared";
 import { effectiveBills } from "./bills.service";
 import type { PlanningRepository, PlanningSnapshot } from "./entity";
 import {
   accounts,
+  cardCatalog,
   found,
   inSpace,
   selectedTransactions,
   transactionStream,
 } from "./projection";
-import { cardCatalog } from "./queries.service";
 
 export async function planningMutation(
-  command: PlanningCommand,
+  command: PlanningMutation,
   context: {
     snapshot: PlanningSnapshot;
     state: PlanningState;
     repository: PlanningRepository;
     now: string;
   },
-): Promise<unknown> {
+) {
   const { snapshot, state, repository, now } = context;
   if (
     "personId" in command &&
     command.personId &&
     !snapshot.people.some((p) => p.id === command.personId)
   ) {
-    throw new Error("NOT_FOUND");
+    throw new Error(PlanningError.NOT_FOUND);
   }
   const space = found(state.spaces.find((s) => s.id === command.spaceId));
   const accountList = accounts(snapshot, state);
@@ -70,7 +79,7 @@ export async function planningMutation(
   function manualLoan(id: string) {
     const row = inSpace(state.loans, id, command.spaceId);
     if (!row.manual) {
-      throw new Error("SOURCE_READ_ONLY");
+      throw new Error(PlanningError.SOURCE_READ_ONLY);
     }
     return row;
   }
@@ -88,10 +97,10 @@ export async function planningMutation(
     input: Extract<PlanningCommand, { tool: "create_manual_account" }>,
   ) {
     if (
-      input.type !== "CREDIT" &&
+      input.type !== AccountType.CREDIT &&
       (input.closeDay || input.dueDay || input.creditLimitMinor)
     ) {
-      throw new Error("CARD_REQUIRED");
+      throw new Error(PlanningError.CARD_REQUIRED);
     }
     const row: AccountSettings = {
       currency: input.currency,
@@ -118,7 +127,7 @@ export async function planningMutation(
       return;
     }
     if (!row.manual) {
-      throw new Error("SOURCE_READ_ONLY");
+      throw new Error(PlanningError.SOURCE_READ_ONLY);
     }
     row.personId = personId;
   }
@@ -133,10 +142,10 @@ export async function planningMutation(
       input.dueDay !== undefined
     ) {
       if (!row.manual) {
-        throw new Error("SOURCE_READ_ONLY");
+        throw new Error(PlanningError.SOURCE_READ_ONLY);
       }
-      if (row.type !== "CREDIT") {
-        throw new Error("CARD_REQUIRED");
+      if (row.type !== AccountType.CREDIT) {
+        throw new Error(PlanningError.CARD_REQUIRED);
       }
     }
     if (input.name !== undefined) {
@@ -162,7 +171,7 @@ export async function planningMutation(
   ) {
     const row = settings(input.id);
     if (!row.manual) {
-      throw new Error("SOURCE_READ_ONLY");
+      throw new Error(PlanningError.SOURCE_READ_ONLY);
     }
     if (
       state.edits.some((t) => t.accountId === row.id && !t.deleted) ||
@@ -170,7 +179,7 @@ export async function planningMutation(
       state.installments.some((p) => p.accountId === row.id) ||
       state.goals.some((g) => g.accountId === row.id)
     ) {
-      throw new Error("RESOURCE_IN_USE");
+      throw new Error(PlanningError.RESOURCE_IN_USE);
     }
     state.accounts = state.accounts.filter((a) => a.id !== row.id);
     return { deleted: true, id: row.id };
@@ -184,7 +193,7 @@ export async function planningMutation(
   ) {
     const card = inSpace(cardCatalog(snapshot, state), input.id, input.spaceId);
     if (input.tool === "delete_card" && card.primary) {
-      throw new Error("PRIMARY_CARD_REQUIRED");
+      throw new Error(PlanningError.PRIMARY_CARD_REQUIRED);
     }
     if (input.tool === "set_primary_card") {
       settings(card.accountId).primaryCard = card.number;
@@ -252,7 +261,7 @@ export async function planningMutation(
   ) {
     const target = account(input.accountId);
     if (!target.manual) {
-      throw new Error("MANUAL_ACCOUNT_REQUIRED");
+      throw new Error(PlanningError.MANUAL_ACCOUNT_REQUIRED);
     }
     category(input.category);
     if (input.recurrenceId) {
@@ -265,7 +274,7 @@ export async function planningMutation(
         recurrence.accountId !== target.id ||
         recurrence.currency !== target.currency
       ) {
-        throw new Error("CURRENCY_MISMATCH");
+        throw new Error(PlanningError.CURRENCY_MISMATCH);
       }
     }
     const row: TransactionEdit = {
@@ -376,7 +385,7 @@ export async function planningMutation(
           state.contributions.some((c) => c.transactionId === row.id),
       )
     ) {
-      throw new Error("RESOURCE_IN_USE");
+      throw new Error(PlanningError.RESOURCE_IN_USE);
     }
     if ("category" in input && input.category !== undefined) {
       category(input.category);
@@ -392,7 +401,7 @@ export async function planningMutation(
     const rules = activeRules(
       state.rules.filter((r) => r.spaceId === input.spaceId),
     );
-    function changeRow(row: import("../../domain").PlanningTransaction) {
+    function changeRow(row: PlanningTransaction) {
       const patch = edit(row.id, row.accountId);
       switch (input.tool) {
         case "delete_transaction":
@@ -435,14 +444,14 @@ export async function planningMutation(
   ) {
     const target = account(input.accountId);
     const config = settings(target.id);
-    if (!target.manual || target.type !== "CREDIT") {
-      throw new Error("MANUAL_CARD_REQUIRED");
+    if (!target.manual || target.type !== AccountType.CREDIT) {
+      throw new Error(PlanningError.MANUAL_CARD_REQUIRED);
     }
     if (!(config.closeDay && config.dueDay)) {
-      throw new Error("BILLING_CYCLE_REQUIRED");
+      throw new Error(PlanningError.BILLING_CYCLE_REQUIRED);
     }
     if (input.current > input.total) {
-      throw new Error("INVALID_INSTALLMENT");
+      throw new Error(PlanningError.INVALID_INSTALLMENT);
     }
     category(input.categoryId);
     const id = uuid();
@@ -468,7 +477,7 @@ export async function planningMutation(
       amountMinor: row.amountMinor,
       categoryId: row.categoryId,
       currency: target.currency,
-      direction: "DEBIT",
+      direction: TransactionDirection.DEBIT,
       endDate: monthDate(row.startDate, row.total - row.current),
       id: uuid(),
       installmentId: id,
@@ -526,11 +535,11 @@ export async function planningMutation(
   ) {
     const target = account(input.accountId);
     if (target.currency !== input.currency) {
-      throw new Error("CURRENCY_MISMATCH");
+      throw new Error(PlanningError.CURRENCY_MISMATCH);
     }
     category(input.categoryId);
     if (input.endDate && input.endDate < input.startDate) {
-      throw new Error("INVALID_PERIOD");
+      throw new Error(PlanningError.INVALID_PERIOD);
     }
     const id =
       input.tool === "update_recurrence"
@@ -579,7 +588,7 @@ export async function planningMutation(
     >,
   ) {
     if (!space.budgetEnabled) {
-      throw new Error("BUDGET_DISABLED");
+      throw new Error(PlanningError.BUDGET_DISABLED);
     }
     const row = inSpace(state.categories, input.id, input.spaceId);
     row.limitMinor =
@@ -594,11 +603,12 @@ export async function planningMutation(
     >,
     id = uuid(),
   ) {
+    const { icon = "shopping" } = input;
     const row = {
       color: input.color ?? "#64748b",
       groupId: input.groupId ?? null,
       hidden: false,
-      icon: input.icon ?? "shopping",
+      icon,
       id,
       kind: input.kind,
       limitMinor: null,
@@ -621,7 +631,7 @@ export async function planningMutation(
       row.system &&
       (input.name !== undefined || input.hidden !== undefined)
     ) {
-      throw new Error("SYSTEM_CATEGORY");
+      throw new Error(PlanningError.SYSTEM_CATEGORY);
     }
     if (input.groupId) {
       inSpace(state.categoryGroups, input.groupId, input.spaceId);
@@ -649,7 +659,7 @@ export async function planningMutation(
   ) {
     const row = inSpace(state.categories, input.id, input.spaceId);
     if (row.system) {
-      throw new Error("SYSTEM_CATEGORY");
+      throw new Error(PlanningError.SYSTEM_CATEGORY);
     }
     const fallback = found(
       state.categories.find(
@@ -693,7 +703,7 @@ export async function planningMutation(
     origin?: { id: string; pack: NonNullable<Rule["pack"]> },
   ) {
     if (!(input.text || input.filter)) {
-      throw new Error("INVALID_RULE");
+      throw new Error(PlanningError.INVALID_RULE);
     }
     category(input.categoryId);
     for (const condition of input.filter?.alternatives.flatMap(
@@ -706,7 +716,7 @@ export async function planningMutation(
         condition.field === "personId" &&
         !snapshot.people.some((p) => p.id === condition.value)
       ) {
-        throw new Error("NOT_FOUND");
+        throw new Error(PlanningError.NOT_FOUND);
       }
     }
     if (input.accountId) {
@@ -749,7 +759,7 @@ export async function planningMutation(
     >,
   ): Promise<RuleImportResult> {
     if (input.tool === "import_rules" && input.revision !== snapshot.revision) {
-      throw new Error("RESTART_REQUIRED");
+      throw new Error(PlanningError.RESTART_REQUIRED);
     }
     const { pack } = input;
     const prefix = `pack:${await hash([input.spaceId, pack.id])}:`;
@@ -822,7 +832,7 @@ export async function planningMutation(
       (c) => c.status === "ambiguous" || c.status === "invalid",
     );
     if (blocked && input.tool === "import_rules") {
-      throw new Error("INVALID_RULE_IMPORT_CATEGORY");
+      throw new Error(PlanningError.INVALID_RULE_IMPORT_CATEGORY);
     }
     function signature(
       rule: Pick<
@@ -911,7 +921,7 @@ export async function planningMutation(
         prior.accountId ||
         prior.investmentId)
     ) {
-      throw new Error("CURRENCY_MISMATCH");
+      throw new Error(PlanningError.CURRENCY_MISMATCH);
     }
     const row = {
       accountId: prior?.accountId ?? null,
@@ -942,16 +952,16 @@ export async function planningMutation(
     if (input.transactionId) {
       const row = found((await selected([input.transactionId]))[0]);
       if (row.currency !== goal.currency) {
-        throw new Error("CURRENCY_MISMATCH");
+        throw new Error(PlanningError.CURRENCY_MISMATCH);
       }
       if (
         row.amountMinor === null ||
         BigInt(row.amountMinor.replace("-", "")) !== BigInt(input.amountMinor)
       ) {
-        throw new Error("AMOUNT_MISMATCH");
+        throw new Error(PlanningError.AMOUNT_MISMATCH);
       }
       if (state.contributions.some((c) => c.transactionId === row.id)) {
-        throw new Error("RESOURCE_IN_USE");
+        throw new Error(PlanningError.RESOURCE_IN_USE);
       }
       edit(row.id, row.accountId).goalId = goal.id;
     }
@@ -1004,13 +1014,13 @@ export async function planningMutation(
   ) {
     const goal = inSpace(state.goals, input.id, input.spaceId);
     if (!!input.accountId === !!input.investmentId) {
-      throw new Error("ONE_ASSET_REQUIRED");
+      throw new Error(PlanningError.ONE_ASSET_REQUIRED);
     }
     const asset = input.accountId
       ? account(input.accountId)
       : inSpace(state.investments, input.investmentId ?? "", input.spaceId);
     if (asset.currency !== goal.currency) {
-      throw new Error("CURRENCY_MISMATCH");
+      throw new Error(PlanningError.CURRENCY_MISMATCH);
     }
     if (
       state.goals.some(
@@ -1020,7 +1030,7 @@ export async function planningMutation(
             (input.investmentId && g.investmentId === input.investmentId)),
       )
     ) {
-      throw new Error("RESOURCE_IN_USE");
+      throw new Error(PlanningError.RESOURCE_IN_USE);
     }
     goal.accountId = input.accountId ?? null;
     goal.investmentId = input.investmentId ?? null;
@@ -1063,14 +1073,14 @@ export async function planningMutation(
         ? inSpace(state.investments, input.id, input.spaceId)
         : undefined;
     if (prior && !prior.manual) {
-      throw new Error("SOURCE_READ_ONLY");
+      throw new Error(PlanningError.SOURCE_READ_ONLY);
     }
     if (
       prior &&
       prior.currency !== input.currency &&
       state.goals.some((g) => g.investmentId === prior.id)
     ) {
-      throw new Error("CURRENCY_MISMATCH");
+      throw new Error(PlanningError.CURRENCY_MISMATCH);
     }
     const row = {
       amountMinor: input.amountMinor,
@@ -1108,7 +1118,7 @@ export async function planningMutation(
   ) {
     const row = inSpace(state.investments, input.id, input.spaceId);
     if (!row.manual) {
-      throw new Error("SOURCE_READ_ONLY");
+      throw new Error(PlanningError.SOURCE_READ_ONLY);
     }
     for (const goal of state.goals) {
       if (goal.investmentId === row.id) {
@@ -1126,12 +1136,12 @@ export async function planningMutation(
     >,
   ) {
     if (input.paid > input.total) {
-      throw new Error("INVALID_INSTALLMENT");
+      throw new Error(PlanningError.INVALID_INSTALLMENT);
     }
     const prior =
       input.tool === "update_manual_loan" ? manualLoan(input.id) : undefined;
     if (prior && state.schedules.some((p) => p.loanId === prior.id)) {
-      throw new Error("SCHEDULE_EXISTS");
+      throw new Error(PlanningError.SCHEDULE_EXISTS);
     }
     const row = {
       amountMinor: input.amountMinor,
@@ -1171,7 +1181,7 @@ export async function planningMutation(
   ) {
     const row = manualLoan(input.id);
     if (state.schedules.some((p) => p.loanId === row.id && !p.transactionId)) {
-      throw new Error("PENDING_PAYMENTS");
+      throw new Error(PlanningError.PENDING_PAYMENTS);
     }
     state.schedules = state.schedules.filter((p) => p.loanId !== row.id);
     state.loans = state.loans.filter((l) => l.id !== row.id);
@@ -1190,7 +1200,7 @@ export async function planningMutation(
       prior.some((p) => p.transactionId) ||
       (input.tool === "create_manual_loan_schedule" && prior.length)
     ) {
-      throw new Error("SCHEDULE_EXISTS");
+      throw new Error(PlanningError.SCHEDULE_EXISTS);
     }
     const rows = sacSchedule({
       count: input.count,
@@ -1218,7 +1228,7 @@ export async function planningMutation(
       ),
     );
     if (payment.transactionId) {
-      throw new Error("ALREADY_RECONCILED");
+      throw new Error(PlanningError.ALREADY_RECONCILED);
     }
     if (
       state.schedules.some(
@@ -1226,32 +1236,32 @@ export async function planningMutation(
           p.loanId === loan.id && p.number < payment.number && !p.transactionId,
       )
     ) {
-      throw new Error("PAYMENT_ORDER");
+      throw new Error(PlanningError.PAYMENT_ORDER);
     }
     const target = account(input.accountId);
-    if (target.type !== "BANK" || target.currency !== loan.currency) {
-      throw new Error("CURRENCY_MISMATCH");
+    if (target.type !== AccountType.BANK || target.currency !== loan.currency) {
+      throw new Error(PlanningError.CURRENCY_MISMATCH);
     }
     if (input.transactionId) {
       const row = found((await selected([input.transactionId]))[0]);
       if (
         row.accountId !== target.id ||
-        row.direction !== "DEBIT" ||
-        row.status !== "POSTED" ||
+        row.direction !== TransactionDirection.DEBIT ||
+        row.status !== TransactionStatus.POSTED ||
         row.currency !== loan.currency ||
         row.amountMinor === null ||
         BigInt(row.amountMinor.replace("-", "")) !== BigInt(payment.amountMinor)
       ) {
-        throw new Error("PAYMENT_MISMATCH");
+        throw new Error(PlanningError.PAYMENT_MISMATCH);
       }
       if (state.schedules.some((p) => p.transactionId === row.id)) {
-        throw new Error("RESOURCE_IN_USE");
+        throw new Error(PlanningError.RESOURCE_IN_USE);
       }
       payment.transactionId = row.id;
       payment.createdTransaction = false;
     } else {
       if (!target.manual) {
-        throw new Error("MANUAL_ACCOUNT_REQUIRED");
+        throw new Error(PlanningError.MANUAL_ACCOUNT_REQUIRED);
       }
       const id = uuid();
       state.edits.push({
@@ -1260,11 +1270,11 @@ export async function planningMutation(
         currency: loan.currency,
         date: localDay(new Date(now)),
         description: loan.name,
-        direction: "DEBIT",
+        direction: TransactionDirection.DEBIT,
         id,
         manual: true,
         spaceId: input.spaceId,
-        status: "POSTED",
+        status: TransactionStatus.POSTED,
       });
       payment.transactionId = id;
       payment.createdTransaction = true;
@@ -1285,7 +1295,7 @@ export async function planningMutation(
       ),
     );
     if (!payment.transactionId) {
-      throw new Error("NOT_RECONCILED");
+      throw new Error(PlanningError.NOT_RECONCILED);
     }
     if (
       state.schedules.some(
@@ -1293,7 +1303,7 @@ export async function planningMutation(
           p.loanId === loan.id && p.number > payment.number && p.transactionId,
       )
     ) {
-      throw new Error("PAYMENT_ORDER");
+      throw new Error(PlanningError.PAYMENT_ORDER);
     }
     const preservedTransactionId = payment.transactionId;
     payment.transactionId = null;
@@ -1362,7 +1372,7 @@ export async function planningMutation(
     const catalog = categoryCatalog(id);
     state.categories.push(...catalog.categories);
     state.categoryGroups.push(...catalog.categoryGroups);
-    for (const kind of ["income", "expense"] as const) {
+    for (const kind of [CategoryKind.income, CategoryKind.expense] as const) {
       state.categories.push({
         color: "#64748b",
         groupId: null,
@@ -1407,10 +1417,10 @@ export async function planningMutation(
     input: Extract<PlanningCommand, { tool: "delete_space" }>,
   ) {
     if (input.id !== input.spaceId) {
-      throw new Error("SPACE_MISMATCH");
+      throw new Error(PlanningError.SPACE_MISMATCH);
     }
     if (input.id === "personal") {
-      throw new Error("SPACE_PROTECTED");
+      throw new Error(PlanningError.SPACE_PROTECTED);
     }
     const linked = [
       state.accounts,
@@ -1429,7 +1439,7 @@ export async function planningMutation(
       accountList.some((row) => row.spaceId === input.id) ||
       state.categories.some((row) => row.spaceId === input.id && !row.system)
     ) {
-      throw new Error("SPACE_NOT_EMPTY");
+      throw new Error(PlanningError.SPACE_NOT_EMPTY);
     }
     state.spaces = state.spaces.filter((row) => row.id !== input.id);
     state.categories = state.categories.filter(
@@ -1441,10 +1451,7 @@ export async function planningMutation(
     return { deleted: true, id: input.id };
   }
 
-  function moveTarget(
-    target: import("../../domain").PlanningAccount,
-    targetSpaceId: string,
-  ) {
+  function moveTarget(target: PlanningAccount, targetSpaceId: string) {
     settings(target.id).spaceId = targetSpaceId;
     for (const row of state.edits.filter((t) => t.accountId === target.id)) {
       row.spaceId = targetSpaceId;
@@ -1487,7 +1494,7 @@ export async function planningMutation(
               a.spaceId === input.spaceId,
           );
     if (!targets.length) {
-      throw new Error("NOT_FOUND");
+      throw new Error(PlanningError.NOT_FOUND);
     }
     for (const target of targets) {
       moveTarget(target, input.targetSpaceId);
@@ -1675,6 +1682,6 @@ export async function planningMutation(
     case "set_notification_preference":
       return handleSetNotificationPreference(command);
     default:
-      throw new Error("UNKNOWN_TOOL");
+      throw new Error(PlanningError.UNKNOWN_TOOL);
   }
 }

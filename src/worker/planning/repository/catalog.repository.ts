@@ -1,6 +1,6 @@
 import { eq, sql } from "drizzle-orm";
 
-import { compareRules } from "../../../domain";
+import { compareRules, PlanningError } from "../../../domain";
 import { database } from "../../database";
 import {
   planningCategories,
@@ -48,7 +48,7 @@ export function createCatalogRepository(binding: D1Database) {
           ),
       ]);
       if (!spaces.some((s) => s.data.id === spaceId)) {
-        throw new Error("NOT_FOUND");
+        throw new Error(PlanningError.NOT_FOUND);
       }
       return {
         categories: categories.map((s) => s.data),

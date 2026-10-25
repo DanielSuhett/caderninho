@@ -1,18 +1,37 @@
 import { z } from "zod/v4";
 
 import {
+  AccountType,
   CategoryColorSchema,
   CategoryIconSchema,
+  CategoryKind,
   FinancialIdentitySchema,
   RunStatus,
+  SpaceType,
+  SpendingGroupBy,
   TransactionClassificationSchema,
+  TransactionDirection,
   TransactionIdentificationSchema,
+  TransactionStatus,
 } from "../domain";
-import { CardCommitmentsQuerySchema } from "./card-commitments";
-import { PortalCardsQuerySchema } from "./cards";
-import { planningDefinitions } from "./planning";
-import { ImportedRuleOriginSchema } from "./rule-import";
+import { CardCommitmentsResponseSchema } from "./card-commitments";
+import { PortalCardsQuerySchema, PortalCardsSchema } from "./cards";
+import {
+  FinancialOverviewResponseSchema,
+  MonthlySpendingResponseSchema,
+} from "./dashboard";
+import { InvestmentListSchema } from "./investments";
+import { planningTools } from "./planning";
+import {
+  ImportedRuleOriginSchema,
+  RuleImportResultSchema,
+} from "./rule-import";
 import { RuleFilterSchema } from "./rules";
+
+export const PortalTransactionQuerySchema =
+  planningTools.get_transaction_purchases.schema.extend({
+    tool: z.literal("get_portal_transactions"),
+  });
 
 // Deliberate read-only allowlist; the portal cannot forward arbitrary MCP mutations.
 export const PortalQuerySchema = z
@@ -20,27 +39,16 @@ export const PortalQuerySchema = z
     csrf: z.string(),
     query: z.union([
       PortalCardsQuerySchema,
-      planningDefinitions[17].schema.extend({
-        tool: z.literal("get_investments"),
+      planningTools.get_investments.command,
+      planningTools.get_card_commitments.command,
+      planningTools.preview_rule_import.command,
+      planningTools.get_accounts.command,
+      planningTools.get_transactions.command,
+      planningTools.get_overview.command,
+      planningTools.generate_chart.command.extend({
+        groupBy: z.literal(SpendingGroupBy.month),
       }),
-      CardCommitmentsQuerySchema.extend({
-        tool: z.literal("get_card_commitments"),
-      }),
-      planningDefinitions[96].schema.extend({
-        tool: z.literal("preview_rule_import"),
-      }),
-      planningDefinitions[0].schema.extend({ tool: z.literal("get_accounts") }),
-      planningDefinitions[2].schema.extend({
-        tool: z.literal("get_transactions"),
-      }),
-      planningDefinitions[3].schema.extend({ tool: z.literal("get_overview") }),
-      planningDefinitions[23].schema.extend({
-        groupBy: z.literal("month"),
-        tool: z.literal("generate_chart"),
-      }),
-      planningDefinitions[94].schema.extend({
-        tool: z.literal("get_portal_transactions"),
-      }),
+      PortalTransactionQuerySchema,
     ]),
   })
   .strict();
@@ -63,7 +71,11 @@ const SpaceListSchema = z.object({
         currency: z.string(),
         monthlyBudgetMinor: minor,
         monthStartDay: z.number(),
-        type: z.enum(["personal", "family", "business"]),
+        type: z.enum([
+          SpaceType.personal,
+          SpaceType.family,
+          SpaceType.business,
+        ]),
       }),
     ),
   }),
@@ -76,7 +88,11 @@ const CategoryListSchema = z.object({
         groupId: id.nullable().default(null),
         hidden: z.boolean(),
         icon: CategoryIconSchema.default("shopping"),
-        kind: z.enum(["income", "expense", "transfer"]),
+        kind: z.enum([
+          CategoryKind.income,
+          CategoryKind.expense,
+          CategoryKind.transfer,
+        ]),
         limitMinor: minor,
         system: z.boolean().default(false),
       }),
@@ -92,7 +108,9 @@ const RuleListSchema = z.object({
       named.extend({
         accountId: id.nullable(),
         categoryId: id,
-        direction: z.enum(["DEBIT", "CREDIT"]).nullable(),
+        direction: z
+          .enum([TransactionDirection.DEBIT, TransactionDirection.CREDIT])
+          .nullable(),
         enabled: z.boolean(),
         filter: RuleFilterSchema.nullable().optional(),
         pack: ImportedRuleOriginSchema.optional(),
@@ -109,7 +127,7 @@ export const AccountListSchema = z.object({
         identity: FinancialIdentitySchema.nullish(),
         personId: id,
         personName: z.string(),
-        type: z.enum(["BANK", "CREDIT"]).optional(),
+        type: z.enum([AccountType.BANK, AccountType.CREDIT]).optional(),
       }),
     ),
   }),
@@ -122,14 +140,14 @@ const TransactionRecordSchema = z.object({
   currency: z.string(),
   date: z.string(),
   description: z.string(),
-  direction: z.enum(["DEBIT", "CREDIT"]),
+  direction: z.enum([TransactionDirection.DEBIT, TransactionDirection.CREDIT]),
   id,
   identification: TransactionIdentificationSchema.nullish(),
   ignored: z.boolean(),
   manual: z.boolean(),
   personId: id,
   personName: z.string(),
-  status: z.enum(["POSTED", "PENDING"]),
+  status: z.enum([TransactionStatus.POSTED, TransactionStatus.PENDING]),
 });
 export const TransactionListSchema = z.object({
   data: z.object({
@@ -158,6 +176,32 @@ export const PortalTransactionListSchema = z.object({
   }),
   partial: z.boolean(),
 });
+const portalQueryResponses = {
+  generate_chart: MonthlySpendingResponseSchema,
+  get_accounts: AccountListSchema,
+  get_card_commitments: CardCommitmentsResponseSchema,
+  get_investments: InvestmentListSchema,
+  get_overview: FinancialOverviewResponseSchema,
+  get_portal_cards: PortalCardsSchema,
+  get_portal_transactions: PortalTransactionListSchema,
+  get_transactions: TransactionListSchema,
+  preview_rule_import: z.object({ data: RuleImportResultSchema }),
+} satisfies Record<PortalQuery["tool"], z.ZodType>;
+export type PortalQueryResults = {
+  [Tool in keyof typeof portalQueryResponses]: z.output<
+    (typeof portalQueryResponses)[Tool]
+  >;
+};
+const queryValidators: {
+  [Tool in keyof PortalQueryResults]: z.ZodType<PortalQueryResults[Tool]>;
+} = portalQueryResponses;
+export function parsePortalQueryResult<Tool extends keyof PortalQueryResults>(
+  tool: Tool,
+  value: unknown,
+): PortalQueryResults[Tool] {
+  return queryValidators[tool].parse(value);
+}
+
 export const SyncHistorySelectionSchema = z
   .object({
     cursor: z.string().max(4096).optional(),
@@ -180,7 +224,6 @@ export const SyncHistoryResultSchema = z.object({
       error: z.string().nullable(),
       finishedAt: z.string().nullable(),
       id,
-      legacy: z.boolean(),
       personId: id,
       personName: z.string(),
       phase: z.string().nullable(),
@@ -212,39 +255,19 @@ export type WorkspaceCatalog = z.infer<typeof WorkspaceCatalogSchema>;
 export const PortalMutationSchema = z
   .object({
     command: z.discriminatedUnion("tool", [
-      planningDefinitions[97].schema.extend({
-        tool: z.literal("import_rules"),
-      }),
-      planningDefinitions[52].schema.extend({
-        tool: z.literal("create_category"),
-      }),
-      planningDefinitions[53].schema.extend({
-        tool: z.literal("update_category"),
-      }),
-      planningDefinitions[54].schema.extend({
-        tool: z.literal("delete_category"),
-      }),
-      planningDefinitions[91].schema.extend({
-        tool: z.literal("create_category_group"),
-      }),
-      planningDefinitions[92].schema.extend({
-        tool: z.literal("update_category_group"),
-      }),
-      planningDefinitions[93].schema.extend({
-        tool: z.literal("delete_category_group"),
-      }),
-      planningDefinitions[56].schema.extend({ tool: z.literal("create_rule") }),
-      planningDefinitions[57].schema.extend({ tool: z.literal("update_rule") }),
-      planningDefinitions[58].schema.extend({ tool: z.literal("delete_rule") }),
-      planningDefinitions[84].schema.extend({
-        tool: z.literal("create_space"),
-      }),
-      planningDefinitions[85].schema.extend({
-        tool: z.literal("update_space"),
-      }),
-      planningDefinitions[89].schema.extend({
-        tool: z.literal("delete_space"),
-      }),
+      planningTools.import_rules.command,
+      planningTools.create_category.command,
+      planningTools.update_category.command,
+      planningTools.delete_category.command,
+      planningTools.create_category_group.command,
+      planningTools.update_category_group.command,
+      planningTools.delete_category_group.command,
+      planningTools.create_rule.command,
+      planningTools.update_rule.command,
+      planningTools.delete_rule.command,
+      planningTools.create_space.command,
+      planningTools.update_space.command,
+      planningTools.delete_space.command,
     ]),
     csrf: z.string(),
   })

@@ -1,6 +1,10 @@
 import { z } from "zod/v4";
 
-import { FinancialIdentitySchema } from "../domain";
+import {
+  AccountType,
+  FinancialIdentitySchema,
+  SpendingGroupBy,
+} from "../domain";
 
 const minor = z.string().regex(/^-?\d+$/);
 const nullableMinor = minor.nullable();
@@ -41,12 +45,12 @@ export const FinancialOverviewSchema = FinancialSummarySchema.extend({
       manual: z.boolean(),
       name: z.string(),
       personId: z.string(),
-      type: z.enum(["BANK", "CREDIT"]),
+      type: z.enum([AccountType.BANK, AccountType.CREDIT]),
     }),
   ),
 });
 export const MonthlySpendingSchema = FinancialSummarySchema.extend({
-  groupBy: z.literal("month"),
+  groupBy: z.literal(SpendingGroupBy.month),
 });
 export type FinancialSummary = z.infer<typeof FinancialSummarySchema>;
 export type FinancialOverview = z.infer<typeof FinancialOverviewSchema>;

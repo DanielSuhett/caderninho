@@ -1,5 +1,5 @@
 import type { RulePreviewQuery, RulePreviewResult } from "../../contracts";
-import { ruleMatches } from "../../domain";
+import { PlanningError, ruleMatches } from "../../domain";
 import type { PlanningRepository } from "./entity";
 import { found, transactionStream } from "./projection";
 
@@ -12,8 +12,7 @@ export async function previewRule(
   found(snapshot.state.spaces.find((space) => space.id === input.spaceId));
   let examined = 0;
   let truncated = false;
-  const bounded: PlanningRepository = {
-    ...repository,
+  const bounded: Pick<PlanningRepository, "transactions"> = {
     async *transactions(ids, selection) {
       for await (const page of repository.transactions(ids, selection)) {
         const remaining = scanLimit - examined;
@@ -64,7 +63,7 @@ export async function previewRule(
     }
   }
   if ((await repository.revision()) !== snapshot.revision) {
-    throw new Error("RESTART_REQUIRED");
+    throw new Error(PlanningError.RESTART_REQUIRED);
   }
   return { ...result, examined, truncated };
 }

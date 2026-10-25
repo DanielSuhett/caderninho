@@ -9,9 +9,7 @@ import {
 } from "../../src/contracts";
 import { createPlanningService } from "../../src/worker/planning";
 import { createPlanningRepository } from "../../src/worker/planning/repository";
-import { testMigrations } from "./access-fixture";
 import { collect, setup, source, transaction } from "./fixture";
-import { applyD1Migrations, reset } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 
 beforeEach(setup);
@@ -887,39 +885,6 @@ test("automatic and explicit rule matching use the same literal accents and ASCI
     records(await f.call("get_transactions"))[0]?.category,
     "personal:expense",
   );
-});
-
-test("new finance metadata migration preserves an existing minimal ledger", async () => {
-  await reset();
-  await applyD1Migrations(env.DB, testMigrations.slice(0, 1));
-  await env.DB.prepare("INSERT INTO connections(id) VALUES(?)")
-    .bind("existing")
-    .run();
-  await env.DB.prepare("INSERT INTO transactions VALUES(?,?,?,?,?,?,?,?,?)")
-    .bind(
-      "existing-t",
-      "existing-a",
-      "2026-10-01",
-      "POSTED",
-      "DEBIT",
-      "BRL",
-      "-999999999999999999999999999999",
-      "Original",
-      "Original category",
-    )
-    .run();
-  await applyD1Migrations(env.DB, testMigrations.slice(1));
-  const persisted = await env.DB.prepare(
-    "SELECT amount_minor,description FROM transactions WHERE id=?",
-  )
-    .bind("existing-t")
-    .first();
-  assert.deepEqual(persisted, {
-    amount_minor: "-999999999999999999999999999999",
-    description: "Original",
-  });
-  const f = fixture();
-  assert.equal(records(await f.call("get_spaces"))[0]?.id, "personal");
 });
 
 test("manual investor holdings retain an explicit local coverage and unknown net/profit", async () => {

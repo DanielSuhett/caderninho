@@ -1,5 +1,25 @@
 import type { PlanningTransaction, Rule } from "./planning.entity";
 
+export const RuleOperator = {
+  contains: "contains",
+  equals: "equals",
+  gte: "gte",
+  lte: "lte",
+  not_contains: "not_contains",
+  starts_with: "starts_with",
+} as const;
+export type RuleOperator = (typeof RuleOperator)[keyof typeof RuleOperator];
+
+type TextOperator =
+  | typeof RuleOperator.contains
+  | typeof RuleOperator.not_contains
+  | typeof RuleOperator.equals
+  | typeof RuleOperator.starts_with;
+type OrderedOperator =
+  | typeof RuleOperator.equals
+  | typeof RuleOperator.gte
+  | typeof RuleOperator.lte;
+
 type RuleTransaction = Pick<
   PlanningTransaction,
   | "accountId"
@@ -29,17 +49,17 @@ export function activeRules<T extends OrderedRule & Pick<Rule, "enabled">>(
 export type RuleCondition =
   | {
       field: "description";
-      operator: "contains" | "not_contains" | "equals" | "starts_with";
+      operator: TextOperator;
       value: string;
     }
   | {
       field: "direction" | "status" | "accountId" | "personId";
-      operator: "equals";
+      operator: typeof RuleOperator.equals;
       value: string;
     }
   | {
       field: "date" | "amount";
-      operator: "equals" | "gte" | "lte";
+      operator: OrderedOperator;
       value: string;
     };
 export interface RuleFilter {
@@ -58,10 +78,10 @@ function conditionMatches(row: RuleTransaction, condition: RuleCondition) {
     const signed = BigInt(row.amountMinor);
     const amount = signed < 0n ? -signed : signed;
     const expected = BigInt(condition.value);
-    if (condition.operator === "gte") {
+    if (condition.operator === RuleOperator.gte) {
       return amount >= expected;
     }
-    if (condition.operator === "lte") {
+    if (condition.operator === RuleOperator.lte) {
       return amount <= expected;
     }
     return amount === expected;
@@ -75,15 +95,15 @@ function conditionMatches(row: RuleTransaction, condition: RuleCondition) {
       ? ruleText(condition.value)
       : condition.value;
   switch (condition.operator) {
-    case "contains":
+    case RuleOperator.contains:
       return actual.includes(expected);
-    case "not_contains":
+    case RuleOperator.not_contains:
       return !actual.includes(expected);
-    case "starts_with":
+    case RuleOperator.starts_with:
       return actual.startsWith(expected);
-    case "gte":
+    case RuleOperator.gte:
       return actual >= expected;
-    case "lte":
+    case RuleOperator.lte:
       return actual <= expected;
     default:
       return actual === expected;

@@ -1,7 +1,9 @@
-import { Banner, Empty, Select } from "@cloudflare/kumo";
+import { Banner } from "@cloudflare/kumo/components/banner";
+import { Empty } from "@cloudflare/kumo/components/empty";
+import { Select } from "@cloudflare/kumo/components/select";
 import { useCallback } from "react";
 
-import { PortalCardsSchema, type PortalResponse } from "../../contracts";
+import type { PortalResponse } from "../../contracts";
 import { localDay } from "../../domain";
 import type { createAccountApi } from "./account-api";
 import { AccountIdentity } from "./account-identity";
@@ -43,21 +45,19 @@ export function CardsView({
         requestedCurrency ??
         catalog.spaces.find((space) => space.id === spaceId)?.currency ??
         "BRL";
-      const result = PortalCardsSchema.parse(
-        await api.query(
-          {
-            currency,
-            month,
-            spaceId,
-            tool: "get_portal_cards",
-            ...(personId && { personId }),
-            ...(accountId && { accountId }),
-            ...(cursor && { cursor }),
-          },
-          snapshot.csrf,
-          signal,
-          fresh,
-        ),
+      const result = await api.query(
+        {
+          currency,
+          month,
+          spaceId,
+          tool: "get_portal_cards",
+          ...(personId && { personId }),
+          ...(accountId && { accountId }),
+          ...(cursor && { cursor }),
+        },
+        snapshot.csrf,
+        signal,
+        fresh,
       );
       return { ...result, catalog };
     },

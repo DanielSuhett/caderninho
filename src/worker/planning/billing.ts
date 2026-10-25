@@ -1,5 +1,9 @@
-import type { AccountSettings, Recurrence } from "../../domain";
-import { monthDate } from "../../domain";
+import {
+  type AccountSettings,
+  monthDate,
+  PlanningError,
+  type Recurrence,
+} from "../../domain";
 
 export interface ProjectedPayment {
   accountId: string | null;
@@ -12,7 +16,7 @@ export interface ProjectedPayment {
 }
 export function billingDate(date: string, settings: AccountSettings) {
   if (!(settings.closeDay && settings.dueDay)) {
-    throw new Error("BILLING_CYCLE_REQUIRED");
+    throw new Error(PlanningError.BILLING_CYCLE_REQUIRED);
   }
   const close = `${date.slice(0, 7)}-${String(settings.closeDay).padStart(2, "0")}`;
   const shift =
@@ -49,5 +53,5 @@ export function recurrencePayments(
       });
     }
   }
-  throw new Error("PROJECTION_TOO_LARGE");
+  throw new Error(PlanningError.PROJECTION_TOO_LARGE);
 }

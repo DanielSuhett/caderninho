@@ -1,11 +1,14 @@
 import { z } from "zod/v4";
 
-import type {
-  AggregateQuery,
-  TransactionFilter,
-  TransactionQuery,
+import {
+  AggregateGroupBy,
+  type AggregateQuery,
+  Metric,
+  TransactionDirection,
+  type TransactionFilter,
+  type TransactionQuery,
+  TransactionStatus,
 } from "../domain";
-import { Metric } from "../domain";
 
 const identifier = z.string().min(1).max(160);
 const day = z.iso.date();
@@ -50,7 +53,9 @@ const TransactionFilterSchema = z
       .describe(
         "Trecho literal da descrição; ignora caixa, inclusive acentos portugueses. Não remove acentos nem aceita curingas.",
       ),
-    direction: z.enum(["DEBIT", "CREDIT"]).optional(),
+    direction: z
+      .enum([TransactionDirection.DEBIT, TransactionDirection.CREDIT])
+      .optional(),
     from: day
       .optional()
       .describe("Dia financeiro inicial inclusivo, AAAA-MM-DD."),
@@ -66,7 +71,9 @@ const TransactionFilterSchema = z
       ),
     personId: identifier.optional(),
     profileId: identifier.optional(),
-    status: z.enum(["PENDING", "POSTED"]).optional(),
+    status: z
+      .enum([TransactionStatus.PENDING, TransactionStatus.POSTED])
+      .optional(),
     to: day.optional().describe("Dia financeiro final inclusivo, AAAA-MM-DD."),
   })
   .strict()
@@ -128,7 +135,13 @@ export const TransactionQuerySchema = z
 export const AggregateQuerySchema = z
   .object({
     filter: TransactionFilterSchema.optional(),
-    groupBy: z.enum(["account", "category", "month"]).optional(),
+    groupBy: z
+      .enum([
+        AggregateGroupBy.account,
+        AggregateGroupBy.category,
+        AggregateGroupBy.month,
+      ])
+      .optional(),
     metric: z
       .enum(Metric)
       .default("count")

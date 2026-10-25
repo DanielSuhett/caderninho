@@ -1,4 +1,8 @@
-import { Badge, Empty, LayerCard, Link, Table } from "@cloudflare/kumo";
+import { Badge } from "@cloudflare/kumo/components/badge";
+import { Empty } from "@cloudflare/kumo/components/empty";
+import { LayerCard } from "@cloudflare/kumo/components/layer-card";
+import { Link } from "@cloudflare/kumo/components/link";
+import { Table } from "@cloudflare/kumo/components/table";
 import { lazy, Suspense, useMemo } from "react";
 
 import type { PortalCards, WorkspaceCatalog } from "../../contracts";

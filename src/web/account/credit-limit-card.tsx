@@ -1,6 +1,8 @@
-import { LayerCard, Meter } from "@cloudflare/kumo";
+import { LayerCard } from "@cloudflare/kumo/components/layer-card";
+import { Meter } from "@cloudflare/kumo/components/meter";
 import type { ReactNode } from "react";
 
+import type { Person } from "../../domain";
 import { formatBalance } from "../money";
 import { MoneyValue } from "../money-value";
 import { type AccountAppearance, AccountAvatar } from "./account-identity";
@@ -18,7 +20,7 @@ export function CreditLimitCard({
 }: {
   name: string;
   identity?: AccountAppearance["identity"];
-  person?: import("../../domain").Person | undefined;
+  person?: Person | undefined;
   currency: string;
   limit: string | null;
   allocated: string | null;

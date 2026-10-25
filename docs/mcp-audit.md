@@ -2,8 +2,7 @@
 
 `/account/audit` mostra autorizações OAuth, último uso por cliente, requisições,
 chamadas de ferramenta, bytes e falhas. A tela exige a sessão da instalação.
-`0005_mcp_audit.sql` é uma migração aditiva sobre o modelo atual; não migra os
-schemas históricos anteriores a `0001_initial.sql`.
+A tabela `mcp_audit` e seus índices fazem parte do schema inicial da instalação.
 
 ## O que é observado
 

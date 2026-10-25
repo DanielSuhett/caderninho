@@ -1,4 +1,6 @@
-import { KumoLocaleProvider, Toasty, TooltipProvider } from "@cloudflare/kumo";
+import { Toasty } from "@cloudflare/kumo/components/toast";
+import { TooltipProvider } from "@cloudflare/kumo/components/tooltip";
+import { KumoLocaleProvider } from "@cloudflare/kumo/utils";
 import { createRoot } from "react-dom/client";
 
 import { AccountView } from "./account";

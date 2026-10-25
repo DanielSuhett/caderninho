@@ -1,7 +1,8 @@
-import { Banner, Select } from "@cloudflare/kumo";
+import { Banner } from "@cloudflare/kumo/components/banner";
+import { Select } from "@cloudflare/kumo/components/select";
 import { useCallback, useState } from "react";
 
-import { InvestmentListSchema, type PortalResponse } from "../../contracts";
+import type { PortalResponse } from "../../contracts";
 import { investmentPortfolio } from "../../domain";
 import type { createAccountApi } from "./account-api";
 import { AccountIdentity } from "./account-identity";
@@ -41,7 +42,7 @@ export function InvestmentsView({
         ),
         api.catalog(spaceId, signal, fresh),
       ]);
-      return { catalog, result: InvestmentListSchema.parse(result) };
+      return { catalog, result };
     },
     [api, snapshot.csrf, spaceId, personId],
   );

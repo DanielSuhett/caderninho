@@ -51,7 +51,9 @@ mantêm navegação nativa. GET participa da navegação interna; popstate resta
 Voltar/Avançar. A mudança fecha o menu móvel e transfere foco ao conteúdo.
 O cache de leitura usa a chave completa, 20 entradas e dez segundos na memória;
 atualização manual ignora cache. Escritas invalidam antes e depois da requisição,
-e leituras anteriores não repovoam o cache. Falhas não são armazenadas. Skeleton
+e leituras anteriores não repovoam o cache. Uma leitura antiga também não pode
+sobrescrever uma atualização mais recente da mesma chave. Falhas não são armazenadas.
+Skeleton
 aparece após 150 ms. Não persistir esse cache financeiro no navegador.
 
 A confirmação do widget pede a primeira importação uma única vez, mesmo com
@@ -81,20 +83,22 @@ Toasty confirma gravações concluídas. Importação usa Loader sem percentagem
 
 ## Histórico persistente
 
-`0004_sync_history.sql` acrescenta uma tabela e um trigger. Cada admissão cria uma
+`sync_history` e seu trigger fazem parte do schema inicial. Cada admissão cria uma
 linha; cada checkpoint atualiza a mesma rodada, na mesma operação D1 que confirma
 seu progresso. Repetir um checkpoint não duplica o histórico. A pessoa e o perfil
 ficam vinculados à rodada desde a admissão; corrigir titularidade depois não
 reescreve essas referências. Nomes são resolvidos pelo cadastro atual.
 
-A migração recupera apenas a última rodada que ainda está em `connections` e a
-marca como anterior à versão. Rodadas sobrescritas antes da migração não podem ser
-reconstruídas. Falhas antigas sem horário final ficam com fim “Não registrado”.
 O contador mostra **etapas confirmadas**, nunca quantidade de transações. A lista
 usa páginas de 25 rodadas, ordem de admissão decrescente, filtros de pessoa/estado
 e atualização explícita. Consultar a página não inicia sincronização.
 
 ## Segurança e validação
+
+O cliente HTTP valida as respostas por ferramenta e fornece resultados tipados às
+telas. Entradas URL e rascunhos continuam sendo validados nas respectivas fronteiras.
+Imports Kumo usam as entradas específicas de cada componente, incluindo as páginas
+renderizadas no Worker; o lint impede o carregamento do barrel completo.
 
 A interface conserva contratos GET e mutações. Busca de Regras é compacta;
 filtro não repete o campo e preserva `q` oculto. Contagem complexa é absoluta,
@@ -105,11 +109,12 @@ nulo e sinal divergente.
 
 Todas as páginas exigem sessão. Catálogo e histórico são leituras autenticadas;
 a consulta financeira usa POST com origem, JSON e CSRF validados, permitindo
-as leituras de contas, ocorrências, compras agrupadas, `get_overview`, `get_card_commitments`,
+as leituras de contas, ocorrências, compras agrupadas, `get_overview`,
+`get_portal_cards`, `get_investments`, `get_card_commitments`,
 `generate_chart` restrito a `groupBy=month` e `preview_rule_import`. Essa allowlist
 é somente de leitura; escritas têm schema próprio. Nenhuma credencial é devolvida.
 
-`tests/integration/workspace.test.ts` cobre histórico, replay, falha, migração,
+`tests/integration/workspace.test.ts` cobre histórico, replay, falha,
 titularidade, autenticação, CSRF, bloqueio de mutações e paginação cronológica
 com valores acima do limite inteiro seguro de JavaScript. A revisão de navegador
 usa apenas dados fictícios locais. `navigation.test.ts` cobre destinos e
@@ -133,7 +138,7 @@ Regras e grupos podem ser editados na memória da aba. Salvar preserva o histór
 Reaplicar regras usa o avaliador do domínio sobre todos os meses do grupo,
 exceto ignorados. Registros sem correspondência conservam a categoria. O botão
 Restaurar demo e o reload restauram os dados iniciais. Grupos novos ficam vazios,
-com três categorias em português; o seletor de grupo aparece quando há escolha.
+com o catálogo fixo de categorias e agrupadores; o seletor de grupo aparece quando há escolha.
 Fixtures de `src/fixtures` também alimentam testes; expectativas financeiras
 continuam literais e independentes. Não há conexão bancária ou revogação nesta
 navegação. O limite de paridade com o backend está descrito abaixo.
@@ -160,7 +165,7 @@ mudanças e correspondências são distintas. Valores, direção, datas, moeda,
 parcelas e status não mudam. Pendentes/futuras mantêm a elegibilidade financeira.
 O backend `apply_rules` permite ignorados em sua seleção e limita a escrita
 atômica a 500 registros; a demo não simula persistência, concorrência, paginação
-ou atomicidade. Grupo novo tem Receitas/Despesas/Transferências e nenhuma conta;
+ou atomicidade. Grupo novo recebe o catálogo de categorias, mas nenhuma conta;
 mudar de grupo preserva mês, escolhe sua moeda e limpa conta/texto/direção.
 
 ## Agregação e apresentação

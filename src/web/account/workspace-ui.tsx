@@ -1,11 +1,9 @@
-import {
-  Badge,
-  RefreshButton as KumoRefreshButton,
-  SkeletonLine,
-  Text,
-  Toolbar,
-  Tooltip,
-} from "@cloudflare/kumo";
+import { Badge } from "@cloudflare/kumo/components/badge";
+import { RefreshButton as KumoRefreshButton } from "@cloudflare/kumo/components/button";
+import { SkeletonLine } from "@cloudflare/kumo/components/loader";
+import { Text } from "@cloudflare/kumo/components/text";
+import { Toolbar } from "@cloudflare/kumo/components/toolbar";
+import { Tooltip } from "@cloudflare/kumo/components/tooltip";
 import { SlidersHorizontalIcon } from "@phosphor-icons/react";
 import { type ReactNode, useId } from "react";
 

@@ -1,15 +1,11 @@
 import { readRequestBody } from "@modelcontextprotocol/server";
 import { z } from "zod/v4";
 
+import { PlanningError } from "../../domain";
 import type { SafeFields } from "../observability";
 
-const invalidRequests = new Set([
-  "CARD_REQUIRED",
-  "INVALID_RULE",
-  "INVALID_RULE_IMPORT_CATEGORY",
-  "SPACE_PROTECTED",
-  "SPACE_NOT_EMPTY",
-  "SPACE_MISMATCH",
+const invalidRequests = new Set<string>([
+  ...Object.values(PlanningError),
   "EMPTY_FORM",
   "BODY_REQUIRED",
   "FORM_TOO_LARGE",
@@ -76,7 +72,10 @@ export function requestCategory(
   return { action, phase: "auth.request" };
 }
 
-export async function boundedJson(request: Request, maximum = 1_048_576) {
+export async function boundedJson(
+  request: Request,
+  maximum = 1_048_576,
+): Promise<unknown> {
   if (!request.body) {
     throw new Error("BODY_REQUIRED");
   }
@@ -84,7 +83,7 @@ export async function boundedJson(request: Request, maximum = 1_048_576) {
   if (body.tooLarge) {
     throw new Error("BODY_LIMIT");
   }
-  return z.json().parse(JSON.parse(body.text));
+  return JSON.parse(body.text);
 }
 
 export async function boundedForm(request: Request) {

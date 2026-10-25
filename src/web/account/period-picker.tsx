@@ -1,4 +1,6 @@
-import { Button, Select, Tooltip } from "@cloudflare/kumo";
+import { Button } from "@cloudflare/kumo/components/button";
+import { Select } from "@cloudflare/kumo/components/select";
+import { Tooltip } from "@cloudflare/kumo/components/tooltip";
 import { CaretLeftIcon, CaretRightIcon } from "@phosphor-icons/react";
 import { useCallback } from "react";
 

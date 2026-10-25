@@ -1,5 +1,4 @@
 import type { RulePreviewInput, SyncHistorySelection } from "../../contracts";
-import { DEFAULT_PROFILE } from "../../domain";
 import { createAuditRepository } from "../audit/repository";
 import type { Bindings } from "../bindings";
 import { createFinancialService } from "../finance";
@@ -70,24 +69,11 @@ function source(env: Bindings) {
   };
 }
 export function installationService(env: Bindings) {
-  const service = createInstallationService({
+  return createInstallationService({
+    catalog: householdService(env).catalog,
     repository: createInstallationRepository(env.DB),
     source: source(env),
   });
-  return {
-    ...service,
-    async state(selection?: Parameters<typeof service.state>[0]) {
-      const [state, catalog] = await Promise.all([
-        service.state(selection),
-        householdService(env).catalog(),
-      ]);
-      return {
-        ...state,
-        ...catalog,
-        configured: catalog.profiles.some((p) => p.enabled && p.configured),
-      };
-    },
-  };
 }
 export function financialService(env: Bindings) {
   const service = createFinancialService(createFinancialRepository(env.DB));
@@ -122,22 +108,10 @@ export function synchronizationDependencies(env: Bindings) {
 }
 export function syncService(env: Bindings, now: () => Date = () => new Date()) {
   const repository = createSyncRepository(env.DB);
-  const service = createSyncService(
-    {
-      ...repository,
-      admit: (ids, time, initialOnly) =>
-        observeSpan(SpanName.admission, () =>
-          repository.admit(ids, time, initialOnly),
-        ),
-    },
-    {
-      create: async (id) => {
-        await env.FINANCE.create({ id, params: { runId: id } });
-      },
-      status: async (id) => (await (await env.FINANCE.get(id)).status()).status,
-    },
+  const service = createSyncService({
+    assertConfigured: householdService(env).assertConfigured,
     now,
-    (counts) => {
+    report: (counts) => {
       if (counts.dispatchPending || counts.statusUnavailable || counts.failed) {
         reportDiagnostic({
           ...counts,
@@ -150,31 +124,24 @@ export function syncService(env: Bindings, now: () => Date = () => new Date()) {
         });
       }
     },
-  );
+    repository: {
+      ...repository,
+      admit: (ids, time, initialOnly) =>
+        observeSpan(SpanName.admission, () =>
+          repository.admit(ids, time, initialOnly),
+        ),
+    },
+    workflow: {
+      create: async (id) => {
+        await env.FINANCE.create({ id, params: { runId: id } });
+      },
+      status: async (id) => (await (await env.FINANCE.get(id)).status()).status,
+    },
+  });
   return {
     recover: () => observeSpan(SpanName.recovery, () => service.recover()),
     request: (ids?: string[], initialOnly = false) =>
-      observeSpan(SpanName.dispatch, async () => {
-        const state = await createHouseholdRepository(env.DB).read();
-        const selected = state.owners.filter(
-          (owner) => !ids || ids.includes(owner.connectionId),
-        );
-        for (const owner of selected) {
-          const profile = state.profiles.find((p) => p.id === owner.profileId);
-          if (
-            profile?.enabled &&
-            !profile.credentialRef &&
-            !(
-              profile.id === DEFAULT_PROFILE &&
-              env.PLUGGY_CLIENT_ID &&
-              env.PLUGGY_CLIENT_SECRET
-            )
-          ) {
-            throw new Error("NOT_CONFIGURED");
-          }
-        }
-        return service.request(ids, initialOnly);
-      }),
+      observeSpan(SpanName.dispatch, () => service.request(ids, initialOnly)),
   };
 }
 

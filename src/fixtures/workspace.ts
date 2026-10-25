@@ -3,6 +3,12 @@ import type {
   PortalResponse,
   WorkspaceCatalog,
 } from "../contracts";
+import {
+  AccountType,
+  ImportPhase,
+  SpaceType,
+  TransactionDirection,
+} from "../domain";
 import { demoCategories, demoCategoryGroups, demoPeople } from "./finance";
 
 export function connectionFixture(
@@ -15,12 +21,12 @@ export function connectionFixture(
         balanceObservedAt: null,
         currency: "BRL",
         name: "Conta exemplo",
-        type: "BANK",
+        type: AccountType.BANK,
       },
     },
     hasTransactions: false,
     id: "c",
-    importCheckpoint: { accountId: "a", phase: "transactions" },
+    importCheckpoint: { accountId: "a", phase: ImportPhase.transactions },
     importError: null,
     importStatus: "running",
     lastSuccessAt: null,
@@ -61,7 +67,7 @@ export function workspaceFixture(): WorkspaceCatalog {
       {
         accountId: null,
         categoryId: "market",
-        direction: "DEBIT",
+        direction: TransactionDirection.DEBIT,
         enabled: true,
         filter: null,
         id: "demo-market-rule",
@@ -78,7 +84,7 @@ export function workspaceFixture(): WorkspaceCatalog {
         monthlyBudgetMinor: "600000",
         monthStartDay: 1,
         name: "Pessoal",
-        type: "personal",
+        type: SpaceType.personal,
       },
     ],
     tags: [{ id: "essential", name: "Essencial" }],

@@ -1,5 +1,11 @@
 import { RulePreviewSchema, type WorkspaceCatalog } from "../../contracts";
-import { minor, type RuleCondition } from "../../domain";
+import {
+  minor,
+  type RuleCondition,
+  RuleOperator,
+  TransactionDirection,
+  TransactionStatus,
+} from "../../domain";
 import { randomId } from "../random-id";
 
 export interface DraftCondition {
@@ -23,18 +29,18 @@ export const conditionFields = [
 ];
 export function conditionDraft(field = "description"): DraftCondition {
   const operators: Record<string, string> = {
-    amount: "gte",
-    date: "gte",
-    description: "contains",
+    amount: RuleOperator.gte,
+    date: RuleOperator.gte,
+    description: RuleOperator.contains,
   };
   const values: Record<string, string> = {
-    direction: "DEBIT",
-    status: "POSTED",
+    direction: TransactionDirection.DEBIT,
+    status: TransactionStatus.POSTED,
   };
   return {
     field,
     id: randomId(),
-    operator: operators[field] ?? "equals",
+    operator: operators[field] ?? RuleOperator.equals,
     value: values[field] ?? "",
   };
 }
@@ -56,7 +62,11 @@ export function initialAlternatives(
   const source = rule?.filter?.alternatives ?? [
     {
       conditions: [
-        { field: "description", operator: "contains", value: rule?.text ?? "" },
+        {
+          field: "description",
+          operator: RuleOperator.contains,
+          value: rule?.text ?? "",
+        },
       ],
     },
   ];
@@ -108,8 +118,8 @@ export function parseRuleDraft(input: {
 }
 const debit: RuleCondition = {
   field: "direction",
-  operator: "equals",
-  value: "DEBIT",
+  operator: RuleOperator.equals,
+  value: TransactionDirection.DEBIT,
 };
 export const rulePresets = [
   {
@@ -119,7 +129,11 @@ export const rulePresets = [
   },
   { direction: debit, name: "Assinaturas", terms: ["netflix", "spotify"] },
   {
-    direction: { field: "direction", operator: "equals", value: "CREDIT" },
+    direction: {
+      field: "direction",
+      operator: RuleOperator.equals,
+      value: TransactionDirection.CREDIT,
+    },
     name: "Salário",
     terms: ["salário"],
   },

@@ -7,13 +7,13 @@ categorias. Um agrupador contém várias categorias. Uma categoria pertence a ze
 ou um agrupador, sempre no mesmo espaço. O agrupador é organização visual; não
 altera valores, natureza financeira, regras ou classificação das transações.
 
-`planning_categories` conserva os IDs e dados existentes, acrescentando `icon`,
-`color` e `groupId`. `planning_category_groups` guarda `id` e JSON tipado com
+`planning_categories` guarda categorias com `icon`, `color` e `groupId`.
+`planning_category_groups` guarda `id` e JSON tipado com
 `spaceId`, `name`, `icon` e `color`, conforme as outras tabelas de planejamento.
-`0009_fixed_categories.sql` cria os grupos iniciais e as 33 categorias em todos
-os espaços existentes. Novos espaços recebem o mesmo catálogo. Os nomes fixos
+O schema inicial cria os agrupadores e as 33 categorias fixas visíveis do espaço
+Pessoal. Novos espaços recebem o mesmo catálogo. Os nomes fixos
 não podem ser alterados nem excluídos. Ícone, cor, grupo e limite são editáveis.
-Categorias personalizadas e referências legadas são preservadas.
+Categorias personalizadas conservam seus próprios IDs e referências.
 
 Remover um agrupador deixa suas categorias com `groupId=null`. Não remove
 categorias nem altera transações. Os ícones usam uma lista fechada do produto;
@@ -62,7 +62,7 @@ como despesa. O fluxo de caixa mantém todos os movimentos bancários.
 ## Clef no Worker
 
 Os dois arquivos Wrangler declaram o binding `AI` e `CLEF_ENABLED="false"`.
-Para habilitar após publicar a versão/migração, configure `CLEF_ENABLED="true"`
+Para habilitar, configure `CLEF_ENABLED="true"`
 nas variáveis do Worker. Não há token de API extra: o binding usa Workers AI da
 mesma conta Cloudflare. O modelo escolhido é `@cf/cloudflare/clef-flash`.
 
@@ -92,7 +92,7 @@ Fontes oficiais consultadas em 24/10/2026:
 
 ## Evidência
 
-Testes locais cobrem catálogo e migração, CRUD/vínculos/idempotência/escopo,
+Testes locais cobrem catálogo inicial, CRUD/vínculos/idempotência/escopo,
 respostas do adapter, classificação após importação, cache, fallback, desligamento
 e precedência manual. Não medem acurácia real deste catálogo de 33 nomes.
 Deploy, migração remota e importação real exigem validação separada.
@@ -102,18 +102,3 @@ página no final do histórico. A condição composta `(date,id)>(?,?)` mantém 
 51 linhas lidas por página de 25 registros, incluindo acessos ao índice/tabela;
 o teste compara os mesmos resultados com a forma `OR`, que relê registros
 anteriores. O repository usa a condição composta e o índice de conta/data/ID.
-
-### Smoke remoto com o catálogo novo
-
-Em 24/10/2026, três chamadas reais ao Clef Flash da conta Cloudflare usaram
-somente dados sintéticos e o mesmo prompt/catálogo do adapter (4.011 tokens de
-entrada no total). Não houve deploy ou alteração de D1 remoto.
-
-| Evidência sintética | Escolha do modelo | Confiança retornada | Decisão do produto |
-| --- | --- | --- | --- |
-| Mercado Exemplo, CNAE 4711302 | Compras | 0,1967 | Rejeita; usa fallback |
-| Drogaria Exemplo, CNAE 4771701 | Farmácia | 0,8213 | Aceita Farmácia |
-| PIX recebido sem finalidade | unknown | 0,3340 | Usa fallback |
-
-O primeiro caso mostra que o catálogo, sozinho, não garante acerto. O limiar é
-uma política inicial conservadora; confiança retornada não mede acurácia real.

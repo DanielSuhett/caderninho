@@ -1,4 +1,8 @@
-import { Badge, Banner, ClipboardText, Link, Select } from "@cloudflare/kumo";
+import { Badge } from "@cloudflare/kumo/components/badge";
+import { Banner } from "@cloudflare/kumo/components/banner";
+import { ClipboardText } from "@cloudflare/kumo/components/clipboard-text";
+import { Link } from "@cloudflare/kumo/components/link";
+import { Select } from "@cloudflare/kumo/components/select";
 import { type FormEvent, type MouseEvent, useCallback, useState } from "react";
 
 import type { HouseholdCommand, PortalResponse } from "../../contracts";

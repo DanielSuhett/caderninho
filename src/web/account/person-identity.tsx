@@ -1,4 +1,4 @@
-import { Tooltip } from "@cloudflare/kumo";
+import { Tooltip } from "@cloudflare/kumo/components/tooltip";
 import { PlusIcon } from "@phosphor-icons/react";
 import {
   createContext,

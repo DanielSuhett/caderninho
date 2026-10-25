@@ -1,12 +1,17 @@
 import type { z } from "zod/v4";
 
-import type {
-  FinancialOverview,
-  PortalTransactionListSchema,
-  WorkspaceCatalog,
+import {
+  type FinancialOverview,
+  type PortalTransactionListSchema,
+  type WorkspaceCatalog,
+  WorkspaceCatalogSchema,
 } from "../contracts";
-import { WorkspaceCatalogSchema } from "../contracts";
-import { categoryCatalog, monthDate } from "../domain";
+import {
+  AccountType,
+  categoryCatalog,
+  monthDate,
+  TransactionStatus,
+} from "../domain";
 export const demoReferenceDay = "2026-10-24";
 export const demoPeople = [
   { id: "demo-person", name: "Ana Silva", photo: "/demo-people/ana.jpg" },
@@ -55,7 +60,7 @@ export const demoAccounts: FinancialOverview["accounts"] = [
     manual: false,
     name: "Conta principal",
     personId: "demo-person",
-    type: "BANK",
+    type: AccountType.BANK,
   },
   {
     balanceMinor: "2500000",
@@ -74,7 +79,7 @@ export const demoAccounts: FinancialOverview["accounts"] = [
     manual: false,
     name: "Reserva",
     personId: "demo-person",
-    type: "BANK",
+    type: AccountType.BANK,
   },
   {
     balanceMinor: "-238760",
@@ -93,7 +98,7 @@ export const demoAccounts: FinancialOverview["accounts"] = [
     manual: false,
     name: "Cartão pessoal",
     personId: "demo-person",
-    type: "CREDIT",
+    type: AccountType.CREDIT,
   },
   {
     balanceMinor: "184050",
@@ -104,7 +109,7 @@ export const demoAccounts: FinancialOverview["accounts"] = [
     manual: false,
     name: "Conta internacional",
     personId: "demo-person",
-    type: "BANK",
+    type: AccountType.BANK,
   },
   {
     balanceMinor: "0",
@@ -116,7 +121,7 @@ export const demoAccounts: FinancialOverview["accounts"] = [
     manual: false,
     name: "Cartão adicional",
     personId: "demo-person-2",
-    type: "CREDIT",
+    type: AccountType.CREDIT,
   },
 ];
 export type DemoRecord = z.infer<
@@ -146,7 +151,7 @@ export function transactionFixture(
     personId: "demo-person",
     personName: "Ana Silva",
     purchaseDate: null,
-    status: "POSTED",
+    status: TransactionStatus.POSTED,
     totalInstallments: null,
     ...input,
   };
@@ -305,7 +310,7 @@ export const demoLedger = [0, 1, 2, 3, 4, 5]
           day: 24,
           description: "Compra em processamento",
           month,
-          status: "PENDING",
+          status: TransactionStatus.PENDING,
         }),
         transaction({
           accountId: "demo-card",
@@ -317,7 +322,7 @@ export const demoLedger = [0, 1, 2, 3, 4, 5]
           installmentNumber: index + 1,
           month,
           purchaseDate: "2026-05-27",
-          status: "PENDING",
+          status: TransactionStatus.PENDING,
           totalInstallments: 12,
         }),
       ]);
@@ -336,7 +341,7 @@ export const demoLedger = [0, 1, 2, 3, 4, 5]
           installmentNumber: index + 7,
           month,
           purchaseDate: "2026-05-12",
-          status: "PENDING",
+          status: TransactionStatus.PENDING,
           totalInstallments: 12,
         }),
         transaction({
@@ -349,7 +354,7 @@ export const demoLedger = [0, 1, 2, 3, 4, 5]
           installmentNumber: index + 7,
           month,
           purchaseDate: "2026-05-27",
-          status: "PENDING",
+          status: TransactionStatus.PENDING,
           totalInstallments: 12,
         }),
       ];

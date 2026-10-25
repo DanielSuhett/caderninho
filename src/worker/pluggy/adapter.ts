@@ -1,5 +1,4 @@
-import type { ProductKind } from "../../domain";
-import { PluggyCredentialsSchema } from "../../domain";
+import { PluggyCredentialsSchema, type ProductKind } from "../../domain";
 import { PersonalPluggyClient } from "./client.adapter";
 import { productPage } from "./products";
 import { connectToken, financialSource } from "./source";
@@ -18,7 +17,6 @@ export function createPluggyAdapter(input: {
   }
   return {
     accounts: (id: string) => financialSource(client()).accounts(id),
-    configured: parsed.success,
     connection: (id: string) => financialSource(client()).connection(id),
     products: (request: {
       kind: ProductKind;

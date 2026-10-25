@@ -223,6 +223,100 @@ test("MCP purchases match the front's grouped installments, identification and p
   );
 });
 
+test("purchase queries apply currency and reject unknown selection references consistently with transactions", async () => {
+  await collect(
+    source([
+      transaction({ date: "2024-01-01", id: "brl" }),
+      transaction({ currencyCode: "USD", date: "2024-01-01", id: "usd" }),
+    ]),
+  );
+  const f = await client();
+  const selected = await f.call("get_transaction_purchases", {
+    currency: "USD",
+    spaceId: "personal",
+  });
+  assert.equal(selected.error, false);
+  assert.deepEqual(
+    PortalTransactionListSchema.parse(selected.value).data.records.map(
+      (row) => row.id,
+    ),
+    ["usd"],
+  );
+  await Promise.all(
+    [
+      { accountId: "missing", spaceId: "personal" },
+      { categoryId: "missing", spaceId: "personal" },
+      { personId: "missing", spaceId: "personal" },
+      { spaceId: "missing" },
+    ].flatMap((selection) =>
+      (
+        [
+          ["get_transactions", "get_transactions"],
+          ["get_transaction_purchases", "get_portal_transactions"],
+        ] as const
+      ).map(async ([mcpTool, portalTool]) => {
+        const [result, front] = await Promise.all([
+          f.call(mcpTool, selection),
+          f.portal("query", { query: { ...selection, tool: portalTool } }),
+        ]);
+        assert.equal(
+          result.error,
+          true,
+          JSON.stringify({ mcpTool, selection }),
+        );
+        assert.deepEqual(result.value, { error: "NOT_FOUND" });
+        assert.equal(front.status, 404);
+      }),
+    ),
+  );
+});
+
+test("malformed planning cursors remain input errors in both HTTP and MCP", async () => {
+  await collect(source([]));
+  const f = await client();
+  await Promise.all(
+    ["%", "not-json", "[]"].flatMap((cursor) =>
+      (
+        [
+          ["get_transactions", "get_transactions"],
+          ["get_transaction_purchases", "get_portal_transactions"],
+        ] as const
+      ).map(async ([mcpTool, portalTool]) => {
+        const selection = { cursor, spaceId: "personal" };
+        const [result, front] = await Promise.all([
+          f.call(mcpTool, selection),
+          f.portal("query", { query: { ...selection, tool: portalTool } }),
+        ]);
+        assert.equal(result.error, true);
+        assert.equal(
+          z.object({ error: z.string() }).parse(result.value).error,
+          "INVALID_FILTER",
+        );
+        assert.equal(front.status, 400);
+      }),
+    ),
+  );
+});
+
+test("a reversed financial period is a rejected request in both HTTP and MCP", async () => {
+  await collect(source([]));
+  const f = await client();
+  const query = {
+    from: "2026-10-24",
+    spaceId: "personal",
+    to: "2026-10-01",
+    tool: "get_overview",
+  };
+  const { tool, ...selection } = query;
+  const [mcp, front] = await Promise.all([
+    f.call(tool, selection),
+    f.portal("query", { query }),
+  ]);
+  assert.equal(mcp.error, true);
+  assert.deepEqual(mcp.value, { error: "INVALID_PERIOD" });
+  assert.equal(front.status, 400);
+});
+
 test("MCP edits of category groups, categories, rules and spaces round-trip to the front with confirmation and replay", async () => {
   await collect(
     source([
