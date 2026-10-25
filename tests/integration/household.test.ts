@@ -22,15 +22,8 @@ import { createPlanningRepository } from "../../src/worker/planning/repository";
 import { createProfileSource } from "../../src/worker/pluggy";
 import { createSyncRepository } from "../../src/worker/sync/repository";
 import { mockNetwork, syntheticJwt } from "../support/network";
-import {
-  command,
-  cookies,
-  fixture,
-  login,
-  testMigrations,
-} from "./access-fixture";
+import { command, cookies, fixture, login } from "./access-fixture";
 import { account, collect, setup, transaction } from "./fixture";
-import { applyD1Migrations, reset } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 
 beforeEach(setup);
@@ -527,11 +520,8 @@ test("management routes require session and CSRF and never return credentials", 
   assert.equal(rejected.status, 403);
 });
 
-test("household migration assigns existing history to the default owner without rewriting IDs", async () => {
-  await reset();
-  await applyD1Migrations(env.DB, testMigrations.slice(0, 2));
+test("new connections inherit the installation owner and profile without rewriting source IDs", async () => {
   await env.DB.prepare("INSERT INTO connections(id) VALUES('existing')").run();
-  await applyD1Migrations(env.DB, testMigrations.slice(2));
   const owner = await env.DB.prepare(
     "SELECT * FROM connection_owners WHERE connection_id='existing'",
   ).first();

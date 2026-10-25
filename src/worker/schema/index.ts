@@ -240,7 +240,6 @@ export const syncHistory = sqliteTable(
     error: text("error"),
     finishedAt: text("finished_at"),
     id: text("id").primaryKey(),
-    legacy: integer("legacy", { mode: "boolean" }).notNull().default(false),
     personId: text("person_id").notNull(),
     phase: text("phase"),
     profileId: text("profile_id").notNull(),

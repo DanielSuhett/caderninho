@@ -34,7 +34,12 @@ lint; o completo acrescenta testes, build dry-run e runtime local D1/Workflow.
 
 `types` regenera bindings usando somente os nomes de secrets de
 `.dev.vars.example`; `types:check` confere sem reescrever. `migrate:local` usa
-somente D1 local. Deploy é separado e inclui migração remota.
+somente D1 local. Deploy é separado e inclui inicialização do D1 remoto.
+
+Enquanto o projeto estiver em pré-produção, mantenha o modelo inicial completo
+em `migrations/0001_initial.sql` e seus tipos em `src/worker/schema/index.ts`.
+Não acrescente upgrades ou backfills para schemas experimentais descartados.
+Os testes iniciam bancos novos com esse mesmo schema.
 
 ## Ferramentas e revisão
 

@@ -37,10 +37,15 @@ e a montagem do estado pertence a `installation`. A sincronização verifica a
 configuração antes da admissão. `planningTools` mantém schemas por nome, e o
 repository de planejamento recebe seleções internas tipadas de recursos.
 `PlanningError` compartilha as recusas conhecidas entre transporte e diagnóstico.
-A [auditoria de arquitetura](architecture-audit.md) registra as correções e a
-comparação dos contratos com a base anterior.
 
 ## Persistência
+
+`migrations/0001_initial.sql` inicializa o modelo completo em bancos novos: tabelas,
+constraints, índices, triggers e dados iniciais. O projeto está em pré-produção;
+não mantém upgrades de schemas experimentais. `src/worker/schema/index.ts`
+descreve o mesmo modelo para os repositories Drizzle. A criação inclui pessoa
+`self`, perfil `default`, espaço Pessoal e catálogo de categorias/grupos. O
+histórico registra cada rodada desde a admissão, sem recuperação de versões antigas.
 
 | Tabela | Dados |
 | --- | --- |
@@ -48,7 +53,7 @@ comparação dos contratos com a base anterior.
 | `transactions` | Projeção financeira da origem, atualizada somente pela importação |
 
 Contas usam seus IDs Pluggy como chaves do mapa JSON `connections.accounts`.
-Cada valor contém somente nome, tipo, moeda, saldo e horário de leitura do saldo.
+Cada valor contém nome, tipo, moeda, saldo, horário de leitura e identidade financeira estruturada.
 Contas ausentes preservam os metadados e o saldo com seu horário antigo.
 Transações têm onze campos: id, account_id, date, amount_minor, currency,
 direction, status, description, category, identification e classification. A coluna JSON
@@ -69,12 +74,11 @@ Os nove campos de connections concentram id, accounts, import_id, import_status,
 import_admitted_at, import_sequence, import_checkpoint, import_error e last_success_at.
 Admissão deriva cooldown, ID recupera despacho, sequência protege publicação/replay,
 checkpoint contém só phase/accountId/cursor e erro/último sucesso informam qualidade.
-Cada conta contém name, type, currency, balanceMinor e balanceObservedAt.
+Cada conta contém name, type, currency, balanceMinor, balanceObservedAt e identity opcional.
 
-### Extensão de planejamento
+### Planejamento
 
-`0002_planning.sql` acrescenta 21 tabelas, sem alterar as duas tabelas de origem.
-Cada conceito possui uma tabela tipada com `id` e JSON pequeno por registro:
+Os conceitos de planejamento possuem tabelas tipadas com `id` e JSON pequeno por registro:
 espaços, preferências de contas/cartões, sobreposições de transações, categorias,
 tags, regras, recorrências, parcelas, metas, contribuições, investimentos,
 empréstimos, cronogramas, marcações de faturas e preferências de notificação.
@@ -82,12 +86,9 @@ Faturas e metadados de contas/transações têm tabelas próprias. Revisão e re
 completam o controle de concorrência e de repetição. Não há tabela universal de
 recursos nem snapshot único com todo o histórico.
 
-`0008_transaction_identification.sql` acrescenta a coluna de identificação sem
-remover o histórico e copia os metadados de cartão já existentes. A tabela de
-metadados de transações continua atendendo às projeções de planejamento; os
-novos dados de identificação pertencem à transação de origem e só a importação
-os atualiza. Registros antigos sem metadados mantêm `identification=null` até
-uma nova importação. O portal apresenta os campos disponíveis nos detalhes e
+A coluna `transactions.identification` pertence à transação de origem e só a
+importação a atualiza. A tabela de metadados de transações atende às projeções de
+planejamento. Ausência de metadados mantém `identification=null`. O portal apresenta os campos disponíveis nos detalhes e
 busca por descrição, estabelecimento, documento e referências. As consultas
 financeiras e de planejamento/MCP também retornam essa identificação.
 
@@ -95,13 +96,13 @@ Quando uma transação reimportada perde seus metadados de cartão, a publicaç�
 remove o registro auxiliar antigo no mesmo batch da transação e do checkpoint.
 Os caminhos de publicação JSON e escalar seguem a mesma regra.
 
-`0009_fixed_categories.sql` acrescenta `transactions.classification` e
-`planning_category_groups`. O catálogo contém 33 categorias fixas em cada espaço,
+`transactions.classification` guarda decisões de classificação; os agrupadores
+ficam em `planning_category_groups`. O catálogo contém 33 categorias fixas em cada espaço,
 com ícone, cor e `groupId` em `planning_categories`; os agrupadores também têm
 ícone/cor e pertencem a um espaço. Cada categoria tem zero ou um grupo, que pode
 conter várias categorias. Remover um grupo desfaz o vínculo e preserva categorias,
-regras e transações. Categorias legadas/personalizadas e referências são preservadas;
-as duas categorias genéricas legadas ficam ocultas. Os nomes do catálogo fixo são
+regras e transações. Categorias personalizadas conservam suas referências;
+as duas categorias genéricas de apoio ficam ocultas. Os nomes do catálogo fixo são
 protegidos; sua aparência e agrupamento podem ser editados.
 
 Prioridade efetiva: edição/regra local, Clef habilitado com decisão aceita,
@@ -122,9 +123,8 @@ aborta commits obsoletos; a chave única impede duplicação. Triggers de public
 invalidam cursores e aplicam regras a transações novas. As quatro ferramentas
 originais conservam seus contratos e sua paginação seletiva.
 
-O [catálogo e decisões financeiras](mcp-finance.md) registra limites e diferenças
-da referência Visor. O schema inicial ainda não migra instalações históricas
-anteriores ao modelo mínimo.
+O [catálogo e decisões financeiras](mcp-finance.md) registra contratos e limites
+das operações disponíveis.
 
 ## Importação
 
@@ -218,16 +218,15 @@ separadas da validação local.
 
 ## Titularidade e múltiplas aplicações
 
-`0003_household.sql` acrescenta `people`, `pluggy_profiles` e `connection_owners`.
+`people`, `pluggy_profiles` e `connection_owners` descrevem titularidade.
 O adapter seleciona exatamente um perfil, valida a origem e aplica namespace aos
-IDs novos. A origem legada mantém os IDs. Credenciais adicionais ficam no KV;
+IDs dos perfis adicionais. O perfil `default` usa os IDs recebidos da origem. Credenciais adicionais ficam no KV;
 metadados e hash da aplicação ficam no D1. Painel e consultas financeiras usam
 a mesma atribuição de pessoa. Veja [decisões e operação](household.md).
 
 ## Histórico e páginas da instalação
 
-`0004_sync_history.sql` adiciona o registro durável das rodadas sem substituir o
-checkpoint corrente. O trigger acompanha a mesma escrita atômica de progresso;
+`sync_history` guarda as rodadas sem substituir o checkpoint corrente. O trigger acompanha a mesma escrita atômica de progresso;
 pessoa e perfil são fixados na admissão. O painel consulta catálogo de planejamento
 e histórico por repositories específicos, e reutiliza o serviço de consultas MCP
 para a visão financeira efetiva. Veja [o guia do workspace](frontend-workspace.md).
@@ -258,7 +257,7 @@ isso reduz transferência/decodificação, não necessariamente rows_read.
 
 A instalação usa Worker, D1, KV OAuth/credenciais, Workflow, assets e rate limit;
 não exige bucket, webhook ou chave de cofre adicional. O botão provisiona D1/KV;
-as migrações usam DB e o deploy declara FINANCE/LOGIN_LIMITER. Provisionamento
+o schema inicial usa DB e o deploy declara FINANCE/LOGIN_LIMITER. Provisionamento
 em conta nova exige prova real. Cookie usa HMAC SHA-256, HttpOnly, Secure,
 SameSite=Lax e Path=/; sem ADMIN_PASSWORD válida (16–256 caracteres), acesso
 privado é recusado. Comandos validam origem exata e CSRF. LOGIN_LIMITER admite

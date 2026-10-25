@@ -11,14 +11,9 @@ a instituição/conexão. Planejamento e edição são locais. As quatro ferrame
 sobreposições e dados manuais. Administração de pessoas, perfis, credenciais,
 conexões e autorizações permanece no painel.
 
-A referência pública do [Visor](https://help.visorfinance.app/pt-BR/articles/1755006-como-conectar-ao-servidor-mcp-do-visor)
-informa capacidades, mas não publica schemas completos. O produto não afirma
-compatibilidade com assinaturas privadas ou funcionalidades habilitadas por plano.
-
 ## Pessoas e perfis Pluggy
 
-A extensão de [titularidade](household.md) acrescenta múltiplos perfis e filtros
-por `personId`, preservando os contratos existentes. `caderninho_status` fornece os IDs
+A [titularidade](household.md) organiza múltiplos perfis e filtros por `personId`. `caderninho_status` fornece os IDs
 das pessoas e perfis. Espaço, pessoa e aplicação são conceitos independentes.
 
 ## Contrato comum

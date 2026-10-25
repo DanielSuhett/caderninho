@@ -12,15 +12,8 @@ import {
 } from "../../src/fixtures/transaction-identification";
 import { createFinancialService } from "../../src/worker/finance";
 import { createFinancialRepository } from "../../src/worker/finance/repository";
-import {
-  command,
-  cookies,
-  fixture,
-  login,
-  testMigrations,
-} from "./access-fixture";
+import { command, cookies, fixture, login } from "./access-fixture";
 import { account, collect, setup, source, transaction } from "./fixture";
-import { applyD1Migrations, reset } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 
 beforeEach(setup);
@@ -129,47 +122,4 @@ test("large-page scalar writes preserve identification exactly", async () => {
   const [row] = (await finance.query({ limit: 1 })).records;
   assert.equal(row?.description, description);
   assert.deepEqual(row?.identification, transactionIdentification);
-});
-
-test("migration preserves existing transactions and backfills the available card metadata", async () => {
-  await reset();
-  await applyD1Migrations(
-    env.DB,
-    testMigrations.filter((migration) => migration.name < "0008"),
-  );
-  await env.DB.prepare(
-    "INSERT INTO transactions(id,account_id,date,status,direction,currency,amount_minor,description,category) VALUES('old','a','2026-10-01','POSTED','DEBIT','BRL','-100','Old','Groceries')",
-  ).run();
-  await env.DB.prepare(
-    "INSERT INTO planning_transactionDetails(id,data) VALUES('old',?)",
-  )
-    .bind(
-      JSON.stringify({
-        accountId: "a",
-        billId: "old-bill",
-        cardNumber: "1234",
-        id: "old",
-        installmentNumber: 1,
-        operationType: "CARTAO",
-        purchaseDate: "2026-10-01",
-        totalInstallments: 2,
-      }),
-    )
-    .run();
-  await applyD1Migrations(env.DB, testMigrations);
-  const old = await env.DB.prepare(
-    "SELECT amount_minor,identification FROM transactions WHERE id='old'",
-  ).first<{ amount_minor: string; identification: string }>();
-  assert.equal(old?.amount_minor, "-100");
-  assert.ok(old);
-  assert.deepEqual(JSON.parse(old.identification), {
-    creditCardMetadata: {
-      billId: "old-bill",
-      cardNumber: "1234",
-      installmentNumber: 1,
-      purchaseDate: "2026-10-01",
-      totalInstallments: 2,
-    },
-    operationType: "CARTAO",
-  });
 });

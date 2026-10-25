@@ -11,20 +11,12 @@ import {
   TransactionListSchema,
   WorkspaceCatalogSchema,
 } from "../../src/contracts";
-import { createInstallationRepository } from "../../src/worker/installation/repository";
 import { createPlanningService } from "../../src/worker/planning";
 import { createPlanningRepository } from "../../src/worker/planning/repository";
 import { createSyncRepository } from "../../src/worker/sync/repository";
 import { createSyncHistoryRepository } from "../../src/worker/sync/repository/history.repository";
-import {
-  command,
-  cookies,
-  fixture,
-  login,
-  testMigrations,
-} from "./access-fixture";
+import { command, cookies, fixture, login } from "./access-fixture";
 import { account, collect, setup, source, transaction } from "./fixture";
-import { applyD1Migrations, reset } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 
 beforeEach(setup);
@@ -127,20 +119,6 @@ test("durable failures record the committed checkpoint and atomic publication gu
     }),
   );
   assert.deepEqual((await history.query({ limit: 25 })).records, page.records);
-});
-
-test("migration recovers only the latest legacy run without inventing an end time", async () => {
-  await reset();
-  await applyD1Migrations(env.DB, testMigrations.slice(0, 3));
-  await createInstallationRepository(env.DB).register("c");
-  await env.DB.prepare(
-    "UPDATE connections SET import_id='old-run',import_status='failed',import_admitted_at='2026-10-01T00:00:00.000Z',import_error='INVALID_RESPONSE' WHERE id='c'",
-  ).run();
-  await applyD1Migrations(env.DB, testMigrations.slice(3));
-  const page = await createSyncHistoryRepository(env.DB).query({ limit: 25 });
-  assert.equal(page.records.length, 1);
-  assert.equal(page.records[0]?.legacy, true);
-  assert.equal(page.records[0]?.finishedAt, null);
 });
 
 test("workspace routes require session, query CSRF and an explicit read-only tool allowlist", async () => {

@@ -1,1 +1,0 @@
-ALTER TABLE people ADD COLUMN photo TEXT;

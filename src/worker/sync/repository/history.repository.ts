@@ -21,7 +21,6 @@ export function createSyncHistoryRepository(binding: D1Database) {
           error: syncHistory.error,
           finishedAt: syncHistory.finishedAt,
           id: syncHistory.id,
-          legacy: syncHistory.legacy,
           personId: syncHistory.personId,
           personName: sql<string>`coalesce(${people.name},'Pessoa indisponível')`,
           phase: syncHistory.phase,

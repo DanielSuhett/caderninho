@@ -8,14 +8,6 @@ import { required } from "../support";
 import { createExecutionContext } from "cloudflare:test";
 import { env as bindings } from "cloudflare:workers";
 
-export const { TEST_MIGRATIONS: testMigrations } = z
-  .object({
-    TEST_MIGRATIONS: z.array(
-      z.object({ name: z.string(), queries: z.array(z.string()) }),
-    ),
-  })
-  .parse(bindings);
-
 const csrfInputPattern = /name="csrf" value="([^"]+)"/;
 
 export const origin = "https://caderninho.test";

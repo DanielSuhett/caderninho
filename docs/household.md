@@ -1,7 +1,7 @@
 # Pessoas e múltiplos perfis Pluggy
 
-Uma instalação continua tendo um administrador e um conjunto de autorizações MCP.
-Agora ela pode reunir fontes de várias pessoas. Identificação de titularidade não
+Uma instalação tem um administrador e um conjunto de autorizações MCP.
+Ela reúne fontes de várias pessoas. Identificação de titularidade não
 é controle de acesso: painel e assistentes autorizados enxergam toda a instalação.
 
 ## Organizar no dashboard
@@ -78,23 +78,21 @@ queries, como `get_accounts`, `get_transactions`, `get_overview`, `get_bills`,
 {"spaceId":"personal","personId":"ID_RETORNADO_NO_STATUS"}
 ```
 
-O perfil legado `default` mantém IDs antigos, compatíveis com histórico, cursores,
-edições, metas e checkpoints existentes. Novos perfis usam
+O perfil inicial `default` usa os IDs recebidos da Pluggy. Outros perfis usam
 `pluggy:<profileId>:<idCodificado>` em conexões, contas, transações, investimentos,
 empréstimos e faturas. Apenas o adapter traduz para IDs brutos da API. Ele valida
 Item/conta de origem antes de aplicar o prefixo. Nunca tenta outra credencial
 quando um perfil falha ou está pausado.
 
-A migração aditiva `0003_household.sql` cria três tabelas, remove somente o trigger
-de limite local e atribui conexões existentes a `default`/`self`. As dezoito colunas
-originais de `connections`/`transactions` e seus IDs são preservados. Alterações de
-titular invalidam cursores de consultas para impedir paginação misturada.
+O schema inicial cria pessoas, perfis e vínculos de titularidade. Novas conexões
+recebem `default`/`self` no mesmo insert; o caso de uso pode atribuir o perfil
+escolhido. Alterações de titular invalidam cursores para impedir paginação misturada.
 
 ## Credenciais e operação
 
 Os secrets `PLUGGY_CLIENT_ID` e `PLUGGY_CLIENT_SECRET` continuam sendo a configuração
 inicial do perfil `default`. A primeira utilização vincula sua aplicação por hash;
-um Client ID diferente é recusado para impedir que o histórico legado mude de
+um Client ID diferente é recusado para impedir que o histórico mude de
 origem silenciosamente. Em uma atualização de instalação, preserve o par atual.
 
 Credenciais cadastradas pelo painel ficam somente no KV do servidor, sob o prefixo
@@ -114,7 +112,7 @@ rotacionada sem perder os perfis. Backup completo inclui D1, KV e secrets do Wor
 
 ## Validação
 
-Os testes usam somente dados fictícios. Cobrem migração de histórico existente,
+Os testes usam somente dados fictícios. Cobrem titularidade inicial,
 mais de dez conexões locais, isolamento entre aplicações com IDs iguais, escolha
 de credenciais, rotação sem troca de aplicação, pausa, filtros, titularidade manual,
 reatribuição e proteção das rotas administrativas. Validação no navegador usa uma

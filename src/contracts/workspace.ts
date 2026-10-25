@@ -224,7 +224,6 @@ export const SyncHistoryResultSchema = z.object({
       error: z.string().nullable(),
       finishedAt: z.string().nullable(),
       id,
-      legacy: z.boolean(),
       personId: id,
       personName: z.string(),
       phase: z.string().nullable(),

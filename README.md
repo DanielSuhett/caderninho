@@ -21,8 +21,10 @@ Conecte os bancos em [Meu Pluggy](https://meu.pluggy.ai/) antes de importá-los.
 Os três valores ficam nos secrets da sua Cloudflare. Nenhuma chave técnica precisa
 ser gerada manualmente. O painel permite cadastrar várias pessoas e perfis Pluggy autorizados. Consulte [pessoas e perfis](docs/household.md).
 
-Instalações anteriores ao modelo mínimo exigem **banco novo**. A extensão de
-planejamento aceita uma base que já usa `0001_initial.sql`, pelas migrações aditivas 0002, 0003, 0004 e 0005.
+O projeto está em pré-produção. `migrations/0001_initial.sql` cria o modelo
+completo para um banco novo, incluindo planejamento, pessoas, fotos, histórico
+e auditoria. Bases experimentais com schemas anteriores precisam ser recriadas;
+não há um caminho de upgrade desses modelos.
 O botão usa o código publicado no GitHub; alterações locais não aparecem nele.
 O provisionamento completo numa conta Cloudflare nova ainda exige validação real.
 O software é gratuito; Cloudflare e Pluggy têm seus próprios limites e custos.
@@ -37,10 +39,6 @@ regras, orçamento, metas, recorrências e lançamentos manuais ficam no D1.
 A [importação de regras JSON](docs/rule-packs.md) oferece prévia, confirmação e categorias locais na interface; o JSON Brasil fica disponível como exemplo externo.
 Edições locais preservam os registros bancários. Escritas exigem confirmação e
 chave de idempotência; o MCP não realiza pagamentos bancários.
-
-A migração `0002_planning.sql` é aditiva sobre `0001_initial.sql` deste repositório.
-Não é uma migração dos schemas históricos anteriores ao modelo mínimo.
-Esta implementação permanece local até revisão e publicação autorizada.
 
 Consulte o [guia de uso](docs/usage.md) para manutenção e recuperação de acesso.
 
@@ -82,6 +80,8 @@ são equivalentes de 30 dias; os limites Free de D1/KV continuam diários.
 
 O projeto usa a [licença MIT](LICENSE); código de terceiros mantém seus avisos.
 
-O [painel da instalação](docs/frontend-workspace.md) reúne visão geral, transações, regras, grupos, sincronizações e conexões.
+O [painel da instalação](docs/frontend-workspace.md) reúne visão geral, transações,
+[cartões](docs/cards.md), [investimentos](docs/investments.md), regras, grupos,
+sincronizações e conexões.
 
 A [Auditoria MCP](docs/mcp-audit.md) mostra autorizações, chamadas, volume e falhas. A galeria autenticada `/account/design-system` demonstra os componentes reais do painel com dados fictícios.

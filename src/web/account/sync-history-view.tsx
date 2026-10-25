@@ -197,12 +197,6 @@ export function SyncHistoryView({
                           variant="error"
                         />
                       )}
-                      {!!r.legacy && (
-                        <p className="muted">
-                          Registro recuperado da versão anterior; algumas
-                          informações podem não estar disponíveis.
-                        </p>
-                      )}
                       <Link href="/account/connections">
                         Ver conexões e atualização
                       </Link>
