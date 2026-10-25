@@ -37,6 +37,7 @@ function copyPortalAssets(): Plugin {
               "demo",
               "demo/transactions",
               "demo/cards",
+              "demo/investments",
               "demo/rules",
               "demo/groups",
             ].map(async (path) => {

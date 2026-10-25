@@ -4,6 +4,7 @@ import { z } from "zod/v4";
 import type { SafeFields } from "../observability";
 
 const invalidRequests = new Set([
+  "CARD_REQUIRED",
   "INVALID_RULE",
   "INVALID_RULE_IMPORT_CATEGORY",
   "SPACE_PROTECTED",

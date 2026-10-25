@@ -10,6 +10,7 @@ import type { PlanningRepository, PlanningSnapshot } from "./entity";
 import { planningMutation } from "./mutations.service";
 import { portalTransactions } from "./portal-transactions.service";
 import {
+  accounts,
   planningCoverage,
   planningSelection,
   type Selection,
@@ -33,6 +34,15 @@ function readContext(snapshot: PlanningSnapshot, selection: Selection) {
     },
     view: "effective",
   };
+}
+function readSelection(snapshot: PlanningSnapshot, input: PlanningCommand) {
+  const selection = planningSelection(input);
+  if (input.tool === "get_card_commitments") {
+    selection.accountIds = accounts(snapshot)
+      .filter((account) => account.type === "CREDIT")
+      .map((account) => account.id);
+  }
+  return selection;
 }
 export function createPlanningService(
   repository: PlanningRepository,
@@ -124,7 +134,7 @@ export function createPlanningService(
         reads.has(input.tool) ? input.tool : undefined,
       );
       if (reads.has(input.tool)) {
-        const context = readContext(snapshot, planningSelection(input));
+        const context = readContext(snapshot, readSelection(snapshot, input));
         snapshot.partial = context.partial;
         const result = await query(input, snapshot);
         if ((await repository.revision()) !== snapshot.revision) {

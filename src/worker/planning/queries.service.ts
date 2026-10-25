@@ -12,6 +12,7 @@ import {
 import { hash } from "../../shared";
 import { type ProjectedPayment, recurrencePayments } from "./billing";
 import { effectiveBills } from "./bills.service";
+import { cardCommitments } from "./card-commitments.service";
 import type { PlanningRepository, PlanningSnapshot } from "./entity";
 import {
   accounts,
@@ -970,6 +971,13 @@ export async function planningQuery(
   switch (command.tool) {
     case "get_subscriptions":
       return await handleGetSubscriptions(command);
+    case "get_card_commitments":
+      return cardCommitments({
+        query: command,
+        referenceDay: day,
+        repository,
+        snapshot,
+      });
     case "get_spaces":
       return handleGetSpaces(command);
     case "get_accounts":

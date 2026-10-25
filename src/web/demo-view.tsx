@@ -8,6 +8,7 @@ import {
 import {
   ArrowSquareOutIcon,
   CreditCardIcon,
+  ChartPieSliceIcon,
   FolderIcon,
   HouseIcon,
   ListChecksIcon,
@@ -55,11 +56,16 @@ const Cards = lazy(async () => {
   return { default: error ? WorkspacePageError : data.CardsView };
 });
 const demoSnapshot = demoPortalFixture();
+const Investments = lazy(async () => {
+  const { data, error } = await tryCatch(() => import("./demo-investments"));
+  return { default: error ? WorkspacePageError : data.DemoInvestments };
+});
 const trailingSlash = /\/$/;
 const pages = [
   { icon: HouseIcon, label: "Visão geral", path: "" },
   { icon: ReceiptIcon, label: "Transações", path: "/transactions" },
   { icon: CreditCardIcon, label: "Cartões", path: "/cards" },
+  { icon: ChartPieSliceIcon, label: "Investimentos", path: "/investments" },
   { icon: ListChecksIcon, label: "Regras", path: "/rules" },
   { icon: FolderIcon, label: "Grupos", path: "/groups" },
 ];
@@ -253,6 +259,7 @@ function Demo() {
     location.pathname.includes("/rules") ||
     location.pathname.includes("/groups");
   const cards = location.pathname.includes("/cards");
+  const investments = location.pathname.includes("/investments");
   const params = new URLSearchParams(location.search);
   const unavailable = !session
     .spaces()
@@ -316,7 +323,15 @@ function Demo() {
                   />
                 </Suspense>
               )}
-              {!(unavailable || organization || cards) && (
+              {!unavailable && investments && (
+                <Suspense fallback={<WorkspaceSkeleton />}>
+                  <Investments
+                    key={`${route}:${resetVersion}`}
+                    session={session}
+                  />
+                </Suspense>
+              )}
+              {!(unavailable || organization || cards || investments) && (
                 <DemoFinancial
                   route={route}
                   session={session}

@@ -89,6 +89,7 @@ export function installationRoutes(access: Hono<PortalEnv>) {
   for (const path of [
     "cards",
     "transactions",
+    "investments",
     "rules",
     "groups",
     "sync",

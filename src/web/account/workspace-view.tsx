@@ -3,6 +3,7 @@ import {
   ArrowsClockwiseIcon,
   BankIcon,
   CreditCardIcon,
+  ChartPieSliceIcon,
   FoldersIcon,
   HouseIcon,
   ListChecksIcon,
@@ -76,6 +77,13 @@ const loadTransactions = async () => {
   }
   return { default: data.TransactionsView };
 };
+const loadInvestments = async () => {
+  const { data, error } = await tryCatch(() => import("./investments-view"));
+  if (error) {
+    return { default: WorkspacePageError };
+  }
+  return { default: data.InvestmentsView };
+};
 const OverviewView = memo(
   lazy<typeof import("./overview-view").OverviewView>(loadOverview),
 );
@@ -96,6 +104,9 @@ const SyncHistoryView = memo(
 const TransactionsView = memo(
   lazy<typeof import("./transactions-view").TransactionsView>(loadTransactions),
 );
+const InvestmentsView = memo(
+  lazy<typeof import("./investments-view").InvestmentsView>(loadInvestments),
+);
 const pageLoaders: Record<string, (() => Promise<unknown>) | undefined> = {
   "/account": loadOverview,
   "/account/audit": loadAudit,
@@ -103,6 +114,7 @@ const pageLoaders: Record<string, (() => Promise<unknown>) | undefined> = {
   "/account/connections": () => import("./dashboard-view"),
   "/account/design-system": loadDesignSystem,
   "/account/groups": loadOrganization,
+  "/account/investments": loadInvestments,
   "/account/rules": loadOrganization,
   "/account/sync": loadSyncHistory,
   "/account/transactions": loadTransactions,
@@ -138,6 +150,11 @@ const pages = [
     icon: CreditCardIcon,
     name: "Cartões",
     path: "/account/cards",
+  },
+  {
+    icon: ChartPieSliceIcon,
+    name: "Investimentos",
+    path: "/account/investments",
   },
   {
     icon: ListChecksIcon,
@@ -218,6 +235,15 @@ export function WorkspaceView({
         api={api}
         key={route}
         page={path.endsWith("rules") ? "rules" : "groups"}
+        snapshot={snapshot}
+      />
+    );
+  }
+  if (path === "/account/investments") {
+    content = (
+      <InvestmentsView
+        api={api}
+        key={route}
         snapshot={snapshot}
       />
     );

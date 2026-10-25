@@ -571,11 +571,17 @@ test("OAuth exposes 103 tools and executes confirmed local writes with durable r
         listed.result?.tools?.find((tool) => tool.name === name)?.outputSchema,
       );
       const result = await rpc("tools/call", {
-        arguments: {
-          from: "2026-10-01",
-          to: "2026-10-24",
-          ...(name === "generate_chart" && { includeSvg: false, type: "bar" }),
-        },
+        arguments:
+          name === "get_card_commitments"
+            ? { month: "2026-10", months: 12 }
+            : {
+                from: "2026-10-01",
+                to: "2026-10-24",
+                ...(name === "generate_chart" && {
+                  includeSvg: false,
+                  type: "bar",
+                }),
+              },
         name,
       });
       assert.equal(result.result?.isError, false);

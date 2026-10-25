@@ -1,6 +1,7 @@
 import { z } from "zod/v4";
 
 import { CategoryColorSchema, CategoryIconSchema } from "../domain";
+import { CardCommitmentsQuerySchema } from "./card-commitments";
 import { RuleImportFields } from "./rule-import";
 import { RuleFieldsSchema, RulePreviewQuerySchema } from "./rules";
 
@@ -1036,8 +1037,18 @@ export const planningDefinitions = [
       })
       .strict(),
   },
+  {
+    description:
+      "Compromissos observados de contas CREDIT: gastos efetivos POSTED, pendentes e futuras importadas separados; parcelas por mês, categorias e limites explícitos. Créditos classificados como despesa reduzem o gasto. Não prevê parcelas ausentes, não soma pagamento de fatura e não confunde ocupação observada com limite bancário.",
+    name: "get_card_commitments",
+    readOnly: true,
+    schema: CardCommitmentsQuerySchema,
+  },
 ] as const;
 export const PlanningCommandSchema = z.discriminatedUnion("tool", [
+  CardCommitmentsQuerySchema.extend({
+    tool: z.literal("get_card_commitments"),
+  }),
   planningDefinitions[94].schema.extend({
     tool: z.literal("get_transaction_purchases"),
   }),
