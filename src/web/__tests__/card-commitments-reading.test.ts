@@ -68,7 +68,7 @@ test("investment reading separates observed commitments, unavailable limits, and
   assert.ok(text.includes("Pendentes530,00 BRL"));
   assert.ok(text.includes("Compromissos por categoria"));
   assert.ok(text.includes("Não representam o limite ocupado no banco"));
-  assert.ok(text.includes("Indisponível · BRL"));
+  assert.ok(text.includes("Não informado"));
   assert.ok(text.includes("Cartão internacional"));
   assert.ok(text.includes("5.000,00 USD"));
   assert.ok(text.includes("62,4%"));
@@ -131,7 +131,7 @@ test("an available amount without a total does not fabricate allocated credit or
   );
   const text = visibleText(html);
   assert.ok(
-    text.includes("Não há informações suficientes para calcular a ocupação"),
+    text.includes("Ocupação indisponível: limite ou disponível não informado"),
   );
   assert.equal(text.includes("Ocupação calculada pelo limite total"), false);
   assert.equal(html.includes('role="meter"'), false);

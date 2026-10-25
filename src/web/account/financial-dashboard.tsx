@@ -18,9 +18,10 @@ import type {
   PortalTransactionListSchema,
 } from "../../contracts";
 import { tryCatch } from "../../shared";
-import { formatBalance, type MoneyTone } from "../money";
+import { formatBalance } from "../money";
 import type { CategoryAppearance } from "./category-appearance";
 import { DisclosureItem } from "./disclosure-item";
+import { FinancialMetric } from "./financial-metric";
 import { categoryVolumes, summaryCurrency } from "./financial-presentation";
 import { TransactionList } from "./transaction-list";
 import { dayLabel } from "./workspace-resource";
@@ -81,39 +82,6 @@ export interface FinancialDashboardProps {
   rulesHref?: string;
   transactionsHref: string;
 }
-function FinancialMetric({
-  label,
-  amount,
-  currency,
-  hint,
-  tone = "neutral",
-}: {
-  label: string;
-  amount: string | null;
-  currency: string;
-  hint: string;
-  tone?: MoneyTone;
-}) {
-  const value =
-    amount === null ? "Indisponível" : formatBalance(amount, currency);
-  return (
-    <div className="financial-metric">
-      <dt>{label}</dt>
-      <dd>
-        <span
-          className="metric-amount"
-          data-money-tone={
-            amount !== null && BigInt(amount) !== 0n ? tone : "neutral"
-          }
-        >
-          {amount === null ? value : value.slice(0, -(currency.length + 1))}
-        </span>
-        {amount !== null && <span className="metric-currency">{currency}</span>}
-      </dd>
-      <small>{hint}</small>
-    </div>
-  );
-}
 export function FinancialDashboard({
   overview,
   monthly,
@@ -142,6 +110,10 @@ export function FinancialDashboard({
           Resumo financeiro
         </h2>
         <LayerCard className="financial-summary">
+          <p className="summary-period">
+            {dayLabel(overview.from)} a {dayLabel(overview.to)} · resumo do
+            período
+          </p>
           <dl className="financial-metrics">
             <FinancialMetric
               amount={bankBalance}
@@ -171,8 +143,8 @@ export function FinancialDashboard({
             />
           </dl>
           <p className="financial-summary-note">
-            {dayLabel(overview.from)} a {dayLabel(overview.to)} · registros até{" "}
-            {dayLabel(overview.referenceDay)} · {currency}, sem conversão.
+            Registros até {dayLabel(overview.referenceDay)} · {currency}, sem
+            conversão.
           </p>
           {!!total?.unclassifiedCount && (
             <p className="financial-summary-note">

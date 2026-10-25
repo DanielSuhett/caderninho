@@ -123,9 +123,13 @@ inferir instituição por nome de conta, pessoa ou saldo.
 
 ## Conferência de composição
 
-Cartões (`/account/cards` e `/demo/cards`) usa conteúdo e controles em 14 px,
-conforme a solicitação desta aba. Gastos mensais, limites atuais e parcelas
-recebidas formam seções distintas. A rosca usa o total bruto das compras como
+Cartões (`/account/cards` e `/demo/cards`), Compromissos (URLs preservadas em
+`/account/investments` e `/demo/investments`) e Visão geral compartilham
+`FinancialMetric`, valores de 32/26 px, metadados de 14 px e os tokens globais
+de conteúdo de 16 px. As duas telas de cartão usam `CreditLimitCard`, a mesma
+grade de categorias/meses e legendas exatas alinhadas à direita. O período fica
+explícito antes das métricas: um mês em Cartões e 12 meses em Compromissos.
+Gastos mensais, limites atuais e parcelas recebidas formam seções distintas. A rosca usa o total bruto das compras como
 denominador explícito; os limites não são atribuídos a categorias. Consulte os
 [cálculos e estados de Cartões](docs/cards.md).
 

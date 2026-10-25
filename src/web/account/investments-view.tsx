@@ -99,8 +99,8 @@ export function InvestmentsView({
   return (
     <>
       <WorkspaceHeading
-        description="Cartões e parcelas · próximos 12 meses a partir do mês escolhido"
-        title="Investimentos"
+        description="Parcelas e gastos já recebidos para os próximos 12 meses."
+        title="Compromissos"
       >
         <div className="page-actions">
           <PeriodPicker

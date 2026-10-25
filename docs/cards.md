@@ -1,3 +1,7 @@
+> Cartões compartilha métricas, limites e identidade visual com Compromissos
+> e Visão geral. Mantém o recorte mensal, a inclusão de compras sem categoria
+> e a paginação de parcelas. Consulte [a revisão integrada](financial-design-review.md).
+
 # Cartões e parcelamentos
 
 `/account/cards` reúne os gastos das contas `CREDIT`, os limites importados e as

@@ -73,8 +73,8 @@ export function DemoInvestments({
   return (
     <>
       <WorkspaceHeading
-        description="Cartões e parcelas · próximos 12 meses a partir do mês escolhido"
-        title="Investimentos"
+        description="Parcelas e gastos já recebidos para os próximos 12 meses."
+        title="Compromissos"
       >
         <div className="page-actions">
           <PeriodPicker
@@ -83,6 +83,11 @@ export function DemoInvestments({
             onChange={changeMonth}
             toMonth="2026-10"
           />
+        </div>
+      </WorkspaceHeading>
+      <div className="filter-toolbar">
+        <div className="cards-toolbar-controls">
+          {" "}
           {currencies.length > 1 && (
             <Select
               items={currencies.map((value) => ({ label: value, value }))}
@@ -102,11 +107,11 @@ export function DemoInvestments({
               value={spaceId}
             />
           )}
-        </div>
-      </WorkspaceHeading>
-      <p className="filter-context">
-        {group?.name ?? spaceId} · Pessoa de exemplo · {currency}
-      </p>
+        </div>{" "}
+        <p className="filter-context">
+          {group?.name ?? spaceId} · Pessoa de exemplo · {currency}
+        </p>
+      </div>
       <CardCommitmentsPanel
         connectionsHref="/#install-title"
         currency={currency}

@@ -1,16 +1,17 @@
-import { Badge, Empty, LayerCard, Link, Meter, Table } from "@cloudflare/kumo";
-import { CreditCardIcon } from "@phosphor-icons/react";
+import { Badge, Empty, LayerCard, Link, Table } from "@cloudflare/kumo";
 import { lazy, Suspense, useMemo } from "react";
 
 import type { PortalCards, WorkspaceCatalog } from "../../contracts";
 import type { CardAmount } from "../../domain";
 import { tryCatch } from "../../shared";
-import { formatBalance } from "../money";
+import { formatBalance, type MoneyTone } from "../money";
 import { MoneyValue } from "../money-value";
 import { cardPercentage } from "./card-presentation";
 import { CategoryLabel } from "./category-appearance";
+import { CreditLimitCard } from "./credit-limit-card";
 import { monthLabel } from "./dashboard-period";
 import { DisclosureItem } from "./disclosure-item";
+import { FinancialMetric } from "./financial-metric";
 import { dayLabel, momentLabel } from "./workspace-resource";
 
 const CategoryChart = lazy(async () => {
@@ -36,24 +37,29 @@ function CardMetric({
   amount,
   currency,
   hint,
+  tone = "neutral",
 }: {
   label: string;
   amount: CardAmount;
   currency: string;
   hint: string;
+  tone?: MoneyTone;
 }) {
   return (
-    <div className="cards-metric">
-      <dt>{label}</dt>
-      <dd>{amountLabel(amount.totalMinor, currency)}</dd>
-      <small>{hint}</small>
+    <FinancialMetric
+      amount={amount.totalMinor}
+      currency={currency}
+      hint={hint}
+      label={label}
+      tone={tone}
+    >
       {!!amount.unknownCount && (
         <small>
           {amount.unknownCount} sem valor · conhecidos:{" "}
           {amountLabel(amount.knownMinor, currency)}
         </small>
       )}
-    </div>
+    </FinancialMetric>
   );
 }
 function LimitCard({
@@ -63,82 +69,31 @@ function LimitCard({
   account: PortalCards["accounts"][number];
   showOwner: boolean;
 }) {
-  const percentage = cardPercentage(
-    account.allocatedMinor,
-    account.creditLimitMinor,
-  );
-  const excess =
-    account.allocatedMinor !== null && BigInt(account.allocatedMinor) < 0n;
   return (
-    <LayerCard className="cards-limit-card">
-      <header className="cards-limit-heading">
-        <CreditCardIcon
-          aria-hidden
-          size={20}
-        />
-        <div>
-          <h3>
-            {account.name}
-            {account.cardNumber ? ` · ${account.cardNumber}` : ""}
-          </h3>
-          {showOwner ? (
-            <p className="cards-note">{account.personName}</p>
-          ) : null}
-        </div>
-      </header>
-      <dl className="cards-limit-values">
-        <div>
-          <dt>Limite</dt>
-          <dd>{amountLabel(account.creditLimitMinor, account.currency)}</dd>
-        </div>
-        <div>
-          <dt>{excess ? "Crédito excedente" : "Alocado"}</dt>
-          <dd>
-            {amountLabel(
-              excess
-                ? (-BigInt(account.allocatedMinor ?? "0")).toString()
-                : account.allocatedMinor,
-              account.currency,
-            )}
-          </dd>
-        </div>
-        <div>
-          <dt>Disponível</dt>
-          <dd>{amountLabel(account.availableCreditMinor, account.currency)}</dd>
-        </div>
-      </dl>
-      {!!percentage && !excess && (
-        <Meter
-          customValue={percentage.label}
-          label="Ocupação do limite"
-          value={percentage.meter}
-        />
-      )}
-      {!percentage && (
-        <p className="cards-note">
-          {account.creditLimitMinor !== null &&
-          BigInt(account.creditLimitMinor) <= 0n
-            ? "Limite informado não é positivo; percentual indisponível."
-            : "Ocupação indisponível: limite ou disponível não informado."}
-        </p>
-      )}
-      <p className="cards-note">
-        Última observação da conta: {momentLabel(account.balanceObservedAt)}
-      </p>
+    <CreditLimitCard
+      name={`${account.name}${account.cardNumber ? ` · ${account.cardNumber}` : ""}`}
+      {...(showOwner && { owner: account.personName })}
+      allocated={account.allocatedMinor}
+      available={account.availableCreditMinor}
+      currency={account.currency}
+      limit={account.creditLimitMinor}
+    >
+      <p>Atualizado em {momentLabel(account.balanceObservedAt)}</p>
       {!!(account.closeDate || account.dueDate) && (
-        <p className="cards-note">
+        <p>
           {account.closeDate
-            ? `Fechamento: ${dayLabel(account.closeDate)}`
+            ? `Fecha em ${dayLabel(account.closeDate)}`
             : "Fechamento não informado"}{" "}
           ·{" "}
           {account.dueDate
-            ? `Vencimento: ${dayLabel(account.dueDate)}`
+            ? `Vence em ${dayLabel(account.dueDate)}`
             : "Vencimento não informado"}
         </p>
       )}
-    </LayerCard>
+    </CreditLimitCard>
   );
 }
+
 function Categories({
   data,
   categories,
@@ -156,17 +111,18 @@ function Categories({
   );
   const hasValues = groups.some((group) => BigInt(group.knownMinor) > 0n);
   return (
-    <LayerCard className="cards-category-card">
-      <header>
+    <LayerCard className="analysis-card cards-category-card">
+      <header className="analysis-heading">
         <h2>Gastos por categoria</h2>
-        <p className="cards-note">
-          {monthLabel(data.month)} · compras confirmadas antes dos estornos
-        </p>
+        <span>{data.currency}</span>
       </header>
+      <p className="analysis-caption">
+        {monthLabel(data.month)} · compras confirmadas antes dos estornos
+      </p>
       {groups.length ? (
         <div className="cards-category-content">
           {hasValues && !data.purchases.unknownCount ? (
-            <div className="cards-chart">
+            <div className="financial-donut">
               <Suspense fallback={<p role="status">Carregando gráfico…</p>}>
                 <CategoryChart
                   categories={categories}
@@ -174,7 +130,7 @@ function Categories({
                   groups={groups}
                 />
               </Suspense>
-              <div className="cards-chart-center">
+              <div className="financial-donut-center">
                 <span>
                   {amountLabel(data.purchases.totalMinor, data.currency)}
                 </span>
@@ -188,40 +144,32 @@ function Categories({
                 : "Nenhum valor positivo para representar no gráfico."}
             </p>
           )}
-          <Table className="cards-category-table">
-            <Table.Header>
-              <Table.Row>
-                <Table.Head>Categoria</Table.Head>
-                <Table.Head>Valor</Table.Head>
-                <Table.Head>Participação</Table.Head>
-              </Table.Row>
-            </Table.Header>
-            <Table.Body>
-              {groups.map((group) => (
-                <Table.Row key={group.categoryId ?? "uncategorized"}>
-                  <Table.Cell>
-                    <CategoryLabel
-                      category={categories.find(
-                        (category) => category.id === group.categoryId,
-                      )}
-                      label={
-                        categories.find(
-                          (category) => category.id === group.categoryId,
-                        )?.name ?? "Sem categoria"
-                      }
-                    />
-                  </Table.Cell>
-                  <Table.Cell>
-                    {amountLabel(group.totalMinor, data.currency)}
-                  </Table.Cell>
-                  <Table.Cell>
+          <ul className="financial-category-legend">
+            {groups.map((group) => (
+              <li
+                className="financial-category-row"
+                key={group.categoryId ?? "uncategorized"}
+              >
+                <CategoryLabel
+                  category={categories.find(
+                    (category) => category.id === group.categoryId,
+                  )}
+                  label={
+                    categories.find(
+                      (category) => category.id === group.categoryId,
+                    )?.name ?? "Sem categoria"
+                  }
+                />
+                <span className="financial-category-amount">
+                  {amountLabel(group.totalMinor, data.currency)}
+                  <span className="cards-note">
                     {cardPercentage(group.totalMinor, data.purchases.totalMinor)
                       ?.label ?? "Não informada"}
-                  </Table.Cell>
-                </Table.Row>
-              ))}
-            </Table.Body>
-          </Table>
+                  </span>
+                </span>
+              </li>
+            ))}
+          </ul>
         </div>
       ) : (
         <Empty
@@ -255,25 +203,29 @@ export function CardsDashboard({
   );
   return (
     <div className="cards-dashboard">
-      <LayerCard className="cards-summary">
-        <dl className="cards-metrics">
+      <LayerCard className="financial-summary">
+        <p className="summary-period">
+          {monthLabel(data.month)} · gastos do mês
+        </p>
+        <dl className="financial-metrics financial-metrics-three">
           <CardMetric
             amount={data.confirmed}
             currency={data.currency}
             hint="Compras menos estornos classificados"
-            label="Gastos confirmados do mês"
+            label="Gastos confirmados"
+            tone="expense"
           />
           <CardMetric
             amount={data.pending}
             currency={data.currency}
             hint="Data até hoje · aguardam confirmação"
-            label="Pendentes no mês"
+            label="Pendentes"
           />
           <CardMetric
             amount={data.future}
             currency={data.currency}
             hint="Data posterior a hoje · já recebidos"
-            label="Futuros no mês"
+            label="Futuros conhecidos"
           />
         </dl>
         {!!data.refunds.count && (
@@ -297,42 +249,22 @@ export function CardsDashboard({
           </p>
         </DisclosureItem>
       </LayerCard>
-      <section aria-labelledby="card-limits-heading">
-        <header className="cards-section-heading">
-          <h2 id="card-limits-heading">Limites informados</h2>
-          <span>Últimos dados importados · não acompanham o mês escolhido</span>
-        </header>
-        {visibleAccounts.length ? (
-          <div className="cards-limits">
-            {visibleAccounts.map((account) => (
-              <LimitCard
-                account={account}
-                key={account.id}
-                showOwner={showOwner}
-              />
-            ))}
-          </div>
-        ) : (
-          <p className="cards-note">
-            Nenhum cartão com limite nesta moeda. Compras podem estar em uma
-            moeda diferente da conta.
+      <div className="card-analysis-grid">
+        <Categories
+          categories={categories}
+          data={data}
+        />
+        <LayerCard
+          aria-labelledby="card-months-heading"
+          className="analysis-card cards-months"
+        >
+          <header className="analysis-heading">
+            <h2 id="card-months-heading">Parcelas por mês</h2>
+            <span>{data.currency}</span>
+          </header>
+          <p className="analysis-caption">
+            12 meses · somente parcelas recebidas
           </p>
-        )}
-        <p className="cards-note">
-          Alocado = limite − disponível. Limites compartilhados entre cartões
-          não são somados.
-        </p>
-      </section>
-      <Categories
-        categories={categories}
-        data={data}
-      />
-      <section aria-labelledby="card-months-heading">
-        <header className="cards-section-heading">
-          <h2 id="card-months-heading">Parcelas por mês</h2>
-          <span>12 meses · somente parcelas recebidas</span>
-        </header>
-        <LayerCard className="cards-table-card">
           <Table className="cards-months-table">
             <Table.Header>
               <Table.Row>
@@ -344,7 +276,10 @@ export function CardsDashboard({
             </Table.Header>
             <Table.Body>
               {data.months.map((month) => (
-                <Table.Row key={month.month}>
+                <Table.Row
+                  className="even:bg-transparent"
+                  key={month.month}
+                >
                   <Table.Cell>
                     <Link
                       aria-current={
@@ -401,14 +336,42 @@ export function CardsDashboard({
               ))}
             </Table.Body>
           </Table>
+          <p className="cards-note">
+            — indica que nenhuma parcela foi recebida; não comprova ausência de
+            compromisso. Parcelas não enviadas pelo banco não são projetadas.
+          </p>
         </LayerCard>
+      </div>
+      <section aria-labelledby="card-limits-heading">
+        <header className="section-heading">
+          <h2 id="card-limits-heading">Limites informados</h2>
+          <span className="section-context">
+            Última observação importada · fora do recorte mensal
+          </span>
+        </header>
+        {visibleAccounts.length ? (
+          <div className="cards-limits">
+            {visibleAccounts.map((account) => (
+              <LimitCard
+                account={account}
+                key={account.id}
+                showOwner={showOwner}
+              />
+            ))}
+          </div>
+        ) : (
+          <p className="cards-note">
+            Nenhum cartão com limite nesta moeda. Compras podem estar em uma
+            moeda diferente da conta.
+          </p>
+        )}
         <p className="cards-note">
-          — indica que nenhuma parcela foi recebida; não comprova ausência de
-          compromisso. Parcelas não enviadas pelo banco não são projetadas.
+          Ocupado = limite − disponível. Limites compartilhados entre cartões
+          não são somados.
         </p>
       </section>
       <section aria-labelledby="card-installments-heading">
-        <header className="cards-section-heading">
+        <header className="section-heading">
           <h2 id="card-installments-heading">
             Parcelamentos em {monthLabel(data.month)}
           </h2>

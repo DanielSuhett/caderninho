@@ -1052,9 +1052,10 @@
   font-size: var(--type-meta);
   color: var(--muted);
 }
-/* Metric values keep their digits together; currency has its own typographic role. */
+/* MoneyValue wraps only at thousands; currency has its own typographic role. */
 .metric-amount {
-  white-space: nowrap;
+  min-width: 0;
+  max-width: 100%;
 }
 .metric-currency {
   font-size: var(--type-meta);
@@ -1066,7 +1067,7 @@
   font-size: var(--type-meta);
   color: var(--muted);
 }
-@container (max-width: 950px) {
+@container (max-width: 780px) {
   .financial-metrics {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -1299,15 +1300,6 @@
   gap: 32px;
   margin-top: 24px;
 }
-.investment-metrics {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-.investment-analysis-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
-  gap: 24px;
-  align-items: start;
-}
 .investment-months,
 .investment-categories {
   min-width: 0;
@@ -1398,25 +1390,25 @@
 .investment-month-empty {
   margin: 0 0 16px;
 }
-.investment-donut {
+.financial-donut {
   position: relative;
-  margin-top: -8px;
+  min-width: 0;
+  min-height: 240px;
 }
-.investment-donut-center {
+.financial-donut-center {
   position: absolute;
   top: 50%;
   left: 50%;
   display: grid;
   gap: 4px;
-  color: var(--muted);
+  width: 48%;
   text-align: center;
   pointer-events: none;
   transform: translate(-50%, -50%);
 }
-.investment-donut-center > span {
-  font-size: var(--type-meta);
+.financial-donut-center > span:first-child {
+  font-weight: 500;
 }
-.investment-category-total,
 .investment-credit-categories > p {
   display: flex;
   flex-wrap: wrap;
@@ -1425,22 +1417,21 @@
   justify-content: space-between;
   margin: 0 0 16px;
 }
-.investment-category-total > span:first-child {
-  color: var(--muted);
-}
-.investment-category-legend {
+.financial-category-legend {
   display: grid;
-  gap: 16px;
+  gap: 0;
   padding: 16px 0 0;
   margin: 0;
   list-style: none;
   border-top: 1px solid var(--line);
 }
-.investment-category-row {
+.financial-category-row {
   display: flex;
   gap: 12px;
   align-items: baseline;
   justify-content: space-between;
+  padding-block: 12px;
+  font-size: var(--type-meta);
 }
 .investment-category-name {
   display: flex;
@@ -1454,7 +1445,7 @@
   height: 8px;
   border-radius: 100%;
 }
-.investment-category-amount {
+.financial-category-amount {
   display: grid;
   flex-shrink: 0;
   gap: 2px;
@@ -1465,104 +1456,14 @@
   margin-top: 20px;
   font-size: var(--type-meta);
 }
-.investment-card-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 24px;
-}
-.investment-credit-card {
-  min-width: 0;
-  padding: 20px 24px;
-}
-.investment-card-heading {
-  display: flex;
-  gap: 12px;
-  align-items: start;
-}
-.investment-card-heading h3 {
-  margin: 0;
-  font-size: var(--type-body);
-  font-weight: 500;
-}
-.investment-card-heading p {
-  margin: 4px 0 0;
-  font-size: var(--type-meta);
-  color: var(--muted);
-}
-.investment-card-icon {
-  display: flex;
-  align-items: center;
-  height: 1lh;
-}
-.investment-credit-values {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
-  margin: 24px 0;
-}
-.investment-credit-values dt {
-  min-height: 2lh;
-  margin-bottom: 8px;
-  font-size: var(--type-meta);
-  color: var(--muted);
-}
-.investment-credit-values dd {
-  margin: 0;
-  font-size: var(--type-body);
-  font-weight: 500;
-  font-variant-numeric: tabular-nums;
-}
-.investment-limit-note {
-  margin: 16px 0 0;
-}
 .investment-method p {
   max-width: 88ch;
   font-size: var(--type-meta);
   color: var(--muted);
 }
-@media (max-width: 1100px) {
-  .investment-analysis-grid {
-    grid-template-columns: 1fr;
-  }
-  .investment-categories {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    column-gap: 24px;
-  }
-  .investment-categories > .analysis-heading,
-  .investment-categories > .analysis-caption,
-  .investment-categories > .analysis-footnote,
-  .investment-categories > .investment-credit-categories {
-    grid-column: 1 / -1;
-  }
-  .investment-category-total {
-    grid-row: 4;
-    grid-column: 1;
-  }
-  .investment-category-legend {
-    grid-row: 3 / 5;
-    grid-column: 2;
-    align-self: start;
-    border-top: 0;
-  }
-  .investment-card-grid {
-    grid-template-columns: 1fr;
-  }
-}
 @media (max-width: 760px) {
   .investment-dashboard {
     gap: 24px;
-  }
-  .investment-metrics {
-    grid-template-columns: 1fr;
-    gap: 24px;
-  }
-  .investment-metrics :where(.financial-metric) dt {
-    min-height: auto;
-  }
-  .investment-metrics :where(.financial-metric) dd {
-    display: block;
-    font-size: 26px;
   }
   .investment-month-columns {
     display: none;
@@ -1601,7 +1502,7 @@
   .investment-categories {
     display: flex;
   }
-  .investment-category-legend {
+  .financial-category-legend {
     border-top: 1px solid var(--line);
   }
   .investment-installment-row {
@@ -1611,21 +1512,164 @@
   .investment-installment-value {
     justify-items: start;
   }
-  .investment-credit-card {
+}
+
+/* Shared financial reading rhythm: overview, cards and commitments. */
+.cards-toolbar-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: flex-end;
+  max-width: 100%;
+}
+.financial-category-row + .financial-category-row {
+  border-top: 1px solid var(--line);
+}
+.summary-period {
+  margin: 0 0 24px;
+  font-size: var(--type-meta);
+  color: var(--muted);
+}
+.financial-metrics-three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.financial-metric + .financial-metric {
+  padding-left: 24px;
+  border-left: 1px solid var(--line);
+}
+.financial-metric small {
+  font-size: var(--type-meta);
+  line-height: 1.5;
+}
+.financial-summary > .disclosure-item {
+  padding-top: 12px;
+  margin-top: 20px;
+  border-top: 1px solid var(--line);
+}
+.card-analysis-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.3fr);
+  gap: 24px;
+  align-items: start;
+}
+.cards-limits {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr));
+  gap: 24px;
+}
+.credit-limit-card {
+  min-width: 0;
+  padding: 20px 24px;
+}
+.credit-limit-heading {
+  display: flex;
+  gap: 12px;
+  align-items: start;
+}
+.credit-limit-icon {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  color: var(--muted);
+  background: var(--surface-raised);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.credit-limit-heading h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.credit-limit-heading p {
+  margin: 4px 0 0;
+  font-size: var(--type-meta);
+  color: var(--muted);
+}
+.credit-limit-values {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin: 24px 0;
+}
+.credit-limit-values dt {
+  margin: 0 0 8px;
+  font-size: var(--type-meta);
+  color: var(--muted);
+}
+.credit-limit-values dd {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.credit-limit-details,
+.credit-limit-note {
+  margin: 16px 0 0;
+  font-size: var(--type-meta);
+  color: var(--muted);
+}
+.credit-limit-details {
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+.credit-limit-details p {
+  margin: 4px 0 0;
+}
+@container (max-width: 780px) {
+  .financial-metrics:not(.financial-metrics-three)
+    .financial-metric:nth-child(3) {
+    padding-left: 0;
+    border-left: 0;
+  }
+}
+@media (max-width: 1200px) {
+  .card-analysis-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 760px) {
+  .financial-metrics-three {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 20px;
+  }
+  .financial-metrics-three .financial-metric + .financial-metric {
+    padding: 16px 0 0;
+    border-top: 1px solid var(--line);
+    border-left: 0;
+  }
+  .financial-metric dt {
+    min-height: 0;
+  }
+  .financial-metric dd {
+    flex-direction: row;
+    align-items: baseline;
+  }
+  .financial-summary,
+  .credit-limit-card {
     padding: 20px;
   }
-  .investment-credit-values {
-    grid-template-columns: 1fr;
-    gap: 16px;
-  }
-  .investment-credit-values > div {
-    display: flex;
+  .credit-limit-values {
+    grid-template-columns: minmax(0, 1fr);
     gap: 12px;
+  }
+  .credit-limit-values > div {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 12px;
     align-items: baseline;
     justify-content: space-between;
   }
-  .investment-credit-values dt {
-    min-height: auto;
+  .credit-limit-values dt {
     margin: 0;
+  }
+}
+@container (max-width: 290px) {
+  .financial-metric + .financial-metric {
+    padding: 16px 0 0;
+    border-top: 1px solid var(--line);
+    border-left: 0;
   }
 }

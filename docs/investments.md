@@ -1,3 +1,8 @@
+> A navegação agora apresenta **Compromissos**, mantendo as URLs `/account/investments`
+> e `/demo/investments` e a consulta `get_card_commitments`. A apresentação foi
+> unificada com Cartões e Visão geral; esta página continua tratando de dívidas
+> de cartões, enquanto `get_investments` consulta posições de ativos.
+
 # Investimentos: cartões e parcelamentos
 
 A aba `/account/investments` reúne os compromissos de cartões. O nome

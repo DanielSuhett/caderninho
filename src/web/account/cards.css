@@ -1,12 +1,3 @@
-.cards-page {
-  --type-body: 14px;
-  --type-meta: 14px;
-  --text-base: 14px;
-  font-size: 14px;
-}
-.cards-page .disclosure-trigger {
-  font-size: 14px;
-}
 .cards-dashboard {
   display: grid;
   gap: 32px;
@@ -18,11 +9,6 @@
   font-size: 20px;
   font-weight: 600;
 }
-.cards-dashboard h3 {
-  margin: 0;
-  font-size: 16px;
-  font-weight: 600;
-}
 .cards-note {
   display: block;
   margin: 6px 0 0;
@@ -30,119 +16,29 @@
   line-height: 1.5;
   color: var(--muted);
 }
-.cards-summary,
-.cards-limit-card,
-.cards-category-card {
-  min-width: 0;
-  padding: 20px 24px;
-}
-.cards-summary > .disclosure-item {
-  margin-top: 16px;
-}
-.cards-metrics {
-  display: grid;
-  grid-template-columns: 1.4fr 1fr 1fr;
-  gap: 24px;
-  margin: 0;
-}
-.cards-metric {
-  min-width: 0;
-}
-.cards-metric dt,
-.cards-limit-values dt,
-.cards-installment-details dt {
-  color: var(--muted);
-}
-.cards-metric dd {
-  margin: 8px 0 4px;
-  font-weight: var(--cards-metric-weight, 500);
-  font-variant-numeric: tabular-nums;
-}
-.cards-metric:first-child {
-  --cards-metric-weight: 600;
-}
-.cards-metric small {
-  display: block;
-  margin-top: 4px;
-  font-size: 14px;
-  color: var(--muted);
-}
-.cards-section-heading {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 24px;
-  align-items: baseline;
-  justify-content: space-between;
-  margin-bottom: 16px;
-}
-.cards-section-heading > span {
-  color: var(--muted);
-}
-.cards-limits {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
-  gap: 16px;
-}
-.cards-limit-heading {
-  display: flex;
-  gap: 12px;
-  align-items: flex-start;
-}
-.cards-limit-heading > svg {
-  flex-shrink: 0;
-  margin-top: 2px;
-}
-.cards-limit-values {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
-  margin: 20px 0;
-}
-.cards-limit-values dd,
-.cards-installment-details dd {
-  margin: 4px 0 0;
-  font-variant-numeric: tabular-nums;
-  overflow-wrap: anywhere;
-}
 .cards-category-content {
   display: grid;
-  grid-template-columns: minmax(200px, 0.8fr) minmax(0, 1.2fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 24px;
   align-items: center;
-  margin-top: 16px;
-}
-.cards-chart {
-  position: relative;
-  min-width: 0;
-}
-.cards-chart-center {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 42%;
-  text-align: center;
-  pointer-events: none;
-  transform: translate(-50%, -50%);
-}
-.cards-chart-center > span:first-child {
-  font-weight: 500;
-}
-.cards-chart-center .cards-note {
-  margin-top: 4px;
-}
-.cards-category-table {
-  font-variant-numeric: tabular-nums;
-}
-.cards-category-table td:last-child,
-.cards-category-table th:last-child {
-  text-align: right;
-}
-.cards-table-card {
-  padding: 8px 16px;
+  margin-top: 0;
 }
 .cards-months-table {
   width: 100%;
+  font-size: 14px;
   font-variant-numeric: tabular-nums;
+}
+.cards-months-table th {
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--muted);
+}
+.cards-months-table td:not(:first-child),
+.cards-months-table th:not(:first-child) {
+  text-align: right;
+}
+.cards-months-table tbody tr + tr {
+  border-top: 1px solid var(--line);
 }
 .cards-months-table [aria-current="date"] {
   font-weight: 500;
@@ -192,10 +88,6 @@
   gap: 16px;
 }
 @container (max-width: 700px) {
-  .cards-metrics {
-    grid-template-columns: 1fr;
-    gap: 20px;
-  }
   .cards-category-content {
     grid-template-columns: 1fr;
     gap: 8px;
@@ -229,24 +121,6 @@
   }
 }
 @media (max-width: 480px) {
-  .cards-summary,
-  .cards-limit-card,
-  .cards-category-card {
-    padding: 16px;
-  }
-  .cards-limit-values {
-    grid-template-columns: 1fr;
-    gap: 12px;
-  }
-  .cards-limit-values > div {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px 12px;
-    justify-content: space-between;
-  }
-  .cards-limit-values dd {
-    margin: 0;
-  }
   .cards-installment-summary {
     flex-direction: column;
     gap: 8px;
@@ -257,17 +131,4 @@
     align-items: center;
     justify-content: space-between;
   }
-  .cards-category-table td,
-  .cards-category-table th {
-    padding-inline: 4px;
-    overflow-wrap: anywhere;
-  }
-}
-
-.cards-toolbar-controls {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 16px;
-  align-items: flex-end;
-  max-width: 100%;
 }

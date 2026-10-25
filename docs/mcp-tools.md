@@ -2,7 +2,7 @@
 
 Gerado por `npm run docs:mcp` a partir do registro de ferramentas.
 
-103 ferramentas: 33 consultas/prévias, 69 escritas locais e 1 operação de sincronização.
+104 ferramentas: 34 consultas/prévias, 69 escritas locais e 1 operação de sincronização.
 
 | Ferramenta | Operação | Schema de saída | Descrição |
 | --- | --- | --- | --- |

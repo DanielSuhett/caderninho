@@ -7,8 +7,8 @@ import {
 } from "@cloudflare/kumo";
 import {
   ArrowSquareOutIcon,
-  CreditCardIcon,
   ChartPieSliceIcon,
+  CreditCardIcon,
   FolderIcon,
   HouseIcon,
   ListChecksIcon,
@@ -65,7 +65,7 @@ const pages = [
   { icon: HouseIcon, label: "Visão geral", path: "" },
   { icon: ReceiptIcon, label: "Transações", path: "/transactions" },
   { icon: CreditCardIcon, label: "Cartões", path: "/cards" },
-  { icon: ChartPieSliceIcon, label: "Investimentos", path: "/investments" },
+  { icon: ChartPieSliceIcon, label: "Compromissos", path: "/investments" },
   { icon: ListChecksIcon, label: "Regras", path: "/rules" },
   { icon: FolderIcon, label: "Grupos", path: "/groups" },
 ];

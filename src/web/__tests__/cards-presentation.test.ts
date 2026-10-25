@@ -34,9 +34,11 @@ test("the card demo uses the shared ledger, reports only received months and sho
       showOwner: false,
     }),
   );
-  assert.ok(html.includes("Gastos confirmados do mês"));
+  assert.ok(
+    html.includes("Gastos confirmados") && html.includes("gastos do mês"),
+  );
   assert.ok(html.includes("em compras"));
-  assert.ok(html.includes("não acompanham o mês escolhido"));
+  assert.ok(html.includes("fora do recorte mensal"));
   assert.ok(html.includes("Parcela 6 de 12"));
   assert.ok(html.includes("Sem parcelas recebidas"));
   assert.equal(html.includes("Parcela 13 de 12"), false);

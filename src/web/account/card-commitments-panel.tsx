@@ -4,18 +4,18 @@ import {
   Empty,
   LayerCard,
   Link,
-  Meter,
   SkeletonLine,
 } from "@cloudflare/kumo";
-import { CreditCardIcon } from "@phosphor-icons/react";
 import { lazy, Suspense } from "react";
 
 import type { CardCommitments } from "../../contracts";
 import { tryCatch } from "../../shared";
-import { formatBalance, type MoneyTone } from "../money";
+import { formatBalance } from "../money";
 import { MoneyValue } from "../money-value";
+import { CreditLimitCard } from "./credit-limit-card";
 import { monthLabel } from "./dashboard-period";
 import { DisclosureItem } from "./disclosure-item";
+import { FinancialMetric } from "./financial-metric";
 import {
   amountProportion,
   type InvestmentCategorySlice,
@@ -49,43 +49,6 @@ function Amount({
     <span className="muted">Indisponível · {currency}</span>
   ) : (
     <MoneyValue value={formatBalance(value, currency)} />
-  );
-}
-
-function CommitmentMetric({
-  title,
-  value,
-  currency,
-  hint,
-  tone = "neutral",
-}: {
-  title: string;
-  value: string | null;
-  currency: string;
-  hint: string;
-  tone?: MoneyTone;
-}) {
-  const formatted = value === null ? null : formatBalance(value, currency);
-  return (
-    <div className="financial-metric">
-      <dt>{title}</dt>
-      <dd>
-        <span
-          className="metric-amount"
-          data-money-tone={
-            value !== null && BigInt(value) !== 0n ? tone : "neutral"
-          }
-        >
-          {formatted === null ? (
-            "Indisponível"
-          ) : (
-            <MoneyValue value={formatted.slice(0, -(currency.length + 1))} />
-          )}
-        </span>
-        <span className="metric-currency"> {currency}</span>
-      </dd>
-      <small>{hint}</small>
-    </div>
   );
 }
 
@@ -294,7 +257,7 @@ function CommitmentCategories({
       </p>
       {positive.length ? (
         <>
-          <div className="investment-donut">
+          <div className="financial-donut">
             <Suspense
               fallback={
                 <div
@@ -315,18 +278,20 @@ function CommitmentCategories({
                 currency={currency}
               />
             </Suspense>
+            <div className="financial-donut-center">
+              <span>
+                <Amount
+                  currency={currency}
+                  value={total}
+                />
+              </span>
+              <span className="investment-meta">representados</span>
+            </div>
           </div>
-          <p className="investment-category-total">
-            <span>Total representado</span>
-            <Amount
-              currency={currency}
-              value={total}
-            />
-          </p>
-          <ul className="investment-category-legend">
+          <ul className="financial-category-legend">
             {positive.map((category) => (
               <li
-                className="investment-category-row"
+                className="financial-category-row"
                 key={category.id ?? "unclassified"}
               >
                 <span className="investment-category-name">
@@ -337,7 +302,7 @@ function CommitmentCategories({
                   />
                   {category.name}
                 </span>
-                <span className="investment-category-amount">
+                <span className="financial-category-amount">
                   <Amount
                     currency={currency}
                     value={category.knownAmountMinor}
@@ -405,94 +370,33 @@ export function CardCreditLimits({
   return (
     <section aria-labelledby="card-limits-heading">
       <header className="section-heading">
-        <h2 id="card-limits-heading">Limites dos cartões</h2>
+        <h2 id="card-limits-heading">Limites informados</h2>
         <span className="section-context">
           Moedas nativas · última observação importada
         </span>
       </header>
-      <div className="investment-card-grid">
-        {accounts.map((account) => {
-          const measured =
-            account.creditLimitMinor !== null &&
-            account.allocatedCreditMinor !== null &&
-            BigInt(account.creditLimitMinor) > 0n;
-          const proportion = measured
-            ? amountProportion(
-                account.allocatedCreditMinor ?? "0",
-                account.creditLimitMinor ?? "0",
-              )
-            : null;
-          return (
-            <LayerCard
-              className="investment-credit-card"
-              key={account.id}
-            >
-              <header className="investment-card-heading">
-                <span className="investment-card-icon">
-                  <CreditCardIcon
-                    aria-hidden
-                    size={20}
-                  />
-                </span>
-                <div>
-                  <h3>{account.name}</h3>
-                  <p>
-                    {account.personName} · {account.currency}
-                    {!!account.hidden && " · conta oculta"}
-                  </p>
-                </div>
-              </header>
-              <dl className="investment-credit-values">
-                <div>
-                  <dt>Limite total</dt>
-                  <dd>
-                    <Amount
-                      currency={account.currency}
-                      value={account.creditLimitMinor}
-                    />
-                  </dd>
-                </div>
-                <div>
-                  <dt>Ocupado na origem</dt>
-                  <dd>
-                    <Amount
-                      currency={account.currency}
-                      value={account.allocatedCreditMinor}
-                    />
-                  </dd>
-                </div>
-                <div>
-                  <dt>Disponível na origem</dt>
-                  <dd>
-                    <Amount
-                      currency={account.currency}
-                      value={account.availableCreditMinor}
-                    />
-                  </dd>
-                </div>
-              </dl>
-              {proportion !== null && (
-                <Meter
-                  customValue={percentageLabel(proportion)}
-                  label="Ocupação do limite informado"
-                  showValue
-                  value={Math.min(proportion, 100)}
-                />
-              )}
-              <p className="investment-meta investment-limit-note">
-                {account.allocatedCreditMinor === null
-                  ? "Não há informações suficientes para calcular a ocupação. A soma de lançamentos não substitui essa informação."
-                  : "Ocupação calculada pelo limite total menos o disponível informado pela origem."}
-                {account.availabilitySource === "unavailable" &&
-                  " Disponível não informado pela origem."}
-                {!!account.balanceObservedAt &&
-                  ` Conta lida em ${dayLabel(account.balanceObservedAt)}.`}
-                {account.limitSource === "manual" &&
-                  " Limite total cadastrado manualmente."}
-              </p>
-            </LayerCard>
-          );
-        })}
+      <div className="cards-limits">
+        {accounts.map((account) => (
+          <CreditLimitCard
+            allocated={account.allocatedCreditMinor}
+            available={account.availableCreditMinor}
+            currency={account.currency}
+            key={account.id}
+            limit={account.creditLimitMinor}
+            name={account.name}
+            owner={account.personName}
+          >
+            {!!account.balanceObservedAt && (
+              <p>Atualizado em {dayLabel(account.balanceObservedAt)}</p>
+            )}
+            {account.limitSource === "manual" && (
+              <p>Limite total cadastrado manualmente.</p>
+            )}
+            {!!account.hidden && (
+              <p>Conta oculta · há lançamentos neste grupo.</p>
+            )}
+          </CreditLimitCard>
+        ))}
       </div>
     </section>
   );
@@ -534,31 +438,34 @@ export function CardCommitmentsPanel({
           variant="secondary"
         />
       )}
-      <LayerCard className="financial-summary investment-summary">
-        <dl className="financial-metrics investment-metrics">
-          <CommitmentMetric
+      <LayerCard className="financial-summary">
+        <p className="summary-period">
+          {monthLabel(data.month)} a {monthLabel(data.to.slice(0, 7))} ·
+          compromissos recebidos
+        </p>
+        <dl className="financial-metrics financial-metrics-three">
+          <FinancialMetric
+            amount={total ? total.spentMinor : emptyAmount}
             currency={currency}
             hint="Confirmados até a data de referência"
-            title="Gastos realizados"
+            label="Gastos realizados"
             tone="expense"
-            value={total ? total.spentMinor : emptyAmount}
           />
-          <CommitmentMetric
+          <FinancialMetric
+            amount={total ? total.pendingMinor : emptyAmount}
             currency={currency}
             hint="Aguardando confirmação, até a referência"
-            title="Pendentes"
-            value={total ? total.pendingMinor : emptyAmount}
+            label="Pendentes"
           />
-          <CommitmentMetric
+          <FinancialMetric
+            amount={total ? total.futureMinor : emptyAmount}
             currency={currency}
             hint="Lançamentos recebidos após a referência"
-            title="Futuros conhecidos"
-            value={total ? total.futureMinor : emptyAmount}
+            label="Futuros conhecidos"
           />
         </dl>
         <p className="financial-summary-note">
-          {dayLabel(data.from)} a {dayLabel(data.to)} · referência em{" "}
-          {dayLabel(data.referenceDay)} · somente cartões · {currency}, sem
+          Referência em {dayLabel(data.referenceDay)} · {currency}, sem
           conversão.
         </p>
         {!!total?.unknownAmountCount && (
@@ -580,33 +487,37 @@ export function CardCommitmentsPanel({
             .
           </p>
         )}
+        <DisclosureItem
+          className="investment-method"
+          summary="Como os valores são calculados"
+        >
+          <p>
+            Gastos realizados são despesas confirmadas das contas de cartão,
+            líquidas de estornos. Pendentes e futuros são exibidos
+            separadamente. Transferências, pagamentos de fatura e lançamentos
+            ignorados ficam fora destas somas. Cada parcela conta apenas na data
+            recebida; não inferimos parcelas ausentes.
+          </p>
+          {data.assumptions.map((assumption) => (
+            <p key={assumption}>{assumption}</p>
+          ))}
+        </DisclosureItem>
       </LayerCard>
-      <div className="investment-analysis-grid">
-        <CommitmentMonths
+      <div className="card-analysis-grid">
+        <CommitmentCategories
           currency={currency}
           data={data}
         />
-        <CommitmentCategories
+        <CommitmentMonths
           currency={currency}
           data={data}
         />
       </div>
       <CardCreditLimits accounts={data.accounts} />
-      <DisclosureItem
-        className="investment-method"
-        summary="Como os valores são calculados"
-      >
-        <p>
-          Gastos realizados são despesas confirmadas das contas de cartão,
-          líquidas de estornos. Pendentes e futuros são exibidos separadamente.
-          Transferências, pagamentos de fatura e lançamentos ignorados ficam
-          fora destas somas. Cada parcela conta apenas na data recebida; não
-          inferimos parcelas ausentes.
-        </p>
-        {data.assumptions.map((assumption) => (
-          <p key={assumption}>{assumption}</p>
-        ))}
-      </DisclosureItem>
+      <p className="analysis-footnote">
+        Ocupado = limite − disponível. Limites compartilhados entre cartões não
+        são somados.
+      </p>
     </div>
   );
 }

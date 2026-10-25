@@ -2,8 +2,8 @@ import { Sidebar } from "@cloudflare/kumo";
 import {
   ArrowsClockwiseIcon,
   BankIcon,
-  CreditCardIcon,
   ChartPieSliceIcon,
+  CreditCardIcon,
   FoldersIcon,
   HouseIcon,
   ListChecksIcon,
@@ -153,7 +153,7 @@ const pages = [
   },
   {
     icon: ChartPieSliceIcon,
-    name: "Investimentos",
+    name: "Compromissos",
     path: "/account/investments",
   },
   {

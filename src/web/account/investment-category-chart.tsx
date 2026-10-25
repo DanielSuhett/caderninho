@@ -48,7 +48,7 @@ export function InvestmentCategoryChart({
               borderWidth: 0,
             },
             label: { show: false },
-            radius: ["58%", "84%"],
+            radius: ["58%", "82%"],
             type: "pie",
           },
         ],
@@ -64,19 +64,11 @@ export function InvestmentCategoryChart({
     [currency, dark, slices],
   );
   return (
-    <>
-      <Chart
-        echarts={echarts}
-        height={220}
-        isDarkMode={dark}
-        options={options}
-      />
-      <span
-        aria-hidden
-        className="investment-donut-center"
-      >
-        Compromissos<span>{currency}</span>
-      </span>
-    </>
+    <Chart
+      echarts={echarts}
+      height={240}
+      isDarkMode={dark}
+      options={options}
+    />
   );
 }

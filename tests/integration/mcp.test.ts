@@ -537,7 +537,7 @@ test("MCP accumulates imported history and updates only matching source IDs", as
   assert.equal(partialTotal.partial, true);
 });
 
-test("OAuth exposes 103 tools and executes confirmed local writes with durable replay", async () => {
+test("OAuth exposes 104 tools and executes confirmed local writes with durable replay", async () => {
   const app = fixture();
   const token = await grant(app, cookies(await login(app)));
   async function rpc(method: string, params: Record<string, unknown>) {
@@ -564,7 +564,7 @@ test("OAuth exposes 103 tools and executes confirmed local writes with durable r
     );
   }
   const listed = await rpc("tools/list", {});
-  assert.equal(listed.result?.tools?.length, 103);
+  assert.equal(listed.result?.tools?.length, 104);
   await Promise.all(
     [...planningOutputSchemas].map(async ([name, schema]) => {
       assert.ok(
