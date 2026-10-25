@@ -104,7 +104,8 @@ parcialidade acompanha a conexão, sem estados ou intervalos por conta.
 
 ## Planejamento e edição
 
-As 89 ferramentas adicionais e seus contratos estão no [catálogo](mcp-finance.md).
+As ferramentas de planejamento e seus contratos estão no [guia MCP](mcp-finance.md);
+o [inventário gerado](mcp-tools.md) acompanha os nomes e a contagem atual.
 `get_transactions` aplica edições locais; `caderninho_transactions` mantém a
 projeção da origem. O mesmo vale para totais: as ferramentas de planejamento
 separam despesas explicitamente classificadas de movimentos não classificados.
@@ -156,4 +157,21 @@ mudanças e o logout preservam as autorizações dos assistentes; use **Revogar 
 os assistentes** para removê-las.
 
 A instalação desta versão exige um D1 novo. Deploys posteriores preservam o banco.
-O [guia técnico](cloudflare-product.md) descreve os recursos e a validação local.
+A [arquitetura](adr-modular-monolith.md) descreve recursos, persistência e segurança;
+[CONTRIBUTING.md](../CONTRIBUTING.md) explica a validação local.
+
+## Vocabulário
+
+Instalação é a cópia privada com configuração/histórico do proprietário. Conexão
+é o Item Pluggy que pode fornecer várias contas; conta não é sinônimo de conexão
+nem instalação. Pessoa é titular declarado, perfil é aplicação Pluggy e espaço
+organiza planejamento, sem criar permissões. Conta importada fica no mapa da
+conexão; conta manual pertence ao planejamento.
+
+Transação é o registro identificado pela origem, pendente ou confirmado.
+Importação enumera o que o provedor disponibiliza, sem prometer todo o histórico.
+Referência temporal distingue dia financeiro, admissão/último sucesso e horário
+da leitura do saldo. Checkpoint guarda a posição recuperável (fase/conta/cursor),
+sem contar registros nem substituir o histórico de rodadas. Parcialidade sinaliza
+coleta incompleta ou valores desconhecidos; não transforma ausência em zero.
+Autorização do assistente é o grant OAuth independente do cookie do painel.

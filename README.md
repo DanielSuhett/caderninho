@@ -29,7 +29,7 @@ O software é gratuito; Cloudflare e Pluggy têm seus próprios limites e custos
 
 O MCP oferece consultas, sincronização e operações locais de planejamento,
 documentadas no [catálogo financeiro](docs/mcp-finance.md). O
-[inventário gerado](docs/mcp-tools.md) acompanha os nomes e a contagem do registro. A [paridade com o painel](docs/mcp-front-parity.md)
+[inventário gerado](docs/mcp-tools.md) acompanha os nomes e a contagem do registro. A [paridade com o painel](docs/mcp-finance.md#correspondência-com-o-painel)
 inclui prévia de regras, compras parceladas e edição de categorias e grupos.
 A importação lê contas, transações,
 faturas, investimentos e empréstimos disponíveis na Pluggy. Categorias, tags,
@@ -73,7 +73,7 @@ publica o Worker financeiro nem aplica migrações. As cotas mensais mostradas
 são equivalentes de 30 dias; os limites Free de D1/KV continuam diários.
 
 [Contribuição e checks](CONTRIBUTING.md) · [Arquitetura](docs/adr-modular-monolith.md) ·
-[Referência técnica](docs/cloudflare-product.md) · [Identidade visual](DESIGN.md) · [Componentes e layouts](docs/design-system.md)
+[Identidade visual](DESIGN.md) · [Componentes e layouts](docs/design-system.md)
 
 O projeto usa a [licença MIT](LICENSE); código de terceiros mantém seus avisos.
 

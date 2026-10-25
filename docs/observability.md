@@ -61,3 +61,25 @@ telemetria remota.
 Referências: [spans Cloudflare](https://developers.cloudflare.com/workers/observability/traces/custom-spans/),
 [amostragem](https://developers.cloudflare.com/workers/observability/traces/#sampling)
 e [limitações conhecidas](https://developers.cloudflare.com/workers/observability/traces/known-limitations/).
+
+## Medir consumo
+
+Use D1 meta.rows_read, meta.rows_written e Row Metrics, não só quantidade de
+consultas ou registros retornados. Filtros residuais de texto/valor e agregações
+integrais podem varrer muito além da página. Índices também consomem escritas e
+armazenamento; uma carga inicial grande pode exceder a cota diária mesmo que
+as consultas sejam pequenas. Consulte [preços D1](https://developers.cloudflare.com/d1/platform/pricing/)
+e [limites](https://developers.cloudflare.com/d1/platform/limits/) atuais antes de
+concluir que a instalação cabe no Free.
+
+hotpaths.test.ts e index-budget.test.ts verificam scans, cursores e páginas com
+empates; planning-feedback.test.ts mede o recorte efetivo de planejamento.
+Compare respostas exatas além dos planos. Ensaios locais com SQLite/workerd não
+medem p95, rede ou CPU de produção. Tempo de espera SQL é distinto de
+[CPU do Worker](https://developers.cloudflare.com/workers/platform/limits/#cpu-time):
+parse, hash e serialização consomem CPU; a espera pela consulta não.
+
+LOG_LEVEL aceita fatal/error/warn/info/debug/trace/silent e usa warn por padrão
+ou valor inválido. Pino filtra antes de serializar. No Node, escrita assíncrona
+limita buffer a 64 KiB e descarta excedente; no Worker, usa o build browser e o
+logger nativo, sem transporte Node. O filtro reduz volume, não elimina custo de CPU.
