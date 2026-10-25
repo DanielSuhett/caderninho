@@ -1,5 +1,5 @@
 import type { RulePreviewQuery, RulePreviewResult } from "../../contracts";
-import { ruleMatches } from "../../domain";
+import { PlanningError, ruleMatches } from "../../domain";
 import type { PlanningRepository } from "./entity";
 import { found, transactionStream } from "./projection";
 
@@ -64,7 +64,7 @@ export async function previewRule(
     }
   }
   if ((await repository.revision()) !== snapshot.revision) {
-    throw new Error("RESTART_REQUIRED");
+    throw new Error(PlanningError.RESTART_REQUIRED);
   }
   return { ...result, examined, truncated };
 }

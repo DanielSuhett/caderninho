@@ -161,6 +161,16 @@ function transactionMetadataPage(
   json: string,
 ) {
   const edits: BatchItem<"sqlite">[] = [];
+  if (records.some((row) => !row.details)) {
+    edits.push(
+      db
+        .delete(planningTransactionDetails)
+        .where(sql`${planningTransactionDetails.id} IN (
+        SELECT json_extract(value,'$.id') FROM json_each(${json})
+        WHERE json_type(value,'$.details') IS NOT 'object'
+      )`),
+    );
+  }
   if (!records.some((row) => row.details)) {
     return edits;
   }
@@ -332,72 +342,77 @@ function transactionMetadata(
   transaction: import("../../../domain").TransactionProjection,
 ) {
   const edits: BatchItem<"sqlite">[] = [];
-  if (transaction.details) {
+  if (!transaction.details) {
+    return [
+      db
+        .delete(planningTransactionDetails)
+        .where(eq(planningTransactionDetails.id, transaction.id)),
+    ];
+  }
+  edits.push(
+    db
+      .insert(planningTransactionDetails)
+      .values({ data: transaction.details, id: transaction.id })
+      .onConflictDoUpdate({
+        set: { data: transaction.details },
+        target: planningTransactionDetails.id,
+      }),
+  );
+  const number = transaction.details.cardNumber;
+  if (number) {
+    const id = `${transaction.accountId}:${number}`;
     edits.push(
       db
-        .insert(planningTransactionDetails)
-        .values({ data: transaction.details, id: transaction.id })
+        .insert(planningCards)
+        .values({
+          data: {
+            accountId: transaction.accountId,
+            deleted: false,
+            hidden: false,
+            id,
+            name: number,
+            number,
+          },
+          id,
+        })
+        .onConflictDoNothing(),
+    );
+  }
+  const current = transaction.details.installmentNumber;
+  const total = transaction.details.totalInstallments;
+  if (
+    current &&
+    total &&
+    current <= total &&
+    transaction.amountMinor !== null
+  ) {
+    const id = `detected:${transaction.id}`;
+    const data = {
+      accountId: transaction.accountId,
+      amountMinor: transaction.amountMinor.replace("-", ""),
+      categoryId: null,
+      completed: false,
+      currency: transaction.currency,
+      current,
+      id,
+      manual: false,
+      name: transaction.description,
+      spaceId: "personal",
+      startDate: transaction.date,
+      total,
+      transactionIds: [transaction.id],
+    };
+    edits.push(
+      db
+        .insert(planningInstallments)
+        .values({ data, id })
         .onConflictDoUpdate({
-          set: { data: transaction.details },
-          target: planningTransactionDetails.id,
+          set: {
+            data: sql`json_set(${JSON.stringify(data)},'$.name',json_extract(${planningInstallments.data},'$.name'),'$.categoryId',json_extract(${planningInstallments.data},'$.categoryId'),'$.completed',json(CASE WHEN json_extract(${planningInstallments.data},'$.completed') THEN 'true' ELSE 'false' END),'$.spaceId',json_extract(${planningInstallments.data},'$.spaceId'))`,
+          },
+          target: planningInstallments.id,
         }),
     );
-    const number = transaction.details.cardNumber;
-    if (number) {
-      const id = `${transaction.accountId}:${number}`;
-      edits.push(
-        db
-          .insert(planningCards)
-          .values({
-            data: {
-              accountId: transaction.accountId,
-              deleted: false,
-              hidden: false,
-              id,
-              name: number,
-              number,
-            },
-            id,
-          })
-          .onConflictDoNothing(),
-      );
-    }
-    const current = transaction.details.installmentNumber;
-    const total = transaction.details.totalInstallments;
-    if (
-      current &&
-      total &&
-      current <= total &&
-      transaction.amountMinor !== null
-    ) {
-      const id = `detected:${transaction.id}`;
-      const data = {
-        accountId: transaction.accountId,
-        amountMinor: transaction.amountMinor.replace("-", ""),
-        categoryId: null,
-        completed: false,
-        currency: transaction.currency,
-        current,
-        id,
-        manual: false,
-        name: transaction.description,
-        spaceId: "personal",
-        startDate: transaction.date,
-        total,
-        transactionIds: [transaction.id],
-      };
-      edits.push(
-        db
-          .insert(planningInstallments)
-          .values({ data, id })
-          .onConflictDoUpdate({
-            set: {
-              data: sql`json_set(${JSON.stringify(data)},'$.name',json_extract(${planningInstallments.data},'$.name'),'$.categoryId',json_extract(${planningInstallments.data},'$.categoryId'),'$.completed',json(CASE WHEN json_extract(${planningInstallments.data},'$.completed') THEN 'true' ELSE 'false' END),'$.spaceId',json_extract(${planningInstallments.data},'$.spaceId'))`,
-            },
-            target: planningInstallments.id,
-          }),
-      );
-    }
   }
 
   return edits;

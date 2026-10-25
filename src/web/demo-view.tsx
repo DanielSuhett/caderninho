@@ -1,10 +1,8 @@
-import {
-  KumoLocaleProvider,
-  Select,
-  Sidebar,
-  Toasty,
-  TooltipProvider,
-} from "@cloudflare/kumo";
+import { Select } from "@cloudflare/kumo/components/select";
+import { Sidebar } from "@cloudflare/kumo/components/sidebar";
+import { Toasty } from "@cloudflare/kumo/components/toast";
+import { TooltipProvider } from "@cloudflare/kumo/components/tooltip";
+import { KumoLocaleProvider } from "@cloudflare/kumo/utils";
 import {
   ArrowSquareOutIcon,
   FolderIcon,

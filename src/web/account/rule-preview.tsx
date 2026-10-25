@@ -1,10 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 
-import {
-  type RulePreviewInput,
-  type RulePreviewResult,
-  RulePreviewSchema,
-} from "../../contracts";
+import type { RulePreviewInput, RulePreviewResult } from "../../contracts";
 import { tryCatch } from "../../shared";
 import { formatBalance } from "../money";
 import { UiButton } from "../ui";
@@ -28,16 +24,13 @@ export function RulePreview({
     error?: boolean;
   }>({ key: "" });
   useEffect(() => {
-    if (!key) {
+    if (!input) {
       return;
     }
     const controller = new AbortController();
     const timer = setTimeout(async () => {
       const { data: loaded, error } = await tryCatch(() =>
-        api.previewRule(
-          RulePreviewSchema.parse(JSON.parse(key).input),
-          controller.signal,
-        ),
+        api.previewRule(input, controller.signal),
       );
       if (controller.signal.aborted) {
         return;
@@ -48,7 +41,7 @@ export function RulePreview({
       clearTimeout(timer);
       controller.abort();
     };
-  }, [api, key]);
+  }, [api, input, key]);
   const current = key === state.key;
   const data = current ? state.data : undefined;
   let status = "Complete as condições para consultar.";

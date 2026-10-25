@@ -1,12 +1,10 @@
-import {
-  Combobox,
-  type DateRange,
-  Input,
-  InputGroup,
-  Loader,
-  Popover,
-  Select,
-} from "@cloudflare/kumo";
+import { Combobox } from "@cloudflare/kumo/components/combobox";
+import type { DateRange } from "@cloudflare/kumo/components/date-picker";
+import { Input } from "@cloudflare/kumo/components/input";
+import { InputGroup } from "@cloudflare/kumo/components/input-group";
+import { Loader } from "@cloudflare/kumo/components/loader";
+import { Popover } from "@cloudflare/kumo/components/popover";
+import { Select } from "@cloudflare/kumo/components/select";
 import { CalendarIcon, MagnifyingGlassIcon } from "@phosphor-icons/react";
 import {
   type ChangeEvent,

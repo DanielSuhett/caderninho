@@ -7,30 +7,44 @@ import {
   TransactionClassificationSchema,
   TransactionIdentificationSchema,
 } from "../domain";
-import { planningDefinitions } from "./planning";
-import { ImportedRuleOriginSchema } from "./rule-import";
+import {
+  FinancialOverviewResponseSchema,
+  MonthlySpendingResponseSchema,
+} from "./dashboard";
+import { planningTools } from "./planning";
+import {
+  ImportedRuleOriginSchema,
+  RuleImportResultSchema,
+} from "./rule-import";
 import { RuleFilterSchema } from "./rules";
+
+export const PortalTransactionQuerySchema =
+  planningTools.get_transaction_purchases.schema.extend({
+    tool: z.literal("get_portal_transactions"),
+  });
 
 // Deliberate read-only allowlist; the portal cannot forward arbitrary MCP mutations.
 export const PortalQuerySchema = z
   .object({
     csrf: z.string(),
     query: z.union([
-      planningDefinitions[96].schema.extend({
+      planningTools.preview_rule_import.schema.extend({
         tool: z.literal("preview_rule_import"),
       }),
-      planningDefinitions[0].schema.extend({ tool: z.literal("get_accounts") }),
-      planningDefinitions[2].schema.extend({
+      planningTools.get_accounts.schema.extend({
+        tool: z.literal("get_accounts"),
+      }),
+      planningTools.get_transactions.schema.extend({
         tool: z.literal("get_transactions"),
       }),
-      planningDefinitions[3].schema.extend({ tool: z.literal("get_overview") }),
-      planningDefinitions[23].schema.extend({
+      planningTools.get_overview.schema.extend({
+        tool: z.literal("get_overview"),
+      }),
+      planningTools.generate_chart.schema.extend({
         groupBy: z.literal("month"),
         tool: z.literal("generate_chart"),
       }),
-      planningDefinitions[94].schema.extend({
-        tool: z.literal("get_portal_transactions"),
-      }),
+      PortalTransactionQuerySchema,
     ]),
   })
   .strict();
@@ -141,6 +155,29 @@ export const PortalTransactionListSchema = z.object({
   }),
   partial: z.boolean(),
 });
+const portalQueryResponses = {
+  generate_chart: MonthlySpendingResponseSchema,
+  get_accounts: AccountListSchema,
+  get_overview: FinancialOverviewResponseSchema,
+  get_portal_transactions: PortalTransactionListSchema,
+  get_transactions: TransactionListSchema,
+  preview_rule_import: z.object({ data: RuleImportResultSchema }),
+} satisfies Record<PortalQuery["tool"], z.ZodType>;
+export type PortalQueryResults = {
+  [Tool in keyof typeof portalQueryResponses]: z.output<
+    (typeof portalQueryResponses)[Tool]
+  >;
+};
+const queryValidators: {
+  [Tool in keyof PortalQueryResults]: z.ZodType<PortalQueryResults[Tool]>;
+} = portalQueryResponses;
+export function parsePortalQueryResult<Tool extends keyof PortalQueryResults>(
+  tool: Tool,
+  value: unknown,
+): PortalQueryResults[Tool] {
+  return queryValidators[tool].parse(value);
+}
+
 export const SyncHistorySelectionSchema = z
   .object({
     cursor: z.string().max(4096).optional(),
@@ -195,37 +232,43 @@ export type WorkspaceCatalog = z.infer<typeof WorkspaceCatalogSchema>;
 export const PortalMutationSchema = z
   .object({
     command: z.discriminatedUnion("tool", [
-      planningDefinitions[97].schema.extend({
+      planningTools.import_rules.schema.extend({
         tool: z.literal("import_rules"),
       }),
-      planningDefinitions[52].schema.extend({
+      planningTools.create_category.schema.extend({
         tool: z.literal("create_category"),
       }),
-      planningDefinitions[53].schema.extend({
+      planningTools.update_category.schema.extend({
         tool: z.literal("update_category"),
       }),
-      planningDefinitions[54].schema.extend({
+      planningTools.delete_category.schema.extend({
         tool: z.literal("delete_category"),
       }),
-      planningDefinitions[91].schema.extend({
+      planningTools.create_category_group.schema.extend({
         tool: z.literal("create_category_group"),
       }),
-      planningDefinitions[92].schema.extend({
+      planningTools.update_category_group.schema.extend({
         tool: z.literal("update_category_group"),
       }),
-      planningDefinitions[93].schema.extend({
+      planningTools.delete_category_group.schema.extend({
         tool: z.literal("delete_category_group"),
       }),
-      planningDefinitions[56].schema.extend({ tool: z.literal("create_rule") }),
-      planningDefinitions[57].schema.extend({ tool: z.literal("update_rule") }),
-      planningDefinitions[58].schema.extend({ tool: z.literal("delete_rule") }),
-      planningDefinitions[84].schema.extend({
+      planningTools.create_rule.schema.extend({
+        tool: z.literal("create_rule"),
+      }),
+      planningTools.update_rule.schema.extend({
+        tool: z.literal("update_rule"),
+      }),
+      planningTools.delete_rule.schema.extend({
+        tool: z.literal("delete_rule"),
+      }),
+      planningTools.create_space.schema.extend({
         tool: z.literal("create_space"),
       }),
-      planningDefinitions[85].schema.extend({
+      planningTools.update_space.schema.extend({
         tool: z.literal("update_space"),
       }),
-      planningDefinitions[89].schema.extend({
+      planningTools.delete_space.schema.extend({
         tool: z.literal("delete_space"),
       }),
     ]),

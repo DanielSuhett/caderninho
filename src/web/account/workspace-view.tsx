@@ -1,4 +1,4 @@
-import { Sidebar } from "@cloudflare/kumo";
+import { Sidebar } from "@cloudflare/kumo/components/sidebar";
 import {
   ArrowsClockwiseIcon,
   BankIcon,

@@ -198,7 +198,9 @@ export const planningReceipts = sqliteTable("planning_receipts", {
   createdAt: text("created_at").notNull(),
   digest: text("digest").notNull(),
   id: text("id").primaryKey(),
-  result: text("result", { mode: "json" }).$type<unknown>().notNull(),
+  result: text("result", { mode: "json" })
+    .$type<Record<string, unknown>>()
+    .notNull(),
 });
 
 export const people = sqliteTable("people", {

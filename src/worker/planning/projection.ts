@@ -9,6 +9,7 @@ import {
   CLASSIFICATION_VERSION,
   connectionPartial,
   fixedCategoryId,
+  PlanningError,
   pluggyCategory,
   transactionMatchesText,
 } from "../../domain";
@@ -16,7 +17,7 @@ import type { PlanningRepository, PlanningSnapshot } from "./entity";
 
 export function found<T>(row: T | undefined): T {
   if (!row) {
-    throw new Error("NOT_FOUND");
+    throw new Error(PlanningError.NOT_FOUND);
   }
   return row;
 }
@@ -27,7 +28,7 @@ export function inSpace<T extends { id: string; spaceId: string }>(
 ): T {
   const row = found(rows.find((item) => item.id === id));
   if (row.spaceId !== spaceId) {
-    throw new Error("SPACE_MISMATCH");
+    throw new Error(PlanningError.SPACE_MISMATCH);
   }
   return row;
 }
@@ -67,6 +68,56 @@ export function accounts(
         type: row.type ?? "BANK",
       })),
   ];
+}
+export function cardCatalog(snapshot: PlanningSnapshot, state: PlanningState) {
+  const result = new Map<
+    string,
+    {
+      id: string;
+      accountId: string;
+      number: string;
+      name: string;
+      hidden: boolean;
+      deleted: boolean;
+      primary: boolean;
+      spaceId: string;
+    }
+  >();
+  for (const account of accounts(snapshot, state).filter(
+    (a) => a.type === "CREDIT",
+  )) {
+    const settings = state.accounts.find((a) => a.id === account.id);
+    const main =
+      settings?.primaryCard ??
+      snapshot.accountDetails.find((a) => a.id === account.id)?.cardNumber ??
+      "main";
+    const numbers = new Set([
+      main,
+      snapshot.accountDetails.find((a) => a.id === account.id)?.cardNumber ??
+        "main",
+    ]);
+    // Additional card membership is recorded by the provider adapter as accountId:number.
+    for (const setting of state.cards.filter(
+      (c) => c.accountId === account.id,
+    )) {
+      numbers.add(setting.number);
+    }
+    for (const number of numbers) {
+      const id = `${account.id}:${number}`;
+      const setting = state.cards.find((c) => c.id === id);
+      result.set(id, {
+        accountId: account.id,
+        deleted: setting?.deleted ?? false,
+        hidden: setting?.hidden ?? account.hidden,
+        id,
+        name: setting?.name ?? account.name,
+        number,
+        primary: number === main,
+        spaceId: account.spaceId,
+      });
+    }
+  }
+  return [...result.values()];
 }
 export interface Selection {
   accountId?: string | undefined;
@@ -111,8 +162,47 @@ export function validatePeriod(input: {
   to?: string | undefined;
 }) {
   if (input.from && input.to && input.from > input.to) {
-    throw new Error("INVALID_PERIOD");
+    throw new Error(PlanningError.INVALID_PERIOD);
   }
+}
+export function validateSelection(
+  selection: Selection,
+  snapshot: PlanningSnapshot,
+) {
+  validatePeriod(selection);
+  const space = found(
+    snapshot.state.spaces.find((item) => item.id === selection.spaceId),
+  );
+  if (
+    selection.personId &&
+    !snapshot.people.some((person) => person.id === selection.personId)
+  ) {
+    throw new Error(PlanningError.NOT_FOUND);
+  }
+  const accountList = accounts(snapshot);
+  const accountMap = new Map(accountList.map((row) => [row.id, row]));
+  if (selection.accountId) {
+    const account = found(accountMap.get(selection.accountId));
+    const moved = snapshot.state.edits.some(
+      (edit) =>
+        edit.accountId === account.id &&
+        edit.spaceId === selection.spaceId &&
+        !edit.deleted,
+    );
+    if (
+      (account.spaceId !== selection.spaceId && !moved) ||
+      (selection.personId && account.personId !== selection.personId)
+    ) {
+      throw new Error(PlanningError.SPACE_MISMATCH);
+    }
+  }
+  if (selection.categoryId) {
+    inSpace(snapshot.state.categories, selection.categoryId, selection.spaceId);
+  }
+  if (selection.tagId) {
+    inSpace(snapshot.state.tags, selection.tagId, selection.spaceId);
+  }
+  return { accountList, accountMap, space };
 }
 export function transactionStream(
   repository: PlanningRepository,
@@ -330,19 +420,15 @@ export async function selectedTransactions(
   )) {
     rows.push(row);
     if (rows.length > 500) {
-      throw new Error("SELECTION_TOO_LARGE");
+      throw new Error(PlanningError.SELECTION_TOO_LARGE);
     }
   }
   if (ids && (new Set(ids).size !== ids.length || rows.length !== ids.length)) {
-    throw new Error("NOT_FOUND");
+    throw new Error(PlanningError.NOT_FOUND);
   }
   return rows;
 }
-export function classification(
-  row: PlanningTransaction,
-  state: PlanningState,
-  operationType: string | null,
-) {
+export function classification(row: PlanningTransaction, state: PlanningState) {
   const category = state.categories.find(
     (item) => item.id === row.category && item.spaceId === row.spaceId,
   );
@@ -356,21 +442,6 @@ export function classification(
     }
     return category.kind;
   }
-  if (
-    operationType &&
-    [
-      "PIX",
-      "TED",
-      "DOC",
-      "TRANSFERENCIA_MESMA_INSTITUICAO",
-      "PAGAMENTO",
-      "PAGAMENTO_FATURA",
-      "RESGATE_APLIC_FINANCEIRA",
-      "OPERACAO_CREDITO",
-    ].includes(operationType)
-  ) {
-    return "unclassified";
-  }
-  // Provider category names are not a stable classification contract.
+  // Provider operation and category labels do not establish a local classification.
   return "unclassified";
 }

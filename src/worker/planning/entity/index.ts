@@ -32,19 +32,27 @@ export interface TransactionRead {
   pageSize?: number | undefined;
   to?: string | undefined;
 }
+export type PlanningRead =
+  | "tags"
+  | "rules"
+  | "categories"
+  | "categoryGroups"
+  | "spaces"
+  | "notifications";
+export type PlanningResult = Record<string, unknown>;
 export interface PlanningRepository {
   commit: (input: {
     before: PlanningSnapshot;
     state: PlanningState;
     key: string;
     digest: string;
-    result: unknown;
+    result: PlanningResult;
     now: string;
   }) => Promise<void>;
-  read: (tool?: string) => Promise<PlanningSnapshot>;
+  read: (resource?: PlanningRead) => Promise<PlanningSnapshot>;
   receipt: (
     key: string,
-  ) => Promise<{ digest: string; result: unknown } | undefined>;
+  ) => Promise<{ digest: string; result: PlanningResult } | undefined>;
   revision: () => Promise<number>;
   transactions: (
     ids?: string[],

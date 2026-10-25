@@ -8,7 +8,9 @@ import {
   HouseholdResultSchema,
   type PortalMutation,
   type PortalQuery,
+  type PortalQueryResults,
   PortalResponseSchema,
+  parsePortalQueryResult,
   type RulePreviewInput,
   RulePreviewResultSchema,
   SyncHistoryResultSchema,
@@ -143,16 +145,19 @@ export function createAccountApi(
       RulePreviewResultSchema.parse(
         await request("/rule-preview", signal, input),
       ),
-    query: (
-      query: PortalQuery,
+    query: async <Tool extends PortalQuery["tool"]>(
+      query: PortalQuery & { tool: Tool },
       csrf: string,
       signal: AbortSignal,
       fresh = false,
-    ) =>
-      cache.read(
-        `query:${JSON.stringify(query)}`,
-        () => request("/query", signal, { csrf, query }),
-        fresh,
+    ): Promise<PortalQueryResults[Tool]> =>
+      parsePortalQueryResult(
+        query.tool,
+        await cache.read(
+          `query:${JSON.stringify(query)}`,
+          () => request("/query", signal, { csrf, query }),
+          fresh,
+        ),
       ),
     read: async (signal: AbortSignal) =>
       PortalResponseSchema.parse(await request("", signal)),

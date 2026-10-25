@@ -1,4 +1,4 @@
-import { Banner } from "@cloudflare/kumo";
+import { Banner } from "@cloudflare/kumo/components/banner";
 
 import type { ConsentDetails } from "./consent.types";
 import { Portal } from "./portal-view";

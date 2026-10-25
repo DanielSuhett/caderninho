@@ -1,5 +1,6 @@
-import type { InstallationState } from "../../../contracts";
+import type { InstallationState, PortalResponse } from "../../../contracts";
 import type { ProviderConnection } from "../../../domain";
+export type InstallationCatalog = Pick<PortalResponse, "people" | "profiles">;
 export interface StatusSelection {
   connectionIds?: string[] | undefined;
 }
@@ -8,7 +9,6 @@ export interface InstallationRepository {
   state: (selection?: StatusSelection) => Promise<InstallationState>;
 }
 export interface InstallationSource {
-  configured: boolean;
   connection: (id: string) => Promise<ProviderConnection>;
   token: (id?: string, profileId?: string) => Promise<{ accessToken: string }>;
 }

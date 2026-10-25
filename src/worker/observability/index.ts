@@ -4,7 +4,7 @@ import type { Logger } from "pino";
 import { z } from "zod/v4";
 
 import type { ToolName } from "../../contracts";
-import { Fault, FaultCode } from "../../domain";
+import { Fault, FaultCode, PlanningError } from "../../domain";
 import { type Result, tryCatch } from "../../shared";
 import { logger } from "../../shared/logger";
 import { tracing } from "cloudflare:workers";
@@ -88,6 +88,7 @@ for (const code of Object.values(localFailures)) {
   failures.set(code, code);
 }
 for (const code of [
+  ...Object.values(PlanningError),
   "EMPTY_FORM",
   "FORM_TOO_LARGE",
   "DUPLICATE_FORM_FIELD",

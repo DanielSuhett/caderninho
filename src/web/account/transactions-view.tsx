@@ -1,11 +1,12 @@
-import { Banner, Input, Link, Select } from "@cloudflare/kumo";
+import { Banner } from "@cloudflare/kumo/components/banner";
+import { Input } from "@cloudflare/kumo/components/input";
+import { Link } from "@cloudflare/kumo/components/link";
+import { Select } from "@cloudflare/kumo/components/select";
 import { useCallback, useState } from "react";
 
 import {
-  AccountListSchema,
-  PortalQuerySchema,
   type PortalResponse,
-  PortalTransactionListSchema,
+  PortalTransactionQuerySchema,
   type WorkspaceCatalog,
 } from "../../contracts";
 import { UiCheckbox } from "../ui";
@@ -33,31 +34,26 @@ export function TransactionsView({
   const spaceId = params.get("space") || "personal";
   const load = useCallback(
     async (signal: AbortSignal, fresh = false) => {
-      const { query } = PortalQuerySchema.parse({
-        csrf: snapshot.csrf,
-        query: {
-          future: params.get("future") === "on",
-          limit: 50,
-          order: "date_desc",
-          spaceId,
-          tool: "get_portal_transactions",
-          ...Object.fromEntries(
-            [
-              "cursor",
-              "from",
-              "to",
-              "text",
-              "direction",
-              "status",
-              "accountId",
-              "categoryId",
-            ].flatMap((key) =>
-              params.get(key) ? [[key, params.get(key)]] : [],
-            ),
-          ),
-          ...(params.get("person") && { personId: params.get("person") }),
-          include_ignored: params.get("ignored") === "on",
-        },
+      const query = PortalTransactionQuerySchema.parse({
+        future: params.get("future") === "on",
+        limit: 50,
+        order: "date_desc",
+        spaceId,
+        tool: "get_portal_transactions",
+        ...Object.fromEntries(
+          [
+            "cursor",
+            "from",
+            "to",
+            "text",
+            "direction",
+            "status",
+            "accountId",
+            "categoryId",
+          ].flatMap((key) => (params.get(key) ? [[key, params.get(key)]] : [])),
+        ),
+        ...(params.get("person") && { personId: params.get("person") }),
+        include_ignored: params.get("ignored") === "on",
       });
       const [catalog, accounts, result] = await Promise.all([
         api.catalog(spaceId, signal, fresh),
@@ -70,9 +66,9 @@ export function TransactionsView({
         api.query(query, snapshot.csrf, signal, fresh),
       ]);
       return {
-        accounts: AccountListSchema.parse(accounts).data.records,
+        accounts: accounts.data.records,
         catalog,
-        result: PortalTransactionListSchema.parse(result),
+        result,
       };
     },
     [api, snapshot.csrf, spaceId, params],

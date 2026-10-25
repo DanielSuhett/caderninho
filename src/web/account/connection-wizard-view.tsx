@@ -1,4 +1,8 @@
-import { Banner, Input, LayerCard, Loader, Select } from "@cloudflare/kumo";
+import { Banner } from "@cloudflare/kumo/components/banner";
+import { Input } from "@cloudflare/kumo/components/input";
+import { LayerCard } from "@cloudflare/kumo/components/layer-card";
+import { Loader } from "@cloudflare/kumo/components/loader";
+import { Select } from "@cloudflare/kumo/components/select";
 
 import { UiButton, UiLink } from "../ui";
 import type { ConnectionWizardModel } from "./use-connection-wizard";

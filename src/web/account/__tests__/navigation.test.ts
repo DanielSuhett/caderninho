@@ -120,6 +120,28 @@ await test("read cache does not retain failures and bounds retained queries to t
   assert.equal(await cache.read("20", () => Promise.resolve("unexpected")), 20);
 });
 
+await test("an older response cannot overwrite a newer explicit refresh of the same query", async () => {
+  const cache = createReadCache();
+  let finish: ((value: unknown) => void) | undefined;
+  const older = cache.read(
+    "accounts",
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  assert.equal(
+    await cache.read("accounts", () => Promise.resolve("refreshed"), true),
+    "refreshed",
+  );
+  finish?.("outdated");
+  await older;
+  assert.equal(
+    await cache.read("accounts", () => Promise.resolve("unexpected")),
+    "refreshed",
+  );
+});
+
 await test("demo rules and groups keep their public route during client navigation", () => {
   const current = new URL("https://example.test/demo?month=2026-10");
   for (const path of [

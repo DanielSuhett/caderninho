@@ -1,4 +1,4 @@
-import { Banner } from "@cloudflare/kumo";
+import { Banner } from "@cloudflare/kumo/components/banner";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { tryCatch } from "../../shared";

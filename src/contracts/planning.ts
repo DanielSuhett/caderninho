@@ -110,83 +110,325 @@ const goalFields = {
 };
 const ruleFields = RuleFieldsSchema.shape;
 
-export const planningDefinitions = [
-  {
+export const planningTools = {
+  add_goal_contribution: {
     description:
-      "Contas e saldos com referência temporal; inclui contas manuais e preferências locais.",
-    name: "get_accounts",
-    readOnly: true,
-    schema: z.object({ ...listing }).strict(),
-  },
-  {
-    description:
-      "Cartões principais e adicionais identificados na origem; ids estáveis e suporte a include_hidden.",
-    name: "get_cards",
-    readOnly: true,
-    schema: z.object({ ...listing }).strict(),
-  },
-  {
-    description:
-      "Histórico efetivo com edições locais e paginação consistente. Para últimas compras envie order=date_desc e limit=5; não some páginas para calcular totais.",
-    name: "get_transactions",
-    readOnly: true,
+      "Registrar contribuição; transação existente não é contada novamente.",
+    readOnly: false,
     schema: z
       .object({
-        ...selection,
-        cursor: z.string().max(4096).optional(),
-        limit: z.number().int().min(1).max(500).default(100),
-        order: z.enum(["id", "date_desc"]).default("id"),
+        ...mutation,
+        amountMinor: amount,
+        date: day,
+        id,
+        transactionId: id.optional(),
       })
       .strict(),
   },
-  {
-    description:
-      "Saldos, entradas e saídas por moeda, sem tratar transferências e pagamentos de cartão como consumo.",
-    name: "get_overview",
+  analyze_categories: {
+    description: "Analisar despesas categorizadas e itens sem categoria.",
     readOnly: true,
     schema: z.object({ ...analysisPeriod }).strict(),
   },
-  {
+  apply_rules: {
     description:
-      "Despesas classificadas por categoria; exclui transferências e itens ignorados.",
-    name: "get_spending_by_category",
-    readOnly: true,
-    schema: z.object({ ...analysisPeriod }).strict(),
+      "Aplicar regras sincronicamente a até 500 transações; operação atômica.",
+    readOnly: false,
+    schema: z
+      .object({ ...mutation, accountId: id.optional(), from: day, to: day })
+      .strict(),
   },
-  {
+  attach_transaction_tags: {
+    description: "Alterar tags das transações selecionadas.",
+    readOnly: false,
+    schema: z
+      .object({
+        ...mutation,
+        ids: z.array(id).min(1).max(500),
+        tagIds: z.array(id).min(1).max(50),
+      })
+      .strict(),
+  },
+  batch_delete_transactions: {
     description:
-      "Comparar gastos com período anterior de igual duração, mesmos dias do mês anterior ou intervalo explícito. Já inclui grupos e totais dos dois períodos.",
-    name: "get_spending_comparison",
+      "Excluir apresentação local preservando origem; confirmação e repetição idempotente.",
+    readOnly: false,
+    schema: z
+      .object({ ...mutation, ids: z.array(id).min(1).max(500) })
+      .strict(),
+  },
+  batch_edit_transactions: {
+    description: "Editar atomicamente até 500 transações selecionadas.",
+    readOnly: false,
+    schema: z
+      .object({
+        ...mutation,
+        ids: z.array(id).min(1).max(500),
+        ...transactionFields,
+      })
+      .strict(),
+  },
+  complete_goal: {
+    description: "Concluir meta manualmente.",
+    readOnly: false,
+    schema: z.object({ ...mutation, id }).strict(),
+  },
+  complete_installment: {
+    description: "Alterar conclusão manual sem inventar pagamentos.",
+    readOnly: false,
+    schema: z.object({ ...mutation, id }).strict(),
+  },
+  create_category: {
+    description: "Criar categoria personalizada.",
+    readOnly: false,
+    schema: z
+      .object({
+        ...mutation,
+        ...categoryAppearance,
+        kind: z.enum(["income", "expense", "transfer"]),
+        name: text,
+      })
+      .strict(),
+  },
+  create_category_group: {
+    description: "Criar agrupador de categorias com nome, ícone e cor.",
+    readOnly: false,
+    schema: z
+      .object({
+        ...mutation,
+        color: CategoryColorSchema,
+        icon: CategoryIconSchema,
+        name: text,
+      })
+      .strict(),
+  },
+  create_goal: {
+    description: "Criar meta financeira.",
+    readOnly: false,
+    schema: z.object({ ...mutation, ...goalFields }).strict(),
+  },
+  create_manual_account: {
+    description: "Criar conta ou cartão manual.",
+    readOnly: false,
+    schema: z
+      .object({
+        ...mutation,
+        closeDay: z.number().int().min(1).max(31).optional(),
+        creditLimitMinor: amount.optional(),
+        currency,
+        dueDay: z.number().int().min(1).max(31).optional(),
+        name: text,
+        openingBalanceMinor: amount.default("0"),
+        personId: id.optional(),
+        type: z.enum(["BANK", "CREDIT"]),
+      })
+      .strict(),
+  },
+  create_manual_installment: {
+    description:
+      "Criar plano e recorrência de parcelas sem gerar transações futuras.",
+    readOnly: false,
+    schema: z
+      .object({
+        ...mutation,
+        accountId: id,
+        amountMinor: amount,
+        categoryId: id.nullable().default(null),
+        current: z.number().int().min(1).max(600),
+        name: text,
+        startDate: day,
+        total: z.number().int().min(1).max(600),
+      })
+      .strict(),
+  },
+  create_manual_investment: {
+    description: "Criar investimento manual.",
+    readOnly: false,
+    schema: z.object({ ...mutation, ...investmentFields }).strict(),
+  },
+  create_manual_loan: {
+    description: "Cadastrar dívida manual sem efetuar contratação bancária.",
+    readOnly: false,
+    schema: z.object({ ...mutation, ...loanFields }).strict(),
+  },
+  create_manual_loan_schedule: {
+    description:
+      "Criar cronograma SAC exato; juros mensais em pontos-base e arredondamento half-up.",
+    readOnly: false,
+    schema: z
+      .object({
+        ...mutation,
+        count: z.number().int().min(1).max(600),
+        id,
+        monthlyRateBps: z.number().int().min(0).max(10_000),
+        principalMinor: amount,
+        startDate: day,
+      })
+      .strict(),
+  },
+  create_recurrence: {
+    description: "Criar conta fixa ou receita mensal projetada.",
+    readOnly: false,
+    schema: z.object({ ...mutation, ...recurrenceFields }).strict(),
+  },
+  create_rule: {
+    description: "Criar regra textual determinística de categorização.",
+    readOnly: false,
+    schema: z.object({ ...mutation, ...ruleFields }).strict(),
+  },
+  create_space: {
+    description:
+      "Criar espaço local da mesma pessoa; não cria usuários nem permissões.",
+    readOnly: false,
+    schema: z
+      .object({
+        ...mutation,
+        color: text.default("blue"),
+        currency,
+        icon: text.default("wallet"),
+        monthStartDay: z.number().int().min(1).max(28).default(1),
+        name: text,
+        type: z.enum(["personal", "business", "family"]).default("personal"),
+      })
+      .strict(),
+  },
+  create_tag: {
+    description: "Criar tag.",
+    readOnly: false,
+    schema: z.object({ ...mutation, color: text, name: text }).strict(),
+  },
+  create_transaction: {
+    description: "Lançar receita ou despesa em conta manual.",
+    readOnly: false,
+    schema: z
+      .object({
+        ...mutation,
+        accountId: id,
+        amountMinor: amount,
+        category: id.nullable().default(null),
+        date: day,
+        description: text,
+        direction,
+        recurrenceId: id.optional(),
+        status: z.enum(["PENDING", "POSTED"]).default("POSTED"),
+      })
+      .strict(),
+  },
+  deactivate_recurrence: {
+    description: "Desativar projeções futuras.",
+    readOnly: false,
+    schema: z.object({ ...mutation, id }).strict(),
+  },
+  delete_card: {
+    description:
+      "Excluir apresentação de cartão adicional, preservando histórico.",
+    readOnly: false,
+    schema: z.object({ ...mutation, id }).strict(),
+  },
+  delete_category: {
+    description:
+      "Excluir categoria personalizada e reatribuir referências à categoria de sistema do mesmo tipo.",
+    readOnly: false,
+    schema: z.object({ ...mutation, id }).strict(),
+  },
+  delete_category_group: {
+    description:
+      "Remover agrupador; suas categorias e transações são preservadas e ficam sem grupo.",
+    readOnly: false,
+    schema: z.object({ ...mutation, id }).strict(),
+  },
+  delete_goal: {
+    description: "Excluir meta e contribuições locais; preservar transações.",
+    readOnly: false,
+    schema: z.object({ ...mutation, id }).strict(),
+  },
+  delete_manual_account: {
+    description:
+      "Excluir conta manual vazia; recusa referências financeiras ativas.",
+    readOnly: false,
+    schema: z.object({ ...mutation, id }).strict(),
+  },
+  delete_manual_investment: {
+    description: "Excluir investimento manual e remover vínculo de metas.",
+    readOnly: false,
+    schema: z.object({ ...mutation, id }).strict(),
+  },
+  delete_manual_loan: {
+    description: "Excluir dívida manual sem parcelas pendentes vinculadas.",
+    readOnly: false,
+    schema: z.object({ ...mutation, id }).strict(),
+  },
+  delete_rule: {
+    description: "Excluir regra sem reverter classificações já aplicadas.",
+    readOnly: false,
+    schema: z.object({ ...mutation, id }).strict(),
+  },
+  delete_space: {
+    description:
+      "Excluir um espaço vazio; preserva o grupo pessoal e impede referências órfãs.",
+    readOnly: false,
+    schema: z.object({ ...mutation, id }).strict(),
+  },
+  delete_tag: {
+    description: "Excluir tag e suas associações.",
+    readOnly: false,
+    schema: z.object({ ...mutation, id }).strict(),
+  },
+  delete_transaction: {
+    description:
+      "Excluir apresentação local preservando origem; confirmação e repetição idempotente.",
+    readOnly: false,
+    schema: z.object({ ...mutation, id }).strict(),
+  },
+  delete_transactions_by_period: {
+    description:
+      "Excluir apresentação local preservando origem; confirmação e repetição idempotente.",
+    readOnly: false,
+    schema: z
+      .object({ ...mutation, accountId: id.optional(), from: day, to: day })
+      .strict(),
+  },
+  edit_transaction: {
+    description: "Editar projeção local sem sobrescrever registro bancário.",
+    readOnly: false,
+    schema: z.object({ ...mutation, id, ...transactionFields }).strict(),
+  },
+  edit_transactions_by_period: {
+    description:
+      "Editar seleção integral do período; recusa seleções acima de 500.",
+    readOnly: false,
+    schema: z
+      .object({
+        ...mutation,
+        accountId: id.optional(),
+        from: day,
+        to: day,
+        ...transactionFields,
+      })
+      .strict(),
+  },
+  generate_chart: {
+    description:
+      "Séries exatas por moeda, com nomes e apresentação monetária. Use includeSvg=false para compor sua própria visualização; SVG estático é opcional.",
     readOnly: true,
     schema: z
       .object({
         ...analysisPeriod,
-        comparison: z
-          .enum(["previous_period", "previous_month", "explicit"])
-          .default("previous_period"),
-        previousFrom: day.optional(),
-        previousTo: day.optional(),
+        groupBy: z.enum(["category", "month"]).default("category"),
+        includeSvg: z.boolean().default(true),
+        type: z.enum(["bar", "line", "doughnut"]),
       })
       .strict(),
   },
-  {
+  get_accounts: {
     description:
-      "Ritmo observado de despesas e projeção linear explicitamente estimada.",
-    name: "get_spending_pace",
+      "Contas e saldos com referência temporal; inclui contas manuais e preferências locais.",
     readOnly: true,
-    schema: z.object({ ...analysisPeriod }).strict(),
+    schema: z.object({ ...listing }).strict(),
   },
-  {
-    description:
-      "Projeção de saldo BANK com recorrências e vencimentos; informa premissas e desconhecidos.",
-    name: "get_projection",
-    readOnly: true,
-    schema: z.object({ ...period }).strict(),
-  },
-  {
+  get_bills: {
     description:
       "Faturas importadas, pagamentos bancários e marcação manual separada.",
-    name: "get_bills",
     readOnly: true,
     schema: z
       .object({
@@ -197,17 +439,49 @@ export const planningDefinitions = [
       })
       .strict(),
   },
-  {
+  get_budget: {
     description:
-      "Vencimentos de faturas, recorrências e parcelas de empréstimos sem executar pagamentos.",
-    name: "get_upcoming_payments",
+      "Orçamento configurado e consumo do ciclo vigente por moeda e categoria; informa valores sem classificação.",
     readOnly: true,
-    schema: z.object({ ...period }).strict(),
+    schema: z.object({ ...scope }).strict(),
   },
-  {
+  get_cards: {
+    description:
+      "Cartões principais e adicionais identificados na origem; ids estáveis e suporte a include_hidden.",
+    readOnly: true,
+    schema: z.object({ ...listing }).strict(),
+  },
+  get_categories: {
+    description:
+      "Listar registros locais e importados, incluindo ocultos quando solicitado.",
+    readOnly: true,
+    schema: z
+      .object({ ...listing, groupId: id.nullable().optional() })
+      .strict(),
+  },
+  get_category_groups: {
+    description:
+      "Listar agrupadores de categorias de um espaço; não são espaços financeiros.",
+    readOnly: true,
+    schema: z.object({ ...scope }).strict(),
+  },
+  get_goal_plan: {
+    description:
+      "Quanto guardar por mês, arredondado para cima em unidades mínimas; sem presumir rendimento.",
+    readOnly: true,
+    schema: z
+      .object({ ...scope, id, months: z.number().int().min(1).max(1200) })
+      .strict(),
+  },
+  get_goals: {
+    description:
+      "Metas locais com valor, prazo e vínculo patrimonial; use get_goal_plan para calcular aportes.",
+    readOnly: true,
+    schema: z.object({ ...scope }).strict(),
+  },
+  get_installments: {
     description:
       "Planos manuais e candidatos derivados de metadados; agrupamento da origem é estimativa, não prova de pagamento.",
-    name: "get_installments",
     readOnly: true,
     schema: z
       .object({
@@ -224,492 +498,142 @@ export const planningDefinitions = [
       })
       .strict(),
   },
-  {
-    description:
-      "Listar registros locais e importados, incluindo ocultos quando solicitado.",
-    name: "get_categories",
-    readOnly: true,
-    schema: z
-      .object({ ...listing, groupId: id.nullable().optional() })
-      .strict(),
-  },
-  {
-    description:
-      "Listar registros locais e importados, incluindo ocultos quando solicitado.",
-    name: "get_loans",
-    readOnly: true,
-    schema: z.object({ ...listing }).strict(),
-  },
-  {
-    description:
-      "Etiquetas locais do espaço, com IDs e nomes para filtrar e organizar transações.",
-    name: "get_tags",
-    readOnly: true,
-    schema: z.object({ ...scope }).strict(),
-  },
-  {
-    description:
-      "Regras locais ordenadas por prioridade. Salvar não reaplica o histórico; use preview_rule antes de aplicar.",
-    name: "get_rules",
-    readOnly: true,
-    schema: z.object({ ...scope }).strict(),
-  },
-  {
-    description:
-      "Compromissos recorrentes cadastrados. Não detecta automaticamente assinaturas no histórico.",
-    name: "get_recurrences",
-    readOnly: true,
-    schema: z.object({ ...scope }).strict(),
-  },
-  {
-    description:
-      "Metas locais com valor, prazo e vínculo patrimonial; use get_goal_plan para calcular aportes.",
-    name: "get_goals",
-    readOnly: true,
-    schema: z.object({ ...scope }).strict(),
-  },
-  {
+  get_investments: {
     description:
       "Posições locais e importadas disponíveis. Variação de saldo não comprova rentabilidade.",
-    name: "get_investments",
     readOnly: true,
     schema: z.object({ ...scope }).strict(),
   },
-  {
-    description:
-      "Orçamento configurado e consumo do ciclo vigente por moeda e categoria; informa valores sem classificação.",
-    name: "get_budget",
-    readOnly: true,
-    schema: z.object({ ...scope }).strict(),
-  },
-  {
-    description:
-      "Espaços locais e suas configurações de moeda, ciclo e orçamento.",
-    name: "get_spaces",
-    readOnly: true,
-    schema: z.object({ ...scope }).strict(),
-  },
-  {
-    description:
-      "Preferências locais de avisos. deliveryConfigured=false informa que o envio não está configurado.",
-    name: "get_notification_preferences",
-    readOnly: true,
-    schema: z.object({ ...scope }).strict(),
-  },
-  {
-    description:
-      "Quanto guardar por mês, arredondado para cima em unidades mínimas; sem presumir rendimento.",
-    name: "get_goal_plan",
-    readOnly: true,
-    schema: z
-      .object({ ...scope, id, months: z.number().int().min(1).max(1200) })
-      .strict(),
-  },
-  {
+  get_loan_schedule: {
     description:
       "Cronograma SAC local e estado de conciliação de cada parcela.",
-    name: "get_loan_schedule",
     readOnly: true,
     schema: z.object({ ...scope, id }).strict(),
   },
-  {
+  get_loans: {
     description:
-      "Séries exatas por moeda, com nomes e apresentação monetária. Use includeSvg=false para compor sua própria visualização; SVG estático é opcional.",
-    name: "generate_chart",
+      "Listar registros locais e importados, incluindo ocultos quando solicitado.",
+    readOnly: true,
+    schema: z.object({ ...listing }).strict(),
+  },
+  get_notification_preferences: {
+    description:
+      "Preferências locais de avisos. deliveryConfigured=false informa que o envio não está configurado.",
+    readOnly: true,
+    schema: z.object({ ...scope }).strict(),
+  },
+  get_overview: {
+    description:
+      "Saldos, entradas e saídas por moeda, sem tratar transferências e pagamentos de cartão como consumo.",
+    readOnly: true,
+    schema: z.object({ ...analysisPeriod }).strict(),
+  },
+  get_projection: {
+    description:
+      "Projeção de saldo BANK com recorrências e vencimentos; informa premissas e desconhecidos.",
+    readOnly: true,
+    schema: z.object({ ...period }).strict(),
+  },
+  get_recurrences: {
+    description:
+      "Compromissos recorrentes cadastrados. Não detecta automaticamente assinaturas no histórico.",
+    readOnly: true,
+    schema: z.object({ ...scope }).strict(),
+  },
+  get_rules: {
+    description:
+      "Regras locais ordenadas por prioridade. Salvar não reaplica o histórico; use preview_rule antes de aplicar.",
+    readOnly: true,
+    schema: z.object({ ...scope }).strict(),
+  },
+  get_spaces: {
+    description:
+      "Espaços locais e suas configurações de moeda, ciclo e orçamento.",
+    readOnly: true,
+    schema: z.object({ ...scope }).strict(),
+  },
+  get_spending_by_category: {
+    description:
+      "Despesas classificadas por categoria; exclui transferências e itens ignorados.",
+    readOnly: true,
+    schema: z.object({ ...analysisPeriod }).strict(),
+  },
+  get_spending_comparison: {
+    description:
+      "Comparar gastos com período anterior de igual duração, mesmos dias do mês anterior ou intervalo explícito. Já inclui grupos e totais dos dois períodos.",
     readOnly: true,
     schema: z
       .object({
         ...analysisPeriod,
-        groupBy: z.enum(["category", "month"]).default("category"),
-        includeSvg: z.boolean().default(true),
-        type: z.enum(["bar", "line", "doughnut"]),
+        comparison: z
+          .enum(["previous_period", "previous_month", "explicit"])
+          .default("previous_period"),
+        previousFrom: day.optional(),
+        previousTo: day.optional(),
       })
       .strict(),
   },
-  {
-    description: "Criar conta ou cartão manual.",
-    name: "create_manual_account",
-    readOnly: false,
-    schema: z
-      .object({
-        ...mutation,
-        closeDay: z.number().int().min(1).max(31).optional(),
-        creditLimitMinor: amount.optional(),
-        currency,
-        dueDay: z.number().int().min(1).max(31).optional(),
-        name: text,
-        openingBalanceMinor: amount.default("0"),
-        personId: id.optional(),
-        type: z.enum(["BANK", "CREDIT"]),
-      })
-      .strict(),
-  },
-  {
+  get_spending_pace: {
     description:
-      "Editar apresentação; limite e ciclo somente para cartões manuais.",
-    name: "update_account_settings",
-    readOnly: false,
-    schema: z.object({ ...mutation, id, ...accountFields }).strict(),
-  },
-  {
-    description:
-      "Excluir conta manual vazia; recusa referências financeiras ativas.",
-    name: "delete_manual_account",
-    readOnly: false,
-    schema: z.object({ ...mutation, id }).strict(),
-  },
-  {
-    description: "Renomear ou ocultar cartão adicional.",
-    name: "update_card",
-    readOnly: false,
-    schema: z
-      .object({
-        ...mutation,
-        hidden: z.boolean().optional(),
-        id,
-        name: text.optional(),
-      })
-      .strict(),
-  },
-  {
-    description:
-      "Excluir apresentação de cartão adicional, preservando histórico.",
-    name: "delete_card",
-    readOnly: false,
-    schema: z.object({ ...mutation, id }).strict(),
-  },
-  {
-    description: "Definir cartão principal.",
-    name: "set_primary_card",
-    readOnly: false,
-    schema: z.object({ ...mutation, id }).strict(),
-  },
-  {
-    description:
-      "Alterar apenas confirmação manual da fatura; nunca enviar pagamento ao banco.",
-    name: "mark_bill_paid",
-    readOnly: false,
-    schema: z.object({ ...mutation, id }).strict(),
-  },
-  {
-    description:
-      "Alterar apenas confirmação manual da fatura; nunca enviar pagamento ao banco.",
-    name: "unmark_bill_paid",
-    readOnly: false,
-    schema: z.object({ ...mutation, id }).strict(),
-  },
-  {
-    description: "Lançar receita ou despesa em conta manual.",
-    name: "create_transaction",
-    readOnly: false,
-    schema: z
-      .object({
-        ...mutation,
-        accountId: id,
-        amountMinor: amount,
-        category: id.nullable().default(null),
-        date: day,
-        description: text,
-        direction,
-        recurrenceId: id.optional(),
-        status: z.enum(["PENDING", "POSTED"]).default("POSTED"),
-      })
-      .strict(),
-  },
-  {
-    description: "Editar projeção local sem sobrescrever registro bancário.",
-    name: "edit_transaction",
-    readOnly: false,
-    schema: z.object({ ...mutation, id, ...transactionFields }).strict(),
-  },
-  {
-    description: "Editar atomicamente até 500 transações selecionadas.",
-    name: "batch_edit_transactions",
-    readOnly: false,
-    schema: z
-      .object({
-        ...mutation,
-        ids: z.array(id).min(1).max(500),
-        ...transactionFields,
-      })
-      .strict(),
-  },
-  {
-    description:
-      "Editar seleção integral do período; recusa seleções acima de 500.",
-    name: "edit_transactions_by_period",
-    readOnly: false,
-    schema: z
-      .object({
-        ...mutation,
-        accountId: id.optional(),
-        from: day,
-        to: day,
-        ...transactionFields,
-      })
-      .strict(),
-  },
-  {
-    description:
-      "Excluir apresentação local preservando origem; confirmação e repetição idempotente.",
-    name: "delete_transaction",
-    readOnly: false,
-    schema: z.object({ ...mutation, id }).strict(),
-  },
-  {
-    description:
-      "Excluir apresentação local preservando origem; confirmação e repetição idempotente.",
-    name: "batch_delete_transactions",
-    readOnly: false,
-    schema: z
-      .object({ ...mutation, ids: z.array(id).min(1).max(500) })
-      .strict(),
-  },
-  {
-    description:
-      "Excluir apresentação local preservando origem; confirmação e repetição idempotente.",
-    name: "delete_transactions_by_period",
-    readOnly: false,
-    schema: z
-      .object({ ...mutation, accountId: id.optional(), from: day, to: day })
-      .strict(),
-  },
-  {
-    description: "Alterar tags das transações selecionadas.",
-    name: "attach_transaction_tags",
-    readOnly: false,
-    schema: z
-      .object({
-        ...mutation,
-        ids: z.array(id).min(1).max(500),
-        tagIds: z.array(id).min(1).max(50),
-      })
-      .strict(),
-  },
-  {
-    description: "Alterar tags das transações selecionadas.",
-    name: "remove_transaction_tags",
-    readOnly: false,
-    schema: z
-      .object({
-        ...mutation,
-        ids: z.array(id).min(1).max(500),
-        tagIds: z.array(id).min(1).max(50),
-      })
-      .strict(),
-  },
-  {
-    description:
-      "Mover projeções de transações para outro espaço da mesma instalação.",
-    name: "move_transactions",
-    readOnly: false,
-    schema: z
-      .object({
-        ...mutation,
-        ids: z.array(id).min(1).max(500),
-        targetSpaceId: id,
-      })
-      .strict(),
-  },
-  {
-    description:
-      "Criar plano e recorrência de parcelas sem gerar transações futuras.",
-    name: "create_manual_installment",
-    readOnly: false,
-    schema: z
-      .object({
-        ...mutation,
-        accountId: id,
-        amountMinor: amount,
-        categoryId: id.nullable().default(null),
-        current: z.number().int().min(1).max(600),
-        name: text,
-        startDate: day,
-        total: z.number().int().min(1).max(600),
-      })
-      .strict(),
-  },
-  {
-    description: "Renomear plano e parcelas vinculadas ou alterar categoria.",
-    name: "update_installment",
-    readOnly: false,
-    schema: z
-      .object({
-        ...mutation,
-        categoryId: id.nullable().optional(),
-        id,
-        name: text.optional(),
-      })
-      .strict(),
-  },
-  {
-    description: "Alterar conclusão manual sem inventar pagamentos.",
-    name: "complete_installment",
-    readOnly: false,
-    schema: z.object({ ...mutation, id }).strict(),
-  },
-  {
-    description: "Alterar conclusão manual sem inventar pagamentos.",
-    name: "reopen_installment",
-    readOnly: false,
-    schema: z.object({ ...mutation, id }).strict(),
-  },
-  {
-    description: "Criar conta fixa ou receita mensal projetada.",
-    name: "create_recurrence",
-    readOnly: false,
-    schema: z.object({ ...mutation, ...recurrenceFields }).strict(),
-  },
-  {
-    description:
-      "Substituir configuração da recorrência, inclusive data final.",
-    name: "update_recurrence",
-    readOnly: false,
-    schema: z.object({ ...mutation, id, ...recurrenceFields }).strict(),
-  },
-  {
-    description: "Desativar projeções futuras.",
-    name: "deactivate_recurrence",
-    readOnly: false,
-    schema: z.object({ ...mutation, id }).strict(),
-  },
-  {
-    description: "Ativar orçamento e definir total mensal por espaço.",
-    name: "set_budget",
-    readOnly: false,
-    schema: z
-      .object({
-        ...mutation,
-        currency,
-        enabled: z.boolean(),
-        monthlyBudgetMinor: amount.nullable(),
-      })
-      .strict(),
-  },
-  {
-    description: "Definir limite com orçamento ativado.",
-    name: "set_category_limit",
-    readOnly: false,
-    schema: z.object({ ...mutation, amountMinor: amount, id }).strict(),
-  },
-  {
-    description: "Remover limite com orçamento ativado.",
-    name: "remove_category_limit",
-    readOnly: false,
-    schema: z.object({ ...mutation, id }).strict(),
-  },
-  {
-    description: "Criar categoria personalizada.",
-    name: "create_category",
-    readOnly: false,
-    schema: z
-      .object({
-        ...mutation,
-        ...categoryAppearance,
-        kind: z.enum(["income", "expense", "transfer"]),
-        name: text,
-      })
-      .strict(),
-  },
-  {
-    description:
-      "Configurar ícone, cor e grupo de qualquer categoria. Nomes de categorias fixas são protegidos.",
-    name: "update_category",
-    readOnly: false,
-    schema: z
-      .object({
-        ...mutation,
-        ...categoryAppearance,
-        hidden: z.boolean().optional(),
-        id,
-        name: text.optional(),
-      })
-      .strict(),
-  },
-  {
-    description:
-      "Excluir categoria personalizada e reatribuir referências à categoria de sistema do mesmo tipo.",
-    name: "delete_category",
-    readOnly: false,
-    schema: z.object({ ...mutation, id }).strict(),
-  },
-  {
-    description: "Analisar despesas categorizadas e itens sem categoria.",
-    name: "analyze_categories",
+      "Ritmo observado de despesas e projeção linear explicitamente estimada.",
     readOnly: true,
     schema: z.object({ ...analysisPeriod }).strict(),
   },
-  {
-    description: "Criar regra textual determinística de categorização.",
-    name: "create_rule",
-    readOnly: false,
-    schema: z.object({ ...mutation, ...ruleFields }).strict(),
-  },
-  {
+  get_tags: {
     description:
-      "Atualizar regra pessoal; pessoais precedem pacotes, depois menor prioridade vence.",
-    name: "update_rule",
-    readOnly: false,
-    schema: z.object({ ...mutation, id, ...ruleFields }).strict(),
+      "Etiquetas locais do espaço, com IDs e nomes para filtrar e organizar transações.",
+    readOnly: true,
+    schema: z.object({ ...scope }).strict(),
   },
-  {
-    description: "Excluir regra sem reverter classificações já aplicadas.",
-    name: "delete_rule",
-    readOnly: false,
-    schema: z.object({ ...mutation, id }).strict(),
-  },
-  {
+  get_transaction_purchases: {
     description:
-      "Aplicar regras sincronicamente a até 500 transações; operação atômica.",
-    name: "apply_rules",
-    readOnly: false,
+      "Compras e transações com parcelas de cartão agrupadas antes da paginação, como na lista do painel. Mantém valores de cada parcela, moeda, pendência, datas e identificação. Datas filtram a compra ou primeira parcela conhecida; nunca some a página para calcular totais.",
+    readOnly: true,
     schema: z
-      .object({ ...mutation, accountId: id.optional(), from: day, to: day })
+      .object({
+        ...selection,
+        cursor: z.string().max(4096).optional(),
+        future: z.boolean().default(false),
+        limit: z.number().int().min(1).max(500).default(100),
+        order: z.literal("date_desc").default("date_desc"),
+      })
+      .omit({ cardNumber: true, tagId: true })
       .strict(),
   },
-  {
-    description: "Criar meta financeira.",
-    name: "create_goal",
-    readOnly: false,
-    schema: z.object({ ...mutation, ...goalFields }).strict(),
-  },
-  {
-    description: "Atualizar meta financeira.",
-    name: "update_goal",
-    readOnly: false,
-    schema: z.object({ ...mutation, id, ...goalFields }).strict(),
-  },
-  {
+  get_transactions: {
     description:
-      "Registrar contribuição; transação existente não é contada novamente.",
-    name: "add_goal_contribution",
+      "Histórico efetivo com edições locais e paginação consistente. Para últimas compras envie order=date_desc e limit=5; não some páginas para calcular totais.",
+    readOnly: true,
+    schema: z
+      .object({
+        ...selection,
+        cursor: z.string().max(4096).optional(),
+        limit: z.number().int().min(1).max(500).default(100),
+        order: z.enum(["id", "date_desc"]).default("id"),
+      })
+      .strict(),
+  },
+  get_upcoming_payments: {
+    description:
+      "Vencimentos de faturas, recorrências e parcelas de empréstimos sem executar pagamentos.",
+    readOnly: true,
+    schema: z.object({ ...period }).strict(),
+  },
+  import_rules: {
+    description:
+      "Importar JSON de regras compostas atomicamente no espaço confirmado. Preserva regras pessoais e duplicatas; exige a revisão da prévia. Não reaplica histórico.",
     readOnly: false,
     schema: z
       .object({
         ...mutation,
-        amountMinor: amount,
-        date: day,
-        id,
-        transactionId: id.optional(),
+        ...RuleImportFields,
+        revision: z.number().int().nonnegative(),
       })
       .strict(),
   },
-  {
-    description: "Remover contribuição preservando transação.",
-    name: "remove_goal_contribution",
-    readOnly: false,
-    schema: z.object({ ...mutation, contributionId: id, id }).strict(),
-  },
-  {
-    description: "Concluir meta manualmente.",
-    name: "complete_goal",
-    readOnly: false,
-    schema: z.object({ ...mutation, id }).strict(),
-  },
-  {
+  link_goal_asset: {
     description:
       "Vincular exatamente uma conta ou investimento da mesma moeda à meta.",
-    name: "link_goal_asset",
     readOnly: false,
     schema: z
       .object({
@@ -720,109 +644,53 @@ export const planningDefinitions = [
       })
       .strict(),
   },
-  {
-    description: "Remover vínculo de patrimônio.",
-    name: "unlink_goal_asset",
-    readOnly: false,
-    schema: z.object({ ...mutation, id }).strict(),
-  },
-  {
-    description: "Excluir meta e contribuições locais; preservar transações.",
-    name: "delete_goal",
-    readOnly: false,
-    schema: z.object({ ...mutation, id }).strict(),
-  },
-  {
+  mark_bill_paid: {
     description:
-      "Desvincular transação e contribuição associada sem excluir histórico.",
-    name: "unlink_goal_transaction",
-    readOnly: false,
-    schema: z.object({ ...mutation, id, transactionId: id }).strict(),
-  },
-  {
-    description: "Criar investimento manual.",
-    name: "create_manual_investment",
-    readOnly: false,
-    schema: z.object({ ...mutation, ...investmentFields }).strict(),
-  },
-  {
-    description: "Editar investimento manual.",
-    name: "update_manual_investment",
-    readOnly: false,
-    schema: z.object({ ...mutation, id, ...investmentFields }).strict(),
-  },
-  {
-    description: "Definir participação no patrimônio.",
-    name: "set_investment_inclusion",
-    readOnly: false,
-    schema: z.object({ ...mutation, id, included: z.boolean() }).strict(),
-  },
-  {
-    description: "Excluir investimento manual e remover vínculo de metas.",
-    name: "delete_manual_investment",
+      "Alterar apenas confirmação manual da fatura; nunca enviar pagamento ao banco.",
     readOnly: false,
     schema: z.object({ ...mutation, id }).strict(),
   },
-  {
-    description: "Cadastrar dívida manual sem efetuar contratação bancária.",
-    name: "create_manual_loan",
-    readOnly: false,
-    schema: z.object({ ...mutation, ...loanFields }).strict(),
-  },
-  {
-    description: "Atualizar dívida manual sem alterar parcelas conciliadas.",
-    name: "update_manual_loan",
-    readOnly: false,
-    schema: z.object({ ...mutation, id, ...loanFields }).strict(),
-  },
-  {
-    description: "Ocultar ou restaurar empréstimo.",
-    name: "set_loan_visibility",
-    readOnly: false,
-    schema: z.object({ ...mutation, hidden: z.boolean(), id }).strict(),
-  },
-  {
-    description: "Excluir dívida manual sem parcelas pendentes vinculadas.",
-    name: "delete_manual_loan",
-    readOnly: false,
-    schema: z.object({ ...mutation, id }).strict(),
-  },
-  {
+  move_account: {
     description:
-      "Criar cronograma SAC exato; juros mensais em pontos-base e arredondamento half-up.",
-    name: "create_manual_loan_schedule",
+      "Mover conta ou todas as contas da conexão entre espaços pessoais.",
+    readOnly: false,
+    schema: z.object({ ...mutation, id, targetSpaceId: id }).strict(),
+  },
+  move_connection: {
+    description:
+      "Mover conta ou todas as contas da conexão entre espaços pessoais.",
+    readOnly: false,
+    schema: z
+      .object({ ...mutation, connectionId: id, targetSpaceId: id })
+      .strict(),
+  },
+  move_transactions: {
+    description:
+      "Mover projeções de transações para outro espaço da mesma instalação.",
     readOnly: false,
     schema: z
       .object({
         ...mutation,
-        count: z.number().int().min(1).max(600),
-        id,
-        monthlyRateBps: z.number().int().min(0).max(10_000),
-        principalMinor: amount,
-        startDate: day,
+        ids: z.array(id).min(1).max(500),
+        targetSpaceId: id,
       })
       .strict(),
   },
-  {
+  preview_rule: {
     description:
-      "Criar cronograma SAC exato; juros mensais em pontos-base e arredondamento half-up.",
-    name: "replace_manual_loan_schedule",
-    readOnly: false,
-    schema: z
-      .object({
-        ...mutation,
-        count: z.number().int().min(1).max(600),
-        id,
-        monthlyRateBps: z.number().int().min(0).max(10_000),
-        principalMinor: amount,
-        startDate: day,
-      })
-      .strict(),
+      "Simular uma regra sem salvar nem reclassificar. Usa o mesmo escopo obrigatório, alternativas OU, condições E e dinheiro exato do painel. Informa contagem, amostras e limites de cobertura; truncated ou partial impedem tratar a contagem como definitiva.",
+    readOnly: true,
+    schema: RulePreviewQuerySchema,
   },
-  {
+  preview_rule_import: {
+    description:
+      "Conferir importação de JSON de regras compostas, categorias e duplicatas, sem gravar. Retorna revisão para confirmação.",
+    readOnly: true,
+    schema: z.object({ ...RuleImportFields, spaceId: id }).strict(),
+  },
+  reconcile_scheduled_payment: {
     description:
       "Conciliar próxima parcela com transação compatível ou criar lançamento manual; nunca inicia pagamento bancário.",
-    name: "reconcile_scheduled_payment",
     readOnly: false,
     schema: z
       .object({
@@ -834,57 +702,200 @@ export const planningDefinitions = [
       })
       .strict(),
   },
-  {
-    description: "Desfazer última conciliação mantendo transação e histórico.",
-    name: "undo_scheduled_payment",
+  remove_category_limit: {
+    description: "Remover limite com orçamento ativado.",
     readOnly: false,
-    schema: z.object({ ...mutation, id, paymentId: id }).strict(),
+    schema: z.object({ ...mutation, id }).strict(),
   },
-  {
-    description: "Criar tag.",
-    name: "create_tag",
+  remove_goal_contribution: {
+    description: "Remover contribuição preservando transação.",
     readOnly: false,
-    schema: z.object({ ...mutation, color: text, name: text }).strict(),
+    schema: z.object({ ...mutation, contributionId: id, id }).strict(),
   },
-  {
-    description: "Editar tag.",
-    name: "update_tag",
+  remove_transaction_tags: {
+    description: "Alterar tags das transações selecionadas.",
     readOnly: false,
     schema: z
       .object({
         ...mutation,
-        color: text.optional(),
+        ids: z.array(id).min(1).max(500),
+        tagIds: z.array(id).min(1).max(50),
+      })
+      .strict(),
+  },
+  reopen_installment: {
+    description: "Alterar conclusão manual sem inventar pagamentos.",
+    readOnly: false,
+    schema: z.object({ ...mutation, id }).strict(),
+  },
+  replace_manual_loan_schedule: {
+    description:
+      "Criar cronograma SAC exato; juros mensais em pontos-base e arredondamento half-up.",
+    readOnly: false,
+    schema: z
+      .object({
+        ...mutation,
+        count: z.number().int().min(1).max(600),
+        id,
+        monthlyRateBps: z.number().int().min(0).max(10_000),
+        principalMinor: amount,
+        startDate: day,
+      })
+      .strict(),
+  },
+  set_budget: {
+    description: "Ativar orçamento e definir total mensal por espaço.",
+    readOnly: false,
+    schema: z
+      .object({
+        ...mutation,
+        currency,
+        enabled: z.boolean(),
+        monthlyBudgetMinor: amount.nullable(),
+      })
+      .strict(),
+  },
+  set_category_limit: {
+    description: "Definir limite com orçamento ativado.",
+    readOnly: false,
+    schema: z.object({ ...mutation, amountMinor: amount, id }).strict(),
+  },
+  set_investment_inclusion: {
+    description: "Definir participação no patrimônio.",
+    readOnly: false,
+    schema: z.object({ ...mutation, id, included: z.boolean() }).strict(),
+  },
+  set_loan_visibility: {
+    description: "Ocultar ou restaurar empréstimo.",
+    readOnly: false,
+    schema: z.object({ ...mutation, hidden: z.boolean(), id }).strict(),
+  },
+  set_notification_preference: {
+    description:
+      "Guardar preferência de canal; não configura nem comprova entrega de notificações.",
+    readOnly: false,
+    schema: z
+      .object({
+        ...mutation,
+        channel: z.enum(["email", "push"]),
+        enabled: z.boolean(),
+        event: text,
+      })
+      .strict(),
+  },
+  set_primary_card: {
+    description: "Definir cartão principal.",
+    readOnly: false,
+    schema: z.object({ ...mutation, id }).strict(),
+  },
+  undo_scheduled_payment: {
+    description: "Desfazer última conciliação mantendo transação e histórico.",
+    readOnly: false,
+    schema: z.object({ ...mutation, id, paymentId: id }).strict(),
+  },
+  unlink_goal_asset: {
+    description: "Remover vínculo de patrimônio.",
+    readOnly: false,
+    schema: z.object({ ...mutation, id }).strict(),
+  },
+  unlink_goal_transaction: {
+    description:
+      "Desvincular transação e contribuição associada sem excluir histórico.",
+    readOnly: false,
+    schema: z.object({ ...mutation, id, transactionId: id }).strict(),
+  },
+  unmark_bill_paid: {
+    description:
+      "Alterar apenas confirmação manual da fatura; nunca enviar pagamento ao banco.",
+    readOnly: false,
+    schema: z.object({ ...mutation, id }).strict(),
+  },
+  update_account_settings: {
+    description:
+      "Editar apresentação; limite e ciclo somente para cartões manuais.",
+    readOnly: false,
+    schema: z.object({ ...mutation, id, ...accountFields }).strict(),
+  },
+  update_card: {
+    description: "Renomear ou ocultar cartão adicional.",
+    readOnly: false,
+    schema: z
+      .object({
+        ...mutation,
+        hidden: z.boolean().optional(),
         id,
         name: text.optional(),
       })
       .strict(),
   },
-  {
-    description: "Excluir tag e suas associações.",
-    name: "delete_tag",
-    readOnly: false,
-    schema: z.object({ ...mutation, id }).strict(),
-  },
-  {
+  update_category: {
     description:
-      "Criar espaço local da mesma pessoa; não cria usuários nem permissões.",
-    name: "create_space",
+      "Configurar ícone, cor e grupo de qualquer categoria. Nomes de categorias fixas são protegidos.",
     readOnly: false,
     schema: z
       .object({
         ...mutation,
-        color: text.default("blue"),
-        currency,
-        icon: text.default("wallet"),
-        monthStartDay: z.number().int().min(1).max(28).default(1),
-        name: text,
-        type: z.enum(["personal", "business", "family"]).default("personal"),
+        ...categoryAppearance,
+        hidden: z.boolean().optional(),
+        id,
+        name: text.optional(),
       })
       .strict(),
   },
-  {
+  update_category_group: {
+    description: "Editar nome, ícone ou cor de um agrupador de categorias.",
+    readOnly: false,
+    schema: z
+      .object({
+        ...mutation,
+        color: CategoryColorSchema.optional(),
+        icon: CategoryIconSchema.optional(),
+        id,
+        name: text.optional(),
+      })
+      .strict(),
+  },
+  update_goal: {
+    description: "Atualizar meta financeira.",
+    readOnly: false,
+    schema: z.object({ ...mutation, id, ...goalFields }).strict(),
+  },
+  update_installment: {
+    description: "Renomear plano e parcelas vinculadas ou alterar categoria.",
+    readOnly: false,
+    schema: z
+      .object({
+        ...mutation,
+        categoryId: id.nullable().optional(),
+        id,
+        name: text.optional(),
+      })
+      .strict(),
+  },
+  update_manual_investment: {
+    description: "Editar investimento manual.",
+    readOnly: false,
+    schema: z.object({ ...mutation, id, ...investmentFields }).strict(),
+  },
+  update_manual_loan: {
+    description: "Atualizar dívida manual sem alterar parcelas conciliadas.",
+    readOnly: false,
+    schema: z.object({ ...mutation, id, ...loanFields }).strict(),
+  },
+  update_recurrence: {
+    description:
+      "Substituir configuração da recorrência, inclusive data final.",
+    readOnly: false,
+    schema: z.object({ ...mutation, id, ...recurrenceFields }).strict(),
+  },
+  update_rule: {
+    description:
+      "Atualizar regra pessoal; pessoais precedem pacotes, depois menor prioridade vence.",
+    readOnly: false,
+    schema: z.object({ ...mutation, id, ...ruleFields }).strict(),
+  },
+  update_space: {
     description: "Editar espaço e início do ciclo financeiro.",
-    name: "update_space",
     readOnly: false,
     schema: z
       .object({
@@ -898,341 +909,277 @@ export const planningDefinitions = [
       })
       .strict(),
   },
-  {
-    description:
-      "Mover conta ou todas as contas da conexão entre espaços pessoais.",
-    name: "move_account",
-    readOnly: false,
-    schema: z.object({ ...mutation, id, targetSpaceId: id }).strict(),
-  },
-  {
-    description:
-      "Mover conta ou todas as contas da conexão entre espaços pessoais.",
-    name: "move_connection",
-    readOnly: false,
-    schema: z
-      .object({ ...mutation, connectionId: id, targetSpaceId: id })
-      .strict(),
-  },
-  {
-    description:
-      "Guardar preferência de canal; não configura nem comprova entrega de notificações.",
-    name: "set_notification_preference",
+  update_tag: {
+    description: "Editar tag.",
     readOnly: false,
     schema: z
       .object({
         ...mutation,
-        channel: z.enum(["email", "push"]),
-        enabled: z.boolean(),
-        event: text,
-      })
-      .strict(),
-  },
-  {
-    description:
-      "Excluir um espaço vazio; preserva o grupo pessoal e impede referências órfãs.",
-    name: "delete_space",
-    readOnly: false,
-    schema: z.object({ ...mutation, id }).strict(),
-  },
-  {
-    description:
-      "Listar agrupadores de categorias de um espaço; não são espaços financeiros.",
-    name: "get_category_groups",
-    readOnly: true,
-    schema: z.object({ ...scope }).strict(),
-  },
-  {
-    description: "Criar agrupador de categorias com nome, ícone e cor.",
-    name: "create_category_group",
-    readOnly: false,
-    schema: z
-      .object({
-        ...mutation,
-        color: CategoryColorSchema,
-        icon: CategoryIconSchema,
-        name: text,
-      })
-      .strict(),
-  },
-  {
-    description: "Editar nome, ícone ou cor de um agrupador de categorias.",
-    name: "update_category_group",
-    readOnly: false,
-    schema: z
-      .object({
-        ...mutation,
-        color: CategoryColorSchema.optional(),
-        icon: CategoryIconSchema.optional(),
+        color: text.optional(),
         id,
         name: text.optional(),
       })
       .strict(),
   },
-  {
-    description:
-      "Remover agrupador; suas categorias e transações são preservadas e ficam sem grupo.",
-    name: "delete_category_group",
-    readOnly: false,
-    schema: z.object({ ...mutation, id }).strict(),
-  },
-  {
-    description:
-      "Compras e transações com parcelas de cartão agrupadas antes da paginação, como na lista do painel. Mantém valores de cada parcela, moeda, pendência, datas e identificação. Datas filtram a compra ou primeira parcela conhecida; nunca some a página para calcular totais.",
-    name: "get_transaction_purchases",
-    readOnly: true,
-    schema: z
-      .object({
-        ...selection,
-        cursor: z.string().max(4096).optional(),
-        future: z.boolean().default(false),
-        limit: z.number().int().min(1).max(500).default(100),
-        order: z.literal("date_desc").default("date_desc"),
-      })
-      .omit({ cardNumber: true, tagId: true })
-      .strict(),
-  },
-  {
-    description:
-      "Simular uma regra sem salvar nem reclassificar. Usa o mesmo escopo obrigatório, alternativas OU, condições E e dinheiro exato do painel. Informa contagem, amostras e limites de cobertura; truncated ou partial impedem tratar a contagem como definitiva.",
-    name: "preview_rule",
-    readOnly: true,
-    schema: RulePreviewQuerySchema,
-  },
-  {
-    description:
-      "Conferir importação de JSON de regras compostas, categorias e duplicatas, sem gravar. Retorna revisão para confirmação.",
-    name: "preview_rule_import",
-    readOnly: true,
-    schema: z.object({ ...RuleImportFields, spaceId: id }).strict(),
-  },
-  {
-    description:
-      "Importar JSON de regras compostas atomicamente no espaço confirmado. Preserva regras pessoais e duplicatas; exige a revisão da prévia. Não reaplica histórico.",
-    name: "import_rules",
-    readOnly: false,
-    schema: z
-      .object({
-        ...mutation,
-        ...RuleImportFields,
-        revision: z.number().int().nonnegative(),
-      })
-      .strict(),
-  },
-] as const;
+} as const;
+export const planningDefinitions = Object.entries(planningTools).map(
+  ([name, definition]) => ({ ...definition, name }),
+);
 export const PlanningCommandSchema = z.discriminatedUnion("tool", [
-  planningDefinitions[94].schema.extend({
+  planningTools.get_transaction_purchases.schema.extend({
     tool: z.literal("get_transaction_purchases"),
   }),
-  planningDefinitions[95].schema.safeExtend({
+  planningTools.preview_rule.schema.safeExtend({
     tool: z.literal("preview_rule"),
   }),
-  planningDefinitions[90].schema.extend({
+  planningTools.get_category_groups.schema.extend({
     tool: z.literal("get_category_groups"),
   }),
-  planningDefinitions[91].schema.extend({
+  planningTools.create_category_group.schema.extend({
     tool: z.literal("create_category_group"),
   }),
-  planningDefinitions[92].schema.extend({
+  planningTools.update_category_group.schema.extend({
     tool: z.literal("update_category_group"),
   }),
-  planningDefinitions[93].schema.extend({
+  planningTools.delete_category_group.schema.extend({
     tool: z.literal("delete_category_group"),
   }),
-  planningDefinitions[0].schema.extend({ tool: z.literal("get_accounts") }),
-  planningDefinitions[1].schema.extend({ tool: z.literal("get_cards") }),
-  planningDefinitions[2].schema.extend({ tool: z.literal("get_transactions") }),
-  planningDefinitions[3].schema.extend({ tool: z.literal("get_overview") }),
-  planningDefinitions[4].schema.extend({
+  planningTools.get_accounts.schema.extend({ tool: z.literal("get_accounts") }),
+  planningTools.get_cards.schema.extend({ tool: z.literal("get_cards") }),
+  planningTools.get_transactions.schema.extend({
+    tool: z.literal("get_transactions"),
+  }),
+  planningTools.get_overview.schema.extend({ tool: z.literal("get_overview") }),
+  planningTools.get_spending_by_category.schema.extend({
     tool: z.literal("get_spending_by_category"),
   }),
-  planningDefinitions[5].schema.extend({
+  planningTools.get_spending_comparison.schema.extend({
     tool: z.literal("get_spending_comparison"),
   }),
-  planningDefinitions[6].schema.extend({
+  planningTools.get_spending_pace.schema.extend({
     tool: z.literal("get_spending_pace"),
   }),
-  planningDefinitions[7].schema.extend({ tool: z.literal("get_projection") }),
-  planningDefinitions[8].schema.extend({ tool: z.literal("get_bills") }),
-  planningDefinitions[9].schema.extend({
+  planningTools.get_projection.schema.extend({
+    tool: z.literal("get_projection"),
+  }),
+  planningTools.get_bills.schema.extend({ tool: z.literal("get_bills") }),
+  planningTools.get_upcoming_payments.schema.extend({
     tool: z.literal("get_upcoming_payments"),
   }),
-  planningDefinitions[10].schema.extend({
+  planningTools.get_installments.schema.extend({
     tool: z.literal("get_installments"),
   }),
-  planningDefinitions[11].schema.extend({ tool: z.literal("get_categories") }),
-  planningDefinitions[12].schema.extend({ tool: z.literal("get_loans") }),
-  planningDefinitions[13].schema.extend({ tool: z.literal("get_tags") }),
-  planningDefinitions[14].schema.extend({ tool: z.literal("get_rules") }),
-  planningDefinitions[15].schema.extend({ tool: z.literal("get_recurrences") }),
-  planningDefinitions[16].schema.extend({ tool: z.literal("get_goals") }),
-  planningDefinitions[17].schema.extend({ tool: z.literal("get_investments") }),
-  planningDefinitions[18].schema.extend({ tool: z.literal("get_budget") }),
-  planningDefinitions[19].schema.extend({ tool: z.literal("get_spaces") }),
-  planningDefinitions[20].schema.extend({
+  planningTools.get_categories.schema.extend({
+    tool: z.literal("get_categories"),
+  }),
+  planningTools.get_loans.schema.extend({ tool: z.literal("get_loans") }),
+  planningTools.get_tags.schema.extend({ tool: z.literal("get_tags") }),
+  planningTools.get_rules.schema.extend({ tool: z.literal("get_rules") }),
+  planningTools.get_recurrences.schema.extend({
+    tool: z.literal("get_recurrences"),
+  }),
+  planningTools.get_goals.schema.extend({ tool: z.literal("get_goals") }),
+  planningTools.get_investments.schema.extend({
+    tool: z.literal("get_investments"),
+  }),
+  planningTools.get_budget.schema.extend({ tool: z.literal("get_budget") }),
+  planningTools.get_spaces.schema.extend({ tool: z.literal("get_spaces") }),
+  planningTools.get_notification_preferences.schema.extend({
     tool: z.literal("get_notification_preferences"),
   }),
-  planningDefinitions[21].schema.extend({ tool: z.literal("get_goal_plan") }),
-  planningDefinitions[22].schema.extend({
+  planningTools.get_goal_plan.schema.extend({
+    tool: z.literal("get_goal_plan"),
+  }),
+  planningTools.get_loan_schedule.schema.extend({
     tool: z.literal("get_loan_schedule"),
   }),
-  planningDefinitions[23].schema.extend({ tool: z.literal("generate_chart") }),
-  planningDefinitions[24].schema.extend({
+  planningTools.generate_chart.schema.extend({
+    tool: z.literal("generate_chart"),
+  }),
+  planningTools.create_manual_account.schema.extend({
     tool: z.literal("create_manual_account"),
   }),
-  planningDefinitions[25].schema.extend({
+  planningTools.update_account_settings.schema.extend({
     tool: z.literal("update_account_settings"),
   }),
-  planningDefinitions[26].schema.extend({
+  planningTools.delete_manual_account.schema.extend({
     tool: z.literal("delete_manual_account"),
   }),
-  planningDefinitions[27].schema.extend({ tool: z.literal("update_card") }),
-  planningDefinitions[28].schema.extend({ tool: z.literal("delete_card") }),
-  planningDefinitions[29].schema.extend({
+  planningTools.update_card.schema.extend({ tool: z.literal("update_card") }),
+  planningTools.delete_card.schema.extend({ tool: z.literal("delete_card") }),
+  planningTools.set_primary_card.schema.extend({
     tool: z.literal("set_primary_card"),
   }),
-  planningDefinitions[30].schema.extend({ tool: z.literal("mark_bill_paid") }),
-  planningDefinitions[31].schema.extend({
+  planningTools.mark_bill_paid.schema.extend({
+    tool: z.literal("mark_bill_paid"),
+  }),
+  planningTools.unmark_bill_paid.schema.extend({
     tool: z.literal("unmark_bill_paid"),
   }),
-  planningDefinitions[32].schema.extend({
+  planningTools.create_transaction.schema.extend({
     tool: z.literal("create_transaction"),
   }),
-  planningDefinitions[33].schema.extend({
+  planningTools.edit_transaction.schema.extend({
     tool: z.literal("edit_transaction"),
   }),
-  planningDefinitions[34].schema.extend({
+  planningTools.batch_edit_transactions.schema.extend({
     tool: z.literal("batch_edit_transactions"),
   }),
-  planningDefinitions[35].schema.extend({
+  planningTools.edit_transactions_by_period.schema.extend({
     tool: z.literal("edit_transactions_by_period"),
   }),
-  planningDefinitions[36].schema.extend({
+  planningTools.delete_transaction.schema.extend({
     tool: z.literal("delete_transaction"),
   }),
-  planningDefinitions[37].schema.extend({
+  planningTools.batch_delete_transactions.schema.extend({
     tool: z.literal("batch_delete_transactions"),
   }),
-  planningDefinitions[38].schema.extend({
+  planningTools.delete_transactions_by_period.schema.extend({
     tool: z.literal("delete_transactions_by_period"),
   }),
-  planningDefinitions[39].schema.extend({
+  planningTools.attach_transaction_tags.schema.extend({
     tool: z.literal("attach_transaction_tags"),
   }),
-  planningDefinitions[40].schema.extend({
+  planningTools.remove_transaction_tags.schema.extend({
     tool: z.literal("remove_transaction_tags"),
   }),
-  planningDefinitions[41].schema.extend({
+  planningTools.move_transactions.schema.extend({
     tool: z.literal("move_transactions"),
   }),
-  planningDefinitions[42].schema.extend({
+  planningTools.create_manual_installment.schema.extend({
     tool: z.literal("create_manual_installment"),
   }),
-  planningDefinitions[43].schema.extend({
+  planningTools.update_installment.schema.extend({
     tool: z.literal("update_installment"),
   }),
-  planningDefinitions[44].schema.extend({
+  planningTools.complete_installment.schema.extend({
     tool: z.literal("complete_installment"),
   }),
-  planningDefinitions[45].schema.extend({
+  planningTools.reopen_installment.schema.extend({
     tool: z.literal("reopen_installment"),
   }),
-  planningDefinitions[46].schema.extend({
+  planningTools.create_recurrence.schema.extend({
     tool: z.literal("create_recurrence"),
   }),
-  planningDefinitions[47].schema.extend({
+  planningTools.update_recurrence.schema.extend({
     tool: z.literal("update_recurrence"),
   }),
-  planningDefinitions[48].schema.extend({
+  planningTools.deactivate_recurrence.schema.extend({
     tool: z.literal("deactivate_recurrence"),
   }),
-  planningDefinitions[49].schema.extend({ tool: z.literal("set_budget") }),
-  planningDefinitions[50].schema.extend({
+  planningTools.set_budget.schema.extend({ tool: z.literal("set_budget") }),
+  planningTools.set_category_limit.schema.extend({
     tool: z.literal("set_category_limit"),
   }),
-  planningDefinitions[51].schema.extend({
+  planningTools.remove_category_limit.schema.extend({
     tool: z.literal("remove_category_limit"),
   }),
-  planningDefinitions[52].schema.extend({ tool: z.literal("create_category") }),
-  planningDefinitions[53].schema.extend({ tool: z.literal("update_category") }),
-  planningDefinitions[54].schema.extend({ tool: z.literal("delete_category") }),
-  planningDefinitions[55].schema.extend({
+  planningTools.create_category.schema.extend({
+    tool: z.literal("create_category"),
+  }),
+  planningTools.update_category.schema.extend({
+    tool: z.literal("update_category"),
+  }),
+  planningTools.delete_category.schema.extend({
+    tool: z.literal("delete_category"),
+  }),
+  planningTools.analyze_categories.schema.extend({
     tool: z.literal("analyze_categories"),
   }),
-  planningDefinitions[56].schema.extend({ tool: z.literal("create_rule") }),
-  planningDefinitions[57].schema.extend({ tool: z.literal("update_rule") }),
-  planningDefinitions[58].schema.extend({ tool: z.literal("delete_rule") }),
-  planningDefinitions[59].schema.extend({ tool: z.literal("apply_rules") }),
-  planningDefinitions[60].schema.extend({ tool: z.literal("create_goal") }),
-  planningDefinitions[61].schema.extend({ tool: z.literal("update_goal") }),
-  planningDefinitions[62].schema.extend({
+  planningTools.create_rule.schema.extend({ tool: z.literal("create_rule") }),
+  planningTools.update_rule.schema.extend({ tool: z.literal("update_rule") }),
+  planningTools.delete_rule.schema.extend({ tool: z.literal("delete_rule") }),
+  planningTools.apply_rules.schema.extend({ tool: z.literal("apply_rules") }),
+  planningTools.create_goal.schema.extend({ tool: z.literal("create_goal") }),
+  planningTools.update_goal.schema.extend({ tool: z.literal("update_goal") }),
+  planningTools.add_goal_contribution.schema.extend({
     tool: z.literal("add_goal_contribution"),
   }),
-  planningDefinitions[63].schema.extend({
+  planningTools.remove_goal_contribution.schema.extend({
     tool: z.literal("remove_goal_contribution"),
   }),
-  planningDefinitions[64].schema.extend({ tool: z.literal("complete_goal") }),
-  planningDefinitions[65].schema.extend({ tool: z.literal("link_goal_asset") }),
-  planningDefinitions[66].schema.extend({
+  planningTools.complete_goal.schema.extend({
+    tool: z.literal("complete_goal"),
+  }),
+  planningTools.link_goal_asset.schema.extend({
+    tool: z.literal("link_goal_asset"),
+  }),
+  planningTools.unlink_goal_asset.schema.extend({
     tool: z.literal("unlink_goal_asset"),
   }),
-  planningDefinitions[67].schema.extend({ tool: z.literal("delete_goal") }),
-  planningDefinitions[68].schema.extend({
+  planningTools.delete_goal.schema.extend({ tool: z.literal("delete_goal") }),
+  planningTools.unlink_goal_transaction.schema.extend({
     tool: z.literal("unlink_goal_transaction"),
   }),
-  planningDefinitions[69].schema.extend({
+  planningTools.create_manual_investment.schema.extend({
     tool: z.literal("create_manual_investment"),
   }),
-  planningDefinitions[70].schema.extend({
+  planningTools.update_manual_investment.schema.extend({
     tool: z.literal("update_manual_investment"),
   }),
-  planningDefinitions[71].schema.extend({
+  planningTools.set_investment_inclusion.schema.extend({
     tool: z.literal("set_investment_inclusion"),
   }),
-  planningDefinitions[72].schema.extend({
+  planningTools.delete_manual_investment.schema.extend({
     tool: z.literal("delete_manual_investment"),
   }),
-  planningDefinitions[73].schema.extend({
+  planningTools.create_manual_loan.schema.extend({
     tool: z.literal("create_manual_loan"),
   }),
-  planningDefinitions[74].schema.extend({
+  planningTools.update_manual_loan.schema.extend({
     tool: z.literal("update_manual_loan"),
   }),
-  planningDefinitions[75].schema.extend({
+  planningTools.set_loan_visibility.schema.extend({
     tool: z.literal("set_loan_visibility"),
   }),
-  planningDefinitions[76].schema.extend({
+  planningTools.delete_manual_loan.schema.extend({
     tool: z.literal("delete_manual_loan"),
   }),
-  planningDefinitions[77].schema.extend({
+  planningTools.create_manual_loan_schedule.schema.extend({
     tool: z.literal("create_manual_loan_schedule"),
   }),
-  planningDefinitions[78].schema.extend({
+  planningTools.replace_manual_loan_schedule.schema.extend({
     tool: z.literal("replace_manual_loan_schedule"),
   }),
-  planningDefinitions[79].schema.extend({
+  planningTools.reconcile_scheduled_payment.schema.extend({
     tool: z.literal("reconcile_scheduled_payment"),
   }),
-  planningDefinitions[80].schema.extend({
+  planningTools.undo_scheduled_payment.schema.extend({
     tool: z.literal("undo_scheduled_payment"),
   }),
-  planningDefinitions[81].schema.extend({ tool: z.literal("create_tag") }),
-  planningDefinitions[82].schema.extend({ tool: z.literal("update_tag") }),
-  planningDefinitions[83].schema.extend({ tool: z.literal("delete_tag") }),
-  planningDefinitions[84].schema.extend({ tool: z.literal("create_space") }),
-  planningDefinitions[85].schema.extend({ tool: z.literal("update_space") }),
-  planningDefinitions[86].schema.extend({ tool: z.literal("move_account") }),
-  planningDefinitions[87].schema.extend({ tool: z.literal("move_connection") }),
-  planningDefinitions[88].schema.extend({
+  planningTools.create_tag.schema.extend({ tool: z.literal("create_tag") }),
+  planningTools.update_tag.schema.extend({ tool: z.literal("update_tag") }),
+  planningTools.delete_tag.schema.extend({ tool: z.literal("delete_tag") }),
+  planningTools.create_space.schema.extend({ tool: z.literal("create_space") }),
+  planningTools.update_space.schema.extend({ tool: z.literal("update_space") }),
+  planningTools.move_account.schema.extend({ tool: z.literal("move_account") }),
+  planningTools.move_connection.schema.extend({
+    tool: z.literal("move_connection"),
+  }),
+  planningTools.set_notification_preference.schema.extend({
     tool: z.literal("set_notification_preference"),
   }),
-  planningDefinitions[89].schema.extend({ tool: z.literal("delete_space") }),
-  planningDefinitions[96].schema.extend({
+  planningTools.delete_space.schema.extend({ tool: z.literal("delete_space") }),
+  planningTools.preview_rule_import.schema.extend({
     tool: z.literal("preview_rule_import"),
   }),
-  planningDefinitions[97].schema.extend({ tool: z.literal("import_rules") }),
+  planningTools.import_rules.schema.extend({ tool: z.literal("import_rules") }),
 ]);
 export type PlanningCommand = z.infer<typeof PlanningCommandSchema>;
+type ReadTool = {
+  [Name in keyof typeof planningTools]: (typeof planningTools)[Name]["readOnly"] extends true
+    ? Name
+    : never;
+}[keyof typeof planningTools];
+export type PlanningQuery = Extract<PlanningCommand, { tool: ReadTool }>;
+export type PlanningMutation =
+  | Exclude<PlanningCommand, PlanningQuery>
+  | Extract<PlanningCommand, { tool: "preview_rule_import" }>;
+export function isPlanningQuery(
+  command: PlanningCommand,
+): command is PlanningQuery {
+  return planningTools[command.tool].readOnly;
+}
 
 export const PlanningCursorSchema = z.tuple([
   z.number().int().nonnegative(),

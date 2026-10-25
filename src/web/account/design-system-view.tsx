@@ -1,16 +1,14 @@
-import {
-  Badge,
-  Banner,
-  Field,
-  Grid,
-  Input,
-  Label,
-  LayerCard,
-  Meter,
-  Select,
-  Switch,
-  useKumoToastManager,
-} from "@cloudflare/kumo";
+import { Badge } from "@cloudflare/kumo/components/badge";
+import { Banner } from "@cloudflare/kumo/components/banner";
+import { Field } from "@cloudflare/kumo/components/field";
+import { Grid } from "@cloudflare/kumo/components/grid";
+import { Input } from "@cloudflare/kumo/components/input";
+import { Label } from "@cloudflare/kumo/components/label";
+import { LayerCard } from "@cloudflare/kumo/components/layer-card";
+import { Meter } from "@cloudflare/kumo/components/meter";
+import { Select } from "@cloudflare/kumo/components/select";
+import { Switch } from "@cloudflare/kumo/components/switch";
+import { useKumoToastManager } from "@cloudflare/kumo/components/toast";
 import { useCallback, useState } from "react";
 
 import { UiButton } from "../ui";

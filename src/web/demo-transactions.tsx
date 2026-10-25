@@ -1,4 +1,4 @@
-import { Select } from "@cloudflare/kumo";
+import { Select } from "@cloudflare/kumo/components/select";
 
 import { demoReferenceDay } from "../fixtures/finance";
 import { monthLabel, shiftMonth } from "./account/dashboard-period";

@@ -1,4 +1,4 @@
-import { Collapsible } from "@cloudflare/kumo";
+import { Collapsible } from "@cloudflare/kumo/components/collapsible";
 import type { ReactNode } from "react";
 
 // Actions stay in the panel; the complete summary is one keyboard target.

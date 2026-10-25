@@ -139,7 +139,6 @@ export function createProfileSource(input: {
   };
   return {
     ...source,
-    configured: true,
     async token(id?: string, selectedProfile = DEFAULT_PROFILE) {
       const identity = id
         ? sourceIdentity(id)

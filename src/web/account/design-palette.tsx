@@ -1,4 +1,5 @@
-import { Grid, Text } from "@cloudflare/kumo";
+import { Grid } from "@cloudflare/kumo/components/grid";
+import { Text } from "@cloudflare/kumo/components/text";
 
 import { colorTokens } from "../design-tokens";
 

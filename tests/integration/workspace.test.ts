@@ -5,12 +5,15 @@ import { beforeEach, test } from "vitest";
 import {
   FinancialOverviewResponseSchema,
   MonthlySpendingResponseSchema,
+  PlanningCommandSchema,
   PortalTransactionListSchema,
   SyncHistoryResultSchema,
   TransactionListSchema,
   WorkspaceCatalogSchema,
 } from "../../src/contracts";
 import { createInstallationRepository } from "../../src/worker/installation/repository";
+import { createPlanningService } from "../../src/worker/planning";
+import { createPlanningRepository } from "../../src/worker/planning/repository";
 import { createSyncRepository } from "../../src/worker/sync/repository";
 import { createSyncHistoryRepository } from "../../src/worker/sync/repository/history.repository";
 import {
@@ -25,6 +28,44 @@ import { applyD1Migrations, reset } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 
 beforeEach(setup);
+
+test("purchase cursors require a restart when the financial day changes", async () => {
+  await collect(
+    source([
+      transaction({ date: "2026-10-22", id: "old" }),
+      transaction({ date: "2026-10-23", id: "current" }),
+      transaction({ date: "2026-10-24", id: "next-day" }),
+    ]),
+  );
+  let now = new Date("2026-10-24T02:59:59Z");
+  const service = createPlanningService(
+    createPlanningRepository(env.DB),
+    () => now,
+  );
+  const input = {
+    limit: 1,
+    spaceId: "personal",
+    tool: "get_transaction_purchases",
+  };
+  const first = PortalTransactionListSchema.parse(
+    await service.execute(PlanningCommandSchema.parse(input)),
+  );
+  assert.equal(first.data.referenceDay, "2026-10-23");
+  assert.equal(first.data.records[0]?.id, "current");
+  assert.ok(first.data.cursor);
+  now = new Date("2026-10-24T03:00:00Z");
+  await assert.rejects(
+    service.execute(
+      PlanningCommandSchema.parse({ ...input, cursor: first.data.cursor }),
+    ),
+    { message: "RESTART_REQUIRED" },
+  );
+  const fresh = PortalTransactionListSchema.parse(
+    await service.execute(PlanningCommandSchema.parse(input)),
+  );
+  assert.equal(fresh.data.referenceDay, "2026-10-24");
+  assert.equal(fresh.data.records[0]?.id, "next-day");
+});
 
 test("run history survives later imports, preserves admission ownership and paginates without duplicate retries", async () => {
   const history = createSyncHistoryRepository(env.DB);

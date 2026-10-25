@@ -1,12 +1,8 @@
-import { Banner, Select } from "@cloudflare/kumo";
+import { Banner } from "@cloudflare/kumo/components/banner";
+import { Select } from "@cloudflare/kumo/components/select";
 import { useCallback, useState } from "react";
 
-import {
-  FinancialOverviewResponseSchema,
-  MonthlySpendingResponseSchema,
-  type PortalResponse,
-  PortalTransactionListSchema,
-} from "../../contracts";
+import type { PortalResponse } from "../../contracts";
 import { tryCatch } from "../../shared";
 import type { createAccountApi } from "./account-api";
 import { navigateWorkspace } from "./account-navigation";
@@ -52,21 +48,19 @@ export function OverviewView({
           signal,
           fresh,
         ),
-        tryCatch(async () =>
-          MonthlySpendingResponseSchema.parse(
-            await api.query(
-              {
-                tool: "generate_chart",
-                ...scope,
-                from: `${shiftMonth(month, -5)}-01`,
-                groupBy: "month",
-                to: queryPeriod.to,
-                type: "line",
-              },
-              snapshot.csrf,
-              signal,
-              fresh,
-            ),
+        tryCatch(() =>
+          api.query(
+            {
+              tool: "generate_chart",
+              ...scope,
+              from: `${shiftMonth(month, -5)}-01`,
+              groupBy: "month",
+              to: queryPeriod.to,
+              type: "line",
+            },
+            snapshot.csrf,
+            signal,
+            fresh,
           ),
         ),
         api.catalog(spaceId, signal, fresh),
@@ -88,8 +82,8 @@ export function OverviewView({
         catalog,
         monthly: monthly.error ? null : monthly.data.data,
         observedAt: new Date().toISOString(),
-        overview: FinancialOverviewResponseSchema.parse(overview).data,
-        recent: PortalTransactionListSchema.parse(recent),
+        overview: overview.data,
+        recent,
       };
     },
     [api, month, personId, snapshot.csrf, spaceId],

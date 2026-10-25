@@ -49,6 +49,11 @@ convergir sem alterações. Preserve comentários e imports com efeitos colatera
 O lint verifica dependências entre camadas; a revisão ainda deve conferir a
 localização das decisões de produto e o uso de `tryCatch` descrito em AGENTS.
 
+Domínio e shared não importam contratos de transporte. Entities e repositories
+não consomem os índices de aplicação de planning/household. No frontend, importe
+Kumo pela entrada específica, como `@cloudflare/kumo/components/banner`;
+o barrel principal carrega dependências de navegador nas páginas do Worker.
+
 Use `shared/logger` e siga o [roteiro de observabilidade](docs/observability.md).
 Não registre secrets, dados financeiros ou texto arbitrário de exceções.
 

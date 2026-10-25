@@ -56,6 +56,7 @@ export type {
 export {
   DEFAULT_PERSON,
   DEFAULT_PROFILE,
+  profileConfigured,
   scopedSourceId,
   sourceIdentity,
 } from "./ownership.entity";
@@ -87,6 +88,7 @@ export type {
   TransactionEdit,
 } from "./planning.entity";
 export { monthDate, sacSchedule } from "./planning.entity";
+export { PlanningError } from "./planning-errors.entity";
 export type {
   ProviderAccount,
   ProviderConnection,

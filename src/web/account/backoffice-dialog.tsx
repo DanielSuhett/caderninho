@@ -1,4 +1,5 @@
-import { Banner, LayerDialog } from "@cloudflare/kumo";
+import { Banner } from "@cloudflare/kumo/components/banner";
+import { LayerDialog } from "@cloudflare/kumo/components/layer-dialog";
 import {
   type ComponentProps,
   type ReactNode,

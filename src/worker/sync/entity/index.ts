@@ -114,3 +114,15 @@ export function importFailure(error: Error) {
   }
   return importErrors.has(error.message) ? error.message : "IMPORT_FAILED";
 }
+
+export interface SyncServiceDependencies {
+  assertConfigured: (connectionIds?: string[]) => Promise<void>;
+  now?: () => Date;
+  report?: (counts: {
+    dispatchPending: number;
+    statusUnavailable: number;
+    failed: number;
+  }) => void;
+  repository: SyncRepository;
+  workflow: WorkflowPort;
+}

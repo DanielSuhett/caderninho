@@ -19,11 +19,56 @@ import {
   login,
   testMigrations,
 } from "./access-fixture";
-import { collect, setup, source, transaction } from "./fixture";
+import { account, collect, setup, source, transaction } from "./fixture";
 import { applyD1Migrations, reset } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 
 beforeEach(setup);
+
+for (const description of ["Compra sintética", "synthetic ".repeat(60_000)]) {
+  test(`reimport clears withdrawn source card metadata atomically (${description.length} characters)`, async () => {
+    const accounts = [account({ type: "CREDIT" })];
+    const rows = [1, 2].map((installmentNumber) =>
+      transaction({
+        creditCardMetadata: {
+          cardNumber: "1234",
+          installmentNumber,
+          purchaseDate: "2024-01-01",
+          totalInstallments: 2,
+        },
+        date: `2024-0${installmentNumber}-01`,
+        description,
+        id: `installment-${installmentNumber}`,
+      }),
+    );
+    await collect(source(rows, accounts));
+    const app = fixture();
+    const cookie = cookies(await login(app));
+    const purchases = async () => {
+      const response = await command(app, cookie, "query", {
+        query: { spaceId: "personal", tool: "get_portal_transactions" },
+      });
+      assert.equal(response.status, 200);
+      return PortalTransactionListSchema.parse(await response.json()).data
+        .records;
+    };
+    assert.equal((await purchases())[0]?.installments.length, 2);
+    await collect(
+      source(
+        rows.map((row) => ({ ...row, creditCardMetadata: null })),
+        accounts,
+      ),
+      "2026-10-02T00:00:00Z",
+    );
+    const updated = await purchases();
+    assert.equal(updated.length, 2);
+    for (const row of updated) {
+      assert.equal(row.cardNumber, null);
+      assert.equal(row.purchaseDate, null);
+      assert.deepEqual(row.installments, []);
+    }
+  });
+}
 
 test("identification survives atomic import, financial queries, portal/MCP planning queries and metadata-only reimports", async () => {
   const row = transaction({ ...transactionIdentificationInput });

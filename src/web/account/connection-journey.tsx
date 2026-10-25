@@ -1,4 +1,8 @@
-import { Banner, LayerCard, Link, Loader, Select } from "@cloudflare/kumo";
+import { Banner } from "@cloudflare/kumo/components/banner";
+import { LayerCard } from "@cloudflare/kumo/components/layer-card";
+import { Link } from "@cloudflare/kumo/components/link";
+import { Loader } from "@cloudflare/kumo/components/loader";
+import { Select } from "@cloudflare/kumo/components/select";
 import { CheckCircleIcon } from "@phosphor-icons/react";
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 

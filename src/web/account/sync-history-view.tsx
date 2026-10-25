@@ -1,11 +1,9 @@
-import {
-  Badge,
-  Banner,
-  InlineCopyText,
-  LayerCard,
-  Link,
-  Select,
-} from "@cloudflare/kumo";
+import { Badge } from "@cloudflare/kumo/components/badge";
+import { Banner } from "@cloudflare/kumo/components/banner";
+import { InlineCopyText } from "@cloudflare/kumo/components/inline-copy-text";
+import { LayerCard } from "@cloudflare/kumo/components/layer-card";
+import { Link } from "@cloudflare/kumo/components/link";
+import { Select } from "@cloudflare/kumo/components/select";
 import { useCallback, useState } from "react";
 
 import type { PortalResponse } from "../../contracts";

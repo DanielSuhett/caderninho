@@ -26,8 +26,13 @@ export {
   HouseholdResultSchema,
 } from "./household";
 export { PRODUCT_INSTRUCTIONS, ToolName, tools } from "./mcp-contract";
-export type { PlanningCommand } from "./planning";
+export type {
+  PlanningCommand,
+  PlanningMutation,
+  PlanningQuery,
+} from "./planning";
 export {
+  isPlanningQuery,
   PlanningCommandSchema,
   PlanningCursorSchema,
   planningDefinitions,
@@ -71,6 +76,7 @@ export {
 export type {
   PortalMutation,
   PortalQuery,
+  PortalQueryResults,
   PortalTransactionQuery,
   SyncHistoryResult,
   SyncHistorySelection,
@@ -82,6 +88,8 @@ export {
   PortalMutationSchema,
   PortalQuerySchema,
   PortalTransactionListSchema,
+  PortalTransactionQuerySchema,
+  parsePortalQueryResult,
   SyncHistoryCursorSchema,
   SyncHistoryResultSchema,
   SyncHistorySelectionSchema,

@@ -18,7 +18,7 @@ import {
   TransactionQuerySchema,
   tools,
 } from "../../../contracts";
-import { Fault } from "../../../domain";
+import { Fault, PlanningError } from "../../../domain";
 import { tryCatch } from "../../../shared";
 import type { Bindings } from "../../bindings";
 import {
@@ -77,44 +77,9 @@ async function invoke(env: Bindings, name: string, args: unknown) {
       throw new Error("UNKNOWN_TOOL");
   }
 }
-const safeErrors = new Set([
+const safeErrors = new Set<string>([
+  ...Object.values(PlanningError),
   "NOT_CONFIGURED",
-  "SPACE_MISMATCH",
-  "INVALID_PERIOD",
-  "CURRENCY_MISMATCH",
-  "AMOUNT_MISMATCH",
-  "SOURCE_READ_ONLY",
-  "RESOURCE_IN_USE",
-  "PRIMARY_CARD_REQUIRED",
-  "MANUAL_ACCOUNT_REQUIRED",
-  "MANUAL_CARD_REQUIRED",
-  "BILLING_CYCLE_REQUIRED",
-  "INVALID_INSTALLMENT",
-  "CARD_REQUIRED",
-  "BUDGET_DISABLED",
-  "SYSTEM_CATEGORY",
-  "ONE_ASSET_REQUIRED",
-  "SCHEDULE_EXISTS",
-  "PENDING_PAYMENTS",
-  "ALREADY_RECONCILED",
-  "PAYMENT_ORDER",
-  "PAYMENT_MISMATCH",
-  "NOT_RECONCILED",
-  "SELECTION_TOO_LARGE",
-  "PROJECTION_TOO_LARGE",
-  "PROJECTION_REQUIRES_CURRENT_OR_FUTURE_PERIOD",
-  "IDEMPOTENCY_CONFLICT",
-  "CONFIRMATION_REQUIRED",
-  "INVALID_RULE",
-  "INVALID_RULE_IMPORT_CATEGORY",
-  "SPACE_PROTECTED",
-  "SPACE_NOT_EMPTY",
-  "CHART_TOO_LARGE",
-  "CHART_NEGATIVE_VALUES",
-  "NOT_FOUND",
-  "RESTART_REQUIRED",
-  "CURSOR_SCOPE_MISMATCH",
-  "UNKNOWN_TOOL",
   "IMPORT_FAILED",
 ]);
 export async function fetchMcp(
@@ -223,9 +188,7 @@ export async function fetchMcp(
               content: [{ text: JSON.stringify(payload), type: "text" }],
               isError: !!error,
               ...(!error && {
-                structuredContent: z
-                  .record(z.string(), z.unknown())
-                  .parse(data),
+                structuredContent: data,
               }),
             };
           },

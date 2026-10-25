@@ -32,6 +32,14 @@ com Drizzle. A composição injeta implementações por requisição/importaçã
 Adapters Pluggy, OAuth e Workflow têm entradas explícitas. Não há repository
 universal, container de DI nem camadas vazias.
 
+A composição liga as portas; disponibilidade de perfis pertence a `household`,
+e a montagem do estado pertence a `installation`. A sincronização verifica a
+configuração antes da admissão. `planningTools` mantém schemas por nome, e o
+repository de planejamento recebe seleções internas tipadas de recursos.
+`PlanningError` compartilha as recusas conhecidas entre transporte e diagnóstico.
+A [auditoria de arquitetura](architecture-audit.md) registra as correções e a
+comparação dos contratos com a base anterior.
+
 ## Persistência
 
 | Tabela | Dados |
@@ -82,6 +90,10 @@ os atualiza. Registros antigos sem metadados mantêm `identification=null` até
 uma nova importação. O portal apresenta os campos disponíveis nos detalhes e
 busca por descrição, estabelecimento, documento e referências. As consultas
 financeiras e de planejamento/MCP também retornam essa identificação.
+
+Quando uma transação reimportada perde seus metadados de cartão, a publicação
+remove o registro auxiliar antigo no mesmo batch da transação e do checkpoint.
+Os caminhos de publicação JSON e escalar seguem a mesma regra.
 
 `0009_fixed_categories.sql` acrescenta `transactions.classification` e
 `planning_category_groups`. O catálogo contém 33 categorias fixas em cada espaço,
@@ -165,6 +177,11 @@ ID, sequência, estado e metadados das conexões selecionadas no batch da leitur
 Alteração relevante exige reiniciar a consulta; importação não selecionada não
 invalida o cursor. Totais
 consideram toda a seleção SQL, não uma página. Moedas permanecem separadas.
+
+Consultas individuais e compras agrupadas validam as mesmas referências de
+seleção. O cursor das compras inclui o dia financeiro: a virada do dia exige
+reiniciar a leitura. O codec compartilhado recusa cursores malformados como
+entradas inválidas.
 
 Valores monetários são inteiros em strings, com até 30 dígitos por registro. A
 soma SQL usa cinco parcelas inteiras de seis dígitos, reconstruídas com BigInt.

@@ -1,4 +1,7 @@
-import { Banner, Input, Select, Switch } from "@cloudflare/kumo";
+import { Banner } from "@cloudflare/kumo/components/banner";
+import { Input } from "@cloudflare/kumo/components/input";
+import { Select } from "@cloudflare/kumo/components/select";
+import { Switch } from "@cloudflare/kumo/components/switch";
 import { PlusIcon, TrashIcon } from "@phosphor-icons/react";
 import {
   type ChangeEvent,

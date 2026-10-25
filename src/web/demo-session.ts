@@ -1,5 +1,6 @@
 import type { z } from "zod/v4";
 
+import type { PortalQuery, PortalQueryResults } from "../contracts";
 import {
   type PortalMutationSchema,
   type WorkspaceCatalog,
@@ -278,6 +279,32 @@ export function createDemoSession({
         throw new Error("UNSUPPORTED_DEMO_OPERATION");
     }
   }
+  function unsupportedQuery(): never {
+    throw new Error("UNSUPPORTED_DEMO_OPERATION");
+  }
+  const queries: {
+    [Tool in keyof PortalQueryResults]: (
+      query: PortalQuery & { tool: Tool },
+    ) => PortalQueryResults[Tool];
+  } = {
+    generate_chart: unsupportedQuery,
+    get_accounts: (query) => ({
+      data: {
+        records: view(query.spaceId).accounts.map((account) => ({
+          id: account.id,
+          name: account.name,
+          personId: account.personId,
+          personName:
+            demoPeople.find((person) => person.id === account.personId)?.name ??
+            "Pessoa de exemplo",
+        })),
+      },
+    }),
+    get_overview: unsupportedQuery,
+    get_portal_transactions: unsupportedQuery,
+    get_transactions: unsupportedQuery,
+    preview_rule_import: unsupportedQuery,
+  };
   const api: OrganizationApi = {
     catalog: (spaceId, signal) =>
       local(signal, () =>
@@ -337,23 +364,7 @@ export function createDemoSession({
         };
       }),
     query: (query, _csrf, signal) =>
-      local(signal, () => {
-        if (query.tool !== "get_accounts") {
-          throw new Error("UNSUPPORTED_DEMO_OPERATION");
-        }
-        return {
-          data: {
-            records: view(query.spaceId).accounts.map((account) => ({
-              id: account.id,
-              name: account.name,
-              personId: account.personId,
-              personName:
-                demoPeople.find((person) => person.id === account.personId)
-                  ?.name ?? "Pessoa de exemplo",
-            })),
-          },
-        };
-      }),
+      local(signal, () => queries[query.tool](query)),
   };
   return {
     api,

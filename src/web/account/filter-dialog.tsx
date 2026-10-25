@@ -1,4 +1,5 @@
-import { LayerDialog, Toolbar } from "@cloudflare/kumo";
+import { LayerDialog } from "@cloudflare/kumo/components/layer-dialog";
+import { Toolbar } from "@cloudflare/kumo/components/toolbar";
 import { type ReactNode, useState } from "react";
 
 export function FilterDialog({

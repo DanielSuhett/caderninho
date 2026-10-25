@@ -1,4 +1,5 @@
-import { Banner, LayerCard } from "@cloudflare/kumo";
+import { Banner } from "@cloudflare/kumo/components/banner";
+import { LayerCard } from "@cloudflare/kumo/components/layer-card";
 
 import { PublicLayout } from "./public-layout";
 import { UiButton, UiField } from "./ui";

@@ -1,4 +1,5 @@
-import { Empty, Select } from "@cloudflare/kumo";
+import { Empty } from "@cloudflare/kumo/components/empty";
+import { Select } from "@cloudflare/kumo/components/select";
 
 import type { PortalResponse, WorkspaceCatalog } from "../../contracts";
 

@@ -18,7 +18,6 @@ export function createPluggyAdapter(input: {
   }
   return {
     accounts: (id: string) => financialSource(client()).accounts(id),
-    configured: parsed.success,
     connection: (id: string) => financialSource(client()).connection(id),
     products: (request: {
       kind: ProductKind;

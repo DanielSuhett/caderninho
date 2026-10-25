@@ -1,13 +1,11 @@
-import {
-  Badge,
-  Banner,
-  InlineCopyText,
-  LayerCard,
-  Link,
-  Meter,
-  Select,
-  Table,
-} from "@cloudflare/kumo";
+import { Badge } from "@cloudflare/kumo/components/badge";
+import { Banner } from "@cloudflare/kumo/components/banner";
+import { InlineCopyText } from "@cloudflare/kumo/components/inline-copy-text";
+import { LayerCard } from "@cloudflare/kumo/components/layer-card";
+import { Link } from "@cloudflare/kumo/components/link";
+import { Meter } from "@cloudflare/kumo/components/meter";
+import { Select } from "@cloudflare/kumo/components/select";
+import { Table } from "@cloudflare/kumo/components/table";
 import {
   type MouseEvent,
   useCallback,

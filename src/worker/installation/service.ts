@@ -4,16 +4,21 @@ import {
   PERSONAL_CONNECTOR_ID,
   scopedSourceId,
 } from "../../domain";
-import type { InstallationRepository, InstallationSource } from "./entity";
+import type {
+  InstallationCatalog,
+  InstallationRepository,
+  InstallationSource,
+} from "./entity";
 export function createInstallationService({
+  catalog,
   repository,
   source,
 }: {
+  catalog: () => Promise<InstallationCatalog>;
   repository: InstallationRepository;
   source: InstallationSource;
 }) {
   return {
-    configured: source.configured,
     async connect(upstreamId: string, profileId = DEFAULT_PROFILE) {
       const id = scopedSourceId(profileId, upstreamId);
       const connection = await source.connection(id);
@@ -24,7 +29,19 @@ export function createInstallationService({
       await repository.register(id, profileId);
       return id;
     },
-    state: repository.state,
+    async state(selection?: Parameters<InstallationRepository["state"]>[0]) {
+      const [state, household] = await Promise.all([
+        repository.state(selection),
+        catalog(),
+      ]);
+      return {
+        ...state,
+        ...household,
+        configured: household.profiles.some(
+          (profile) => profile.enabled && profile.configured,
+        ),
+      };
+    },
     async token(id?: string, profileId = DEFAULT_PROFILE) {
       if (
         id &&

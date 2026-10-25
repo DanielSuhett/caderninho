@@ -43,6 +43,22 @@ test("concurrent observations isolate failures/correlation and omit arbitrary ex
   assert.ok(success?.includes('"outcome":"success"'));
   assert.equal(lines.join("").includes("private-body-and-secret"), false);
 });
+
+test("planning rejections use a safe request diagnosis rather than an internal failure", () => {
+  const lines: string[] = [];
+  const output = createLogger({
+    destination: { write: (line) => lines.push(line) },
+    level: "debug",
+    name: "planning",
+  });
+  withObservation({ output }, () => {
+    markFailure(new Error("INVALID_PERIOD"));
+    reportDiagnostic({ event: DiagnosticEvent.http, status: 400 });
+  });
+  assert.equal(lines.length, 1);
+  assert.ok(lines[0]?.includes('"failure":"INVALID_REQUEST"'));
+  assert.ok(lines[0]?.includes('"outcome":"rejected"'));
+});
 test("stream errors after headers retain captured context, report once and close both resources", async () => {
   const lines: string[] = [];
   let closed = 0;

@@ -493,18 +493,8 @@ export function createPlanningRepository(
       }
       await db.batch([required(writes[0]), ...writes.slice(1)]);
     },
-    async read(tool) {
-      if (
-        tool &&
-        [
-          "get_tags",
-          "get_rules",
-          "get_categories",
-          "get_category_groups",
-          "get_spaces",
-          "get_notification_preferences",
-        ].includes(tool)
-      ) {
+    async read(resource) {
+      if (resource) {
         const [version, origins, spaces, settings, persons, owners] =
           await db.batch([
             db.select().from(planningRevision),
@@ -533,28 +523,28 @@ export function createPlanningRepository(
           spaces: spaces.map((row) => row.data),
           tags: [],
         };
-        switch (tool) {
-          case "get_tags":
+        switch (resource) {
+          case "tags":
             state.tags = (await db.select().from(planningTags)).map(
               (row) => row.data,
             );
             break;
-          case "get_rules":
+          case "rules":
             state.rules = (await db.select().from(planningRules)).map(
               (row) => row.data,
             );
             break;
-          case "get_categories":
+          case "categories":
             state.categories = (await db.select().from(planningCategories)).map(
               (row) => row.data,
             );
             break;
-          case "get_category_groups":
+          case "categoryGroups":
             state.categoryGroups = (
               await db.select().from(planningCategoryGroups)
             ).map((row) => row.data);
             break;
-          case "get_notification_preferences":
+          case "notifications":
             state.notifications = (
               await db.select().from(planningNotifications)
             ).map((row) => row.data);

@@ -1,4 +1,6 @@
-import { Banner, Input, Select } from "@cloudflare/kumo";
+import { Banner } from "@cloudflare/kumo/components/banner";
+import { Input } from "@cloudflare/kumo/components/input";
+import { Select } from "@cloudflare/kumo/components/select";
 import {
   type ChangeEvent,
   type FormEvent,

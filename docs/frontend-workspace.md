@@ -49,7 +49,9 @@ mantêm navegação nativa. GET participa da navegação interna; popstate resta
 Voltar/Avançar. A mudança fecha o menu móvel e transfere foco ao conteúdo.
 O cache de leitura usa a chave completa, 20 entradas e dez segundos na memória;
 atualização manual ignora cache. Escritas invalidam antes e depois da requisição,
-e leituras anteriores não repovoam o cache. Falhas não são armazenadas. Skeleton
+e leituras anteriores não repovoam o cache. Uma leitura antiga também não pode
+sobrescrever uma atualização mais recente da mesma chave. Falhas não são armazenadas.
+Skeleton
 aparece após 150 ms. Não persistir esse cache financeiro no navegador.
 
 A confirmação do widget pede a primeira importação uma única vez, mesmo com
@@ -93,6 +95,11 @@ usa páginas de 25 rodadas, ordem de admissão decrescente, filtros de pessoa/es
 e atualização explícita. Consultar a página não inicia sincronização.
 
 ## Segurança e validação
+
+O cliente HTTP valida as respostas por ferramenta e fornece resultados tipados às
+telas. Entradas URL e rascunhos continuam sendo validados nas respectivas fronteiras.
+Imports Kumo usam as entradas específicas de cada componente, incluindo as páginas
+renderizadas no Worker; o lint impede o carregamento do barrel completo.
 
 A interface conserva contratos GET e mutações. Busca de Regras é compacta;
 filtro não repete o campo e preserva `q` oculto. Contagem complexa é absoluta,

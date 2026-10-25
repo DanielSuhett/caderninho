@@ -1,26 +1,30 @@
-import type { PlanningCommand } from "../../contracts";
-import { PlanningCursorSchema } from "../../contracts";
-import type { PlanningState, PlanningTransaction } from "../../domain";
+import type { PlanningCommand, PlanningQuery } from "../../contracts";
+import type { PlanningTransaction } from "../../domain";
 import {
   compareRules,
   financialCharts,
   localDay,
   minorPresentation,
   monthDate,
+  PlanningError,
 } from "../../domain";
-import { hash } from "../../shared";
 import { type ProjectedPayment, recurrencePayments } from "./billing";
 import { effectiveBills } from "./bills.service";
-import type { PlanningRepository, PlanningSnapshot } from "./entity";
+import { planningCursor } from "./cursor";
+import type {
+  PlanningRepository,
+  PlanningResult,
+  PlanningSnapshot,
+} from "./entity";
 import {
-  accounts,
+  cardCatalog,
   classification,
   found,
   inSpace,
   planningSelection,
-  type Selection,
   transactionStream,
   validatePeriod,
+  validateSelection,
 } from "./projection";
 
 interface Totals {
@@ -59,106 +63,27 @@ function transactionOrder(order: "id" | "date_desc", after: string) {
     key,
   };
 }
-export function cardCatalog(snapshot: PlanningSnapshot, state: PlanningState) {
-  const result = new Map<
-    string,
-    {
-      id: string;
-      accountId: string;
-      number: string;
-      name: string;
-      hidden: boolean;
-      deleted: boolean;
-      primary: boolean;
-      spaceId: string;
-    }
-  >();
-  for (const account of accounts(snapshot, state).filter(
-    (a) => a.type === "CREDIT",
-  )) {
-    const settings = state.accounts.find((a) => a.id === account.id);
-    const main =
-      settings?.primaryCard ??
-      snapshot.accountDetails.find((a) => a.id === account.id)?.cardNumber ??
-      "main";
-    const numbers = new Set([
-      main,
-      snapshot.accountDetails.find((a) => a.id === account.id)?.cardNumber ??
-        "main",
-    ]);
-    // Additional card membership is recorded by the provider adapter as accountId:number.
-    for (const setting of state.cards.filter(
-      (c) => c.accountId === account.id,
-    )) {
-      numbers.add(setting.number);
-    }
-    for (const number of numbers) {
-      const id = `${account.id}:${number}`;
-      const setting = state.cards.find((c) => c.id === id);
-      result.set(id, {
-        accountId: account.id,
-        deleted: setting?.deleted ?? false,
-        hidden: setting?.hidden ?? account.hidden,
-        id,
-        name: setting?.name ?? account.name,
-        number,
-        primary: number === main,
-        spaceId: account.spaceId,
-      });
-    }
-  }
-  return [...result.values()];
-}
-function validateSelection(
-  selection: Selection,
-  snapshot: PlanningSnapshot,
-  accountMap: Map<string, import("../../domain").PlanningAccount>,
-) {
-  if (selection.accountId) {
-    const account = found(accountMap.get(selection.accountId));
-    const moved = snapshot.state.edits.some(
-      (edit) =>
-        edit.accountId === account.id &&
-        edit.spaceId === selection.spaceId &&
-        !edit.deleted,
-    );
-    if (
-      (account.spaceId !== selection.spaceId && !moved) ||
-      (selection.personId && account.personId !== selection.personId)
-    ) {
-      throw new Error("SPACE_MISMATCH");
-    }
-  }
-  if (selection.categoryId) {
-    inSpace(snapshot.state.categories, selection.categoryId, selection.spaceId);
-  }
-  if (selection.tagId) {
-    inSpace(snapshot.state.tags, selection.tagId, selection.spaceId);
-  }
-}
 export async function planningQuery(
-  command: PlanningCommand,
+  command: PlanningQuery,
   snapshot: PlanningSnapshot,
   repository: PlanningRepository,
   now: Date,
-): Promise<unknown> {
+): Promise<PlanningResult> {
   const { state } = snapshot;
   const day = localDay(now);
-  const space = found(state.spaces.find((s) => s.id === command.spaceId));
-  const allAccounts = accounts(snapshot);
-  const personId = "personId" in command ? command.personId : undefined;
-  if (personId && !snapshot.people.some((p) => p.id === personId)) {
-    throw new Error("NOT_FOUND");
-  }
+  const querySelection = planningSelection(command);
+  const {
+    space,
+    accountMap,
+    accountList: allAccounts,
+  } = validateSelection(querySelection, snapshot);
+  const { personId } = querySelection;
   const allTransactions = transactionStream(repository, snapshot);
   const stream = (selection: import("./projection").Selection) =>
     allTransactions({ ...selection, ...(personId && { personId }) });
   const metadata = new Map(
     snapshot.transactionDetails.map((row) => [row.id, row]),
   );
-  const accountMap = new Map(allAccounts.map((row) => [row.id, row]));
-  const querySelection = planningSelection(command);
-  validateSelection(querySelection, snapshot, accountMap);
   const scoped = <T extends { spaceId: string }>(rows: T[]) =>
     rows.filter((row) => row.spaceId === command.spaceId);
   function owned<
@@ -310,11 +235,7 @@ export async function planningQuery(
     const total = totals.get(row.currency) ?? emptyTotals();
     totals.set(row.currency, total);
     total.count += 1;
-    const kind = classification(
-      row,
-      state,
-      metadata.get(row.id)?.operationType ?? null,
-    );
+    const kind = classification(row, state);
     if (kind === "unclassified") {
       total.unclassified += 1;
       if (row.amountMinor === null) {
@@ -523,21 +444,12 @@ export async function planningQuery(
   ) {
     validatePeriod(input);
     const { cursor, limit, tool: _tool, ...filter } = input;
-    const scope = await hash(filter);
-    let after = "";
-    if (cursor) {
-      const decoded = PlanningCursorSchema.parse(
-        JSON.parse(decodeURIComponent(cursor)),
-      );
-      if (
-        decoded.length !== 3 ||
-        decoded[0] !== snapshot.revision ||
-        decoded[1] !== scope
-      ) {
-        throw new Error("RESTART_REQUIRED");
-      }
-      after = decoded[2] ?? "";
-    }
+    const cursorState = await planningCursor({
+      cursor,
+      filter,
+      revision: snapshot.revision,
+    });
+    const { after } = cursorState;
     const rows: import("../../domain").PlanningTransaction[] = [];
     const order = transactionOrder(input.order, after);
     for await (const row of allTransactions(input, undefined, {
@@ -557,13 +469,7 @@ export async function planningQuery(
     const records = rows.slice(0, limit);
     return {
       cursor: more
-        ? encodeURIComponent(
-            JSON.stringify([
-              snapshot.revision,
-              scope,
-              order.key(found(records.at(-1))),
-            ]),
-          )
+        ? cursorState.encode(order.key(found(records.at(-1))))
         : null,
       partial: snapshot.partial,
       records,
@@ -818,11 +724,11 @@ export async function planningQuery(
     }
     if (input.comparison === "explicit") {
       if (!(input.previousFrom && input.previousTo)) {
-        throw new Error("INVALID_PERIOD");
+        throw new Error(PlanningError.INVALID_PERIOD);
       }
       ({ previousFrom, previousTo } = input);
     } else if (input.previousFrom || input.previousTo) {
-      throw new Error("INVALID_PERIOD");
+      throw new Error(PlanningError.INVALID_PERIOD);
     }
     const [current, previous] = await summaries([
       input,
@@ -876,7 +782,9 @@ export async function planningQuery(
   ) {
     validatePeriod(input);
     if (input.from < day) {
-      throw new Error("PROJECTION_REQUIRES_CURRENT_OR_FUTURE_PERIOD");
+      throw new Error(
+        PlanningError.PROJECTION_REQUIRES_CURRENT_OR_FUTURE_PERIOD,
+      );
     }
     const base = await balances();
     const projection = new Map<string, { balance: bigint; unknown: number }>();
@@ -982,6 +890,6 @@ export async function planningQuery(
     case "get_projection":
       return await handleGetProjection(command);
     default:
-      throw new Error("UNKNOWN_TOOL");
+      throw new Error(PlanningError.UNKNOWN_TOOL);
   }
 }

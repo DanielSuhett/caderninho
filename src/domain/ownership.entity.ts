@@ -44,3 +44,13 @@ export function scopedSourceId(profileId: string, id: string) {
   }
   return `pluggy:${profileId}:${encodeURIComponent(id)}`;
 }
+
+export function profileConfigured(
+  profile: PluggyProfile,
+  defaultConfigured: boolean,
+) {
+  return (
+    !!profile.credentialRef ||
+    (profile.id === DEFAULT_PROFILE && defaultConfigured)
+  );
+}

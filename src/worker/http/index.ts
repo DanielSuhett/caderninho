@@ -1,9 +1,11 @@
 import { readRequestBody } from "@modelcontextprotocol/server";
 import { z } from "zod/v4";
 
+import { PlanningError } from "../../domain";
 import type { SafeFields } from "../observability";
 
-const invalidRequests = new Set([
+const invalidRequests = new Set<string>([
+  ...Object.values(PlanningError),
   "INVALID_RULE",
   "INVALID_RULE_IMPORT_CATEGORY",
   "SPACE_PROTECTED",

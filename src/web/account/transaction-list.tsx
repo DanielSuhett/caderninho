@@ -1,11 +1,9 @@
-import {
-  Badge,
-  Banner,
-  InlineCopyText,
-  LayerCard,
-  LayerDialog,
-  Table,
-} from "@cloudflare/kumo";
+import { Badge } from "@cloudflare/kumo/components/badge";
+import { Banner } from "@cloudflare/kumo/components/banner";
+import { InlineCopyText } from "@cloudflare/kumo/components/inline-copy-text";
+import { LayerCard } from "@cloudflare/kumo/components/layer-card";
+import { LayerDialog } from "@cloudflare/kumo/components/layer-dialog";
+import { Table } from "@cloudflare/kumo/components/table";
 import type { z } from "zod/v4";
 
 import type {

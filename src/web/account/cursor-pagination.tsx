@@ -1,4 +1,5 @@
-import { Link, Pagination } from "@cloudflare/kumo";
+import { Link } from "@cloudflare/kumo/components/link";
+import { Pagination } from "@cloudflare/kumo/components/pagination";
 import { useCallback } from "react";
 
 import { navigateWorkspace } from "./account-navigation";

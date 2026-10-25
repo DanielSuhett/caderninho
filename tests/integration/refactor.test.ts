@@ -75,9 +75,9 @@ test("one import publishes exact transactions and repeating the request reuses t
 test("a new installation registers only verified personal connections and keeps configuration across reads", async () => {
   const repository = createInstallationRepository(env.DB);
   const service = createInstallationService({
+    catalog: async () => ({ people: [], profiles: [] }),
     repository,
     source: {
-      configured: true,
       connection: async (id) => ({
         connector: { id: 200 },
         id,
@@ -96,9 +96,9 @@ test("a new installation registers only verified personal connections and keeps 
 test("only Meu Pluggy is accepted, identity is checked and more than ten connections remain idempotent", async () => {
   const repository = createInstallationRepository(env.DB);
   const service = createInstallationService({
+    catalog: async () => ({ people: [], profiles: [] }),
     repository,
     source: {
-      configured: true,
       connection: async (id) => ({
         connector: { id: id === "wrong" ? 201 : 200 },
         id,
@@ -120,9 +120,9 @@ test("only Meu Pluggy is accepted, identity is checked and more than ten connect
   await service.connect("eleventh");
   assert.equal((await service.state()).connections.length, 11);
   const mismatch = createInstallationService({
+    catalog: async () => ({ people: [], profiles: [] }),
     repository,
     source: {
-      configured: true,
       connection: async () => ({ connector: { id: 200 }, id: "different" }),
       token: async () => ({ accessToken: "synthetic" }),
     },

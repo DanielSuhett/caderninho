@@ -1,5 +1,9 @@
 import type { HouseholdCommand } from "../../contracts";
-import { DEFAULT_PROFILE, type PluggyProfile } from "../../domain";
+import {
+  DEFAULT_PROFILE,
+  type PluggyProfile,
+  profileConfigured,
+} from "../../domain";
 import { hash } from "../../shared";
 import type { CredentialVault, HouseholdRepository } from "./entity";
 
@@ -112,14 +116,29 @@ export function createHouseholdService(dependencies: {
     return { id, personId: person.id };
   }
   return {
+    async assertConfigured(ids?: string[]) {
+      const state = await repository.read();
+      const selected = state.owners.filter(
+        (owner) => !ids || ids.includes(owner.connectionId),
+      );
+      for (const owner of selected) {
+        const profile = state.profiles.find(
+          (item) => item.id === owner.profileId,
+        );
+        if (
+          profile?.enabled &&
+          !profileConfigured(profile, !!dependencies.defaultClientId)
+        ) {
+          throw new Error("NOT_CONFIGURED");
+        }
+      }
+    },
     async catalog() {
       const state = await repository.read();
       return {
         people: state.people,
         profiles: state.profiles.map((p) => ({
-          configured:
-            !!p.credentialRef ||
-            (p.id === DEFAULT_PROFILE && !!dependencies.defaultClientId),
+          configured: profileConfigured(p, !!dependencies.defaultClientId),
           connectionCount: state.owners.filter((o) => o.profileId === p.id)
             .length,
           enabled: p.enabled,

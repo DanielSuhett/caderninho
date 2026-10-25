@@ -11,9 +11,8 @@ import {
 import { hash, tryCatch } from "../../shared";
 import type {
   ImportDependencies,
-  SyncRepository,
   SyncRun,
-  WorkflowPort,
+  SyncServiceDependencies,
 } from "./entity";
 import { importFailure } from "./entity";
 
@@ -344,16 +343,13 @@ export async function runImport(
   await repository.fail(id, importFailure(error));
   throw error;
 }
-export function createSyncService(
-  repository: SyncRepository,
-  workflow: WorkflowPort,
-  now: () => Date = () => new Date(),
-  report: (counts: {
-    dispatchPending: number;
-    statusUnavailable: number;
-    failed: number;
-  }) => void = () => undefined,
-) {
+export function createSyncService({
+  assertConfigured,
+  repository,
+  workflow,
+  now = () => new Date(),
+  report = () => undefined,
+}: SyncServiceDependencies) {
   async function dispatch(id: string) {
     const { data: _data, error } = await tryCatch(() => workflow.create(id));
     if (!error) {
@@ -400,6 +396,7 @@ export function createSyncService(
       );
     },
     async request(ids?: string[], initialOnly = false) {
+      await assertConfigured(ids);
       const admissions = await repository.admit(
         ids,
         now().toISOString(),

@@ -21,6 +21,28 @@ import { env } from "cloudflare:workers";
 const now = "2026-10-01T00:00:00.000Z";
 const finance = () => createFinancialService(createFinancialRepository(env.DB));
 beforeEach(setup);
+
+test("a rejected configuration check cannot admit an import or consume its daily reservation", async () => {
+  const installation = createInstallationRepository(env.DB);
+  await installation.register("c");
+  let dispatched = 0;
+  const service = createSyncService({
+    assertConfigured: () => Promise.reject(new Error("NOT_CONFIGURED")),
+    repository: createSyncRepository(env.DB),
+    workflow: {
+      create: () => {
+        dispatched += 1;
+        return Promise.resolve();
+      },
+      status: async () => "queued",
+    },
+  });
+  await assert.rejects(service.request(["c"]), { message: "NOT_CONFIGURED" });
+  const state = await installation.state();
+  assert.equal(dispatched, 0);
+  assert.equal(state.connections[0]?.nextEligibleAt, null);
+  assert.equal(state.connections[0]?.importStatus, null);
+});
 test("first-import admission is atomic and cannot restart a completed connection after the daily window", async () => {
   const installation = createInstallationRepository(env.DB);
   await installation.register("c");
@@ -247,9 +269,11 @@ test("dispatch uncertainty recovers the same ID and terminal native failures do 
   const ids: string[] = [];
   const repository = createSyncRepository(env.DB);
   await createInstallationRepository(env.DB).register("c");
-  const service = createSyncService(
+  const service = createSyncService({
+    assertConfigured: async () => undefined,
+    now: () => new Date(now),
     repository,
-    {
+    workflow: {
       create: (id) => {
         creates += 1;
         ids.push(id);
@@ -265,8 +289,7 @@ test("dispatch uncertainty recovers the same ID and terminal native failures do 
         return Promise.resolve(native);
       },
     },
-    () => new Date(now),
-  );
+  });
   const first = await service.request(["c"]);
   assert.equal((await repository.active())[0]?.status, "pending");
   await service.recover();
@@ -355,17 +378,18 @@ test("an unavailable native status keeps a running import active past the 24h bo
   const id = await admit();
   await repository.start(id);
   let creates = 0;
-  const service = createSyncService(
+  const service = createSyncService({
+    assertConfigured: async () => undefined,
+    now: () => new Date("2026-10-03T00:00:00.000Z"),
     repository,
-    {
+    workflow: {
       create: () => {
         creates += 1;
         return Promise.resolve();
       },
       status: () => Promise.reject(new Error("offline")),
     },
-    () => new Date("2026-10-03T00:00:00.000Z"),
-  );
+  });
   await service.recover();
   assert.equal(creates, 0);
   assert.equal((await repository.read(id)).status, "running");

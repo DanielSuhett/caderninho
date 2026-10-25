@@ -133,6 +133,7 @@ function services() {
     vault,
   });
   const installation = createInstallationService({
+    catalog: household.catalog,
     repository: createInstallationRepository(env.DB),
     source,
   });

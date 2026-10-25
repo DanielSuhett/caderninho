@@ -1,18 +1,12 @@
-import {
-  Badge,
-  DropdownMenu,
-  InlineCopyText,
-  LayerCard,
-  Select,
-  useKumoToastManager,
-} from "@cloudflare/kumo";
+import { Badge } from "@cloudflare/kumo/components/badge";
+import { DropdownMenu } from "@cloudflare/kumo/components/dropdown";
+import { InlineCopyText } from "@cloudflare/kumo/components/inline-copy-text";
+import { LayerCard } from "@cloudflare/kumo/components/layer-card";
+import { Select } from "@cloudflare/kumo/components/select";
+import { useKumoToastManager } from "@cloudflare/kumo/components/toast";
 import { type MouseEvent, type ReactNode, useCallback, useState } from "react";
 
-import {
-  AccountListSchema,
-  type PortalResponse,
-  type WorkspaceCatalog,
-} from "../../contracts";
+import type { PortalResponse, WorkspaceCatalog } from "../../contracts";
 import { formatBalance } from "../money";
 import { UiButton } from "../ui";
 import type { OrganizationApi } from "./account-api";
@@ -96,7 +90,7 @@ export function OrganizationView({
       ]);
       return {
         ...catalog,
-        accounts: AccountListSchema.parse(accountList).data.records,
+        accounts: accountList.data.records,
       };
     },
     [api, spaceId, snapshot.csrf],

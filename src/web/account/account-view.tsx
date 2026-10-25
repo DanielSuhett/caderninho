@@ -1,4 +1,4 @@
-import { Link } from "@cloudflare/kumo";
+import { Link } from "@cloudflare/kumo/components/link";
 import { lazy, useCallback, useEffect, useRef, useState } from "react";
 
 import type { HouseholdCommand, PortalResponse } from "../../contracts";
