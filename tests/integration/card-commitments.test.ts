@@ -7,6 +7,7 @@ import {
   CardCommitmentsQuerySchema,
   CardCommitmentsResponseSchema,
   PlanningCommandSchema,
+  TransactionListSchema,
   tools,
 } from "../../src/contracts";
 import { createPlanningService } from "../../src/worker/planning";
@@ -312,6 +313,111 @@ test("person and space selection validate IDs, preserve hidden credit accounts a
       ?.spentMinor,
     "1000",
   );
+});
+
+test("individually moved installments stay visible in their effective space without moving their source account", async () => {
+  await collect(
+    source(
+      [
+        transaction({
+          amount: "-12.34",
+          category: "Groceries",
+          creditCardMetadata: installment,
+          id: "moved-credit",
+        }),
+        transaction({
+          amount: "-88.88",
+          category: "Groceries",
+          creditCardMetadata: installment,
+          id: "unmoved-credit",
+        }),
+        transaction({
+          accountId: "bank",
+          amount: "-99.99",
+          category: "Groceries",
+          creditCardMetadata: installment,
+          id: "moved-bank",
+        }),
+      ],
+      [credit(), credit({ id: "unrelated-card" }), account({ id: "bank" })],
+    ),
+  );
+  const f = planning();
+  const { id: familyId } = z.object({ id: z.string() }).parse(
+    await f.write("create_space", {
+      currency: "BRL",
+      name: "Family",
+      type: "family",
+    }),
+  );
+  await f.write("move_transactions", {
+    ids: ["moved-credit", "moved-bank"],
+    targetSpaceId: familyId,
+  });
+  const transactions = async () =>
+    TransactionListSchema.parse(
+      await f.call("get_transactions", {
+        from: "2026-10-01",
+        spaceId: familyId,
+        to: "2026-12-31",
+      }),
+    );
+  const ledger = await transactions();
+  const creditRows = ledger.data.records.filter((row) => row.accountId === "a");
+  assert.deepEqual(
+    creditRows.map((row) => row.id),
+    ["moved-credit"],
+  );
+  const result = await f.query({ spaceId: familyId });
+  assert.deepEqual(
+    result.data.accounts.map((row) => row.id),
+    ["a"],
+  );
+  assert.deepEqual(
+    result.data.installments.map((row) => row.id),
+    creditRows.map((row) => row.id),
+  );
+  assert.equal(result.data.installments[0]?.accountName, "Card");
+  assert.equal(result.data.installments[0]?.amountMinor, "-1234");
+  assert.equal(result.data.accounts[0]?.creditLimitMinor, "100000");
+  assert.equal(result.data.accounts[0]?.allocatedCreditMinor, "60000");
+  assert.equal(result.data.totals[0]?.knownUnclassifiedMinor, "1234");
+  assert.equal(result.data.totals[0]?.unclassifiedCount, 1);
+  assert.equal(result.data.totals[0]?.spentMinor, "0");
+  assert.equal(result.data.months[0]?.knownUnclassifiedMinor, "1234");
+  assert.deepEqual(result.coverage.connectionIds, ["c"]);
+  assert.equal(result.coverage.kind, "imported");
+  assert.equal(result.oldestLastSuccessAt, "2026-10-01T00:00:00.000Z");
+  assert.equal(result.partial, ledger.partial);
+  assert.equal(result.partial, false);
+  assert.deepEqual(
+    (await f.query({ accountId: "a", spaceId: familyId })).data,
+    result.data,
+  );
+  assert.deepEqual(
+    (await f.query()).data.installments.map((row) => row.id),
+    ["unmoved-credit"],
+  );
+  const accountList = z.object({
+    data: z.object({
+      records: z.array(z.object({ id: z.string(), spaceId: z.string() })),
+    }),
+  });
+  const sourceAccounts = accountList.parse(await f.call("get_accounts"));
+  assert.equal(
+    sourceAccounts.data.records.find((row) => row.id === "a")?.spaceId,
+    "personal",
+  );
+  assert.deepEqual(
+    accountList.parse(await f.call("get_accounts", { spaceId: familyId })).data
+      .records,
+    [],
+  );
+  await admit("2026-10-24T00:00:00.000Z");
+  const partial = await f.query({ spaceId: familyId });
+  assert.equal(partial.partial, true);
+  assert.equal(partial.partial, (await transactions()).partial);
+  assert.deepEqual(partial.coverage.connectionIds, ["c"]);
 });
 
 test("portal and MCP expose the same authenticated read-only card query with output schema", async () => {

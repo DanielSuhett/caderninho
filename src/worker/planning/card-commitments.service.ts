@@ -155,10 +155,15 @@ export async function cardCommitments(input: {
   ) {
     throw new Error("CARD_REQUIRED");
   }
+  const movedAccountIds = new Set(
+    snapshot.state.edits
+      .filter((edit) => edit.spaceId === query.spaceId && !edit.deleted)
+      .flatMap((edit) => (edit.accountId ? [edit.accountId] : [])),
+  );
   const selectedAccounts = allAccounts.filter(
     (row) =>
       row.type === "CREDIT" &&
-      row.spaceId === query.spaceId &&
+      (row.spaceId === query.spaceId || movedAccountIds.has(row.id)) &&
       (!query.accountId || row.id === query.accountId) &&
       (!query.personId || row.personId === query.personId),
   );

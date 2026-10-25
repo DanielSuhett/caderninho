@@ -31,6 +31,10 @@ ficam fora. As edições e categorias locais seguem a visão efetiva usada pelos
 demais resumos. Dinheiro usa strings inteiras de unidades menores e aritmética
 exata; moedas permanecem separadas.
 
+Parcelas movidas individualmente seguem o espaço efetivo da transação. A consulta
+resolve os metadados e limites da conta de origem sem mover a própria conta.
+Esses limites continuam sendo os valores da conta, sem divisão entre espaços.
+
 ## Gastos e parcelas
 
 Gastos realizados exigem classificação efetiva de despesa, estado POSTED e data
