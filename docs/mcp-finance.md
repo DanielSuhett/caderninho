@@ -168,7 +168,7 @@ resposta: ausência de candidatos não comprova ausência de assinaturas.
 | --- | --- |
 | Catálogo e categorias | `get_categories` com `include_hidden: true` reconstrói o catálogo, incluindo aparência e vínculos; nomes fixos são protegidos. |
 | Resumo e série mensal | `get_overview` e `generate_chart` agregam o período completo por moeda. |
-| Cartões e parcelamentos | `get_card_commitments` compartilha a consulta da aba Investimentos: gastos efetivos, parcelas observadas por mês, limites informados e categorias, com moedas separadas. Veja [a política de cálculo](investments.md). |
+| Cartões e parcelamentos | `get_card_commitments` mantém a consulta de compromissos de cartão: gastos efetivos, parcelas observadas por mês, limites informados e categorias, com moedas separadas. Veja [a política de cálculo](card-commitments.md). |
 | Ocorrências e compras | `get_transactions` lista registros; `get_transaction_purchases` usa o serviço do painel e agrupa antes de paginar. O valor é de uma parcela, não da compra inteira. |
 | Prévia e regras | `preview_rule` compartilha validadores/serviço com o painel: até 10 mil registros, cinco amostras, `partial` e `truncated`. Não escreve nem prevê a regra vencedora; `apply_rules` é explícito e atômico até 500 registros. |
 | Escritas locais | Categorias, agrupadores, regras e espaços usam os mesmos serviços. Excluir agrupador preserva categorias; excluir espaço exige ausência de vínculos e protege o pessoal. |
@@ -217,3 +217,6 @@ e o harness nativo cobrem replay, falhas parciais e persistência após reiníci
 Pluggy real, provisionamento, deploy, OAuth no host e renderização de SVG/MCP Apps
 exigem validação separada. Skill instalada e endpoint ativo não demonstram uma
 chamada autenticada no host; o catálogo de ferramentas depende da conexão dele.
+
+A carteira de ativos do painel e da demo compartilha `get_investments`; consulte
+[valores, identidade e limites da carteira](investments.md).

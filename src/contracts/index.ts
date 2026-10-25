@@ -41,6 +41,11 @@ export {
   HouseholdCommandSchema,
   HouseholdResultSchema,
 } from "./household";
+export {
+  type InvestmentList,
+  InvestmentListSchema,
+  type InvestmentPortfolio,
+} from "./investments";
 export { PRODUCT_INSTRUCTIONS, ToolName, tools } from "./mcp-contract";
 export type { PlanningCommand } from "./planning";
 export {

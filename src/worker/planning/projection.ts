@@ -77,6 +77,7 @@ export interface Selection {
   direction?: string | undefined;
   from?: string | undefined;
   include_ignored?: boolean | undefined;
+  investments?: boolean;
   personId?: string | undefined;
   profileId?: string | undefined;
   spaceId: string;
@@ -278,6 +279,7 @@ export function planningCoverage(
   );
   const selectedAccounts = accounts(snapshot).filter(
     (row) =>
+      !selection.investments &&
       (row.spaceId === selection.spaceId || movedAccountIds.has(row.id)) &&
       (!selection.personId || row.personId === selection.personId) &&
       (!selection.accountId || row.id === selection.accountId) &&
@@ -288,6 +290,25 @@ export function planningCoverage(
       row.connectionId ? [row.connectionId] : [],
     ),
   );
+  const investments = selection.investments
+    ? snapshot.state.investments.filter((row) => {
+        const ownerId =
+          snapshot.owners.find(
+            (owner) => owner.connectionId === row.connectionId,
+          )?.personId ??
+          row.personId ??
+          "self";
+        return (
+          row.spaceId === selection.spaceId &&
+          (!selection.personId || ownerId === selection.personId)
+        );
+      })
+    : [];
+  for (const row of investments) {
+    if (row.connectionId) {
+      connectionIds.add(row.connectionId);
+    }
+  }
   const origins = snapshot.connections.filter((row) => {
     if (connectionIds.has(row.id)) {
       return true;
@@ -298,7 +319,7 @@ export function planningCoverage(
     return (
       !selection.accountId &&
       selection.spaceId === "personal" &&
-      !Object.keys(row.accounts).length &&
+      (selection.investments || !Object.keys(row.accounts).length) &&
       (!selection.personId || personId === selection.personId)
     );
   });
@@ -306,7 +327,10 @@ export function planningCoverage(
   let kind = "empty";
   if (origins.length) {
     kind = "imported";
-  } else if (selectedAccounts.some((row) => row.manual)) {
+  } else if (
+    selectedAccounts.some((row) => row.manual) ||
+    investments.some((row) => row.manual)
+  ) {
     kind = "local_only";
   }
   return {

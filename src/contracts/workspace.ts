@@ -3,6 +3,7 @@ import { z } from "zod/v4";
 import {
   CategoryColorSchema,
   CategoryIconSchema,
+  FinancialIdentitySchema,
   RunStatus,
   TransactionClassificationSchema,
   TransactionIdentificationSchema,
@@ -19,6 +20,9 @@ export const PortalQuerySchema = z
     csrf: z.string(),
     query: z.union([
       PortalCardsQuerySchema,
+      planningDefinitions[17].schema.extend({
+        tool: z.literal("get_investments"),
+      }),
       CardCommitmentsQuerySchema.extend({
         tool: z.literal("get_card_commitments"),
       }),
@@ -100,7 +104,14 @@ const RuleListSchema = z.object({
 });
 export const AccountListSchema = z.object({
   data: z.object({
-    records: z.array(named.extend({ personId: id, personName: z.string() })),
+    records: z.array(
+      named.extend({
+        identity: FinancialIdentitySchema.nullish(),
+        personId: id,
+        personName: z.string(),
+        type: z.enum(["BANK", "CREDIT"]).optional(),
+      }),
+    ),
   }),
 });
 const TransactionRecordSchema = z.object({

@@ -10,7 +10,7 @@ links. [DESIGN.md](../DESIGN.md) e o [guia](design-system.md) governam a composi
 | `/account` | Resumo completo por período/moeda, categorias, série mensal, recentes e contas/cartões |
 | `/account/transactions` | Table, filtros GET, Dialog de detalhes e parcelas |
 | `/account/cards` | Gastos do mês, categorias, limites e parcelas de um cartão ou de todos |
-| `/account/investments` | Compromissos: gastos de cartões, limites informados, parcelas por mês e categorias dos compromissos observados |
+| `/account/investments` | Carteira de ativos: posição bruta/líquida, resultado, resgate e composição por classe/instituição |
 | `/account/rules` | Condições, categoria, prioridade, preview, edição e composição com Flow sob demanda |
 | `/account/groups` | Grupos de planejamento, orçamento, categorias e etiquetas |
 | `/account/sync` | Rodadas, fases, estados, erros e referências históricas |

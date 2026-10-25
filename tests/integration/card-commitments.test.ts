@@ -428,12 +428,12 @@ test("portal and MCP expose the same authenticated read-only card query with out
     ),
   );
   const app = fixture();
-  assert.equal((await app.request("/account/investments")).status, 302);
+  assert.equal((await app.request("/account/commitments")).status, 302);
   const cookie = cookies(await login(app));
   assert.equal(
-    (await app.request("/account/investments", { headers: { Cookie: cookie } }))
+    (await app.request("/account/commitments", { headers: { Cookie: cookie } }))
       .status,
-    200,
+    404,
   );
   const query = { month: "2026-10", months: 3, tool: "get_card_commitments" };
   const response = await command(app, cookie, "query", { query });

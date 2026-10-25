@@ -1,5 +1,7 @@
 import { z } from "zod/v4";
 
+import { FinancialIdentitySchema } from "../domain";
+
 const id = z.string().min(1).max(160);
 const minor = z.string().regex(/^-?\d+$/);
 const amount = z.object({
@@ -52,6 +54,7 @@ export const PortalCardsSchema = z.object({
         currency: z.string(),
         dueDate: z.string().nullable(),
         id,
+        identity: FinancialIdentitySchema.nullish(),
         name: z.string(),
         personId: id,
         personName: z.string(),

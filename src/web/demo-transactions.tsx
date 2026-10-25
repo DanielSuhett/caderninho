@@ -1,10 +1,13 @@
 import { Select } from "@cloudflare/kumo";
 
-import { demoReferenceDay } from "../fixtures/finance";
+import type { WorkspaceCatalog } from "../contracts";
+import { demoPeople, demoReferenceDay } from "../fixtures/finance";
+import { demoPortalFixture } from "../fixtures/workspace";
 import { monthLabel, shiftMonth } from "./account/dashboard-period";
 import { AccountFilter, QuerySearch } from "./account/filter-fields";
+import { PersonStack } from "./account/person-identity";
 import { TransactionList } from "./account/transaction-list";
-import { EmptyView } from "./account/workspace-filters";
+import { EmptyView, ScopeFields } from "./account/workspace-filters";
 import { WorkspaceDetails, WorkspaceFilters } from "./account/workspace-ui";
 import { type DemoData, demoTransactions } from "./demo-data";
 
@@ -12,10 +15,12 @@ export function DemoTransactions({
   month,
   params,
   data,
+  spaces,
 }: {
   month: string;
   params: URLSearchParams;
   data: DemoData;
+  spaces: WorkspaceCatalog["spaces"];
 }) {
   const accountId = params.get("accountId") ?? "";
   const text = params.get("text") ?? "";
@@ -30,15 +35,24 @@ export function DemoTransactions({
   search.delete("currency");
   search.set("month", month);
   const action = `/demo/transactions?${new URLSearchParams({ month, ...(params.get("space") && { space: params.get("space") ?? "" }) })}`;
-  const activeCount = [text, accountId, params.get("direction")].filter(
-    Boolean,
-  ).length;
+  const activeCount = [
+    text,
+    accountId,
+    params.get("direction"),
+    params.get("person"),
+  ].filter(Boolean).length;
   const account = data.accounts.find((item) => item.id === accountId);
   return (
     <>
       <WorkspaceFilters
         action={action}
         activeCount={activeCount}
+        identity={
+          <PersonStack
+            people={demoPeople}
+            personId={params.get("person") ?? ""}
+          />
+        }
         {...(account && { context: account.name })}
         leading={
           <QuerySearch
@@ -51,13 +65,12 @@ export function DemoTransactions({
         }
         showClear={activeCount > 0}
       >
-        {!!params.get("space") && (
-          <input
-            name="space"
-            type="hidden"
-            value={params.get("space") ?? ""}
-          />
-        )}
+        <ScopeFields
+          catalog={{ spaces }}
+          compact
+          params={params}
+          snapshot={demoPortalFixture()}
+        />
         {!!params.get("direction") && (
           <input
             name="direction"
@@ -77,6 +90,7 @@ export function DemoTransactions({
         />
         <AccountFilter
           accounts={data.accounts}
+          showOwner={!params.get("person")}
           value={accountId}
         />
         <input
@@ -91,7 +105,7 @@ export function DemoTransactions({
           categories={data.categories}
           records={records}
           referenceDay={demoReferenceDay}
-          showOwner={false}
+          showOwner={!params.get("person") && demoPeople.length > 1}
         />
       ) : (
         <EmptyView title="Nenhuma transação neste recorte">

@@ -122,15 +122,25 @@ const oneTime = [
   },
 ] as const;
 
-const entries = [...installments, ...oneTime];
+const entries = [
+  ...installments,
+  ...oneTime.map((row) => ({ ...row, accountId: "demo-card" })),
+];
 
-function totals(
-  currency: string,
-  from: string,
-  to: string,
-  month?: string,
-): CardCommitments["totals"][number] {
-  const rows = entries.filter(
+function totals({
+  currency,
+  from,
+  to,
+  month,
+  sourceEntries,
+}: {
+  currency: string;
+  from: string;
+  to: string;
+  month?: string;
+  sourceEntries: typeof entries;
+}): CardCommitments["totals"][number] {
+  const rows = sourceEntries.filter(
     (row) =>
       row.currency === currency &&
       row.date >= from &&
@@ -171,6 +181,10 @@ const currencies = ["BRL", "USD"];
 
 export function cardCommitmentsFixture(
   input: Partial<CardCommitments> = {},
+  selection: {
+    personId?: string | undefined;
+    accountId?: string | undefined;
+  } = {},
 ): CardCommitments {
   const month = input.month ?? "2026-10";
   const from = `${month}-01`;
@@ -180,57 +194,75 @@ export function cardCommitmentsFixture(
   const months = Array.from({ length: 12 }, (_, index) =>
     monthDate(from, index).slice(0, 7),
   );
+  const selectedAccount = (id: string) =>
+    (!selection.accountId || id === selection.accountId) &&
+    (!selection.personId ||
+      (id === "demo-card-extra" ? "demo-person-2" : "demo-person") ===
+        selection.personId);
   const selectedEntries = entries.filter(
-    (row) => row.date >= from && row.date <= to,
+    (row) =>
+      row.date >= from && row.date <= to && selectedAccount(row.accountId),
   );
   return {
-    accounts: [
-      {
-        allocatedCreditMinor: "1248000",
-        availabilitySource: "provider",
-        availableCreditMinor: "752000",
-        balanceObservedAt: demoReferenceDay,
-        creditLimitMinor: "2000000",
-        currency: "BRL",
-        hidden: false,
-        id: "demo-card",
-        limitSource: "provider",
-        manual: false,
-        name: "Cartão pessoal",
-        personId: "demo-person",
-        personName: "Pessoa de exemplo",
-      },
-      {
-        allocatedCreditMinor: null,
-        availabilitySource: "unavailable",
-        availableCreditMinor: null,
-        balanceObservedAt: demoReferenceDay,
-        creditLimitMinor: null,
-        currency: "BRL",
-        hidden: false,
-        id: "demo-card-extra",
-        limitSource: "unavailable",
-        manual: false,
-        name: "Cartão adicional",
-        personId: "demo-person",
-        personName: "Pessoa de exemplo",
-      },
-      {
-        allocatedCreditMinor: null,
-        availabilitySource: "unavailable",
-        availableCreditMinor: null,
-        balanceObservedAt: demoReferenceDay,
-        creditLimitMinor: "500000",
-        currency: "USD",
-        hidden: false,
-        id: "demo-card-usd",
-        limitSource: "manual",
-        manual: true,
-        name: "Cartão internacional",
-        personId: "demo-person",
-        personName: "Pessoa de exemplo",
-      },
-    ],
+    accounts: (
+      [
+        {
+          allocatedCreditMinor: "1248000",
+          availabilitySource: "provider",
+          availableCreditMinor: "752000",
+          balanceObservedAt: demoReferenceDay,
+          creditLimitMinor: "2000000",
+          currency: "BRL",
+          hidden: false,
+          id: "demo-card",
+          identity: {
+            cardBrand: "MASTERCARD",
+            institution: {
+              id: "201",
+              logoUrl: "https://cdn.pluggy.ai/assets/connector-icons/201.svg",
+              name: "Instituição de exemplo",
+            },
+          },
+          limitSource: "provider",
+          manual: false,
+          name: "Cartão pessoal",
+          personId: "demo-person",
+          personName: "Ana Silva",
+        },
+        {
+          allocatedCreditMinor: null,
+          availabilitySource: "unavailable",
+          availableCreditMinor: null,
+          balanceObservedAt: demoReferenceDay,
+          creditLimitMinor: null,
+          currency: "BRL",
+          hidden: false,
+          id: "demo-card-extra",
+          identity: { cardBrand: "VISA", institution: null },
+          limitSource: "unavailable",
+          manual: false,
+          name: "Cartão adicional",
+          personId: "demo-person-2",
+          personName: "Bruno Costa",
+        },
+        {
+          allocatedCreditMinor: null,
+          availabilitySource: "unavailable",
+          availableCreditMinor: null,
+          balanceObservedAt: demoReferenceDay,
+          creditLimitMinor: "500000",
+          currency: "USD",
+          hidden: false,
+          id: "demo-card-usd",
+          identity: { cardBrand: "AMEX", institution: null },
+          limitSource: "manual",
+          manual: true,
+          name: "Cartão internacional",
+          personId: "demo-person",
+          personName: "Ana Silva",
+        },
+      ] satisfies CardCommitments["accounts"]
+    ).filter((account) => selectedAccount(account.id)),
     assumptions: [
       "A demonstração usa somente dados fictícios. O exemplo inclui um cartão sem informações de limite e uma parcela pendente sem as demais ocorrências enviadas.",
     ],
@@ -264,18 +296,27 @@ export function cardCommitmentsFixture(
     categoryBasis: "observed_commitments",
     from,
     installments: installments.filter(
-      (row) => row.date >= from && row.date <= to,
+      (row) =>
+        row.date >= from && row.date <= to && selectedAccount(row.accountId),
     ),
     month,
     months: months.flatMap((selected) =>
       currencies.map((currency) => ({
-        ...totals(currency, from, to, selected),
+        ...totals({
+          currency,
+          from,
+          month: selected,
+          sourceEntries: selectedEntries,
+          to,
+        }),
         month: selected,
       })),
     ),
     referenceDay: demoReferenceDay,
     to,
-    totals: currencies.map((currency) => totals(currency, from, to)),
+    totals: currencies.map((currency) =>
+      totals({ currency, from, sourceEntries: selectedEntries, to }),
+    ),
     ...input,
   };
 }

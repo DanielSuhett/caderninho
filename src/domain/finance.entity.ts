@@ -5,6 +5,10 @@ export interface AccountMetadata {
   balanceMinor: string | null;
   balanceObservedAt: string | null;
   currency: string;
+  identity?:
+    | import("./financial-identity.entity").FinancialIdentity
+    | null
+    | undefined;
   name: string;
   type: "BANK" | "CREDIT";
 }

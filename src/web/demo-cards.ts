@@ -9,7 +9,7 @@ import {
   isCardExpense,
   isCardInstallment,
 } from "../domain";
-import { demoReferenceDay } from "../fixtures/finance";
+import { demoPeople, demoReferenceDay } from "../fixtures/finance";
 import type { DemoData } from "./demo-data";
 
 export function demoCards(
@@ -27,18 +27,22 @@ export function demoCards(
         (!query.personId || account.personId === query.personId),
     )
     .map((account) => ({
-      allocatedMinor: "238760",
-      availableCreditMinor: "761240",
+      allocatedMinor: account.id === "demo-card-extra" ? "0" : "238760",
+      availableCreditMinor:
+        account.id === "demo-card-extra" ? "1000000" : "761240",
       balanceObservedAt: account.balanceObservedAt ?? null,
-      cardNumber: "4242",
+      cardNumber: account.id === "demo-card-extra" ? "8080" : "4242",
       closeDate: "2026-10-25",
       creditLimitMinor: "1000000",
       currency: account.currency,
       dueDate: "2026-11-02",
       id: account.id,
+      identity: account.identity,
       name: account.name,
       personId: account.personId,
-      personName: "Pessoa de exemplo",
+      personName:
+        demoPeople.find((person) => person.id === account.personId)?.name ??
+        "Pessoa de exemplo",
     }));
   const selected = new Set(
     accounts

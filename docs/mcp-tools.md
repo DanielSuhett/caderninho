@@ -27,7 +27,7 @@ Gerado por `npm run docs:mcp` a partir do registro de ferramentas.
 | `get_rules` | consulta/prévia | — | Regras locais ordenadas por prioridade. Salvar não reaplica o histórico; use preview_rule antes de aplicar. |
 | `get_recurrences` | consulta/prévia | — | Compromissos recorrentes cadastrados. Não detecta automaticamente assinaturas no histórico. |
 | `get_goals` | consulta/prévia | — | Metas locais com valor, prazo e vínculo patrimonial; use get_goal_plan para calcular aportes. |
-| `get_investments` | consulta/prévia | — | Posições locais e importadas disponíveis. Variação de saldo não comprova rentabilidade. |
+| `get_investments` | consulta/prévia | sim | Carteira do investidor: posições brutas/líquidas, resultado informado, resgate e alocação por classe/instituição, por moeda. Excluídos e resgatados não compõem totais; campos ausentes são desconhecidos. Não infere rentabilidade nem histórico. |
 | `get_budget` | consulta/prévia | — | Orçamento configurado e consumo do ciclo vigente por moeda e categoria; informa valores sem classificação. |
 | `get_spaces` | consulta/prévia | — | Espaços locais e suas configurações de moeda, ciclo e orçamento. |
 | `get_notification_preferences` | consulta/prévia | — | Preferências locais de avisos. deliveryConfigured=false informa que o envio não está configurado. |

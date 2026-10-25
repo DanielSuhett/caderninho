@@ -179,6 +179,73 @@ export function landingPage({
           </section>
 
           <section
+            aria-labelledby="investor-title"
+            className="landing-section investor-landing"
+            id="investimentos"
+          >
+            <div className="section-intro">
+              <h2 id="investor-title">
+                Sua carteira.
+                <br />
+                Em uma só visão.
+              </h2>
+              <p>
+                Renda fixa, fundos, ações e ETFs, por pessoa e instituição.
+                Posição bruta e líquida, resultado informado e valor disponível
+                para resgate.
+              </p>
+              <UiLink
+                href="/demo/investments/"
+                variant="primary"
+              >
+                Explorar investimentos{" "}
+                <ArrowRightIcon
+                  aria-hidden
+                  size={18}
+                />
+              </UiLink>
+            </div>
+            <LayerCard className="investor-landing-preview">
+              <span className="eyebrow">Carteira de exemplo · BRL</span>
+              <div className="investor-landing-total">
+                R$ 60.600,00<small>Posição bruta</small>
+              </div>
+              <div
+                aria-label="Renda fixa 47%, fundos 30%, ETFs 15%, ações 8%"
+                className="investor-landing-bar"
+                role="img"
+              >
+                <span />
+                <span />
+                <span />
+                <span />
+              </div>
+              <ul>
+                <li>
+                  <span>Renda fixa</span>
+                  <strong>47%</strong>
+                </li>
+                <li>
+                  <span>Fundos</span>
+                  <strong>30%</strong>
+                </li>
+                <li>
+                  <span>ETFs</span>
+                  <strong>15%</strong>
+                </li>
+                <li>
+                  <span>Ações</span>
+                  <strong>8%</strong>
+                </li>
+              </ul>
+              <p>
+                Também no seu assistente via MCP: “Como minha carteira está
+                distribuída por instituição?”
+              </p>
+            </LayerCard>
+          </section>
+
+          <section
             aria-labelledby="freedom-title"
             className="landing-section freedom-section"
             id="como-funciona"

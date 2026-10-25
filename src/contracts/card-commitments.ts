@@ -1,5 +1,7 @@
 import { z } from "zod/v4";
 
+import { FinancialIdentitySchema } from "../domain";
+
 const id = z.string().min(1).max(160);
 const minor = z.string().regex(/^-?\d+$/);
 const count = z.number().int().nonnegative();
@@ -53,6 +55,7 @@ export const CardCommitmentsSchema = z.object({
       currency: z.string(),
       hidden: z.boolean(),
       id: z.string(),
+      identity: FinancialIdentitySchema.nullish(),
       limitSource: z.enum(["provider", "manual", "unavailable"]),
       manual: z.boolean(),
       name: z.string(),

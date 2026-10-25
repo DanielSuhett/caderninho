@@ -271,10 +271,18 @@ export const planningDefinitions = [
   },
   {
     description:
-      "Posições locais e importadas disponíveis. Variação de saldo não comprova rentabilidade.",
+      "Carteira do investidor: posições brutas/líquidas, resultado informado, resgate e alocação por classe/instituição, por moeda. Excluídos e resgatados não compõem totais; campos ausentes são desconhecidos. Não infere rentabilidade nem histórico.",
     name: "get_investments",
     readOnly: true,
-    schema: z.object({ ...scope }).strict(),
+    schema: z
+      .object({
+        ...scope,
+        currency: currency.optional(),
+        institutionId: id.optional(),
+        status: text.optional(),
+        type: text.optional(),
+      })
+      .strict(),
   },
   {
     description:

@@ -71,6 +71,7 @@ function selectedCards(
       currency: account.currency,
       dueDate: extra?.dueDate ?? null,
       id: account.id,
+      identity: account.identity ?? null,
       name: account.name,
       personId: account.personId,
       personName: account.personName,

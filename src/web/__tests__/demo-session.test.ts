@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { type PortalMutation, RulePreviewSchema } from "../../contracts";
+import {
+  InvestmentListSchema,
+  type PortalMutation,
+  RulePreviewSchema,
+} from "../../contracts";
 import { demoLedger, transactionFixture } from "../../fixtures/finance";
 import { workspaceFixture } from "../../fixtures/workspace";
 import { demoMonthly, demoOverview, demoTransactions } from "../demo-data";
@@ -354,4 +358,33 @@ test("shared fixtures retain independent source direction, zero and unavailable 
     ),
   );
   assert.equal((await session.api.catalog("personal", signal)).rules.length, 1);
+});
+
+test("investment demo shares the MCP portfolio contract, owner and institution filters", async () => {
+  const session = createDemoSession();
+  const result = InvestmentListSchema.parse(
+    await session.api.query(
+      {
+        currency: "BRL",
+        personId: "demo-person-2",
+        spaceId: "personal",
+        tool: "get_investments",
+      },
+      "synthetic",
+      signal,
+    ),
+  );
+  assert.equal(result.data.records.length, 2);
+  assert.equal(result.data.totals[0]?.gross.totalMinor, "2286000");
+  assert.ok(
+    result.data.records.every((row) => row.personId === "demo-person-2"),
+  );
+  const other = InvestmentListSchema.parse(
+    await session.api.query(
+      { spaceId: "missing", tool: "get_investments" },
+      "synthetic",
+      signal,
+    ),
+  );
+  assert.equal(other.data.records.length, 0);
 });

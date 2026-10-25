@@ -1,22 +1,14 @@
-import { Select } from "@cloudflare/kumo";
+import { Banner, Select } from "@cloudflare/kumo";
 import { useCallback, useState } from "react";
 
-import {
-  CardCommitmentsResponseSchema,
-  type PortalResponse,
-} from "../../contracts";
+import { InvestmentListSchema, type PortalResponse } from "../../contracts";
+import { investmentPortfolio } from "../../domain";
 import type { createAccountApi } from "./account-api";
-import { navigateWorkspace } from "./account-navigation";
-import { CardCommitmentsPanel } from "./card-commitments-panel";
-import { selectedMonth } from "./dashboard-period";
-import { displayCurrency } from "./financial-presentation";
-import { PeriodPicker } from "./period-picker";
+import { AccountIdentity } from "./account-identity";
+import { InvestorDashboard, investmentTypeNames } from "./investor-dashboard";
+import { PersonStack } from "./person-identity";
 import { ScopeFields } from "./workspace-filters";
-import {
-  momentLabel,
-  ResourceFeedback,
-  useResource,
-} from "./workspace-resource";
+import { ResourceFeedback, useResource } from "./workspace-resource";
 import {
   RefreshButton,
   WorkspaceFilters,
@@ -26,139 +18,139 @@ import {
 export function InvestmentsView({
   api,
   snapshot,
+  basePath = "/account/investments",
 }: {
-  api: ReturnType<typeof createAccountApi>;
+  api: Pick<ReturnType<typeof createAccountApi>, "query" | "catalog">;
   snapshot: PortalResponse;
+  basePath?: string;
 }) {
   const [params] = useState(() => new URLSearchParams(location.search));
-  const referenceDay = new Date().toLocaleDateString("sv-SE", {
-    timeZone: "America/Sao_Paulo",
-  });
-  const month = selectedMonth(params.get("month"), referenceDay);
-  const spaceId = params.get("space") || "personal";
   const personId = params.get("person") ?? "";
+  const spaceId = params.get("space") ?? "personal";
+  const currency = params.get("currency") ?? "BRL";
+  const type = params.get("type") ?? "";
+  const institutionId = params.get("institutionId") ?? "";
   const load = useCallback(
-    async (signal: AbortSignal, fresh = false) => {
+    async (signal: AbortSignal, fresh: boolean) => {
       const [result, catalog] = await Promise.all([
         api.query(
-          {
-            month,
-            months: 12,
-            spaceId,
-            tool: "get_card_commitments",
-            ...(personId && { personId }),
-          },
+          { spaceId, tool: "get_investments", ...(personId && { personId }) },
           snapshot.csrf,
           signal,
           fresh,
         ),
         api.catalog(spaceId, signal, fresh),
       ]);
-      return {
-        catalog,
-        observedAt: new Date().toISOString(),
-        result: CardCommitmentsResponseSchema.parse(result),
-      };
+      return { catalog, result: InvestmentListSchema.parse(result) };
     },
-    [api, month, personId, snapshot.csrf, spaceId],
+    [api, snapshot.csrf, spaceId, personId],
   );
   const resource = useResource(load);
-  const { data } = resource;
+  const records = resource.data?.result.data.records ?? [];
   const currencies = [
-    ...new Set([
-      ...(data?.result.data.accounts.map((account) => account.currency) ?? []),
-      ...(data?.result.data.totals.map((total) => total.currency) ?? []),
-    ]),
+    ...new Set([currency, ...records.map((row) => row.currency)]),
   ].sort();
-  const space = data?.catalog.spaces.find((item) => item.id === spaceId);
-  const currency = displayCurrency(
-    params.get("currency"),
-    currencies,
-    space?.currency ?? "BRL",
+  const institutions = new Map(
+    records.flatMap((row) =>
+      row.identity?.institution
+        ? [[row.identity.institution.id, row.identity.institution] as const]
+        : [],
+    ),
   );
-  const person = snapshot.people.find((item) => item.id === personId);
-  const missingPerson = personId ? "Pessoa indisponível" : "Todas as pessoas";
-  const context = [
-    space?.name ?? spaceId,
-    person?.name ?? missingPerson,
-    currency,
-  ].join(" · ");
-  const changeMonth = useCallback((value: string) => {
-    const url = new URL(location.href);
-    url.searchParams.set("month", value);
-    navigateWorkspace(url);
-  }, []);
-  const changeCurrency = useCallback((value: string | null) => {
-    if (!value) {
-      return;
-    }
-    const url = new URL(location.href);
-    url.searchParams.set("currency", value);
-    navigateWorkspace(url);
-  }, []);
+  const types = [...new Set(records.map((row) => row.type))].sort();
+  const data = investmentPortfolio(records, {
+    ...(type && { type }),
+    ...(institutionId && { institutionId }),
+  });
   return (
     <>
-      <WorkspaceHeading
-        description="Parcelas e gastos já recebidos para os próximos 12 meses."
-        title="Compromissos"
-      >
-        <div className="page-actions">
-          <PeriodPicker
-            month={month}
-            onChange={changeMonth}
-          />
-          <RefreshButton
-            disabled={resource.loading}
-            label="Atualizar cartões e parcelas"
-            onClick={resource.retry}
-          />
-        </div>
+      <WorkspaceHeading title="Investimentos">
+        <RefreshButton
+          disabled={resource.loading}
+          onClick={resource.retry}
+        />
       </WorkspaceHeading>
       <ResourceFeedback {...resource} />
-      {!!data && (
+      {!!resource.data && (
         <>
           <WorkspaceFilters
-            action="/account/investments"
-            context={context}
-            leading={
-              currencies.length > 1 && (
-                <Select
-                  items={currencies.map((value) => ({ label: value, value }))}
-                  label="Moeda"
-                  onValueChange={changeCurrency}
-                  value={currency}
-                />
-              )
+            action={basePath}
+            activeCount={
+              [personId, type, institutionId, spaceId !== "personal"].filter(
+                Boolean,
+              ).length
+            }
+            context="Carteira do investidor"
+            identity={
+              <PersonStack
+                people={snapshot.people}
+                personId={personId}
+              />
+            }
+            showClear={
+              !!(personId || type || institutionId || spaceId !== "personal")
             }
           >
             <ScopeFields
-              catalog={data.catalog}
+              catalog={resource.data.catalog}
               compact
               params={params}
-              person={snapshot.people.length > 1 || !!personId}
               snapshot={snapshot}
             />
-            <input
-              name="month"
-              type="hidden"
-              value={month}
+            <Select
+              className="w-full"
+              defaultValue={type}
+              items={[
+                { label: "Todas as classes", value: "" },
+                ...types.map((value) => ({
+                  label: investmentTypeNames[value] ?? value,
+                  value,
+                })),
+              ]}
+              label="Classe"
+              name="type"
             />
-            <input
+            <Select
+              className="w-full"
+              defaultValue={institutionId}
+              items={[
+                { label: "Todas as instituições", value: "" },
+                ...[...institutions.values()].map((institution) => ({
+                  label: (
+                    <AccountIdentity
+                      account={{
+                        identity: { cardBrand: null, institution },
+                        name: institution.name,
+                      }}
+                    />
+                  ),
+                  value: institution.id,
+                })),
+              ]}
+              label="Instituição"
+              name="institutionId"
+            />
+            <Select
+              className="w-full"
+              defaultValue={currency}
+              items={currencies.map((value) => ({ label: value, value }))}
+              label="Moeda"
               name="currency"
-              type="hidden"
-              value={currency}
             />
           </WorkspaceFilters>
-          <CardCommitmentsPanel
+          {!!resource.data.result.partial && (
+            <Banner
+              description="Algumas posições ainda não foram recebidas."
+              title="Carteira parcial"
+              variant="secondary"
+            />
+          )}
+          <InvestorDashboard
             currency={currency}
-            data={data.result.data}
-            partial={data.result.partial}
+            data={data}
+            people={snapshot.people}
+            showOwner={!personId}
           />
-          <p className="page-updated">
-            Última importação bem-sucedida:{" "}
-            {momentLabel(data.result.oldestLastSuccessAt)} · consultada em{" "}
-            {momentLabel(data.observedAt)}.
-          </p>
         </>
       )}
     </>

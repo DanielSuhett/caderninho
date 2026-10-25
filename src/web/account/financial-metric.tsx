@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 
 import { formatBalance, type MoneyTone } from "../money";
 import { MoneyValue } from "../money-value";
+import { InfoTip } from "./info-tip";
 
 export function FinancialMetric({
   label,
@@ -21,7 +22,10 @@ export function FinancialMetric({
   const value = amount === null ? null : formatBalance(amount, currency);
   return (
     <div className="financial-metric">
-      <dt>{label}</dt>
+      <dt>
+        {label}
+        <InfoTip label={label}>{hint}</InfoTip>
+      </dt>
       <dd>
         <span
           className="metric-amount"
@@ -37,7 +41,6 @@ export function FinancialMetric({
         </span>
         <span className="metric-currency"> {currency}</span>
       </dd>
-      <small>{hint}</small>
       {children}
     </div>
   );

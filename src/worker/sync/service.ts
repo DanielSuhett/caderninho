@@ -5,8 +5,10 @@ import {
   CLASSIFICATION_VERSION,
   CLEF_MIN_CONFIDENCE,
   classificationState,
+  institutionLogoUrl,
   normalizeAccount,
   normalizeTransaction,
+  type ProviderConnection,
 } from "../../domain";
 import { hash, tryCatch } from "../../shared";
 import type {
@@ -42,9 +44,10 @@ async function unique<T extends { id: string }>(records: T[]) {
 async function catalog(
   source: ImportDependencies["source"],
   connectionId: string,
+  connector?: ProviderConnection["connector"],
 ) {
   return (await unique(await source.accounts(connectionId)))
-    .map((row) => normalizeAccount(row, connectionId))
+    .map((row) => normalizeAccount(row, connectionId, connector))
     .sort((left, right) =>
       left.id < right.id ? -1 : Number(left.id > right.id),
     );
@@ -64,7 +67,11 @@ async function importAccounts(dependencies: ImportDependencies, run: SyncRun) {
     throw new Error("SOURCE_IDENTITY_MISMATCH");
   }
   assertPersonalConnector(connection.connector?.id);
-  const prepared = await catalog(source, run.connectionId);
+  const prepared = await catalog(
+    source,
+    run.connectionId,
+    connection.connector,
+  );
   const [first] = prepared;
   return repository.publish({
     accounts: prepared,
@@ -123,6 +130,32 @@ function afterProducts(
 ): SyncRun["checkpoint"]["phase"] {
   return classifier ? "classification" : "finish";
 }
+async function identifyInvestments(
+  source: ImportDependencies["source"],
+  connectionId: string,
+  products: import("../../domain").ProductPage,
+) {
+  if (products.kind !== "investments") {
+    return;
+  }
+  const connection = await source.connection(connectionId);
+  if (connection.id !== connectionId) {
+    throw new Error("SOURCE_IDENTITY_MISMATCH");
+  }
+  const { connector } = connection;
+  if (connector) {
+    for (const investment of products.records) {
+      investment.identity ??= {
+        cardBrand: null,
+        institution: {
+          id: String(connector.id),
+          logoUrl: institutionLogoUrl(connector.imageUrl),
+          name: connector.name ?? "Instituição",
+        },
+      };
+    }
+  }
+}
 async function importProducts(
   { repository, source, now, classifier }: ImportDependencies,
   run: SyncRun,
@@ -148,6 +181,7 @@ async function importProducts(
     observedAt: now(),
     page,
   });
+  await identifyInvestments(source, run.connectionId, products);
   if (products.kind !== phase) {
     throw new Error("SOURCE_IDENTITY_MISMATCH");
   }

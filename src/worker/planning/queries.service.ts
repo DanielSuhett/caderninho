@@ -5,6 +5,7 @@ import {
   compareRules,
   detectSubscriptions,
   financialCharts,
+  investmentPortfolio,
   localDay,
   minorPresentation,
   monthDate,
@@ -67,6 +68,7 @@ export function cardCatalog(snapshot: PlanningSnapshot, state: PlanningState) {
     {
       id: string;
       accountId: string;
+      identity: import("../../domain").FinancialIdentity | null;
       number: string;
       name: string;
       hidden: boolean;
@@ -102,6 +104,7 @@ export function cardCatalog(snapshot: PlanningSnapshot, state: PlanningState) {
         deleted: setting?.deleted ?? false,
         hidden: setting?.hidden ?? account.hidden,
         id,
+        identity: account.identity ?? null,
         name: setting?.name ?? account.name,
         number,
         primary: number === main,
@@ -166,7 +169,7 @@ export async function planningQuery(
   function owned<
     T extends {
       spaceId: string;
-      personId?: string;
+      personId?: string | undefined;
       accountId?: string | null;
       connectionId?: string | null;
     },
@@ -631,9 +634,24 @@ export async function planningQuery(
   }
 
   function handleGetInvestments(
-    _input: Extract<PlanningCommand, { tool: "get_investments" }>,
+    input: Extract<PlanningCommand, { tool: "get_investments" }>,
   ) {
-    return { records: owned(state.investments) };
+    return investmentPortfolio(
+      owned(state.investments).map((investment) => ({
+        ...investment,
+        identity: investment.identity ?? {
+          cardBrand: null,
+          institution:
+            Object.values(
+              snapshot.connections.find(
+                (connection) => connection.id === investment.connectionId,
+              )?.accounts ?? {},
+            ).find((account) => account.identity?.institution)?.identity
+              ?.institution ?? null,
+        },
+      })),
+      input,
+    );
   }
 
   function handleGetLoans(

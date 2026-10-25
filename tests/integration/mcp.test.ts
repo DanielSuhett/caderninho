@@ -3,10 +3,12 @@ import assert from "node:assert/strict";
 import { beforeEach, test } from "vitest";
 import { z } from "zod/v4";
 
+import { InvestmentListSchema } from "../../src/contracts";
 import { planningOutputSchemas } from "../../src/contracts/planning-results";
 import {
   Fault,
   FaultCode,
+  FinancialIdentitySchema,
   type FinancialSource,
   TransactionClassificationSchema,
   TransactionIdentificationSchema,
@@ -141,6 +143,7 @@ test("official OAuth, legacy standard tools/defaults, protocol errors and grant 
                 balanceMinor: z.string().nullable(),
                 balanceObservedAt: z.string().nullable(),
                 currency: z.string(),
+                identity: FinancialIdentitySchema.nullish(),
                 name: z.string(),
                 type: z.enum(["BANK", "CREDIT"]),
               })
@@ -570,18 +573,21 @@ test("OAuth exposes 104 tools and executes confirmed local writes with durable r
       assert.ok(
         listed.result?.tools?.find((tool) => tool.name === name)?.outputSchema,
       );
+      let argumentsValue: Record<string, unknown> = {
+        from: "2026-10-01",
+        to: "2026-10-24",
+      };
+      if (name === "get_investments") {
+        argumentsValue = {};
+      }
+      if (name === "get_card_commitments") {
+        argumentsValue = { month: "2026-10", months: 12 };
+      }
+      if (name === "generate_chart") {
+        argumentsValue = { ...argumentsValue, includeSvg: false, type: "bar" };
+      }
       const result = await rpc("tools/call", {
-        arguments:
-          name === "get_card_commitments"
-            ? { month: "2026-10", months: 12 }
-            : {
-                from: "2026-10-01",
-                to: "2026-10-24",
-                ...(name === "generate_chart" && {
-                  includeSvg: false,
-                  type: "bar",
-                }),
-              },
+        arguments: argumentsValue,
         name,
       });
       assert.equal(result.result?.isError, false);
@@ -592,6 +598,31 @@ test("OAuth exposes 104 tools and executes confirmed local writes with durable r
       );
     }),
   );
+  const createdInvestment = await rpc("tools/call", {
+    arguments: {
+      amountMinor: "900719925474099301",
+      confirmed: true,
+      currency: "BRL",
+      date: "2026-10-25",
+      idempotency_key: "investor-mcp",
+      name: "Reserva MCP",
+      spaceId: "personal",
+      type: "FIXED_INCOME",
+    },
+    name: "create_manual_investment",
+  });
+  assert.equal(createdInvestment.result?.isError, false);
+  const investorRead = await rpc("tools/call", {
+    arguments: { currency: "BRL", type: "FIXED_INCOME" },
+    name: "get_investments",
+  });
+  assert.equal(investorRead.result?.isError, false);
+  const investor = InvestmentListSchema.parse(
+    investorRead.result?.structuredContent,
+  ).data;
+  assert.equal(investor.records[0]?.name, "Reserva MCP");
+  assert.equal(investor.totals[0]?.gross.totalMinor, "900719925474099301");
+  assert.equal(investor.totals[0]?.profit.totalMinor, null);
   const groupRequest = {
     arguments: {
       color: "#123456",

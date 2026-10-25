@@ -34,11 +34,9 @@ test("the card demo uses the shared ledger, reports only received months and sho
       showOwner: false,
     }),
   );
-  assert.ok(
-    html.includes("Gastos confirmados") && html.includes("gastos do mês"),
-  );
+  assert.ok(html.includes("Gastos confirmados"));
   assert.ok(html.includes("em compras"));
-  assert.ok(html.includes("fora do recorte mensal"));
+  assert.ok(html.includes("Sobre Gastos confirmados"));
   assert.ok(html.includes("Parcela 6 de 12"));
   assert.ok(html.includes("Sem parcelas recebidas"));
   assert.equal(html.includes("Parcela 13 de 12"), false);
@@ -51,8 +49,11 @@ test("the card scope keeps card selection inline and limits the filter dialog to
     params: new URLSearchParams(),
     snapshot: demoPortalFixture(),
   });
-  assert.equal(scope.hasFilters, false);
-  assert.equal(scope.context, "Pessoal · Cartão pessoal · BRL");
+  assert.equal(scope.hasFilters, true);
+  assert.equal(
+    scope.context,
+    "Pessoal · Todas as pessoas · Todos os cartões · BRL",
+  );
   assert.equal(
     cardScope({
       catalog: workspaceFixture(),
@@ -60,7 +61,7 @@ test("the card scope keeps card selection inline and limits the filter dialog to
       params: new URLSearchParams({ accountId: "demo-card" }),
       snapshot: demoPortalFixture(),
     }).hasFilters,
-    false,
+    true,
   );
   assert.equal(
     cardPercentage("900719925474099301", "1801439850948198602")?.label,

@@ -37,6 +37,9 @@ function readContext(snapshot: PlanningSnapshot, selection: Selection) {
 }
 function readSelection(snapshot: PlanningSnapshot, input: PlanningCommand) {
   const selection = planningSelection(input);
+  if (input.tool === "get_investments") {
+    selection.investments = true;
+  }
   if (input.tool === "get_card_commitments") {
     selection.accountIds = accounts(snapshot)
       .filter((account) => account.type === "CREDIT")

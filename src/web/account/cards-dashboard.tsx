@@ -12,6 +12,7 @@ import { CreditLimitCard } from "./credit-limit-card";
 import { monthLabel } from "./dashboard-period";
 import { DisclosureItem } from "./disclosure-item";
 import { FinancialMetric } from "./financial-metric";
+import { InfoTip } from "./info-tip";
 import { dayLabel, momentLabel } from "./workspace-resource";
 
 const CategoryChart = lazy(async () => {
@@ -71,12 +72,17 @@ function LimitCard({
 }) {
   return (
     <CreditLimitCard
-      name={`${account.name}${account.cardNumber ? ` · ${account.cardNumber}` : ""}`}
-      {...(showOwner && { owner: account.personName })}
       allocated={account.allocatedMinor}
       available={account.availableCreditMinor}
       currency={account.currency}
+      identity={account.identity}
       limit={account.creditLimitMinor}
+      name={`${account.name}${account.cardNumber ? ` · ${account.cardNumber}` : ""}`}
+      person={
+        showOwner
+          ? { id: account.personId, name: account.personName }
+          : undefined
+      }
     >
       <p>Atualizado em {momentLabel(account.balanceObservedAt)}</p>
       {!!(account.closeDate || account.dueDate) && (
@@ -115,10 +121,10 @@ function Categories({
       <header className="analysis-heading">
         <h2>Gastos por categoria</h2>
         <span>{data.currency}</span>
+        <InfoTip label="este resumo">
+          {monthLabel(data.month)} · compras confirmadas antes dos estornos
+        </InfoTip>
       </header>
-      <p className="analysis-caption">
-        {monthLabel(data.month)} · compras confirmadas antes dos estornos
-      </p>
       {groups.length ? (
         <div className="cards-category-content">
           {hasValues && !data.purchases.unknownCount ? (
@@ -204,9 +210,6 @@ export function CardsDashboard({
   return (
     <div className="cards-dashboard">
       <LayerCard className="financial-summary">
-        <p className="summary-period">
-          {monthLabel(data.month)} · gastos do mês
-        </p>
         <dl className="financial-metrics financial-metrics-three">
           <CardMetric
             amount={data.confirmed}
@@ -235,7 +238,7 @@ export function CardsDashboard({
             {amountLabel(data.refunds.totalMinor, data.currency)}.
           </p>
         )}
-        <DisclosureItem summary="Como os valores são calculados">
+        <DisclosureItem summary="Critérios">
           <p className="cards-note">
             Somente contas categorizadas como cartão (CREDIT), no grupo e pessoa
             escolhidos. Gastos confirmados usam lançamentos POSTED até{" "}
@@ -261,10 +264,11 @@ export function CardsDashboard({
           <header className="analysis-heading">
             <h2 id="card-months-heading">Parcelas por mês</h2>
             <span>{data.currency}</span>
+            <InfoTip label="parcelas por mês">
+              12 meses · somente parcelas recebidas. Ausência de registros não
+              comprova ausência de compromisso.
+            </InfoTip>
           </header>
-          <p className="analysis-caption">
-            12 meses · somente parcelas recebidas
-          </p>
           <Table className="cards-months-table">
             <Table.Header>
               <Table.Row>
@@ -336,18 +340,15 @@ export function CardsDashboard({
               ))}
             </Table.Body>
           </Table>
-          <p className="cards-note">
-            — indica que nenhuma parcela foi recebida; não comprova ausência de
-            compromisso. Parcelas não enviadas pelo banco não são projetadas.
-          </p>
         </LayerCard>
       </div>
       <section aria-labelledby="card-limits-heading">
         <header className="section-heading">
           <h2 id="card-limits-heading">Limites informados</h2>
-          <span className="section-context">
-            Última observação importada · fora do recorte mensal
-          </span>
+          <InfoTip label="estes valores">
+            Última observação importada, fora do recorte mensal. Ocupado =
+            limite − disponível. Limites compartilhados não são somados.
+          </InfoTip>
         </header>
         {visibleAccounts.length ? (
           <div className="cards-limits">
@@ -365,16 +366,10 @@ export function CardsDashboard({
             moeda diferente da conta.
           </p>
         )}
-        <p className="cards-note">
-          Ocupado = limite − disponível. Limites compartilhados entre cartões
-          não são somados.
-        </p>
       </section>
       <section aria-labelledby="card-installments-heading">
         <header className="section-heading">
-          <h2 id="card-installments-heading">
-            Parcelamentos em {monthLabel(data.month)}
-          </h2>
+          <h2 id="card-installments-heading">Parcelamentos</h2>
         </header>
         {data.installments.length ? (
           <LayerCard className="cards-installments">

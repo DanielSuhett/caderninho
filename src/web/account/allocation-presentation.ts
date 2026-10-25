@@ -14,14 +14,14 @@ export function percentageLabel(value: number) {
   return `${value.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`;
 }
 
-export interface InvestmentCategorySlice {
+export interface AllocationSlice {
   amountMinor: string;
   color: string;
   id: string;
   name: string;
 }
 
-export function categorySlices(groups: InvestmentCategorySlice[]) {
+export function categorySlices(groups: AllocationSlice[]) {
   if (groups.some((group) => BigInt(group.amountMinor) < 0n)) {
     return null;
   }

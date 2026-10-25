@@ -8,7 +8,10 @@ import type {
 import { WorkspaceCatalogSchema } from "../contracts";
 import { categoryCatalog, monthDate } from "../domain";
 export const demoReferenceDay = "2026-10-24";
-export const demoPeople = [{ id: "demo-person", name: "Pessoa de exemplo" }];
+export const demoPeople = [
+  { id: "demo-person", name: "Ana Silva" },
+  { id: "demo-person-2", name: "Bruno Costa" },
+];
 const demoCategoryIds = new Map([
   ["salario-renda", "salary"],
   ["casa", "home"],
@@ -41,6 +44,14 @@ export const demoAccounts: FinancialOverview["accounts"] = [
     currency: "BRL",
     hidden: false,
     id: "demo-bank",
+    identity: {
+      cardBrand: null,
+      institution: {
+        id: "201",
+        logoUrl: "https://cdn.pluggy.ai/assets/connector-icons/201.svg",
+        name: "Instituição de exemplo",
+      },
+    },
     manual: false,
     name: "Conta principal",
     personId: "demo-person",
@@ -52,6 +63,14 @@ export const demoAccounts: FinancialOverview["accounts"] = [
     currency: "BRL",
     hidden: false,
     id: "demo-reserve",
+    identity: {
+      cardBrand: null,
+      institution: {
+        id: "201",
+        logoUrl: "https://cdn.pluggy.ai/assets/connector-icons/201.svg",
+        name: "Instituição de exemplo",
+      },
+    },
     manual: false,
     name: "Reserva",
     personId: "demo-person",
@@ -63,6 +82,14 @@ export const demoAccounts: FinancialOverview["accounts"] = [
     currency: "BRL",
     hidden: false,
     id: "demo-card",
+    identity: {
+      cardBrand: "MASTERCARD",
+      institution: {
+        id: "201",
+        logoUrl: "https://cdn.pluggy.ai/assets/connector-icons/201.svg",
+        name: "Instituição de exemplo",
+      },
+    },
     manual: false,
     name: "Cartão pessoal",
     personId: "demo-person",
@@ -78,6 +105,18 @@ export const demoAccounts: FinancialOverview["accounts"] = [
     name: "Conta internacional",
     personId: "demo-person",
     type: "BANK",
+  },
+  {
+    balanceMinor: "0",
+    balanceObservedAt: demoReferenceDay,
+    currency: "BRL",
+    hidden: false,
+    id: "demo-card-extra",
+    identity: { cardBrand: "VISA", institution: null },
+    manual: false,
+    name: "Cartão adicional",
+    personId: "demo-person-2",
+    type: "CREDIT",
   },
 ];
 export type DemoRecord = z.infer<
@@ -105,7 +144,7 @@ export function transactionFixture(
     installments: [],
     manual: false,
     personId: "demo-person",
-    personName: "Pessoa de exemplo",
+    personName: "Ana Silva",
     purchaseDate: null,
     status: "POSTED",
     totalInstallments: null,

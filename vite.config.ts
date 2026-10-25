@@ -100,7 +100,7 @@ function copyPortalAssets(): Plugin {
       );
       await writeFile(
         new URL("_headers", output),
-        `/*\n  Referrer-Policy: same-origin\n  X-Content-Type-Options: nosniff\n  Content-Security-Policy: default-src 'none'; font-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'\n\n/chunks/*\n  Cache-Control: public, max-age=31536000, immutable\n`,
+        `/*\n  Referrer-Policy: same-origin\n  X-Content-Type-Options: nosniff\n  Content-Security-Policy: default-src 'none'; font-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://cdn.pluggy.ai/assets/connector-icons/; frame-ancestors 'none'; base-uri 'none'; form-action 'self'\n\n/chunks/*\n  Cache-Control: public, max-age=31536000, immutable\n`,
       );
       await Promise.all(
         ["kumo.css", "_headers"].map((name) =>

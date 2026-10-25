@@ -2,7 +2,6 @@ import { Sidebar } from "@cloudflare/kumo";
 import {
   ArrowsClockwiseIcon,
   BankIcon,
-  ChartPieSliceIcon,
   CreditCardIcon,
   FoldersIcon,
   HouseIcon,
@@ -30,6 +29,11 @@ import { scopedHref } from "./workspace-resource";
 import { SidebarFrame, WorkspaceFrame } from "./workspace-shell";
 import { WorkspaceSkeleton } from "./workspace-ui";
 
+const loadInvestments = async () => {
+  const { data, error } = await tryCatch(() => import("./investments-view"));
+  return { default: error ? WorkspacePageError : data.InvestmentsView };
+};
+const InvestmentsView = memo(lazy(loadInvestments));
 const loadOverview = async () => {
   const { data, error } = await tryCatch(() => import("./overview-view"));
   if (error) {
@@ -77,13 +81,6 @@ const loadTransactions = async () => {
   }
   return { default: data.TransactionsView };
 };
-const loadInvestments = async () => {
-  const { data, error } = await tryCatch(() => import("./investments-view"));
-  if (error) {
-    return { default: WorkspacePageError };
-  }
-  return { default: data.InvestmentsView };
-};
 const OverviewView = memo(
   lazy<typeof import("./overview-view").OverviewView>(loadOverview),
 );
@@ -103,9 +100,6 @@ const SyncHistoryView = memo(
 );
 const TransactionsView = memo(
   lazy<typeof import("./transactions-view").TransactionsView>(loadTransactions),
-);
-const InvestmentsView = memo(
-  lazy<typeof import("./investments-view").InvestmentsView>(loadInvestments),
 );
 const pageLoaders: Record<string, (() => Promise<unknown>) | undefined> = {
   "/account": loadOverview,
@@ -151,11 +145,7 @@ const pages = [
     name: "Cartões",
     path: "/account/cards",
   },
-  {
-    icon: ChartPieSliceIcon,
-    name: "Compromissos",
-    path: "/account/investments",
-  },
+  { icon: BankIcon, name: "Investimentos", path: "/account/investments" },
   {
     icon: ListChecksIcon,
     name: "Regras",

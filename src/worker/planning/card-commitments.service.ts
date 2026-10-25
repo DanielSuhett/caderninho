@@ -294,6 +294,7 @@ export async function cardCommitments(input: {
         currency: account.currency,
         hidden: account.hidden,
         id: account.id,
+        identity: account.identity ?? null,
         limitSource,
         manual: account.manual,
         name: account.name,

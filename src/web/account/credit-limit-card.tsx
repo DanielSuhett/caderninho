@@ -1,14 +1,15 @@
 import { LayerCard, Meter } from "@cloudflare/kumo";
-import { CreditCardIcon } from "@phosphor-icons/react";
 import type { ReactNode } from "react";
 
 import { formatBalance } from "../money";
 import { MoneyValue } from "../money-value";
+import { type AccountAppearance, AccountAvatar } from "./account-identity";
 import { cardPercentage } from "./card-presentation";
 
 export function CreditLimitCard({
   name,
-  owner,
+  identity,
+  person,
   currency,
   limit,
   allocated,
@@ -16,14 +17,14 @@ export function CreditLimitCard({
   children,
 }: {
   name: string;
-  owner?: string;
+  identity?: AccountAppearance["identity"];
+  person?: import("../../domain").Person | undefined;
   currency: string;
   limit: string | null;
   allocated: string | null;
   available: string | null;
   children?: ReactNode;
 }) {
-  const context = owner ? `${owner} · ${currency}` : currency;
   const percentage = cardPercentage(allocated, limit);
   const excess = allocated !== null && BigInt(allocated) < 0n;
   let unavailableReason =
@@ -46,15 +47,12 @@ export function CreditLimitCard({
   return (
     <LayerCard className="credit-limit-card">
       <header className="credit-limit-heading">
-        <span className="credit-limit-icon">
-          <CreditCardIcon
-            aria-hidden
-            size={20}
-          />
-        </span>
+        <AccountAvatar
+          account={{ identity, name, type: "CREDIT" }}
+          person={person}
+        />
         <div>
           <h3>{name}</h3>
-          <p>{context}</p>
         </div>
       </header>
       <dl className="credit-limit-values">

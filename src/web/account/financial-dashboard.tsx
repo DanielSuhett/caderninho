@@ -8,7 +8,6 @@ import {
   SkeletonLine,
   Table,
 } from "@cloudflare/kumo";
-import { BankIcon, CreditCardIcon } from "@phosphor-icons/react";
 import { lazy, Suspense, useMemo } from "react";
 import type { z } from "zod/v4";
 
@@ -19,10 +18,12 @@ import type {
 } from "../../contracts";
 import { tryCatch } from "../../shared";
 import { formatBalance } from "../money";
+import { AccountIdentity } from "./account-identity";
 import type { CategoryAppearance } from "./category-appearance";
 import { DisclosureItem } from "./disclosure-item";
 import { FinancialMetric } from "./financial-metric";
 import { categoryVolumes, summaryCurrency } from "./financial-presentation";
+import { InfoTip } from "./info-tip";
 import { TransactionList } from "./transaction-list";
 import { dayLabel } from "./workspace-resource";
 
@@ -80,6 +81,7 @@ export interface FinancialDashboardProps {
   recentScope?: string;
   records: RecentRecords;
   rulesHref?: string;
+  showOwner?: boolean;
   transactionsHref: string;
 }
 export function FinancialDashboard({
@@ -88,6 +90,7 @@ export function FinancialDashboard({
   currency,
   categories,
   people,
+  showOwner = true,
   records,
   transactionsHref,
   recentScope = "Todas as moedas · últimos registros recebidos no período",
@@ -110,15 +113,11 @@ export function FinancialDashboard({
           Resumo financeiro
         </h2>
         <LayerCard className="financial-summary">
-          <p className="summary-period">
-            {dayLabel(overview.from)} a {dayLabel(overview.to)} · resumo do
-            período
-          </p>
           <dl className="financial-metrics">
             <FinancialMetric
               amount={bankBalance}
               currency={currency}
-              hint="Última observação importada"
+              hint={`Última observação importada. Registros até ${dayLabel(overview.referenceDay)}; sem conversão de moedas.`}
               label="Saldo bancário importado"
             />
             <FinancialMetric
@@ -142,10 +141,6 @@ export function FinancialDashboard({
               label="Fluxo bancário"
             />
           </dl>
-          <p className="financial-summary-note">
-            Registros até {dayLabel(overview.referenceDay)} · {currency}, sem
-            conversão.
-          </p>
           {!!total?.unclassifiedCount && (
             <p className="financial-summary-note">
               Movimentos sem classificação: {total.unclassifiedCount}. Fora das
@@ -159,7 +154,7 @@ export function FinancialDashboard({
               indisponíveis; os dados recebidos continuam consultáveis.
             </p>
           )}
-          <DisclosureItem summary="Como este resumo é calculado">
+          <DisclosureItem summary="Critérios">
             <p className="summary-policy">
               Somente registros confirmados até a data de referência. Ignorados,
               pendentes e futuros ficam fora dos agregados. Receitas e despesas
@@ -177,11 +172,12 @@ export function FinancialDashboard({
           <header className="analysis-heading">
             <h2>Despesas por categoria</h2>
             <span>{currency}</span>
+            <InfoTip label="despesas por categoria">
+              Categorias explícitas, com estornos descontados. Barras comparam o
+              volume absoluto observado.{" "}
+              {unknown > 0 ? "Somente valores conhecidos." : ""}
+            </InfoTip>
           </header>
-          <p className="analysis-caption">
-            Categorias explícitas · estornos descontados
-            {unknown > 0 ? " · valores conhecidos" : ""}
-          </p>
           <div className="analysis-body">
             {groups.length ? (
               <>
@@ -210,9 +206,6 @@ export function FinancialDashboard({
               />
             )}
           </div>
-          <p className="analysis-footnote">
-            Barras comparam o volume absoluto observado; não representam cotas.
-          </p>
         </LayerCard>
         <MonthlyAnalysis
           currency={currency}
@@ -221,17 +214,19 @@ export function FinancialDashboard({
       </div>
       <section aria-labelledby="recent-transactions-heading">
         <header className="section-heading">
-          <h2 id="recent-transactions-heading">Transações recentes</h2>
+          <h2 id="recent-transactions-heading">
+            Transações recentes
+            <InfoTip label="transações recentes">{recentScope}</InfoTip>
+          </h2>
           <Link href={transactionsHref}>Ver todas</Link>
         </header>
-        <p className="analysis-caption">{recentScope}</p>
         {records.length ? (
           <TransactionList
             accounts={overview.accounts}
             categories={categories}
             records={records}
             referenceDay={overview.referenceDay}
-            showOwner={people.length > 1}
+            showOwner={showOwner && people.length > 1}
           />
         ) : (
           <Empty
@@ -244,14 +239,15 @@ export function FinancialDashboard({
       <section aria-labelledby="financial-accounts-heading">
         <header className="section-heading">
           <h2 id="financial-accounts-heading">Contas e cartões</h2>
-          <span className="section-context">
+          <InfoTip label="estes valores">
             Saldos separados dos movimentos do período
-          </span>
+          </InfoTip>
         </header>
         <AccountBalances
           accounts={accounts}
           partial={overview.partial}
           people={people}
+          showOwner={showOwner}
           transactionsHref={transactionsHref}
         />
       </section>
@@ -281,12 +277,12 @@ function MonthlyAnalysis({
       <header className="analysis-heading">
         <h2>Despesas por mês</h2>
         <span>{currency}</span>
+        <InfoTip label="despesas por mês">
+          {monthly
+            ? `${dayLabel(monthly.from)} a ${dayLabel(monthly.to)} · sem projeção`
+            : "Série temporariamente indisponível"}
+        </InfoTip>
       </header>
-      <p className="analysis-caption">
-        {monthly
-          ? `${dayLabel(monthly.from)} a ${dayLabel(monthly.to)} · sem projeção`
-          : "Série temporariamente indisponível"}
-      </p>
       {!!monthly?.partial && (
         <p className="analysis-caption">
           Histórico parcial também nesta série.
@@ -390,12 +386,14 @@ function CategoryRows({
 export function AccountBalances({
   accounts,
   people,
+  showOwner = true,
   partial,
   transactionsHref,
 }: {
   accounts: FinancialOverview["accounts"];
   people: Array<{ id: string; name: string }>;
   partial: boolean;
+  showOwner?: boolean;
   transactionsHref: string;
 }) {
   return (
@@ -411,20 +409,16 @@ export function AccountBalances({
             summary={
               <>
                 <span className="record-title bank-heading">
-                  <span className="financial-account-icon">
-                    {account.type === "CREDIT" ? (
-                      <CreditCardIcon
-                        aria-hidden
-                        size={20}
-                      />
-                    ) : (
-                      <BankIcon
-                        aria-hidden
-                        size={20}
-                      />
-                    )}
-                  </span>
-                  {account.name}
+                  <AccountIdentity
+                    account={account}
+                    person={
+                      showOwner && people.length > 1
+                        ? people.find(
+                            (person) => person.id === account.personId,
+                          )
+                        : undefined
+                    }
+                  />
                 </span>
                 <span className="record-value">
                   {formatBalance(account.balanceMinor, account.currency)}

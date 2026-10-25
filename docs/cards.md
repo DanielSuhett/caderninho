@@ -1,4 +1,4 @@
-> Cartões compartilha métricas, limites e identidade visual com Compromissos
+> Cartões compartilha métricas, limites e identidade visual com Investimentos
 > e Visão geral. Mantém o recorte mensal, a inclusão de compras sem categoria
 > e a paginação de parcelas. Consulte [a revisão integrada](financial-design-review.md).
 
@@ -8,10 +8,9 @@
 parcelas recebidas. A demonstração pública em `/demo/cards` usa os mesmos
 componentes, o ledger sintético compartilhado e nenhuma conexão real.
 
-O seletor **Cartão** fica sempre visível acima dos valores, mesmo com uma única
-conta. Permite alternar entre Todos os cartões e uma conta específica. A seleção
+O seletor **Cartão** fica no diálogo **Filtros**, mesmo com uma única conta. Permite alternar entre Todos os cartões e uma conta específica. A seleção
 recalcula resumo, categorias, meses, parcelas e limites do recorte; preserva mês,
-pessoa, grupo e moeda, e reinicia a paginação. Pessoa e grupo ficam em Filtros.
+pessoa, grupo e moeda, e reinicia a paginação. Pessoa, grupo e moeda usam o mesmo diálogo.
 
 ## Gastos do mês
 

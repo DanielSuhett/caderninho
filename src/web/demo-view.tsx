@@ -1,8 +1,10 @@
 import {
+  Badge,
   KumoLocaleProvider,
   Select,
   Sidebar,
   Toasty,
+  Tooltip,
   TooltipProvider,
 } from "@cloudflare/kumo";
 import {
@@ -33,9 +35,15 @@ import {
 import { monthLabel } from "./account/dashboard-period";
 import { FinancialDashboard } from "./account/financial-dashboard";
 import { PeriodPicker } from "./account/period-picker";
+import { PersonStack } from "./account/person-identity";
+import { ScopeFields } from "./account/workspace-filters";
 import { WorkspacePageError } from "./account/workspace-page";
 import { SidebarFrame, WorkspaceFrame } from "./account/workspace-shell";
-import { WorkspaceHeading, WorkspaceSkeleton } from "./account/workspace-ui";
+import {
+  WorkspaceFilters,
+  WorkspaceHeading,
+  WorkspaceSkeleton,
+} from "./account/workspace-ui";
 import {
   demoMonthly,
   demoOverview,
@@ -44,7 +52,7 @@ import {
 } from "./demo-data";
 import { createDemoSession } from "./demo-session";
 import { DemoTransactions } from "./demo-transactions";
-import { UiButton, UiLink } from "./ui";
+import { UiLink } from "./ui";
 import "./account.css";
 
 const Organization = lazy(async () => {
@@ -55,23 +63,27 @@ const Cards = lazy(async () => {
   const { data, error } = await tryCatch(() => import("./account/cards-view"));
   return { default: error ? WorkspacePageError : data.CardsView };
 });
-const demoSnapshot = demoPortalFixture();
 const Investments = lazy(async () => {
-  const { data, error } = await tryCatch(() => import("./demo-investments"));
-  return { default: error ? WorkspacePageError : data.DemoInvestments };
+  const { data, error } = await tryCatch(
+    () => import("./account/investments-view"),
+  );
+  return { default: error ? WorkspacePageError : data.InvestmentsView };
 });
+const demoSnapshot = demoPortalFixture();
 const trailingSlash = /\/$/;
 const pages = [
   { icon: HouseIcon, label: "Visão geral", path: "" },
   { icon: ReceiptIcon, label: "Transações", path: "/transactions" },
   { icon: CreditCardIcon, label: "Cartões", path: "/cards" },
-  { icon: ChartPieSliceIcon, label: "Compromissos", path: "/investments" },
+  { icon: ChartPieSliceIcon, label: "Investimentos", path: "/investments" },
   { icon: ListChecksIcon, label: "Regras", path: "/rules" },
   { icon: FolderIcon, label: "Grupos", path: "/groups" },
 ];
 function DemoNavigation({
   session,
+  onReset,
 }: {
+  onReset: () => void;
   session: ReturnType<typeof createDemoSession>;
 }) {
   const params = new URLSearchParams(location.search);
@@ -81,12 +93,13 @@ function DemoNavigation({
   const scope = new URLSearchParams({
     currency: params.get("currency") ?? group?.currency ?? "BRL",
     month: selectedDemoMonth(params.get("month")),
+    ...(params.get("person") && { person: params.get("person") ?? "" }),
     ...(params.get("space") && { space: params.get("space") ?? "" }),
   });
   return (
     <SidebarFrame
       brandHref={`/demo?${scope}`}
-      footer="Demonstração · dados fictícios"
+      footer=""
     >
       <Sidebar.Group>
         <Sidebar.GroupLabel>Explore o Caderninho</Sidebar.GroupLabel>
@@ -118,6 +131,9 @@ function DemoNavigation({
           >
             Instalar minha cópia
           </Sidebar.MenuButton>
+          <Sidebar.MenuButton onClick={onReset}>
+            Restaurar demonstração
+          </Sidebar.MenuButton>
           <Sidebar.MenuButton
             className="text-base"
             href="/"
@@ -140,7 +156,17 @@ function DemoFinancial({
   const params = new URLSearchParams(location.search);
   const month = selectedDemoMonth(params.get("month"));
   const spaceId = params.get("space") ?? "personal";
-  const data = session.view(spaceId);
+  const allData = session.view(spaceId);
+  const personId = params.get("person") ?? "";
+  const data = {
+    ...allData,
+    accounts: allData.accounts.filter(
+      (account) => !personId || account.personId === personId,
+    ),
+    records: allData.records.filter(
+      (row) => !personId || row.personId === personId,
+    ),
+  };
   const spaces = session.spaces();
   const currencies = [
     ...new Set(["BRL", "USD", ...spaces.map((space) => space.currency)]),
@@ -156,34 +182,11 @@ function DemoFinancial({
     url.searchParams.set("month", value);
     navigateWorkspace(url);
   }, []);
-  const changeCurrency = useCallback((value: string | null) => {
-    if (!value) {
-      return;
-    }
-    const url = new URL(location.href);
-    url.searchParams.set("currency", value);
-    url.searchParams.delete("accountId");
-    navigateWorkspace(url);
-  }, []);
-  const changeSpace = useCallback(
-    (value: string | null) => {
-      if (!value) {
-        return;
-      }
-      const url = new URL(location.href);
-      url.searchParams.set("space", value);
-      const selected = session.spaces().find((space) => space.id === value);
-      if (selected) {
-        url.searchParams.set("currency", selected.currency);
-      }
-      for (const key of ["accountId", "text", "direction"]) {
-        url.searchParams.delete(key);
-      }
-      navigateWorkspace(url);
-    },
-    [session],
-  );
-  const scope = new URLSearchParams({ month, space: spaceId });
+  const scope = new URLSearchParams({
+    month,
+    space: spaceId,
+    ...(personId && { person: personId }),
+  });
   return (
     <>
       <WorkspaceHeading
@@ -191,32 +194,13 @@ function DemoFinancial({
         {...(transactions && { description: monthLabel(month) })}
       >
         <div className="page-actions">
-          {(spaces.length > 1 || spaceId !== "personal") && (
-            <Select
-              items={spaces.map((space) => ({
-                label: space.name,
-                value: space.id,
-              }))}
-              label="Grupo"
-              onValueChange={changeSpace}
-              value={spaceId}
-            />
-          )}
           {!transactions && (
-            <>
-              <PeriodPicker
-                fromMonth="2026-05"
-                month={month}
-                onChange={changeMonth}
-                toMonth="2026-10"
-              />
-              <Select
-                items={currencies.map((value) => ({ label: value, value }))}
-                label="Moeda"
-                onValueChange={changeCurrency}
-                value={currency}
-              />
-            </>
+            <PeriodPicker
+              fromMonth="2026-05"
+              month={month}
+              onChange={changeMonth}
+              toMonth="2026-10"
+            />
           )}
         </div>
       </WorkspaceHeading>
@@ -226,21 +210,55 @@ function DemoFinancial({
           key={route}
           month={month}
           params={params}
+          spaces={spaces}
         />
       ) : (
-        <FinancialDashboard
-          categories={data.categories}
-          currency={currency}
-          monthly={demoMonthly(month, data)}
-          overview={demoOverview(month, data)}
-          people={demoPeople}
-          recentScope={`${currency} · últimos registros do mês`}
-          records={records
-            .filter((row) => row.date <= demoReferenceDay)
-            .slice(0, 6)}
-          rulesHref={`/demo/rules?${scope}`}
-          transactionsHref={`/demo/transactions?${scope}`}
-        />
+        <>
+          <WorkspaceFilters
+            action="/demo"
+            activeCount={Number(!!personId) + Number(spaceId !== "personal")}
+            identity={
+              <PersonStack
+                people={demoPeople}
+                personId={personId}
+              />
+            }
+            showClear={!!personId || spaceId !== "personal"}
+          >
+            <ScopeFields
+              catalog={{ spaces }}
+              compact
+              params={params}
+              snapshot={demoSnapshot}
+            />
+            <Select
+              className="w-full"
+              defaultValue={currency}
+              items={currencies.map((value) => ({ label: value, value }))}
+              label="Moeda"
+              name="currency"
+            />
+            <input
+              name="month"
+              type="hidden"
+              value={month}
+            />
+          </WorkspaceFilters>
+          <FinancialDashboard
+            categories={data.categories}
+            currency={currency}
+            monthly={demoMonthly(month, data)}
+            overview={demoOverview(month, data)}
+            people={demoPeople}
+            recentScope={`${currency} · últimos registros do mês`}
+            records={records
+              .filter((row) => row.date <= demoReferenceDay)
+              .slice(0, 6)}
+            rulesHref={`/demo/rules?${scope}`}
+            showOwner={!personId}
+            transactionsHref={`/demo/transactions?${scope}`}
+          />
+        </>
       )}
     </>
   );
@@ -271,22 +289,25 @@ function Demo() {
       <TooltipProvider>
         <Toasty>
           <WorkspaceFrame
-            footer="Demonstração pública. Nenhuma conta real ou conexão bancária é utilizada."
-            navigation={<DemoNavigation session={session} />}
+            footer=""
+            navigation={
+              <DemoNavigation
+                onReset={reset}
+                session={session}
+              />
+            }
             route={route}
           >
             <div className="workspace-page">
               <div className="demo-toolbar">
-                <p className="demo-notice">
-                  Dados fictícios · alterações até recarregar esta aba
-                </p>
-                <UiButton
-                  onClick={reset}
-                  type="button"
-                  variant="ghost"
-                >
-                  Restaurar demo
-                </UiButton>
+                <Tooltip
+                  content="Dados fictícios. As alterações duram até recarregar a aba."
+                  render={
+                    <button type="button">
+                      <Badge variant="secondary">Demo</Badge>
+                    </button>
+                  }
+                />
               </div>
               {unavailable && (
                 <>
@@ -326,8 +347,10 @@ function Demo() {
               {!unavailable && investments && (
                 <Suspense fallback={<WorkspaceSkeleton />}>
                   <Investments
-                    key={`${route}:${resetVersion}`}
-                    session={session}
+                    api={session.api}
+                    basePath="/demo/investments"
+                    key={route}
+                    snapshot={demoSnapshot}
                   />
                 </Suspense>
               )}

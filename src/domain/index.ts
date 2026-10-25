@@ -57,6 +57,16 @@ export {
   normalizeMoney,
   normalizeTransaction,
 } from "./finance-model";
+export {
+  type FinancialIdentity,
+  institutionLogoUrl,
+} from "./financial-identity.entity";
+export { FinancialIdentitySchema } from "./financial-identity.schema";
+export {
+  type InvestmentDetails,
+  type InvestorPosition,
+  investmentPortfolio,
+} from "./investment.entity";
 export type {
   ConnectionOwner,
   Person,

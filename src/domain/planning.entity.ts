@@ -144,11 +144,16 @@ export interface Investment {
   connectionId: string | null;
   currency: string;
   date: string | null;
+  details?: import("./investment.entity").InvestmentDetails | null | undefined;
   id: string;
+  identity?:
+    | import("./financial-identity.entity").FinancialIdentity
+    | null
+    | undefined;
   included: boolean;
   manual: boolean;
   name: string;
-  personId?: string;
+  personId?: string | undefined;
   spaceId: string;
   type: string;
 }

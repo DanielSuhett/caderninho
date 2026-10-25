@@ -4,9 +4,11 @@ import type {
   AccountProjection,
   TransactionProjection,
 } from "./finance.entity";
+import { institutionLogoUrl } from "./financial-identity.entity";
 import type {
   MoneyInput,
   ProviderAccount,
+  ProviderConnection,
   ProviderTransaction,
 } from "./provider.entity";
 import type { TransactionIdentification } from "./transaction.entity";
@@ -36,11 +38,25 @@ export function normalizeMoney(value: MoneyInput, currency: string) {
 export function normalizeAccount(
   source: ProviderAccount,
   connectionId: string,
+  connector?: ProviderConnection["connector"],
 ): AccountProjection {
   if (source.itemId !== connectionId) {
     throw new Error("SOURCE_IDENTITY_MISMATCH");
   }
   return {
+    identity: {
+      cardBrand:
+        source.creditData?.brand === "OTHER"
+          ? (source.creditData.brandAdditionalInfo ?? "OTHER")
+          : (source.creditData?.brand ?? null),
+      institution: connector
+        ? {
+            id: String(connector.id),
+            logoUrl: institutionLogoUrl(connector.imageUrl),
+            name: connector.name ?? "Instituição",
+          }
+        : null,
+    },
     ...(source.creditData && {
       details: {
         availableCreditMinor: normalizeMoney(
