@@ -94,10 +94,8 @@ Fontes oficiais consultadas em 24/10/2026:
 
 Testes locais cobrem catálogo e migração, CRUD/vínculos/idempotência/escopo,
 respostas do adapter, classificação após importação, cache, fallback, desligamento
-e precedência manual. A validação anterior em dados reais é descrita em
-`clef-category-validation-2026-10-24.md`; ela antecede este catálogo de 33 nomes e
-não mede a acurácia desta versão. Deploy, migração remota e importação real desta
-implementação não foram executados.
+e precedência manual. Não medem acurácia real deste catálogo de 33 nomes.
+Deploy, migração remota e importação real exigem validação separada.
 
 O teste de custo local semeia 10 mil transações na mesma data e consulta uma
 página no final do histórico. A condição composta `(date,id)>(?,?)` mantém até

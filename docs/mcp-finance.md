@@ -1,26 +1,19 @@
 # MCP financeiro: catálogo e decisões
 
-O [inventário gerado](mcp-tools.md) lista as ferramentas e sua contagem atual. A [conferência de paridade com o painel](mcp-front-parity.md)
-documenta o escopo, as correções e a evidência local dessa extensão.
-A pesquisa inicial de referência é de 22/10/2026, baseada em `061cefb`.
-Esta validação não publicou código nem aplicou migrações em uma instalação real.
+O [inventário gerado](mcp-tools.md) lista nomes, contagem, operações e schemas.
+`npm run docs:mcp` o atualiza a partir do registro; `tools/list` é o contrato
+executável. Campos desconhecidos, datas inválidas, valores não canônicos e
+referências de outro espaço são recusados antes do commit.
 
-## Escopo verificado
+A Pluggy fornece contas, transações, faturas, investimentos e empréstimos conforme
+a instituição/conexão. Planejamento e edição são locais. As quatro ferramentas
+`caderninho_*` preservam a visão da origem; as demais usam a visão efetiva, com
+sobreposições e dados manuais. Administração de pessoas, perfis, credenciais,
+conexões e autorizações permanece no painel.
 
-O artigo público do Visor descreve capacidades e alguns nomes de tools, mas não
-publica o catálogo completo com schemas. O endpoint MCP respondeu HTTP 401 sem
-autenticação. Portanto este trabalho implementa equivalentes das capacidades
-publicadas, preservando os nomes explicitamente documentados quando aplicáveis;
-não afirma paridade de assinatura com tools privadas ou habilitadas por plano.
-
-A Pluggy fornece contas, transações, faturas, investimentos e empréstimos, com
-cobertura dependente da instituição/conexão. Planejamento e edição são locais.
-As quatro tools `caderninho_*` continuam disponíveis com seus contratos originais.
-As tools de planejamento usam a visão efetiva, com sobreposições e dados manuais.
-
-A extensão de [backoffice](backoffice.md) acrescentou `delete_space` e condições
-compostas em regras. O catálogo também inclui grupos de categorias,
-`preview_rule`, `get_transaction_purchases` e [importação de regras JSON](rule-packs.md).
+A referência pública do [Visor](https://help.visorfinance.app/pt-BR/articles/1755006-como-conectar-ao-servidor-mcp-do-visor)
+informa capacidades, mas não publica schemas completos. O produto não afirma
+compatibilidade com assinaturas privadas ou funcionalidades habilitadas por plano.
 
 ## Pessoas e perfis Pluggy
 
@@ -42,7 +35,7 @@ si. Valores desconhecidos permanecem `null`; subtotais conhecidos têm nomes
 próprios. Contas manuais exigem uma moeda suportada explicitamente.
 
 As consultas retornam `{data, partial, revision}` e metadados de escopo, visão e
-qualidade. Consulte os [ajustes dos contratos e leituras](mcp-feedback-2026-10-24.md). `get_transactions` retorna
+qualidade. `get_transactions` retorna
 até 500 registros, com cursor; qualquer alteração financeira concorrente exige
 reiniciar. Escritas por seleção/período são atômicas e recusam mais de 500 registros.
 Não há confirmação parcial de uma seleção maior. As escritas em D1 não refazem
@@ -99,137 +92,87 @@ A integração real com Meu Pluggy, permissões por produto, OAuth em ChatGPT/Cl
 provisionamento e deploy continuam como validações externas. Os testes locais
 usam apenas dados sintéticos e não constituem prova dessas etapas.
 
-## Validação local
+## Resultados, filtros e cobertura
 
-`mise run check` passou em 22/10/2026: tipos, configuração, lint, formatação,
-19 testes Node, 59 testes de integração em 11 arquivos e build Wrangler dry-run.
-O teste nativo de Workflow/D1 passou com 10 mil e 100 mil transações sintéticas,
-replay, falhas parciais e reinício do Worker com preservação do banco. Os cenários
-de integração exercitam as ferramentas de planejamento; o transporte MCP autenticado
-verifica o catálogo original de 93 tools e escritas com confirmação e repetição idempotente.
+Sucesso retorna `structuredContent` com o mesmo objeto canônico do bloco textual
+JSON, preservado por compatibilidade. Essa serialização duplicada não economiza
+contexto por si só. Seis consultas analíticas têm `outputSchema`: `get_overview`,
+`get_spending_by_category`, `analyze_categories`, `get_spending_comparison`,
+`get_spending_pace` e `generate_chart`.
 
-## Fontes primárias
+Planejamento e lista agrupada expõem `view`, `scope`, `revision`, `coverage` e
+`oldestLastSuccessAt`; `preview_rule` mantém seu envelope específico. Cobertura
+considera pessoa, espaço, conta, transações movidas e conexões sem primeira coleta.
+`coverage.kind` distingue importados, somente locais e ausência de fontes.
+`partial: false` não promete dados recentes nem todo o histórico da instituição.
 
-- [MCP do Visor](https://help.visorfinance.app/pt-BR/articles/1755006-como-conectar-ao-servidor-mcp-do-visor)
-- [Recorrências do Visor](https://help.visorfinance.app/pt-BR/articles/3769191-como-usar-contas-fixas-e-recorrencias)
-- [Metas do Visor](https://help.visorfinance.app/pt-BR/articles/6142022-como-usar-metas-para-guardar-dinheiro)
-- [Regras do Visor](https://help.visorfinance.app/pt-BR/articles/9580010-como-corrigir-transacoes-categorizadas-errado-usando-regras)
-- [Transações Pluggy](https://docs.pluggy.ai/en/docs/products/transactions)
-- [Faturas Pluggy](https://docs.pluggy.ai/en/docs/products/credit-card-bills)
-- [Parcelamentos Pluggy](https://docs.pluggy.ai/en/docs/products/credit-card-installments)
-- [Investimentos Pluggy](https://docs.pluggy.ai/en/docs/products/investments)
-- [Empréstimos Pluggy](https://docs.pluggy.ai/en/docs/products/loans)
+Resumo, série e detalhe aceitam filtros de conta, categoria, tag, moeda, cartão,
+direção, status, texto e ignorados; os resumos devolvem a seleção aplicada.
+Realizados ficam limitados a POSTED até o dia de referência, conforme `eligibility`.
+Saldo, investimentos e empréstimos são contexto patrimonial separado desses totais.
 
-## Ferramentas novas
+Categorias devolvem ID, nome e rótulo. `amountMinor` é exato; `scale` e
+`formattedAmount` permitem apresentação sem Number. Moeda desconhecida tem
+`scale: null`. `knownUnclassifiedMinor` soma magnitudes conhecidas sem chamá-las de
+despesa; `unclassifiedMinor` é null se houver valor desconhecido, com contagem própria.
 
-O schema retornado por `tools/list` é o contrato executável. Campos desconhecidos
-são recusados; datas inválidas, valores não canônicos e referências de outro
-espaço não chegam ao commit.
+`get_spending_comparison` informa as datas resolvidas e aceita `previous_period`
+(intervalo anterior de mesma duração), `previous_month` (mesmos dias, limitados ao
+fim do mês) ou `explicit`, que exige `previousFrom` e `previousTo` válidos.
+`generate_chart` aceita `includeSvg: false` para devolver só séries; o padrão é
+true. Para últimas compras, prefira `date_desc`, `limit: 5`, e reutilize grupos
+presentes nos resumos. Não trunque descrições nem descarte grupos silenciosamente:
+um registro extenso ou agrupamentos sem paginação podem produzir respostas grandes.
 
-### Consultas
+## Correspondência com o painel
 
-| Tool | Comportamento |
+| Capacidade | Contrato compartilhado |
 | --- | --- |
-| `get_accounts` | Contas e saldos com referência temporal; inclui contas manuais e preferências locais. |
-| `get_cards` | Cartões principais e adicionais identificados na origem; ids estáveis e suporte a include_hidden. |
-| `get_transactions` | Histórico efetivo com edições locais, filtros e paginação consistente. Não some páginas para calcular totais. |
-| `get_transaction_purchases` | Mesma lista de compras do painel: agrupa parcelas antes de paginar, mantém valores individuais e identificação da origem. O período considera a data da compra ou primeira parcela conhecida; não substitui totais financeiros. |
-| `preview_rule` | Simula o mesmo escopo e condições E/OU do painel sem salvar ou reclassificar; informa amostras, contagem, `partial`, `truncated` e revisão. |
-| `get_overview` | Saldos, entradas e saídas por moeda, sem tratar transferências e pagamentos de cartão como consumo. |
-| `get_spending_by_category` | Despesas classificadas por categoria; exclui transferências e itens ignorados. |
-| `get_spending_comparison` | Comparação com período anterior, mesmos dias do mês anterior ou intervalo explícito. |
-| `get_spending_pace` | Ritmo observado de despesas e projeção linear explicitamente estimada. |
-| `get_projection` | Projeção de saldo BANK com recorrências e vencimentos; informa premissas e desconhecidos. |
-| `get_bills` | Faturas importadas, pagamentos bancários e marcação manual separada. |
-| `get_upcoming_payments` | Vencimentos de faturas, recorrências e parcelas de empréstimos sem executar pagamentos. |
-| `get_installments` | Planos manuais e candidatos derivados de metadados; agrupamento da origem é estimativa, não prova de pagamento. |
-| `get_categories` | Categorias com nome, tipo, ícone, cor e `groupId`; aceita `include_hidden` e filtro por grupo. |
-| `get_category_groups` | Agrupadores de categorias com nome, ícone e cor; são diferentes dos espaços financeiros. |
-| `get_loans` | Listar registros locais e importados, incluindo ocultos quando solicitado. |
-| `get_tags` | Consultar dados locais de planejamento e registros importados disponíveis. |
-| `get_rules` | Consultar dados locais de planejamento e registros importados disponíveis. |
-| `get_recurrences` | Consultar dados locais de planejamento e registros importados disponíveis. |
-| `get_goals` | Consultar dados locais de planejamento e registros importados disponíveis. |
-| `get_investments` | Consultar dados locais de planejamento e registros importados disponíveis. |
-| `get_budget` | Consultar dados locais de planejamento e registros importados disponíveis. |
-| `get_spaces` | Consultar dados locais de planejamento e registros importados disponíveis. |
-| `get_notification_preferences` | Consultar dados locais de planejamento e registros importados disponíveis. |
-| `get_goal_plan` | Quanto guardar por mês, arredondado para cima em unidades mínimas; sem presumir rendimento. |
-| `get_loan_schedule` | Cronograma SAC local e estado de conciliação de cada parcela. |
-| `generate_chart` | Séries exatas por moeda para gráficos de barras, linhas ou rosca; valores inteiros em strings. |
-| `analyze_categories` | Analisar despesas categorizadas e itens sem categoria. |
+| Catálogo e categorias | `get_categories` com `include_hidden: true` reconstrói o catálogo, incluindo aparência e vínculos; nomes fixos são protegidos. |
+| Resumo e série mensal | `get_overview` e `generate_chart` agregam o período completo por moeda. |
+| Ocorrências e compras | `get_transactions` lista registros; `get_transaction_purchases` usa o serviço do painel e agrupa antes de paginar. O valor é de uma parcela, não da compra inteira. |
+| Prévia e regras | `preview_rule` compartilha validadores/serviço com o painel: até 10 mil registros, cinco amostras, `partial` e `truncated`. Não escreve nem prevê a regra vencedora; `apply_rules` é explícito e atômico até 500 registros. |
+| Escritas locais | Categorias, agrupadores, regras e espaços usam os mesmos serviços. Excluir agrupador preserva categorias; excluir espaço exige ausência de vínculos e protege o pessoal. |
 
-### Escritas confirmadas
+O painel usa sessão/origem/CSRF; MCP usa OAuth. O alias interno
+`get_portal_transactions` e os endpoints existentes conservam seus contratos.
+A [importação de regras JSON](rule-packs.md) oferece prévia sem escrita e commit
+atômico com revisão/idempotência, preservando o histórico.
 
-| Tool | Comportamento |
-| --- | --- |
-| `create_manual_account` | Criar conta ou cartão manual. |
-| `update_account_settings` | Editar apresentação; limite e ciclo somente para cartões manuais. |
-| `delete_manual_account` | Excluir conta manual vazia; recusa referências financeiras ativas. |
-| `update_card` | Renomear ou ocultar cartão adicional. |
-| `delete_card` | Excluir apresentação de cartão adicional, preservando histórico. |
-| `set_primary_card` | Definir cartão principal. |
-| `mark_bill_paid` | Alterar apenas confirmação manual da fatura; nunca enviar pagamento ao banco. |
-| `unmark_bill_paid` | Alterar apenas confirmação manual da fatura; nunca enviar pagamento ao banco. |
-| `create_transaction` | Lançar receita ou despesa em conta manual. |
-| `edit_transaction` | Editar projeção local sem sobrescrever registro bancário. |
-| `batch_edit_transactions` | Editar atomicamente até 500 transações selecionadas. |
-| `edit_transactions_by_period` | Editar seleção integral do período; recusa seleções acima de 500. |
-| `delete_transaction` | Excluir apresentação local preservando origem; confirmação e repetição idempotente. |
-| `batch_delete_transactions` | Excluir apresentação local preservando origem; confirmação e repetição idempotente. |
-| `delete_transactions_by_period` | Excluir apresentação local preservando origem; confirmação e repetição idempotente. |
-| `attach_transaction_tags` | Alterar tags das transações selecionadas. |
-| `remove_transaction_tags` | Alterar tags das transações selecionadas. |
-| `move_transactions` | Mover projeções de transações para outro espaço da mesma instalação. |
-| `create_manual_installment` | Criar plano e recorrência de parcelas sem gerar transações futuras. |
-| `update_installment` | Renomear plano e parcelas vinculadas ou alterar categoria. |
-| `complete_installment` | Alterar conclusão manual sem inventar pagamentos. |
-| `reopen_installment` | Alterar conclusão manual sem inventar pagamentos. |
-| `create_recurrence` | Criar conta fixa ou receita mensal projetada. |
-| `update_recurrence` | Substituir configuração da recorrência, inclusive data final. |
-| `deactivate_recurrence` | Desativar projeções futuras. |
-| `set_budget` | Ativar orçamento e definir total mensal por espaço. |
-| `set_category_limit` | Definir limite com orçamento ativado. |
-| `remove_category_limit` | Remover limite com orçamento ativado. |
-| `create_category` | Criar categoria personalizada com ícone, cor e grupo opcionais. |
-| `update_category` | Editar ícone, cor e grupo; categorias personalizadas também permitem renomear ou ocultar. Nomes das categorias fixas são protegidos. |
-| `delete_category` | Excluir categoria personalizada e reatribuir referências à categoria de sistema do mesmo tipo. |
-| `create_category_group` | Criar agrupador de categorias com nome, ícone e cor. |
-| `update_category_group` | Editar nome, ícone e cor do agrupador. |
-| `delete_category_group` | Remover agrupador preservando categorias e transações; as categorias ficam sem grupo. |
-| `create_rule` | Criar regra determinística, textual ou composta; salvar não reaplica o histórico. |
-| `update_rule` | Atualizar regra; pessoais precedem pacotes, depois menor prioridade vence. |
-| `delete_rule` | Excluir regra sem reverter classificações já aplicadas. |
-| `preview_rule_import` | Conferir JSON genérico, categorias e duplicatas sem gravar; retorna revisão. |
-| `import_rules` | Importar atomicamente o JSON confirmado com revisão e idempotência; não reclassifica histórico. |
-| `apply_rules` | Aplicar regras sincronicamente a até 500 transações; operação atômica. |
-| `create_goal` | Criar meta financeira. |
-| `update_goal` | Atualizar meta financeira. |
-| `add_goal_contribution` | Registrar contribuição; transação existente não é contada novamente. |
-| `remove_goal_contribution` | Remover contribuição preservando transação. |
-| `complete_goal` | Concluir meta manualmente. |
-| `link_goal_asset` | Vincular exatamente uma conta ou investimento da mesma moeda à meta. |
-| `unlink_goal_asset` | Remover vínculo de patrimônio. |
-| `delete_goal` | Excluir meta e contribuições locais; preservar transações. |
-| `unlink_goal_transaction` | Desvincular transação e contribuição associada sem excluir histórico. |
-| `create_manual_investment` | Criar investimento manual. |
-| `update_manual_investment` | Editar investimento manual. |
-| `set_investment_inclusion` | Definir participação no patrimônio. |
-| `delete_manual_investment` | Excluir investimento manual e remover vínculo de metas. |
-| `create_manual_loan` | Cadastrar dívida manual sem efetuar contratação bancária. |
-| `update_manual_loan` | Atualizar dívida manual sem alterar parcelas conciliadas. |
-| `set_loan_visibility` | Ocultar ou restaurar empréstimo. |
-| `delete_manual_loan` | Excluir dívida manual sem parcelas pendentes vinculadas. |
-| `create_manual_loan_schedule` | Criar cronograma SAC exato; juros mensais em pontos-base e arredondamento half-up. |
-| `replace_manual_loan_schedule` | Criar cronograma SAC exato; juros mensais em pontos-base e arredondamento half-up. |
-| `reconcile_scheduled_payment` | Conciliar próxima parcela com transação compatível ou criar lançamento manual; nunca inicia pagamento bancário. |
-| `undo_scheduled_payment` | Desfazer última conciliação mantendo transação e histórico. |
-| `create_tag` | Criar tag. |
-| `update_tag` | Editar tag. |
-| `delete_tag` | Excluir tag e suas associações. |
-| `create_space` | Criar espaço local da mesma pessoa; não cria usuários nem permissões. |
-| `update_space` | Editar espaço e início do ciclo financeiro. |
-| `delete_space` | Excluir espaço vazio; o pessoal é protegido e referências ativas impedem a remoção. |
-| `move_account` | Mover conta ou todas as contas da conexão entre espaços pessoais. |
-| `move_connection` | Mover conta ou todas as contas da conexão entre espaços pessoais. |
-| `set_notification_preference` | Guardar preferência de canal; não configura nem comprova entrega de notificações. |
+## Consultas e custo
+
+Período e contas são aplicados no SQL usando os índices existentes. Origens com
+sobreposições são buscadas por ID e avaliadas após edições de data, conta, espaço,
+classificação ou exclusão. Filtros residuais de categoria, tag e texto, edições e
+lançamentos manuais podem exigir trabalho em memória proporcional ao volume.
+
+Saldos importados dispensam transações quando não há contas manuais selecionadas;
+só essas contas são lidas para calcular saldos manuais. Ocorrências usam cursor
+no banco e encerram a leitura ao obter `limit + 1` correspondências, combinadas
+com edições/manuais. A lista de compras conserva a travessia necessária para agrupar
+parcelas completas antes da paginação.
+
+Comparar períodos faz uma passagem no intervalo que engloba ambos; intervalos
+explícitos distantes também podem ler os registros entre eles. Tags, regras,
+categorias, grupos, espaços e preferências leem o catálogo/contexto mínimo;
+outras famílias ainda usam o snapshot completo. Não há cache global financeiro
+nem materialização persistida adicional. Meça `meta.rows_read` e custo real antes
+de prometer consumo ou latência constantes.
+
+## Validação
+
+`tests/integration/front-mcp.test.ts` compara compras, prévia e escritas do painel
+com chamadas MCP HTTP/OAuth sintéticas. `mcp.test.ts` cobre catálogo e transporte;
+`planning-feedback.test.ts` cobre filtros consistentes, cobertura, moedas, precisão,
+comparações, paginação editada e seis schemas de saída. Cenários com 1.000 e 10.000
+registros fora do período verificam leitura/materialização limitada para o recorte.
+
+A medição D1 reexecuta os SELECTs reais na mesma fixture para obter `rows_read`,
+porque Drizzle `raw()` descarta metadados. Ela não inclui leituras do snapshot nem
+representa orçamento universal, p95 ou custo de produção. Os testes de instalação
+e o harness nativo cobrem replay, falhas parciais e persistência após reinício.
+`mise run check` executa a validação local com dados sintéticos.
+
+Pluggy real, provisionamento, deploy, OAuth no host e renderização de SVG/MCP Apps
+exigem validação separada. Skill instalada e endpoint ativo não demonstram uma
+chamada autenticada no host; o catálogo de ferramentas depende da conexão dele.

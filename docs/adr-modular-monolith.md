@@ -57,8 +57,11 @@ transação nesta instalação com uma aplicação Pluggy. A conexão e o tipo B
 são resolvidos pelo mapa pequeno de contas, sem repetir esses dados no histórico.
 Documentos de participantes são preservados como recebidos, inclusive máscaras.
 O contrato descarta campos desconhecidos; não guarda o payload arbitrário do provedor.
-A [referência técnica](cloudflare-product.md#contrato-mínimo-e-consumidores)
-registra o consumidor de cada coluna e dos cinco valores por conta.
+Os nove campos de connections concentram id, accounts, import_id, import_status,
+import_admitted_at, import_sequence, import_checkpoint, import_error e last_success_at.
+Admissão deriva cooldown, ID recupera despacho, sequência protege publicação/replay,
+checkpoint contém só phase/accountId/cursor e erro/último sucesso informam qualidade.
+Cada conta contém name, type, currency, balanceMinor e balanceObservedAt.
 
 ### Extensão de planejamento
 
@@ -116,7 +119,8 @@ anteriores ao modelo mínimo.
 Pedido manual ou cron às 09:00 UTC admite conexões elegíveis. Uma atualização
 condicional da conexão confirma o ID da importação e reserva 24 horas, inclusive
 em falha. O estado corrente impede duas execuções ativas; a elegibilidade deriva
-da admissão. Não há pausa global, histórico de jobs ou lock mantido durante HTTP.
+da admissão. Não há pausa global nem lock mantido durante HTTP. O histórico de rodadas é
+separado do checkpoint corrente, como descrito abaixo.
 
 O Workflow usa o ID da execução. Despacho incerto conserva a intenção; o próximo
 cron ou pedido manual recupera o mesmo ID. GET/status nunca despacham trabalho.
@@ -210,3 +214,37 @@ checkpoint corrente. O trigger acompanha a mesma escrita atômica de progresso;
 pessoa e perfil são fixados na admissão. O painel consulta catálogo de planejamento
 e histórico por repositories específicos, e reutiliza o serviço de consultas MCP
 para a visão financeira efetiva. Veja [o guia do workspace](frontend-workspace.md).
+
+## Índices e publicação
+
+Os índices de transações atendem status/data/conta/ID, categoria/data/conta/ID,
+paginação por conta e agregações. O parcial transaction_posted_totals cobre
+(direction,currency,date,account_id,amount_minor,category) para POSTED. Uma conta
+usa igualdade e cursor (date,id); o cursor público mantém (date,account_id,id).
+Predicados redundantes de data podem fazer o planner reler empates. Preserve os
+filtros no escopo do cursor e na seleção de qualidade ao ajustar a consulta.
+
+Igualdades precedem intervalos nos índices; colunas seguintes podem atender
+ordenação/cobertura sem eliminar filtros residuais. Não criar um índice por campo.
+Índices adicionais custam escrita/armazenamento; WITHOUT ROWID e cobertura maior
+não são ganhos universais. Não há ANALYZE/manutenção automática por requisição.
+Consulte o [planejador SQLite](https://sqlite.org/queryplanner.html) e meça planos
+com a distribuição relevante antes de mudar os índices.
+
+Publicação usa json_each com JSON transitório por página; acima de 500 mil
+unidades UTF-16, usa parâmetros escalares para respeitar o limite de string D1.
+Identificação/classificação são contratos tipados separados do payload bruto.
+Registro idêntico não sofre UPDATE; correção ou mudança de identificação sofre.
+IDs repetidos na mesma página usam hash para detectar duplicatas conflitantes,
+sem deduplicar por similaridade. Projeções de controle leem só campos necessários;
+isso reduz transferência/decodificação, não necessariamente rows_read.
+
+A instalação usa Worker, D1, KV OAuth/credenciais, Workflow, assets e rate limit;
+não exige bucket, webhook ou chave de cofre adicional. O botão provisiona D1/KV;
+as migrações usam DB e o deploy declara FINANCE/LOGIN_LIMITER. Provisionamento
+em conta nova exige prova real. Cookie usa HMAC SHA-256, HttpOnly, Secure,
+SameSite=Lax e Path=/; sem ADMIN_PASSWORD válida (16–256 caracteres), acesso
+privado é recusado. Comandos validam origem exata e CSRF. LOGIN_LIMITER admite
+dez tentativas/minuto por IP da Cloudflare e localização, sem contador global
+exato nem persistência de IP. Metadados/registro OAuth públicos não dão acesso;
+bearer MCP não autentica painel/widget.
