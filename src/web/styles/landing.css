@@ -1061,3 +1061,66 @@ summary {
 .network-mobile-source {
   padding-top: 12px;
 }
+
+.investor-landing {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 48px;
+  align-items: center;
+}
+.investor-landing-preview {
+  padding: 32px;
+}
+.investor-landing-total {
+  margin: 24px 0;
+  font-size: 40px;
+  font-variant-numeric: tabular-nums;
+}
+.investor-landing-total small {
+  display: block;
+  font-size: 14px;
+  color: var(--muted);
+}
+.investor-landing-bar {
+  display: flex;
+  gap: 4px;
+  height: 12px;
+  margin: 24px 0;
+  overflow: hidden;
+  border-radius: 4px;
+}
+.investor-landing-bar span:nth-child(1) {
+  width: 47%;
+  background: #3b82f6;
+}
+.investor-landing-bar span:nth-child(2) {
+  width: 30%;
+  background: #14b8a6;
+}
+.investor-landing-bar span:nth-child(3) {
+  width: 15%;
+  background: #a78bfa;
+}
+.investor-landing-bar span:nth-child(4) {
+  width: 8%;
+  background: #f59e0b;
+}
+.investor-landing-preview ul {
+  padding: 0;
+  list-style: none;
+}
+.investor-landing-preview li {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 0;
+}
+.investor-landing-preview p {
+  margin-top: 24px;
+  font-size: 14px;
+}
+@media (max-width: 760px) {
+  .investor-landing {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+}

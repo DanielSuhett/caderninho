@@ -5,6 +5,7 @@ import {
   compareRules,
   detectSubscriptions,
   financialCharts,
+  investmentPortfolio,
   localDay,
   minorPresentation,
   monthDate,
@@ -12,6 +13,7 @@ import {
 import { hash } from "../../shared";
 import { type ProjectedPayment, recurrencePayments } from "./billing";
 import { effectiveBills } from "./bills.service";
+import { cardCommitments } from "./card-commitments.service";
 import type { PlanningRepository, PlanningSnapshot } from "./entity";
 import {
   accounts,
@@ -66,6 +68,7 @@ export function cardCatalog(snapshot: PlanningSnapshot, state: PlanningState) {
     {
       id: string;
       accountId: string;
+      identity: import("../../domain").FinancialIdentity | null;
       number: string;
       name: string;
       hidden: boolean;
@@ -101,6 +104,7 @@ export function cardCatalog(snapshot: PlanningSnapshot, state: PlanningState) {
         deleted: setting?.deleted ?? false,
         hidden: setting?.hidden ?? account.hidden,
         id,
+        identity: account.identity ?? null,
         name: setting?.name ?? account.name,
         number,
         primary: number === main,
@@ -165,7 +169,7 @@ export async function planningQuery(
   function owned<
     T extends {
       spaceId: string;
-      personId?: string;
+      personId?: string | undefined;
       accountId?: string | null;
       connectionId?: string | null;
     },
@@ -630,9 +634,24 @@ export async function planningQuery(
   }
 
   function handleGetInvestments(
-    _input: Extract<PlanningCommand, { tool: "get_investments" }>,
+    input: Extract<PlanningCommand, { tool: "get_investments" }>,
   ) {
-    return { records: owned(state.investments) };
+    return investmentPortfolio(
+      owned(state.investments).map((investment) => ({
+        ...investment,
+        identity: investment.identity ?? {
+          cardBrand: null,
+          institution:
+            Object.values(
+              snapshot.connections.find(
+                (connection) => connection.id === investment.connectionId,
+              )?.accounts ?? {},
+            ).find((account) => account.identity?.institution)?.identity
+              ?.institution ?? null,
+        },
+      })),
+      input,
+    );
   }
 
   function handleGetLoans(
@@ -970,6 +989,13 @@ export async function planningQuery(
   switch (command.tool) {
     case "get_subscriptions":
       return await handleGetSubscriptions(command);
+    case "get_card_commitments":
+      return cardCommitments({
+        query: command,
+        referenceDay: day,
+        repository,
+        snapshot,
+      });
     case "get_spaces":
       return handleGetSpaces(command);
     case "get_accounts":

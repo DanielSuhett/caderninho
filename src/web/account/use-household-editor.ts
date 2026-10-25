@@ -61,6 +61,7 @@ export function useHouseholdEditor({
           action: "save_person",
           csrf,
           name: values.get("name"),
+          ...(values.has("photo") && { photo: values.get("photo") || null }),
           ...(form.dataset.id && { id: form.dataset.id }),
         },
         form.dataset.id ?? "person",

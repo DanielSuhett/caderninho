@@ -17,6 +17,7 @@ import {
   DateRangeFields,
   QuerySearch,
 } from "./filter-fields";
+import { PersonStack } from "./person-identity";
 import { TransactionList } from "./transaction-list";
 import { EmptyView, ScopeFields } from "./workspace-filters";
 import { dayLabel, ResourceFeedback, useResource } from "./workspace-resource";
@@ -95,6 +96,7 @@ export function TransactionsView({
   const first = new URLSearchParams(params);
   first.delete("cursor");
   const future = params.get("future") === "on";
+  const showOwner = !params.get("person") && !!presentation?.multiplePeople;
   return (
     <>
       <WorkspaceHeading title="Transações" />
@@ -105,6 +107,12 @@ export function TransactionsView({
             action="/account/transactions"
             activeCount={presentation.activeCount}
             context={presentation.context}
+            identity={
+              <PersonStack
+                people={snapshot.people}
+                personId={params.get("person") ?? ""}
+              />
+            }
             leading={
               <QuerySearch
                 action="/account/transactions"
@@ -150,7 +158,7 @@ export function TransactionsView({
               />
               <AccountFilter
                 accounts={data.accounts}
-                showOwner={presentation.multiplePeople}
+                showOwner={showOwner}
                 value={params.get("accountId") ?? ""}
               />
               <CatalogField
@@ -220,7 +228,7 @@ export function TransactionsView({
               records={data.result.data.records}
               referenceDay={data.result.data.referenceDay}
               showAccount={presentation.showAccount}
-              showOwner={!params.get("person") && presentation.multiplePeople}
+              showOwner={showOwner}
             />
           ) : (
             <EmptyView title="Nenhuma transação neste recorte">

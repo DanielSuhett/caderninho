@@ -14,12 +14,9 @@ import { monthPeriod, selectedMonth, shiftMonth } from "./dashboard-period";
 import { FinancialDashboard } from "./financial-dashboard";
 import { displayCurrency } from "./financial-presentation";
 import { PeriodPicker } from "./period-picker";
+import { PersonStack } from "./person-identity";
 import { ScopeFields } from "./workspace-filters";
-import {
-  momentLabel,
-  ResourceFeedback,
-  useResource,
-} from "./workspace-resource";
+import { ResourceFeedback, useResource } from "./workspace-resource";
 import {
   RefreshButton,
   WorkspaceFilters,
@@ -87,7 +84,6 @@ export function OverviewView({
       return {
         catalog,
         monthly: monthly.error ? null : monthly.data.data,
-        observedAt: new Date().toISOString(),
         overview: FinancialOverviewResponseSchema.parse(overview).data,
         recent: PortalTransactionListSchema.parse(recent),
       };
@@ -100,14 +96,6 @@ export function OverviewView({
     const destination = new URL(location.href);
     destination.searchParams.set("month", value);
     destination.searchParams.delete("cursor");
-    navigateWorkspace(destination);
-  }, []);
-  const changeCurrency = useCallback((value: string | null) => {
-    if (!value) {
-      return;
-    }
-    const destination = new URL(location.href);
-    destination.searchParams.set("currency", value);
     navigateWorkspace(destination);
   }, []);
   const currencies = [
@@ -151,17 +139,15 @@ export function OverviewView({
         <>
           <WorkspaceFilters
             action="/account"
+            activeCount={Number(!!personId) + Number(spaceId !== "personal")}
             context={context}
-            leading={
-              currencies.length > 1 && (
-                <Select
-                  items={currencies.map((value) => ({ label: value, value }))}
-                  label="Moeda"
-                  onValueChange={changeCurrency}
-                  value={currency}
-                />
-              )
+            identity={
+              <PersonStack
+                people={snapshot.people}
+                personId={personId}
+              />
             }
+            showClear={!!personId || spaceId !== "personal"}
           >
             <ScopeFields
               catalog={data.catalog}
@@ -173,10 +159,12 @@ export function OverviewView({
               type="hidden"
               value={month}
             />
-            <input
+            <Select
+              className="w-full"
+              defaultValue={currency}
+              items={currencies.map((value) => ({ label: value, value }))}
+              label="Moeda"
               name="currency"
-              type="hidden"
-              value={currency}
             />
           </WorkspaceFilters>
           {!!data.overview.partial && (
@@ -199,11 +187,9 @@ export function OverviewView({
             people={snapshot.people}
             records={data.recent.data.records}
             rulesHref="/account/rules"
+            showOwner={!personId}
             transactionsHref={transactionsHref}
           />
-          <p className="page-updated">
-            Cópia importada · consultada em {momentLabel(data.observedAt)}.
-          </p>
         </>
       )}
     </>

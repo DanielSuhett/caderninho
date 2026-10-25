@@ -1,7 +1,9 @@
 import { z } from "zod/v4";
 
 import { SubscriptionCadence, type SubscriptionCandidate } from "../domain";
+import { CardCommitmentsResponseSchema } from "./card-commitments";
 import { FinancialOverviewSchema, FinancialSummarySchema } from "./dashboard";
+import { InvestmentListSchema } from "./investments";
 
 const minor = z.string().regex(/^-?\d+$/);
 const selection = z.looseObject({
@@ -99,7 +101,9 @@ export const SubscriptionsResultSchema = envelope(
 );
 
 export const planningOutputSchemas = new Map<string, z.ZodType>([
+  ["get_investments", envelope(InvestmentListSchema.shape.data)],
   ["get_subscriptions", SubscriptionsResultSchema],
+  ["get_card_commitments", CardCommitmentsResponseSchema],
   [
     "get_overview",
     envelope(

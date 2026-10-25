@@ -1,5 +1,7 @@
 import { z } from "zod/v4";
 
+import { FinancialIdentitySchema } from "../domain";
+
 const minor = z.string().regex(/^-?\d+$/);
 const nullableMinor = minor.nullable();
 
@@ -35,6 +37,7 @@ export const FinancialOverviewSchema = FinancialSummarySchema.extend({
       currency: z.string(),
       hidden: z.boolean(),
       id: z.string(),
+      identity: FinancialIdentitySchema.nullish(),
       manual: z.boolean(),
       name: z.string(),
       personId: z.string(),

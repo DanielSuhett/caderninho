@@ -3,7 +3,10 @@ import assert from "node:assert/strict";
 import { beforeEach, test } from "vitest";
 import { z } from "zod/v4";
 
-import { PlanningCommandSchema } from "../../src/contracts";
+import {
+  InvestmentListSchema,
+  PlanningCommandSchema,
+} from "../../src/contracts";
 import { createPlanningService } from "../../src/worker/planning";
 import { createPlanningRepository } from "../../src/worker/planning/repository";
 import { testMigrations } from "./access-fixture";
@@ -917,4 +920,25 @@ test("new finance metadata migration preserves an existing minimal ledger", asyn
   });
   const f = fixture();
   assert.equal(records(await f.call("get_spaces"))[0]?.id, "personal");
+});
+
+test("manual investor holdings retain an explicit local coverage and unknown net/profit", async () => {
+  const f = fixture();
+  await f.write("create_manual_investment", {
+    amountMinor: "900719925474099301",
+    currency: "BRL",
+    date: "2026-10-25",
+    name: "Reserva manual",
+    type: "FIXED_INCOME",
+  });
+  const result = await f.call("get_investments", { currency: "BRL" });
+  assert.equal(
+    z.object({ coverage: z.object({ kind: z.string() }) }).parse(result)
+      .coverage.kind,
+    "local_only",
+  );
+  const portfolio = InvestmentListSchema.parse(result).data;
+  assert.equal(portfolio.totals[0]?.gross.totalMinor, "900719925474099301");
+  assert.equal(portfolio.totals[0]?.net.totalMinor, null);
+  assert.equal(portfolio.totals[0]?.profit.totalMinor, null);
 });

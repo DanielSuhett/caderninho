@@ -1,4 +1,4 @@
-import type { AccountMap, Checkpoint, RunStatus } from "../domain";
+import type { AccountMap, Checkpoint, Person, RunStatus } from "../domain";
 export interface ConnectionInfo {
   accounts: AccountMap;
   hasTransactions?: boolean | undefined;
@@ -21,7 +21,7 @@ export interface PortalResponse extends InstallationState {
   configured: boolean;
   csrf: string;
   origin: string;
-  people: { id: string; name: string }[];
+  people: Person[];
   profiles: {
     id: string;
     name: string;

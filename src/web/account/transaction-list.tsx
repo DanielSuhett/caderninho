@@ -15,6 +15,7 @@ import type {
 import { formatBalance, type MoneyTone, transactionTone } from "../money";
 import { MoneyValue } from "../money-value";
 import { UiButton } from "../ui";
+import { type AccountAppearance, AccountAvatar } from "./account-identity";
 import { type CategoryAppearance, CategoryLabel } from "./category-appearance";
 import { TransactionIdentificationDetails } from "./transaction-identification";
 import { dayLabel } from "./workspace-resource";
@@ -78,7 +79,7 @@ export function TransactionList({
   showAccount = true,
 }: {
   records: Array<Transaction | PortalTransaction>;
-  accounts: Array<{ id: string; name: string }>;
+  accounts: Array<AccountAppearance & { id: string }>;
   categories: CategoryAppearance[];
   referenceDay?: string;
   showOwner?: boolean;
@@ -119,6 +120,7 @@ export function TransactionList({
                   accounts.find((item) => item.id === row.accountId)?.name ??
                   "Conta não identificada"
                 }
+                appearance={accounts.find((item) => item.id === row.accountId)}
                 category={category?.name ?? row.category ?? "Sem categoria"}
                 categoryAppearance={category}
                 key={row.id}
@@ -138,6 +140,7 @@ export function TransactionList({
 function TransactionItem({
   row,
   account,
+  appearance,
   category,
   categoryAppearance,
   referenceDay,
@@ -146,6 +149,7 @@ function TransactionItem({
 }: {
   row: Transaction | PortalTransaction;
   account: string;
+  appearance?: AccountAppearance | undefined;
   category: string;
   categoryAppearance?: CategoryAppearance | undefined;
   referenceDay: string | undefined;
@@ -174,37 +178,46 @@ function TransactionItem({
         data-wide-amount={amount.length > 22}
       >
         <Table.Cell data-label="Descrição">
-          <LayerDialog.Trigger
-            aria-label={`Ver detalhes de ${row.description || "Sem descrição"}`}
-            render={
-              <UiButton
-                className="transaction-open"
-                type="button"
-                variant="ghost"
-              />
-            }
-          >
-            {row.description || "Sem descrição"}
-          </LayerDialog.Trigger>
-          <div className="transaction-meta">
-            <span className="table-secondary">
-              <CategoryLabel
-                category={variedCategories ? undefined : categoryAppearance}
-                label={displayedCategory}
-              />
-            </span>
-            {!!pendingLabel && <Badge variant="warning">{pendingLabel}</Badge>}
-            {!!futureLabel && <Badge variant="info">{futureLabel}</Badge>}
-            {!!row.ignored && <Badge variant="secondary">Ignorada</Badge>}
+          <div className="transaction-identity-row">
+            <AccountAvatar
+              account={appearance ?? { name: account }}
+              person={
+                showOwner
+                  ? { id: row.personId, name: row.personName }
+                  : undefined
+              }
+            />
+            <div>
+              <LayerDialog.Trigger
+                aria-label={`Ver detalhes de ${row.description || "Sem descrição"}`}
+                render={
+                  <UiButton
+                    className="transaction-open"
+                    type="button"
+                    variant="ghost"
+                  />
+                }
+              >
+                {row.description || "Sem descrição"}
+              </LayerDialog.Trigger>
+              <div className="transaction-meta">
+                <span className="table-secondary">
+                  <CategoryLabel
+                    category={variedCategories ? undefined : categoryAppearance}
+                    label={displayedCategory}
+                  />
+                </span>
+                {!!pendingLabel && (
+                  <Badge variant="warning">{pendingLabel}</Badge>
+                )}
+                {!!futureLabel && <Badge variant="info">{futureLabel}</Badge>}
+                {!!row.ignored && <Badge variant="secondary">Ignorada</Badge>}
+              </div>
+            </div>
           </div>
         </Table.Cell>
         {showAccount === true && (
-          <Table.Cell data-label="Conta">
-            {account}
-            {showOwner === true && (
-              <span className="table-secondary">{row.personName}</span>
-            )}
-          </Table.Cell>
+          <Table.Cell data-label="Conta">{account}</Table.Cell>
         )}
         <Table.Cell data-label="Data">
           {firstKnown === true && (

@@ -1,18 +1,40 @@
 import { z } from "zod/v4";
 
 import type { ProductKind, ProductPage } from "../../domain";
-import { accountingDay, normalizeMoney } from "../../domain";
+import { accountingDay, decimal, normalizeMoney } from "../../domain";
 import type { PersonalPluggyClient } from "./client.adapter";
 import { sdkResult } from "./source";
 
 const money = z.union([z.string(), z.number()]).nullish();
 const investment = z.object({
   amount: money,
+  amountOriginal: money,
+  amountProfit: money,
+  amountWithdrawal: money,
+  annualRate: money,
+  balance: money,
+  code: z.string().nullish(),
   currencyCode: z.string(),
   date: z.string().nullish(),
+  dueDate: z.string().nullish(),
+  fixedAnnualRate: money,
   id: z.string().min(1),
+  institution: z
+    .object({ name: z.string(), number: z.string().nullish() })
+    .nullish(),
+  issuer: z.string().nullish(),
   itemId: z.string().min(1),
+  lastMonthRate: money,
+  lastTwelveMonthsRate: money,
   name: z.string(),
+  purchaseDate: z.string().nullish(),
+  quantity: money,
+  rate: money,
+  rateType: z.string().nullish(),
+  status: z.string().nullish(),
+  subtype: z.string().nullish(),
+  taxes: money,
+  taxes2: money,
   type: z.string(),
 });
 const loan = z.object({
@@ -104,6 +126,43 @@ export async function productPage(
           }
           return {
             amountMinor: normalizeMoney(row.amount, row.currencyCode),
+            details: {
+              annualRate: decimal(row.annualRate),
+              balanceMinor: normalizeMoney(row.balance, row.currencyCode),
+              code: row.code ?? null,
+              dueDate: accountingDay(row.dueDate),
+              financialTaxMinor: normalizeMoney(row.taxes2, row.currencyCode),
+              fixedAnnualRate: decimal(row.fixedAnnualRate),
+              incomeTaxMinor: normalizeMoney(row.taxes, row.currencyCode),
+              issuer: row.issuer ?? null,
+              lastMonthRate: decimal(row.lastMonthRate),
+              lastTwelveMonthsRate: decimal(row.lastTwelveMonthsRate),
+              originalMinor: normalizeMoney(
+                row.amountOriginal,
+                row.currencyCode,
+              ),
+              profitMinor: normalizeMoney(row.amountProfit, row.currencyCode),
+              purchaseDate: accountingDay(row.purchaseDate),
+              quantity: decimal(row.quantity),
+              rate: decimal(row.rate),
+              rateType: row.rateType ?? null,
+              status: row.status ?? null,
+              subtype: row.subtype ?? null,
+              withdrawalMinor: normalizeMoney(
+                row.amountWithdrawal,
+                row.currencyCode,
+              ),
+            },
+            ...(row.institution && {
+              identity: {
+                cardBrand: null,
+                institution: {
+                  id: row.institution.number ?? row.institution.name,
+                  logoUrl: null,
+                  name: row.institution.name,
+                },
+              },
+            }),
             connectionId: input.id,
             currency: row.currencyCode,
             date: accountingDay(row.date),

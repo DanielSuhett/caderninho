@@ -2,7 +2,7 @@
 
 Gerado por `npm run docs:mcp` a partir do registro de ferramentas.
 
-103 ferramentas: 33 consultas/prévias, 69 escritas locais e 1 operação de sincronização.
+104 ferramentas: 34 consultas/prévias, 69 escritas locais e 1 operação de sincronização.
 
 | Ferramenta | Operação | Schema de saída | Descrição |
 | --- | --- | --- | --- |
@@ -27,7 +27,7 @@ Gerado por `npm run docs:mcp` a partir do registro de ferramentas.
 | `get_rules` | consulta/prévia | — | Regras locais ordenadas por prioridade. Salvar não reaplica o histórico; use preview_rule antes de aplicar. |
 | `get_recurrences` | consulta/prévia | — | Compromissos recorrentes cadastrados. Não detecta automaticamente assinaturas no histórico. |
 | `get_goals` | consulta/prévia | — | Metas locais com valor, prazo e vínculo patrimonial; use get_goal_plan para calcular aportes. |
-| `get_investments` | consulta/prévia | — | Posições locais e importadas disponíveis. Variação de saldo não comprova rentabilidade. |
+| `get_investments` | consulta/prévia | sim | Carteira do investidor: posições brutas/líquidas, resultado informado, resgate e alocação por classe/instituição, por moeda. Excluídos e resgatados não compõem totais; campos ausentes são desconhecidos. Não infere rentabilidade nem histórico. |
 | `get_budget` | consulta/prévia | — | Orçamento configurado e consumo do ciclo vigente por moeda e categoria; informa valores sem classificação. |
 | `get_spaces` | consulta/prévia | — | Espaços locais e suas configurações de moeda, ciclo e orçamento. |
 | `get_notification_preferences` | consulta/prévia | — | Preferências locais de avisos. deliveryConfigured=false informa que o envio não está configurado. |
@@ -109,3 +109,4 @@ Gerado por `npm run docs:mcp` a partir do registro de ferramentas.
 | `preview_rule_import` | consulta/prévia | — | Conferir importação de JSON de regras compostas, categorias e duplicatas, sem gravar. Retorna revisão para confirmação. |
 | `import_rules` | escrita local | — | Importar JSON de regras compostas atomicamente no espaço confirmado. Preserva regras pessoais e duplicatas; exige a revisão da prévia. Não reaplica histórico. |
 | `get_subscriptions` | consulta/prévia | sim | Identificar candidatos a assinaturas e cobranças recorrentes no histórico efetivo, com frequência, valores exatos e evidências. Exclui pendentes, futuros, transferências classificadas e parcelas identificadas. Padrão: últimos 12 meses e 3 ocorrências. Não confirma contratos nem cria recorrências; partial/truncated indicam análise incompleta. |
+| `get_card_commitments` | consulta/prévia | sim | Compromissos observados de contas CREDIT: gastos efetivos POSTED, pendentes e futuras importadas separados; parcelas por mês, categorias e limites explícitos. Créditos classificados como despesa reduzem o gasto. Não prevê parcelas ausentes, não soma pagamento de fatura e não confunde ocupação observada com limite bancário. |

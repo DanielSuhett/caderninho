@@ -5,6 +5,7 @@ import { z } from "zod/v4";
 
 import {
   HouseholdCommandSchema,
+  InvestmentListSchema,
   PlanningCommandSchema,
   PortalResponseSchema,
 } from "../../src/contracts";
@@ -211,10 +212,23 @@ function provider() {
       },
       "/investments": {
         amount: "42.10",
+        amountOriginal: "42.06",
+        amountProfit: "-2.05",
+        amountWithdrawal: "0",
+        balance: "40.01",
         currencyCode: "BRL",
+        dueDate: "2027-10-25T12:00:00Z",
         id: "i",
+        institution: { name: "Instituição B3", number: "12345678000100" },
         itemId: "c",
         name: "Reserva",
+        quantity: "0.123456789012345678",
+        rate: "102.25",
+        rateType: "CDI",
+        status: "ACTIVE",
+        subtype: "CDB",
+        taxes: "2.09",
+        taxes2: "0",
         type: "FIXED_INCOME",
       },
       "/loans": {
@@ -304,6 +318,33 @@ test("two profiles with equal upstream IDs import separate histories and expose 
       assert.equal(owned[0]?.profileId, profileId);
       assert.equal(owned[0]?.id, scopedSourceId(profileId, id));
     }),
+  );
+  const portfolio = InvestmentListSchema.parse(
+    await f.read("get_investments", {
+      currency: "BRL",
+      personId,
+      type: "FIXED_INCOME",
+    }),
+  );
+  assert.equal(portfolio.data.totals[0]?.gross.totalMinor, "4210");
+  assert.equal(portfolio.data.totals[0]?.net.totalMinor, "4001");
+  assert.equal(portfolio.data.totals[0]?.profit.totalMinor, "-205");
+  assert.equal(portfolio.data.totals[0]?.withdrawal.totalMinor, "0");
+  assert.equal(
+    portfolio.data.records[0]?.details?.quantity,
+    "0.123456789012345678",
+  );
+  assert.equal(portfolio.data.records[0]?.details?.dueDate, "2027-10-25");
+  assert.equal(
+    portfolio.data.records[0]?.identity?.institution?.name,
+    "Instituição B3",
+  );
+  assert.equal(portfolio.data.records[0]?.identity?.institution?.logoUrl, null);
+  assert.equal(
+    InvestmentListSchema.parse(
+      await f.read("get_investments", { institutionId: "missing" }),
+    ).data.records.length,
+    0,
   );
   const cards = records(await f.read("get_cards", { personId }));
   assert.equal(cards.length, 1);
@@ -532,4 +573,58 @@ test("default application binding refuses a changed environment and missing stor
     vault: f.vault,
   });
   await assert.rejects(missing.connection("c"));
+});
+
+test("person photos persist through name edits and can be explicitly removed", async () => {
+  const app = fixture();
+  const cookie = cookies(await login(app));
+  const photo =
+    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jY1sAAAAASUVORK5CYII=";
+  const saved = await command(app, cookie, "manage", {
+    action: "save_person",
+    name: "Foto exemplo",
+    photo,
+  });
+  assert.equal(saved.status, 200);
+  const personId = identify(await saved.json());
+  const readPerson = async () => {
+    const response = await app.request("/api/account", {
+      headers: { Cookie: cookie },
+    });
+    return PortalResponseSchema.parse(await response.json()).people.find(
+      (person) => person.id === personId,
+    );
+  };
+  assert.equal((await readPerson())?.photo, photo);
+  assert.equal(
+    (
+      await command(app, cookie, "manage", {
+        action: "save_person",
+        id: personId,
+        name: "Nome atualizado",
+      })
+    ).status,
+    200,
+  );
+  assert.equal((await readPerson())?.photo, photo);
+  const invalid = await command(app, cookie, "manage", {
+    action: "save_person",
+    id: personId,
+    name: "Nome atualizado",
+    photo: "data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=",
+  });
+  assert.equal(invalid.status, 400);
+  assert.equal((await readPerson())?.photo, photo);
+  assert.equal(
+    (
+      await command(app, cookie, "manage", {
+        action: "save_person",
+        id: personId,
+        name: "Nome atualizado",
+        photo: null,
+      })
+    ).status,
+    200,
+  );
+  assert.equal((await readPerson())?.photo, null);
 });

@@ -32,7 +32,7 @@ test("dashboard keeps currencies and bank balances separate from card debt and h
   const overview = demoOverview("2026-10");
   const bank = summaryCurrency(overview, "BRL");
   assert.equal(bank.bankBalance, "3542586");
-  assert.equal(bank.accounts.length, 3);
+  assert.equal(bank.accounts.length, 4);
   assert.equal(summaryCurrency(overview, "USD").bankBalance, "184050");
   const unknown = {
     ...overview,

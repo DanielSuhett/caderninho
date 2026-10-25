@@ -175,3 +175,39 @@ da leitura do saldo. Checkpoint guarda a posição recuperável (fase/conta/curs
 sem contar registros nem substituir o histórico de rodadas. Parcialidade sinaliza
 coleta incompleta ou valores desconhecidos; não transforma ausência em zero.
 Autorização do assistente é o grant OAuth independente do cookie do painel.
+
+### Carteira do investidor
+
+Abra **Investimentos** para consultar posições importadas e manuais, filtrar
+pessoa, grupo, classe, instituição e moeda, consultar composição e abrir detalhes
+do ativo. Parcelas e gastos de cartão ficam em **Cartões**.
+A [demo de investimentos](/demo/investments/) usa os mesmos componentes e regras
+de cálculo, com valores sintéticos.
+
+No MCP, `get_investments` aceita `spaceId`, `personId`, `currency`, `type`,
+`institutionId` e `status`. Retorna `records` e `totals` por moeda, com `gross`,
+`net`, `original`, `profit`, `withdrawal`, `byType` e `byInstitution`.
+Cada medida informa `totalMinor`, `knownMinor` e `unknownCount`. Campos monetários
+são strings inteiras em unidades menores. Zero é conhecido; ausência não é zero.
+`amountMinor` continua sendo a posição bruta, preservando o contrato anterior.
+`details` conserva valores, taxas e datas fornecidos pela Pluggy; `identity`
+conserva instituição e logo validado. Reimportações preservam grupo e inclusão.
+
+Resgatados (`TOTAL_WITHDRAWAL`) e registros com `included=false` continuam na
+lista, mas não entram nos totais. Rentabilidade não é deduzida da diferença entre
+bruto, líquido ou aportes. Não há série histórica inventada nem execução de
+aplicações/resgates. Campos novos de registros antigos dependem da próxima
+sincronização com a instituição.
+
+### Foto da pessoa
+
+Em **Conexões → Editar titulares e credenciais**, escolha **Adicionar foto** ou
+**Trocar foto**, confira a prévia e clique em **Salvar pessoa**. **Remover foto**
+volta às iniciais e também precisa ser salvo. JPEG, PNG e WebP de até 5 MB são
+aceitos; o navegador recorta e reduz a foto para 160 × 160 px antes de enviar.
+A imagem fica no banco privado da instalação, sem serviços externos de avatar.
+
+A migração aditiva `0011_person_photos.sql` acrescenta a coluna opcional em
+`people`. Nomes e perfis existentes são preservados. A atualização precisa dessa
+migração antes de executar o novo Worker; o comando de deploy já aplica as
+migrações. Nenhuma migração remota foi aplicada nesta implementação.

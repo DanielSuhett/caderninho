@@ -18,7 +18,13 @@ export const PluggyCredentialsSchema = z.object({
   clientSecret: z.string().min(1),
 }) satisfies z.ZodType<Credentials>;
 export const ProviderConnectionSchema = z.object({
-  connector: z.object({ id: money }).optional(),
+  connector: z
+    .object({
+      id: money,
+      imageUrl: z.string().nullish(),
+      name: z.string().nullish(),
+    })
+    .optional(),
   id: z.string(),
 }) satisfies z.ZodType<ProviderConnection>;
 export const ProviderAccountSchema = z.object({
@@ -28,6 +34,8 @@ export const ProviderAccountSchema = z.object({
       availableCreditLimit: money.nullish(),
       balanceCloseDate: z.string().nullish(),
       balanceDueDate: z.string().nullish(),
+      brand: z.string().nullish(),
+      brandAdditionalInfo: z.string().nullish(),
       creditLimit: money.nullish(),
     })
     .nullish(),

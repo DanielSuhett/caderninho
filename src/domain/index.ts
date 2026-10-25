@@ -1,3 +1,12 @@
+export type { CardActivityRow, CardAmount } from "./card.entity";
+export {
+  allocatedCredit,
+  CardChargeStatus,
+  cardChargeStatus,
+  createCardActivity,
+  isCardExpense,
+  isCardInstallment,
+} from "./card.entity";
 export type {
   FixedCategoryKey,
   TransactionClassification,
@@ -48,6 +57,16 @@ export {
   normalizeMoney,
   normalizeTransaction,
 } from "./finance-model";
+export {
+  type FinancialIdentity,
+  institutionLogoUrl,
+} from "./financial-identity.entity";
+export { FinancialIdentitySchema } from "./financial-identity.schema";
+export {
+  type InvestmentDetails,
+  type InvestorPosition,
+  investmentPortfolio,
+} from "./investment.entity";
 export type {
   ConnectionOwner,
   Person,

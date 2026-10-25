@@ -6,6 +6,7 @@ import { z } from "zod/v4";
 import { TransactionQuerySchema } from "../../src/contracts";
 import {
   type CommitResult,
+  FinancialIdentitySchema,
   type FinancialSource,
   ProviderAccountSchema,
 } from "../../src/domain";
@@ -24,6 +25,7 @@ const metadata = z
     balanceMinor: z.string().nullable(),
     balanceObservedAt: z.string().nullable(),
     currency: z.string(),
+    identity: FinancialIdentitySchema.nullish(),
     name: z.string(),
     type: z.enum(["BANK", "CREDIT"]),
   })
@@ -65,6 +67,10 @@ test("status preserves absent accounts and unread balances with their original r
       balanceMinor: "12345",
       balanceObservedAt: "2026-10-01T00:00:00.000Z",
       currency: "BRL",
+      identity: {
+        cardBrand: null,
+        institution: { id: "200", logoUrl: null, name: "Instituição" },
+      },
       name: "Renamed",
       type: "BANK",
     },
@@ -72,6 +78,10 @@ test("status preserves absent accounts and unread balances with their original r
       balanceMinor: "0",
       balanceObservedAt: "2026-10-01T00:00:00.000Z",
       currency: "BRL",
+      identity: {
+        cardBrand: null,
+        institution: { id: "200", logoUrl: null, name: "Instituição" },
+      },
       name: "Synthetic",
       type: "CREDIT",
     },

@@ -3,10 +3,13 @@ import { z } from "zod/v4";
 import {
   CategoryColorSchema,
   CategoryIconSchema,
+  FinancialIdentitySchema,
   RunStatus,
   TransactionClassificationSchema,
   TransactionIdentificationSchema,
 } from "../domain";
+import { CardCommitmentsQuerySchema } from "./card-commitments";
+import { PortalCardsQuerySchema } from "./cards";
 import { planningDefinitions } from "./planning";
 import { ImportedRuleOriginSchema } from "./rule-import";
 import { RuleFilterSchema } from "./rules";
@@ -16,6 +19,13 @@ export const PortalQuerySchema = z
   .object({
     csrf: z.string(),
     query: z.union([
+      PortalCardsQuerySchema,
+      planningDefinitions[17].schema.extend({
+        tool: z.literal("get_investments"),
+      }),
+      CardCommitmentsQuerySchema.extend({
+        tool: z.literal("get_card_commitments"),
+      }),
       planningDefinitions[96].schema.extend({
         tool: z.literal("preview_rule_import"),
       }),
@@ -94,7 +104,14 @@ const RuleListSchema = z.object({
 });
 export const AccountListSchema = z.object({
   data: z.object({
-    records: z.array(named.extend({ personId: id, personName: z.string() })),
+    records: z.array(
+      named.extend({
+        identity: FinancialIdentitySchema.nullish(),
+        personId: id,
+        personName: z.string(),
+        type: z.enum(["BANK", "CREDIT"]).optional(),
+      }),
+    ),
   }),
 });
 const TransactionRecordSchema = z.object({

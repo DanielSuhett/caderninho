@@ -6,6 +6,22 @@ export {
   AuditSelectionSchema,
   RevokeGrantSchema,
 } from "./audit";
+export type {
+  CardCommitments,
+  CardCommitmentsQuery,
+  CardCommitmentsResponse,
+} from "./card-commitments";
+export {
+  CardCommitmentsQuerySchema,
+  CardCommitmentsResponseSchema,
+  CardCommitmentsSchema,
+} from "./card-commitments";
+export type {
+  PortalCardInstallment,
+  PortalCards,
+  PortalCardsQuery,
+} from "./cards";
+export { PortalCardsQuerySchema, PortalCardsSchema } from "./cards";
 export type { FinancialOverview, FinancialSummary } from "./dashboard";
 export {
   FinancialOverviewResponseSchema,
@@ -24,7 +40,13 @@ export {
   HouseholdCatalogSchema,
   HouseholdCommandSchema,
   HouseholdResultSchema,
+  PersonPhotoSchema,
 } from "./household";
+export {
+  type InvestmentList,
+  InvestmentListSchema,
+  type InvestmentPortfolio,
+} from "./investments";
 export { PRODUCT_INSTRUCTIONS, ToolName, tools } from "./mcp-contract";
 export type { PlanningCommand } from "./planning";
 export {

@@ -11,6 +11,7 @@ import { type ReactNode, useId } from "react";
 
 import { DisclosureItem } from "./disclosure-item";
 import { FilterDialog } from "./filter-dialog";
+import { InfoTip } from "./info-tip";
 
 export function WorkspaceHeading({
   title,
@@ -30,8 +31,8 @@ export function WorkspaceHeading({
           variant="heading"
         >
           {title}
+          {!!description && <InfoTip label={title}>{description}</InfoTip>}
         </Text>
-        {!!description && <p>{description}</p>}
       </div>
       {children}
     </header>
@@ -97,6 +98,7 @@ export function WorkspaceFilters({
   context,
   activeCount = 0,
   leading,
+  identity,
   showClear,
 }: {
   action: string;
@@ -104,6 +106,7 @@ export function WorkspaceFilters({
   context?: string;
   activeCount?: number;
   leading?: ReactNode;
+  identity?: ReactNode;
   showClear?: boolean;
 }) {
   const formId = useId();
@@ -118,6 +121,7 @@ export function WorkspaceFilters({
           title="Filtros"
           trigger={
             <>
+              {identity}
               <SlidersHorizontalIcon
                 aria-hidden="true"
                 size={20}
@@ -145,7 +149,7 @@ export function WorkspaceFilters({
           <Toolbar.Link href={action}>Limpar</Toolbar.Link>
         )}
       </Toolbar>
-      {!!context && <p className="filter-context">{context}</p>}
+      {!!context && <span className="sr-only">{context}</span>}
     </div>
   );
 }
@@ -202,9 +206,11 @@ export function WorkspaceMetrics({
     <dl className="workspace-metrics">
       {items.map((item) => (
         <div key={item.label}>
-          <dt>{item.label}</dt>
+          <dt>
+            {item.label}
+            {!!item.hint && <InfoTip label={item.label}>{item.hint}</InfoTip>}
+          </dt>
           <dd>{item.value}</dd>
-          {!!item.hint && <small>{item.hint}</small>}
         </div>
       ))}
     </dl>

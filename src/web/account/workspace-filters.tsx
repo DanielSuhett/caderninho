@@ -1,6 +1,7 @@
 import { Empty, Select } from "@cloudflare/kumo";
 
 import type { PortalResponse, WorkspaceCatalog } from "../../contracts";
+import { PersonIdentity } from "./person-identity";
 
 export function ScopeFields({
   snapshot,
@@ -10,7 +11,7 @@ export function ScopeFields({
   compact = false,
 }: {
   snapshot: PortalResponse;
-  catalog: WorkspaceCatalog;
+  catalog: Pick<WorkspaceCatalog, "spaces">;
   params: URLSearchParams;
   person?: boolean;
   compact?: boolean;
@@ -40,7 +41,15 @@ export function ScopeFields({
           defaultValue={params.get("person") ?? ""}
           items={[
             { label: "Todas as pessoas", value: "" },
-            ...snapshot.people.map((p) => ({ label: p.name, value: p.id })),
+            ...snapshot.people.map((p) => ({
+              label: (
+                <PersonIdentity
+                  compact
+                  person={p}
+                />
+              ),
+              value: p.id,
+            })),
           ]}
           label="Pessoa"
           name="person"
