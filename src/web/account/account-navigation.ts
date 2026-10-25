@@ -7,6 +7,9 @@ import {
 
 const paths = new Set([
   "/account",
+  "/account/cards",
+  "/demo/cards",
+  "/demo/cards/",
   "/account/audit",
   "/account/transactions",
   "/account/rules",

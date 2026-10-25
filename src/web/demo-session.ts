@@ -1,6 +1,7 @@
 import type { z } from "zod/v4";
 
 import {
+  PortalCardsQuerySchema,
   type PortalMutationSchema,
   type WorkspaceCatalog,
   WorkspaceCatalogSchema,
@@ -14,6 +15,7 @@ import {
 } from "../fixtures/finance";
 import { workspaceFixture } from "../fixtures/workspace";
 import type { OrganizationApi } from "./account/account-api";
+import { demoCards } from "./demo-cards";
 import type { DemoData } from "./demo-data";
 import { randomId } from "./random-id";
 
@@ -338,6 +340,15 @@ export function createDemoSession({
       }),
     query: (query, _csrf, signal) =>
       local(signal, () => {
+        if (query.tool === "get_portal_cards") {
+          return {
+            data: demoCards(
+              PortalCardsQuerySchema.parse(query),
+              view(query.spaceId),
+            ),
+            partial: false,
+          };
+        }
         if (query.tool !== "get_accounts") {
           throw new Error("UNSUPPORTED_DEMO_OPERATION");
         }
