@@ -41,7 +41,7 @@ export interface Space {
 }
 export interface AccountSettings {
   closeDay?: number;
-  creditLimitMinor?: string;
+  creditLimitMinor?: string | null;
   currency?: string;
   dueDay?: number;
   hidden: boolean;

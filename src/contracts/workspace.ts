@@ -20,6 +20,7 @@ import {
   FinancialOverviewResponseSchema,
   MonthlySpendingResponseSchema,
 } from "./dashboard";
+import { identityFilterFields } from "./identity-filter";
 import { InvestmentListSchema } from "./investments";
 import { planningTools } from "./planning";
 import {
@@ -30,7 +31,9 @@ import { RuleFilterSchema } from "./rules";
 
 export const PortalTransactionQuerySchema =
   planningTools.get_transaction_purchases.schema.extend({
+    ...identityFilterFields,
     tool: z.literal("get_portal_transactions"),
+    transactionId: z.string().min(1).max(160).optional(),
   });
 
 // Deliberate read-only allowlist; the portal cannot forward arbitrary MCP mutations.
@@ -39,13 +42,14 @@ export const PortalQuerySchema = z
     csrf: z.string(),
     query: z.union([
       PortalCardsQuerySchema,
-      planningTools.get_investments.command,
+      planningTools.get_investments.command.extend(identityFilterFields),
       planningTools.get_card_commitments.command,
       planningTools.preview_rule_import.command,
       planningTools.get_accounts.command,
       planningTools.get_transactions.command,
-      planningTools.get_overview.command,
+      planningTools.get_overview.command.extend(identityFilterFields),
       planningTools.generate_chart.command.extend({
+        ...identityFilterFields,
         groupBy: z.literal(SpendingGroupBy.month),
       }),
       PortalTransactionQuerySchema,
@@ -157,6 +161,7 @@ export const TransactionListSchema = z.object({
   partial: z.boolean(),
 });
 const PortalInstallmentSchema = TransactionRecordSchema.extend({
+  billPayment: z.enum(["bank", "manual"]).nullable().optional(),
   cardNumber: z.string().nullable(),
   installmentNumber: z.number().int().nullable(),
   purchaseDate: z.string().nullable(),
@@ -173,6 +178,8 @@ export const PortalTransactionListSchema = z.object({
       }),
     ),
     referenceDay: z.string(),
+    revision: z.number().int().nonnegative().optional(),
+    uncategorizedCount: z.number().int().nonnegative().optional(),
   }),
   partial: z.boolean(),
 });
@@ -256,6 +263,28 @@ export type WorkspaceCatalog = z.infer<typeof WorkspaceCatalogSchema>;
 export const PortalMutationSchema = z
   .object({
     command: z.discriminatedUnion("tool", [
+      planningTools.batch_edit_transactions.command
+        .pick({
+          category: true,
+          confirmed: true,
+          expected_revision: true,
+          idempotency_key: true,
+          ids: true,
+          spaceId: true,
+          tool: true,
+        })
+        .required({ category: true, expected_revision: true }),
+      planningTools.update_account_settings.command
+        .pick({
+          confirmed: true,
+          creditLimitMinor: true,
+          expected_revision: true,
+          id: true,
+          idempotency_key: true,
+          spaceId: true,
+          tool: true,
+        })
+        .required({ creditLimitMinor: true, expected_revision: true }),
       planningTools.import_rules.command,
       planningTools.create_category.command,
       planningTools.update_category.command,

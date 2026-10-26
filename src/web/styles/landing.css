@@ -10,7 +10,7 @@
 :where(.landing-shell) a:not([class]) {
   color: inherit;
 }
-/* Public pages share Inter, scale, surfaces and native controls with the product. */
+/* Editorial headings use Source Serif 4; the interface preview stays in Inter. */
 .landing-shell {
   max-width: 1200px;
   padding-inline: 32px;
@@ -67,14 +67,16 @@
   margin: 0;
 }
 :where(.landing-shell) h1 {
-  font-size: clamp(36px, 5.2vw, 56px);
-  font-weight: 600;
-  line-height: 1.12;
+  font-family: var(--font-display);
+  font-size: var(--type-display);
+  font-weight: 500;
+  line-height: var(--leading-display);
   text-wrap: balance;
 }
 :where(.landing-shell) h2 {
-  font-size: 28px;
-  font-weight: 600;
+  font-family: var(--font-display);
+  font-size: clamp(30px, 3vw, 40px);
+  font-weight: 500;
   line-height: 1.25;
   text-wrap: balance;
 }
@@ -90,44 +92,137 @@
   text-wrap: pretty;
 }
 .hero {
-  padding-block: 56px 0;
+  padding-block: 48px 0;
 }
-.hero > h1,
-.hero > .hero-kicker,
-.hero > .hero-description,
-.hero > .hero-note {
-  margin-inline: auto;
-  text-align: center;
+.hero-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+  gap: 48px;
+  align-items: center;
 }
-.hero > .hero-kicker {
+.hero-kicker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  align-items: center;
   margin-bottom: 16px;
-  font-size: 16px;
-  color: var(--text);
+  color: var(--muted);
 }
-.hero > .hero-description {
-  max-width: 55ch;
+.hero-intro h1 {
+  font-size: var(--type-display);
+  line-height: var(--leading-display);
+  text-wrap: balance;
+}
+.hero-intro .hero-description {
+  max-width: 37ch;
   margin-top: 24px;
   font-size: 18px;
 }
 .hero-actions {
   flex-wrap: wrap;
   gap: 12px;
-  justify-content: center;
-  margin-top: 28px;
+  margin-top: 24px;
 }
-.hero > .hero-note {
-  max-width: 68ch;
-  margin-top: 8px;
+.hero-intro .hero-note {
+  max-width: 41ch;
+  margin-top: 16px;
   font-size: 14px;
   color: var(--muted);
 }
 .hero-source {
-  display: flex;
+  display: inline-flex;
+  gap: 8px;
   align-items: center;
-  justify-content: center;
-  width: fit-content;
-  min-height: 44px;
-  margin: 12px auto 0;
+  min-height: 40px;
+  font-size: inherit;
+  color: var(--text);
+  text-decoration: none;
+}
+.hero-source:hover {
+  text-decoration: underline;
+}
+.hero-preview {
+  min-width: 0;
+  padding: 24px;
+}
+.hero-preview-heading,
+.hero-preview-period {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+}
+.hero-preview-heading {
+  margin-bottom: 32px;
+}
+.hero-preview-period h2 {
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 600;
+}
+.hero-preview-period > span,
+.hero-preview-description > span,
+.hero-preview-question > span {
+  font-size: 14px;
+  color: var(--muted);
+}
+.hero-preview-records {
+  padding: 0;
+  margin: 8px 0 0;
+  list-style: none;
+}
+.hero-preview-records li {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding-block: 16px;
+  border-bottom: 1px solid var(--line);
+}
+.hero-preview-bank {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  background: white;
+  border-radius: 50%;
+}
+.hero-preview-bank:hover {
+  outline: 2px solid var(--text-color-kumo-link);
+  outline-offset: 2px;
+}
+.hero-preview-description {
+  display: grid;
+  flex: 1;
+  gap: 4px;
+  min-width: 0;
+}
+.hero-preview-description > strong {
+  font-size: 16px;
+  font-weight: 500;
+}
+.hero-preview-amount {
+  flex-shrink: 0;
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+}
+.hero-preview-amount[data-direction="DEBIT"] {
+  color: var(--text-color-kumo-danger);
+}
+.hero-preview-amount[data-direction="CREDIT"] {
+  color: var(--text-color-kumo-success);
+}
+.hero-preview-question {
+  display: grid;
+  gap: 8px;
+  padding-block: 20px;
+}
+.hero-preview-link {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  min-height: 40px;
   font-size: 14px;
   color: var(--text);
 }
@@ -148,8 +243,9 @@
   margin-bottom: 24px;
 }
 .network-heading h2 {
-  font-size: 18px;
-  font-weight: 500;
+  font-family: var(--font-sans);
+  font-size: 20px;
+  font-weight: 600;
 }
 .network-heading p {
   max-width: 40ch;
@@ -774,7 +870,7 @@ summary {
 }
 .quota-table table {
   width: 100%;
-  font-size: 14px;
+  font-size: 16px;
   font-variant-numeric: tabular-nums;
   border-collapse: collapse;
 }
@@ -801,14 +897,54 @@ summary {
   display: grid;
   gap: 8px;
 }
-.faq-list details {
-  padding: 8px 20px;
+.faq-item {
   background: var(--surface);
   border-radius: 6px;
 }
+.faq-item h3 {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: var(--type-body);
+  font-weight: 500;
+}
+.faq-item summary {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  cursor: pointer;
+  list-style: none;
+}
+.faq-question {
+  gap: 16px;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 56px;
+  padding: 16px 20px;
+  text-align: left;
+}
+.faq-item h3 svg {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+}
+.faq-item summary::-webkit-details-marker {
+  display: none;
+}
+.faq-item summary svg {
+  flex-shrink: 0;
+}
+.faq-item:where([open]) summary svg {
+  transform: rotate(180deg);
+}
+.faq-answer {
+  padding-inline: 20px;
+}
 .faq-list p {
-  max-width: 80ch;
-  padding-block: 8px 12px;
+  max-width: 65ch;
+  padding-block: 0 16px;
+  margin: 0;
 }
 .install-section {
   display: flex;
@@ -877,6 +1013,9 @@ summary {
   }
 }
 @media (max-width: 850px) {
+  .hero-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
   .landing-shell {
     padding-inline: 24px;
   }
@@ -925,22 +1064,23 @@ summary {
     gap: 12px;
   }
   .hero {
-    padding-top: 32px;
+    padding-top: 24px;
   }
-  .hero > .hero-description {
-    margin-top: 20px;
-    font-size: 16px;
+  .hero-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 24px;
   }
-  .hero > .hero-note {
-    max-width: 38ch;
+  .hero-preview {
+    padding: 20px 16px;
+  }
+  .hero-preview-records li {
+    gap: 8px;
+  }
+  .hero-preview-heading {
+    margin-bottom: 24px;
   }
   .hero-actions {
     gap: 12px;
-    margin-top: 24px;
-  }
-  .hero-actions > a {
-    justify-content: center;
-    width: 100%;
   }
   .network-figure {
     padding: 20px 12px;
@@ -974,7 +1114,7 @@ summary {
     margin-bottom: 24px;
   }
   :where(.landing-shell) h2 {
-    font-size: 24px;
+    font-size: 30px;
   }
   .network-heading h2 {
     font-size: 18px;
@@ -1055,7 +1195,7 @@ summary {
 }
 @media (max-width: 360px) {
   .hero h1 {
-    font-size: 32px;
+    font-size: 40px;
   }
   .landing-header nav {
     gap: 8px;
@@ -1065,13 +1205,14 @@ summary {
   }
 }
 @media (prefers-reduced-motion: no-preference) {
-  .hero > h1,
+  .hero-intro,
+  .hero-preview,
   .hero-description,
   .hero-actions {
-    animation: content-arrive 400ms var(--motion-ease-out) backwards;
+    animation: content-arrive 220ms var(--motion-ease-out) backwards;
   }
   .landing-revealed {
-    animation: content-arrive 280ms var(--motion-ease-out) backwards;
+    animation: content-arrive 160ms var(--motion-ease-out) backwards;
   }
 }
 

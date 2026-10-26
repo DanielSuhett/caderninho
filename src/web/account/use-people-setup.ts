@@ -11,6 +11,7 @@ import { HouseholdCommandSchema } from "../../contracts";
 import {
   guardWorkspaceNavigation,
   navigateWorkspace,
+  workspaceHref,
 } from "./account-navigation";
 import type { DashboardProps } from "./dashboard-view";
 
@@ -86,7 +87,7 @@ export function usePeopleSetup(props: DashboardProps) {
       setIssue("");
       navigateWorkspace(
         new URL(
-          "/account/connections?" +
+          workspaceHref("/account/connections?") +
             new URLSearchParams({ person: owner, setup: next, space }),
           location.origin,
         ),

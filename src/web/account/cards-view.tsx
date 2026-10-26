@@ -1,37 +1,37 @@
 import { Banner } from "@cloudflare/kumo/components/banner";
 import { Empty } from "@cloudflare/kumo/components/empty";
 import { Select } from "@cloudflare/kumo/components/select";
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 
 import type { PortalResponse } from "../../contracts";
 import { localDay } from "../../domain";
 import type { createAccountApi } from "./account-api";
 import { AccountIdentity } from "./account-identity";
-import { navigateWorkspace } from "./account-navigation";
+import { navigateWorkspace, workspaceHref } from "./account-navigation";
+import { CardsWithLimitEditor } from "./card-limit-editor";
 import { cardScope } from "./card-presentation";
-import { CardsDashboard } from "./cards-dashboard";
 import { selectedMonth } from "./dashboard-period";
+import { identityParameters } from "./identity-filters";
 import { PeriodPicker } from "./period-picker";
 import { PersonStack } from "./person-identity";
 import { ScopeFields } from "./workspace-filters";
 import { ResourceFeedback, useResource } from "./workspace-resource";
-import {
-  RefreshButton,
-  WorkspaceFilters,
-  WorkspaceHeading,
-} from "./workspace-ui";
+import { WorkspaceFilters, WorkspaceHeading } from "./workspace-ui";
 import "./cards.css";
 
 export function CardsView({
   api,
   snapshot,
-  basePath = "/account/cards",
+  basePath = workspaceHref("/account/cards"),
 }: {
-  api: Pick<ReturnType<typeof createAccountApi>, "catalog" | "query">;
+  api: Pick<
+    ReturnType<typeof createAccountApi>,
+    "catalog" | "query" | "planning"
+  >;
   snapshot: PortalResponse;
   basePath?: string;
 }) {
-  const params = new URLSearchParams(location.search);
+  const [params] = useState(() => new URLSearchParams(location.search));
   const month = selectedMonth(params.get("month"), localDay(new Date()));
   const personId = params.get("person") ?? "";
   const accountId = params.get("accountId") ?? "";
@@ -52,6 +52,7 @@ export function CardsView({
           spaceId,
           tool: "get_portal_cards",
           ...(personId && { personId }),
+          ...identityParameters(params),
           ...(accountId && { accountId }),
           ...(cursor && { cursor }),
         },
@@ -63,6 +64,7 @@ export function CardsView({
     },
     [
       accountId,
+      params,
       api,
       cursor,
       month,
@@ -81,15 +83,6 @@ export function CardsView({
   }, []);
   const result = resource.data;
   const data = result?.data;
-  const monthHref = useCallback(
-    (value: string) => {
-      const target = new URLSearchParams(location.search);
-      target.set("month", value);
-      target.delete("cursor");
-      return `${basePath}?${target}`;
-    },
-    [basePath],
-  );
   const { context } = cardScope({
     catalog: result?.catalog,
     data,
@@ -148,10 +141,62 @@ export function CardsView({
   if (data?.nextCursor) {
     nextParams.set("cursor", data.nextCursor);
   }
+  const filterChoices = [
+    cardControl,
+    currencyControl,
+    snapshot.people.length > 1,
+    (result?.catalog.spaces.length ?? 0) > 1,
+    accountId,
+    personId,
+    spaceId !== "personal",
+  ].some(Boolean);
+  const filters = filterChoices && data && result && (
+    <WorkspaceFilters
+      action={basePath}
+      activeCount={
+        Number(!!personId) +
+        Number(!!accountId) +
+        Number(spaceId !== "personal")
+      }
+      context={context}
+      identities={data.accounts}
+      identity={
+        <PersonStack
+          people={snapshot.people}
+          personId={personId}
+        />
+      }
+      showClear={!!(accountId || personId || spaceId !== "personal")}
+    >
+      <div className="cards-page cards-filter-fields">
+        <ScopeFields
+          catalog={result.catalog}
+          params={params}
+          person={snapshot.people.length > 1 || !!personId}
+          snapshot={snapshot}
+        />
+        {cardControl}
+        {currencyControl}
+        <input
+          name="month"
+          type="hidden"
+          value={month}
+        />
+        {!currencyControl && (
+          <input
+            name="currency"
+            type="hidden"
+            value={data.currency}
+          />
+        )}
+      </div>
+    </WorkspaceFilters>
+  );
   return (
     <div className="cards-page">
       <WorkspaceHeading
         description="Gastos, limites e parcelas recebidas dos seus cartões."
+        filters={filters}
         title="Cartões"
       >
         <div className="page-actions">
@@ -159,56 +204,11 @@ export function CardsView({
             month={month}
             onChange={changeMonth}
           />
-          <RefreshButton
-            disabled={resource.loading}
-            label="Atualizar cartões"
-            onClick={resource.retry}
-          />
         </div>
       </WorkspaceHeading>
       <ResourceFeedback {...resource} />
       {!!data && !!result && (
         <>
-          <WorkspaceFilters
-            action={basePath}
-            activeCount={
-              Number(!!personId) +
-              Number(!!accountId) +
-              Number(spaceId !== "personal")
-            }
-            context={context}
-            identity={
-              <PersonStack
-                people={snapshot.people}
-                personId={personId}
-              />
-            }
-            showClear={!!(accountId || personId || spaceId !== "personal")}
-          >
-            <div className="cards-page cards-filter-fields">
-              <ScopeFields
-                catalog={result.catalog}
-                compact
-                params={params}
-                person={snapshot.people.length > 1 || !!personId}
-                snapshot={snapshot}
-              />
-              {cardControl}
-              {currencyControl}
-              <input
-                name="month"
-                type="hidden"
-                value={month}
-              />
-              {!currencyControl && (
-                <input
-                  name="currency"
-                  type="hidden"
-                  value={data.currency}
-                />
-              )}
-            </div>
-          </WorkspaceFilters>
           {!!result.partial && (
             <Banner
               description="Esta visão usa somente os dados já recebidos. Confira o estado das conexões."
@@ -217,18 +217,22 @@ export function CardsView({
             />
           )}
           {data.accounts.length ? (
-            <CardsDashboard
+            <CardsWithLimitEditor
               accountId={accountId}
+              api={api}
               categories={result.catalog.categories}
               data={data}
-              monthHref={monthHref}
               nextHref={data.nextCursor ? `${basePath}?${nextParams}` : null}
+              revision={result.revision}
+              saved={resource.retry}
               showOwner={!personId && snapshot.people.length > 1}
+              snapshot={snapshot}
+              spaceId={spaceId}
             />
           ) : (
             <Empty
               contents={
-                <a href="/account/connections">
+                <a href={workspaceHref("/account/connections")}>
                   Confira suas conexões ou escolha outro grupo.
                 </a>
               }

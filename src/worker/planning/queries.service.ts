@@ -2,11 +2,14 @@ import type { PlanningCommand, PlanningQuery } from "../../contracts";
 import {
   AccountType,
   CategoryKind,
+  cardCredit,
   compareRules,
   detectSubscriptions,
+  type FinancialIdentityFilter,
   financialCharts,
   investmentPortfolio,
   localDay,
+  matchesFinancialIdentity,
   minorPresentation,
   monthDate,
   PlanningError,
@@ -78,11 +81,14 @@ export async function planningQuery(
   command: PlanningQuery,
   snapshot: PlanningSnapshot,
   repository: PlanningRepository,
-  now: Date,
+  {
+    now,
+    identityFilter = {},
+  }: { now: Date; identityFilter?: FinancialIdentityFilter },
 ): Promise<PlanningResult> {
   const { state } = snapshot;
   const day = localDay(now);
-  const querySelection = planningSelection(command);
+  const querySelection = planningSelection(command, identityFilter);
   const {
     space,
     accountMap,
@@ -91,7 +97,11 @@ export async function planningQuery(
   const { personId } = querySelection;
   const allTransactions = transactionStream(repository, snapshot);
   const stream = (selection: Selection) =>
-    allTransactions({ ...selection, ...(personId && { personId }) });
+    allTransactions({
+      ...selection,
+      ...identityFilter,
+      ...(personId && { personId }),
+    });
   const metadata = new Map(
     snapshot.transactionDetails.map((row) => [row.id, row]),
   );
@@ -140,7 +150,11 @@ export async function planningQuery(
     : [];
   const bills = () => owned(billRows);
   async function balances() {
-    const rows = owned(allAccounts).map((a) => ({ ...a }));
+    const rows = owned(allAccounts)
+      .filter((account) =>
+        matchesFinancialIdentity(account.identity, identityFilter),
+      )
+      .map((a) => ({ ...a }));
     const map = new Map(rows.map((a) => [a.id, a]));
     const matched = new Set<string>();
     const manualIds = rows.filter((row) => row.manual).map((row) => row.id);
@@ -173,10 +187,13 @@ export async function planningQuery(
     return rows.map((row) => {
       const setting = state.accounts.find((a) => a.id === row.id);
       const details = snapshot.accountDetails.find((a) => a.id === row.id);
-      const limit = setting?.manual
-        ? (setting.creditLimitMinor ?? null)
-        : (details?.creditLimitMinor ?? null);
-      let available = details?.availableCreditMinor ?? null;
+      const credit = cardCredit({
+        available: details?.availableCreditMinor ?? null,
+        limit: details?.creditLimitMinor ?? null,
+        localLimit: setting?.creditLimitMinor,
+      });
+      const limit = credit.creditLimitMinor;
+      let available = credit.availableCreditMinor;
       if (row.manual && limit !== null && row.balanceMinor !== null) {
         const committed = state.recurrences
           .filter((r) => r.accountId === row.id && r.active && r.installmentId)
@@ -201,7 +218,7 @@ export async function planningQuery(
         availableCreditMinor: available,
         closeDate: details?.closeDate ?? null,
         closeDay: setting?.closeDay ?? null,
-        creditEstimated: row.manual,
+        creditEstimated: row.manual || credit.creditEstimated,
         creditLimitMinor: limit,
         dueDate: details?.dueDate ?? null,
         dueDay: setting?.dueDay ?? null,
@@ -552,19 +569,23 @@ export async function planningQuery(
     input: Extract<PlanningCommand, { tool: "get_investments" }>,
   ) {
     return investmentPortfolio(
-      owned(state.investments).map((investment) => ({
-        ...investment,
-        identity: investment.identity ?? {
-          cardBrand: null,
-          institution:
-            Object.values(
-              snapshot.connections.find(
-                (connection) => connection.id === investment.connectionId,
-              )?.accounts ?? {},
-            ).find((account) => account.identity?.institution)?.identity
-              ?.institution ?? null,
-        },
-      })),
+      owned(state.investments)
+        .map((investment) => ({
+          ...investment,
+          identity: investment.identity ?? {
+            cardBrand: null,
+            institution:
+              Object.values(
+                snapshot.connections.find(
+                  (connection) => connection.id === investment.connectionId,
+                )?.accounts ?? {},
+              ).find((account) => account.identity?.institution)?.identity
+                ?.institution ?? null,
+          },
+        }))
+        .filter((investment) =>
+          matchesFinancialIdentity(investment.identity, identityFilter),
+        ),
       input,
     );
   }

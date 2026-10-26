@@ -9,6 +9,7 @@
     "includes": [
       "!!**/dist",
       "!!**/.wrangler",
+      "!!**/.claude/worktrees",
       "!!.agents",
       "!**/*.md",
       "!**/package-lock.json",

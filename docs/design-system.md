@@ -12,11 +12,17 @@ as classes de componentes Kumo mantêm prioridade. Não definir a cor global de
 `a`, fontes de controles ou seletores genéricos por `data-kumo-component`.
 Inter vem da distribuição oficial rsms.me/inter, com licença SIL OFL em
 `src/web/assets/fonts/Inter-LICENSE.txt`, sem serviço de fontes durante o uso.
-Não há Hanken nem wordmark especial. O nome é Caderninho.
+Source Serif 4 vem da distribuição oficial Adobe (commit
+`80d3f8894c09c937bebfa9011247d2e1c79fd6f4`), com licença em
+`src/web/assets/fonts/SourceSerif4-LICENSE.md`. A fonte editorial só é carregada
+pela landing e pelo espécime da referência visual. Não há serviço externo de
+fontes, Hanken ou wordmark especial. O nome é Caderninho.
 
 O tema inicial é escuro; o alternador sol/lua aplica a preferência local em
 `data-mode` e salva `caderninho.theme`. O script é assíncrono, permitido pela CSP
 sem código inline; não garante ausência de um primeiro frame no tema inicial.
+O consentimento OAuth conserva a CSP sem scripts: `Portal` desativa o bootstrap
+e o alternador por `themeSwitching={false}`, mantendo o tema escuro estático.
 Receitas/entradas e despesas/saídas usam success/danger da biblioteca, com sinal,
 moeda e direção preservados. Identidade de categoria usa a cor e o ícone do
 catálogo em barras, transações, regras e opções; nomes permanecem neutros.
@@ -28,8 +34,41 @@ Conteúdo e controles têm 16 px; metadados, `--text-xs` e `--text-sm` têm 14 p
 Inter local em `--font-sans` atende à preferência explícita do usuário, que
 prevalece sobre a regra 14 px da skill. Métricas usam 32 px desktop/26 px móvel. Títulos usam `Text` ou headings sem alterar
 tracking. Peso máximo 600. Componentes conservam foco, raios, sombras e estados.
+`--font-display` usa Source Serif 4 somente nos títulos editoriais da landing;
+prévia, navegação e controles usam Inter. `--font-mono` usa a monoespaçada do
+sistema em código, URLs, chaves e prompts, cerca de 0,9 em no texto. Dinheiro
+continua em Inter tabular. Corpo tem entrelinha 1,5; títulos de interface 1,25;
+hero 1,1. Não criar fontes alternativas por rota. `DesignTypography` demonstra
+papéis, acentos e valores exatos na referência visual.
+
 Espaços do produto seguem 4, 8, 12, 16, 24 e 32 px. CSS próprio organiza conteúdo
 e responsividade; não reconstrói Button, Select, Checkbox, Tooltip ou modal.
+
+### Superfícies, contornos e sombras
+
+`src/web/styles/design.css` ajusta os tokens nativos por `data-mode`; todos os
+documentos e componentes usam a mesma fundação. No claro: canvas neutro 96%,
+elevated 98%, base branco, line 82% e hairline 90% em OKLCH sem croma. No escuro:
+canvas 14%, elevated 17%, base 21%, line 36% e hairline 30%. `control`/`tint` usam
+100%/94% e 23%/28%, respectivamente. Fundos não são todos brancos ou pretos.
+`surface-raised` é alias de elevated, uma camada discreta; popup usa base.
+
+A escala é compartilhada: `shadow-xs` curta para conteúdo, `shadow-sm` para
+controles, `shadow-md` e `shadow-lg` para sobreposições, `shadow-dialog` para
+modal. A cor de queda vem de `kumo-shadow-drop` (preto 8% no claro, 35% no
+escuro). O contorno ring nativo permanece; divisores sticky usam borda sem
+elevação. Não adicionar sombras de página, empilhar molduras nem usar sombra
+como único sinal de limite.
+
+O standalone Kumo 2.14 embute comprimentos nas utilidades de sombra. O bloco
+`@layer utilities` em `design.css` as associa aos tokens, mantendo a composição
+de ring/foco. Dialog também embute uma sombra inline de 3%: `WorkspaceDialog`
+passa `--tw-shadow: var(--shadow-dialog)` pelo `style` suportado, sem redesenhar
+o modal. Não adicionar seletores genéricos por `data-kumo-component`.
+`DesignPalette` demonstra as cores efetivas, LayerCard e Popover reais. Comparar
+as mesmas superfícies nos dois modos, inclusive campos, foco e leitura secundária.
+O texto de aviso claro usa OKLCH 48%/0,12/57,5 para ter contraste adequado nos
+fundos usados; a cor de preenchimento do alerta continua independente.
 
 ## Responsabilidades
 
@@ -37,15 +76,18 @@ e responsividade; não reconstrói Button, Select, Checkbox, Tooltip ou modal.
 | --- | --- |
 | Navegação autenticada | `workspace-shell.tsx`: Sidebar.Provider/Header/Content/Group/Menu/MenuButton/Footer/Trigger e useSidebar |
 | Navegação pública | `PublicLayout` e landing estática, com seus links e âncoras próprios |
-| Superfícies | LayerCard em listas irmãs; nunca LayerCard aninhado |
-| Transações | Table, Badge e LayerDialog; descrição abre detalhes por botão com nome contextual |
-| Contas, regras e histórico | Collapsible.DefaultTrigger/DefaultPanel com resumo financeiro; ações ficam no painel |
-| Filtros | Toolbar e LayerDialog, GET e rascunho isolado |
+| Superfícies | Títulos externos com `AnalysisSection`; LayerCard em listas irmãs, nunca aninhado |
+| Séries mensais | Chart com extremidades alinhadas e `MonthSlider` nativo acessível; `PeriodPicker` Kumo compartilha seleção/Cancelar |
+| Parcelas | `InstallmentTable` em Cartões e transações, avatares e evidência de pagamento da fatura vinculada |
+| FAQ público | Collapsible Kumo sob demanda, fallback HTML com caret Phosphor |
+| Transações | Table, Badge e Dialog; linha abre o botão nativo; categoria e menu oferecem ações diretas |
+| Contas, regras e histórico | Collapsible.DefaultTrigger/Panel, divisor simples, detalhes 14/16 px e ações compactas; sem Critérios/Referência técnica |
+| Filtros | Toolbar e Dialog, GET e rascunho isolado |
 | Campos | Input/Field/Label, Select pequeno, Combobox para conta/categoria, InputGroup na busca |
 | Datas | Input date digitável + DatePicker range em Popover, carregado sob demanda e traduzido |
-| Edição | LayerDialog sempre montado, proteção de rascunho, busy, Escape e retorno de foco |
+| Edição | Dialog sempre montado; WorkspaceDialog organiza cabeçalho/corpo/ações numa superfície nativa, proteção de rascunho, busy, Escape e retorno de foco |
 | Feedback | Banner persistente, Empty, Loader e SkeletonLine; Toasty confirma salvamento concluído |
-| Cópia | ClipboardText para URL MCP e InlineCopyText para IDs, com rótulos em português |
+| Cópia | ClipboardText para URL/chave MCP e prompts, com rótulos em português |
 | Paginação | Pagination com total desconhecido; API só fornece cursor para avançar e URL de reinício |
 | Medidas | Meter apenas com denominador declarado; escala relativa na atividade não representa cota |
 | Explicação de consulta MCP | Flow real 2.14, quatro nós, horizontal/vertical; fallback HTML e carregamento sob demanda na landing |
@@ -56,7 +98,14 @@ integrado do Input. `UiCheckbox` acrescenta estado inicial de formulário à API
 controlada do Checkbox 2.14, preservando o valor nativo `on`.
 
 A Sidebar precisa de uma altura definida no shell. Seu Footer é uma linha
-compacta; referência visual e saída pertencem ao Menu dentro de Content.
+compacta com tema; Trigger/Close ficam no Header ao lado da marca. Referência
+visual e saída pertencem ao Menu dentro de Content. Não repetir contagens da
+instalação no rodapé.
+Rotas ficam em Finanças, Organização e Instalação; a demo conserva os grupos
+aplicáveis e Demonstração. Não esconder os links atrás de grupos recolhidos.
+A marca móvel é um link para a visão geral do ambiente com seu recorte.
+`lastSuccessAt` informa a última importação concluída, sem prometer atualização
+individual de limites; a demo identifica a data estática dos exemplos.
 Não colocar uma lista vertical inteira no Footer nem sobrescrever sua aparência.
 O menu móvel fecha após uma navegação aceita, preservando o bloqueio de rascunho.
 
@@ -78,8 +127,8 @@ os campos. Busy bloqueia fechamento e navegação; cancelamento não interrompe 
 escrita de resultado incerto. Confirmação destrutiva começa em Cancelar.
 Roots permanecem montados ao fechar, permitindo a animação de saída do Kumo.
 
-Movimento: wrapper de página em 180 ms/6 px; hero em 400 ms e seções públicas
-em 280 ms, uma vez. Nenhum valor financeiro é interpolado e não há cascata de
+Movimento: wrapper de página em 140 ms/6 px; hero em 220 ms e seções públicas
+em 160 ms, uma vez. Nenhum valor financeiro é interpolado e não há cascata de
 linhas. Sidebar/Dialog/Collapsible mantêm transições nativas. O Collapsible
 recebe neutralização local de painel/caret em `prefers-reduced-motion: reduce`.
 O Flow tem uma sequência finita e pausável; textos não dependem da reprodução.
@@ -92,6 +141,25 @@ foco/hover da Sidebar antecipam módulos sem antecipar consultas. Conexões é
 carregada sob demanda. Grupos/valores/options do Chart conservam referência até
 os dados ou a moeda mudarem. A demo mantém o shell ao navegar por GET.
 O helper puro da landing importa shared/result diretamente, sem carregar HTTP.
+
+Gráficos compartilham `chart-tooltip.ts`: HTML com superfície opaca, texto e
+borda dos tokens, resposta imediata e contenção no próprio gráfico. `ChartViewport`
+reserva altura e monta o canvas uma vez, a até 160 px da área visível; legenda e
+tabela permanecem disponíveis. Não carregar o editor de regras/transações ao
+abrir Investimentos na demo. As ilhas MCP, regra, performance e FAQ da landing
+têm entradas separadas e conservam o fallback HTML se uma melhoria falhar.
+
+`SyncStatusIndicator` usa Popover nativo por hover/teclado/clique em todos os tamanhos:
+relógio neutro, Loader para importação pendente/em execução, relógio verde por até
+três minutos desde a conclusão real e aviso para falha/consulta indisponível.
+A data da demo é explicitamente fictícia, sem sucesso ou progresso simulados.
+O estado fica no shell e não é reiniciado ao navegar. O monitor pausa em aba
+oculta e não mantém polling periódico de instalação ociosa; mudanças da origem
+invalidam leituras e atualizam os consumidores. Botões de recarga de consultas
+foram removidos. Ações reais de sincronização, retry, salvar e confirmar continuam.
+Entrada do painel: 140 ms; hero: 220 ms; revelação editorial: 160 ms. Sem animação
+de números ou de cor no hover. Movimento reduzido elimina entradas e rotação do
+indicador; o estado continua disponível pelo nome acessível e pelo Popover.
 
 O preview de regra consulta; salvar afeta as próximas importações, sem
 reclassificar histórico. Grupo Pessoal não pode ser excluído. Acesso MCP sempre
@@ -124,14 +192,40 @@ modelos declarados. Bytes não são tokens nem custo de IA. A escala diária de
 Meter usa o máximo observado no período, declarado no texto, sem sugerir cota.
 Free tier mantém laranja como consumo, período, cota e estimativa identificados.
 
+### Respiro de filtros e registros
+
+`WorkspaceFilters` coloca a composição de pessoas fora do Toolbar, num grupo
+flexível com gap de 12 px. Toolbar conserva Filtros/Limpar; os avatares preservam
+seus links e contorno atuais. O grupo pode quebrar linha sem alargar os botões.
+
+`InstallmentTable` conserva a tabela semântica e a faixa nativa Kumo. No celular,
+cada linha tem padding de 16 px e gap de 12 px × 16 px. Em containers de até
+280 px, status e pagamento ocupam linhas completas, alinhados à esquerda.
+Não adicionar um card à tabela: a superfície da compra já é um LayerCard.
+
+`InvestorDashboard` usa um LayerCard nativo por posição, com 16 px entre cards.
+Cabeçalho externo; trigger e painel conservam insets de 16 px × 20 px, reduzidos
+para 16 px no celular. A grade de valores permanece comparável no desktop.
+
 ### Composição de avatares
 
 `AccountAvatar` compõe pessoa, instituição e bandeira sem trocar o banco pela
 bandeira do cartão. São círculos de 32 px com sobreposição de 10 px; partes
 ausentes não deixam espaços vazios. O SVG bancário usa a identidade normalizada
 da conta e a URL validada da CDN Pluggy. A bandeira usa o asset local existente.
-Cada imagem mantém seu fallback independente. O nome acessível e o Tooltip
-identificam a composição inteira; as imagens internas são decorativas.
+`AvatarStack` desenha somente os arcos expostos do perímetro externo: 0,75 px
+em repouso, 1,5 px em hover/seleção e 2 px com o token de foco por teclado.
+Não há linhas nas interseções, anéis de superfície, salto de camada ou mudança
+de tamanho. Cada imagem mantém seu fallback independente.
+
+Cada parte conhecida é um link com nome acessível e Tooltip: pessoa seleciona o
+titular, banco reúne todas as contas do mesmo ID de instituição e bandeira reúne
+os cartões correspondentes de todos os bancos. Grupo/período/busca permanecem;
+conta individual e cursor saem. Os filtros se combinam e têm chips removíveis.
+A seleção integra consultas, totais e paginação, não apenas os itens renderizados.
+A demo aplica a mesma correspondência de identidade. Select/Combobox usam a versão
+estática; a composição interativa fica fora do botão de expansão. A referência
+visual oferece o exemplo real em “Avatares e filtros”.
 
 A pessoa aparece conforme o contexto existente: várias pessoas e nenhum filtro
 individual. Ao filtrar uma pessoa, banco e bandeira continuam disponíveis.
@@ -149,6 +243,15 @@ Revisão local de 25/10/2026, com dados fictícios e `mise run check` aprovado:
 | Ausência / falha de logo | Conta sem identidade conferida na demo com ícone genérico. Falha de rede da imagem não foi provocada nesta revisão. |
 
 ## Referência e validação
+
+Na revisão global de 26/10/2026, `WorkspaceHeading` recebeu um espaço para
+filtros no próprio cabeçalho. Busca de transações/regras continua junto da lista;
+não aplicar o mesmo arranjo a todas as tarefas. `UiIconButton` compartilha Tooltip,
+nome acessível e alvo de 40 px com as ações do onboarding, categorias e regras.
+Filtros sem escolhas reais são omitidos, preservando campos GET e remoção dos
+recortes ativos. Ausência de valor usa texto de conteúdo de 16 px; valores
+monetários mantêm 32/26 px. Consulte a [matriz por página](../design-qa.md) para
+capturas, estados, decisões e limites da validação.
 
 `/account/design-system` demonstra os componentes realmente usados, com dados
 fictícios. Não mantém uma biblioteca própria de botões, tooltips ou sombras.
@@ -214,9 +317,9 @@ fluxo de gravação, sem sincronização de categorias entre abas independentes.
 
 | Superfície | Política |
 | --- | --- |
-| Hero | 400 ms/6 px, atrasos 0/40/80/120 ms; somente sem movimento reduzido. |
-| Seções públicas | Revelação única de 280 ms/8 px, opacidade 0,75 → 1; conteúdo visível sem IntersectionObserver. |
-| Painel/demo | Wrapper de 180 ms/6 px; rota/query reinicia a entrada privada. Sem shimmer, cascata de linhas ou números interpolados. |
+| Hero | 220 ms/6 px, atrasos 0/40/80/120 ms; somente sem movimento reduzido. |
+| Seções públicas | Revelação única de 160 ms/8 px, opacidade 0,75 → 1; conteúdo visível sem IntersectionObserver. |
+| Painel/demo | Wrapper de 140 ms/6 px; rota/query reinicia a entrada privada. Sem shimmer, cascata de linhas ou números interpolados. |
 | Sidebar/Dialog/Collapsible | Transições nativas e roots montados; neutralização local sob prefers-reduced-motion. |
 | Exemplo MCP | Quatro etapas de 2,4 s, conector de 700 ms; 9,6 s ativos, sequência finita, pausável e repetível. |
 

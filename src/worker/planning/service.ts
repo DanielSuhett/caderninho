@@ -5,7 +5,11 @@ import {
   type PortalCardsQuery,
   type PortalTransactionQuery,
 } from "../../contracts";
-import { AccountType, PlanningError } from "../../domain";
+import {
+  AccountType,
+  type FinancialIdentityFilter,
+  PlanningError,
+} from "../../domain";
 import { hash, tryCatch } from "../../shared";
 import { portalCards } from "./cards.service";
 import type {
@@ -47,8 +51,12 @@ function readContext(snapshot: PlanningSnapshot, selection: Selection) {
     view: "effective",
   };
 }
-function readSelection(snapshot: PlanningSnapshot, input: PlanningCommand) {
-  const selection = planningSelection(input);
+function readSelection(
+  snapshot: PlanningSnapshot,
+  input: PlanningCommand,
+  identityFilter: FinancialIdentityFilter = {},
+) {
+  const selection = planningSelection(input, identityFilter);
   if (input.tool === "get_investments") {
     selection.investments = true;
   }
@@ -98,7 +106,11 @@ export function createPlanningService(
       data: result,
     };
   }
-  function query(input: PlanningQuery, snapshot: PlanningSnapshot) {
+  function query(
+    input: PlanningQuery,
+    snapshot: PlanningSnapshot,
+    identityFilter: FinancialIdentityFilter,
+  ) {
     if (input.tool === "preview_rule_import") {
       return planningMutation(input, {
         now: now().toISOString(),
@@ -107,7 +119,10 @@ export function createPlanningService(
         state: structuredClone(snapshot.state),
       });
     }
-    return planningQuery(input, snapshot, repository, now());
+    return planningQuery(input, snapshot, repository, {
+      identityFilter,
+      now: now(),
+    });
   }
   return {
     async cards(input: PortalCardsQuery) {
@@ -126,7 +141,10 @@ export function createPlanningService(
       }
       return { ...context, data };
     },
-    async execute(input: PlanningCommand): Promise<PlanningResult> {
+    async execute(
+      input: PlanningCommand,
+      identityFilter: FinancialIdentityFilter = {},
+    ): Promise<PlanningResult> {
       if (input.tool === "preview_rule") {
         const result = await previewRule(repository, input);
         return {
@@ -140,9 +158,12 @@ export function createPlanningService(
       }
       if (isPlanningQuery(input)) {
         const snapshot = await repository.read(catalogReads.get(input.tool));
-        const context = readContext(snapshot, readSelection(snapshot, input));
+        const context = readContext(
+          snapshot,
+          readSelection(snapshot, input, identityFilter),
+        );
         snapshot.partial = context.partial;
-        const result = await query(input, snapshot);
+        const result = await query(input, snapshot, identityFilter);
         if ((await repository.revision()) !== snapshot.revision) {
           throw new Error(PlanningError.RESTART_REQUIRED);
         }

@@ -20,12 +20,14 @@ export function PersonEditor({
   busy,
   onSubmit,
   changed,
+  onCancel,
   children,
 }: {
   person: Person;
   busy: boolean;
   onSubmit: (event: FormEvent<HTMLFormElement>) => Promise<void>;
   changed?: () => void;
+  onCancel?: () => void;
   children?: ReactNode;
 }) {
   const [photo, setPhoto] = useState(person.photo ?? null);
@@ -69,7 +71,9 @@ export function PersonEditor({
         className="person-editor-fields"
         disabled={busy || processing}
       >
-        <legend className="sr-only">Perfil de {person.name}</legend>
+        <legend className="sr-only">
+          {person.name ? `Perfil de ${person.name}` : "Nova pessoa"}
+        </legend>
         <div className="person-photo-controls">
           <PersonAvatar
             person={{ ...person, photo }}
@@ -114,6 +118,17 @@ export function PersonEditor({
             name="name"
             required
           />
+        </div>
+        <div className="draft-actions">
+          {!!onCancel && (
+            <UiButton
+              onClick={onCancel}
+              type="button"
+              variant="outline"
+            >
+              Cancelar
+            </UiButton>
+          )}
           <UiButton
             disabled={busy || processing}
             type="submit"

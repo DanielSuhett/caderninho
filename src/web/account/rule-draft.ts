@@ -58,14 +58,20 @@ function amountInput(value: string, currency: string) {
 }
 export function initialAlternatives(
   rule?: WorkspaceCatalog["rules"][number],
+  description?: string,
 ): DraftAlternative[] {
+  let operator: RuleOperator = RuleOperator.contains;
+  if (description) {
+    operator =
+      description.length > 160 ? RuleOperator.starts_with : RuleOperator.equals;
+  }
   const source = rule?.filter?.alternatives ?? [
     {
       conditions: [
         {
           field: "description",
-          operator: RuleOperator.contains,
-          value: rule?.text ?? "",
+          operator,
+          value: rule?.text ?? description?.slice(0, 160) ?? "",
         },
       ],
     },

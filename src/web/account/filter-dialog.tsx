@@ -1,6 +1,9 @@
-import { LayerDialog } from "@cloudflare/kumo/components/layer-dialog";
+import { Dialog } from "@cloudflare/kumo/components/dialog";
 import { Toolbar } from "@cloudflare/kumo/components/toolbar";
 import { type ReactNode, useState } from "react";
+
+import { UiButton } from "../ui";
+import { WorkspaceDialog } from "./workspace-dialog";
 
 export function FilterDialog({
   title,
@@ -15,30 +18,40 @@ export function FilterDialog({
 }) {
   const [open, setOpen] = useState(false);
   return (
-    <LayerDialog.Root
+    <Dialog.Root
       onOpenChange={setOpen}
       open={open}
     >
-      <LayerDialog.Trigger render={<Toolbar.Button type="button" />}>
+      <Dialog.Trigger render={<Toolbar.Button type="button" />}>
         {trigger}
-      </LayerDialog.Trigger>
-      <LayerDialog.Content
+      </Dialog.Trigger>
+      <WorkspaceDialog
+        actions={
+          <>
+            <Dialog.Close
+              render={
+                <UiButton
+                  type="button"
+                  variant="secondary"
+                />
+              }
+            >
+              Cancelar
+            </Dialog.Close>
+            <UiButton
+              form={formId}
+              type="submit"
+              variant="primary"
+            >
+              Aplicar filtros
+            </UiButton>
+          </>
+        }
         closeLabel="Fechar filtros"
-        size="base"
+        title={title}
       >
-        <LayerDialog.Title>
-          <span className="text-xl">{title}</span>
-        </LayerDialog.Title>
-        <LayerDialog.Body>{children}</LayerDialog.Body>
-        <LayerDialog.Actions dismissLabel="Cancelar">
-          <LayerDialog.Actions.Primary
-            form={formId}
-            type="submit"
-          >
-            Aplicar filtros
-          </LayerDialog.Actions.Primary>
-        </LayerDialog.Actions>
-      </LayerDialog.Content>
-    </LayerDialog.Root>
+        {children}
+      </WorkspaceDialog>
+    </Dialog.Root>
   );
 }

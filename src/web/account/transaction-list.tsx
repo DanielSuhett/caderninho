@@ -1,9 +1,16 @@
 import { Badge } from "@cloudflare/kumo/components/badge";
 import { Banner } from "@cloudflare/kumo/components/banner";
-import { InlineCopyText } from "@cloudflare/kumo/components/inline-copy-text";
+import { Dialog } from "@cloudflare/kumo/components/dialog";
+import { DropdownMenu } from "@cloudflare/kumo/components/dropdown";
 import { LayerCard } from "@cloudflare/kumo/components/layer-card";
-import { LayerDialog } from "@cloudflare/kumo/components/layer-dialog";
 import { Table } from "@cloudflare/kumo/components/table";
+import { Tooltip } from "@cloudflare/kumo/components/tooltip";
+import {
+  DotsThreeIcon,
+  FlowArrowIcon,
+  PencilSimpleIcon,
+} from "@phosphor-icons/react";
+import { type PointerEvent, type Ref, useCallback, useRef } from "react";
 import type { z } from "zod/v4";
 
 import type {
@@ -16,9 +23,13 @@ import { MoneyValue } from "../money-value";
 import { UiButton } from "../ui";
 import { type AccountAppearance, AccountAvatar } from "./account-identity";
 import { type CategoryAppearance, CategoryLabel } from "./category-appearance";
+import { InstallmentTable } from "./installment-table";
+import { RelatedInstallments } from "./related-installments";
+import { useTransactionEditing } from "./transaction-actions";
 import { TransactionIdentificationDetails } from "./transaction-identification";
+import { useTransactionReader } from "./transaction-reader";
+import { WorkspaceDialog } from "./workspace-dialog";
 import { dayLabel } from "./workspace-resource";
-import { RecordReference } from "./workspace-ui";
 
 type Transaction = z.infer<
   typeof TransactionListSchema
@@ -137,6 +148,21 @@ export function TransactionList({
   );
 }
 
+function openTransactionRow(
+  event: PointerEvent<HTMLTableRowElement>,
+  trigger: HTMLButtonElement | null,
+) {
+  if (
+    event.button !== 0 ||
+    (event.target instanceof Element &&
+      event.target.closest("button,a,input,select,textarea")) ||
+    window.getSelection()?.toString()
+  ) {
+    return;
+  }
+  trigger?.click();
+}
+
 function TransactionItem({
   row,
   account,
@@ -156,6 +182,33 @@ function TransactionItem({
   showOwner: boolean;
   showAccount: boolean;
 }) {
+  const trigger = useRef<HTMLButtonElement>(null);
+  const editing = useTransactionEditing();
+  const pendingAction = useRef<"category" | "rule" | null>(null);
+  const categorize = useCallback(
+    () => editing?.(row, "category"),
+    [editing, row],
+  );
+  const createRule = useCallback(() => editing?.(row, "rule"), [editing, row]);
+  const queueCategory = useCallback(() => {
+    pendingAction.current = "category";
+  }, []);
+  const queueRule = useCallback(() => {
+    pendingAction.current = "rule";
+  }, []);
+  const afterOpenChange = useCallback(
+    (open: boolean) => {
+      if (!open && pendingAction.current) {
+        editing?.(row, pendingAction.current);
+        pendingAction.current = null;
+      }
+    },
+    [editing, row],
+  );
+  const openRow = useCallback((event: PointerEvent<HTMLTableRowElement>) => {
+    // Use the native trigger so closing returns focus to this transaction.
+    openTransactionRow(event, trigger.current);
+  }, []);
   const installments = "installments" in row ? row.installments : [];
   const total = "totalInstallments" in row ? row.totalInstallments : null;
   const current = "installmentNumber" in row ? row.installmentNumber : null;
@@ -172,49 +225,26 @@ function TransactionItem({
     referenceDay,
   );
   return (
-    <LayerDialog.Root>
+    <Dialog.Root onOpenChangeComplete={afterOpenChange}>
       <Table.Row
         className="transaction-row"
         data-wide-amount={amount.length > 22}
+        onPointerUp={openRow}
       >
         <Table.Cell data-label="Descrição">
-          <div className="transaction-identity-row">
-            <AccountAvatar
-              account={appearance ?? { name: account }}
-              person={
-                showOwner
-                  ? { id: row.personId, name: row.personName }
-                  : undefined
-              }
-            />
-            <div>
-              <LayerDialog.Trigger
-                aria-label={`Ver detalhes de ${row.description || "Sem descrição"}`}
-                render={
-                  <UiButton
-                    className="transaction-open"
-                    type="button"
-                    variant="ghost"
-                  />
-                }
-              >
-                {row.description || "Sem descrição"}
-              </LayerDialog.Trigger>
-              <div className="transaction-meta">
-                <span className="table-secondary">
-                  <CategoryLabel
-                    category={variedCategories ? undefined : categoryAppearance}
-                    label={displayedCategory}
-                  />
-                </span>
-                {!!pendingLabel && (
-                  <Badge variant="warning">{pendingLabel}</Badge>
-                )}
-                {!!futureLabel && <Badge variant="info">{futureLabel}</Badge>}
-                {!!row.ignored && <Badge variant="secondary">Ignorada</Badge>}
-              </div>
-            </div>
-          </div>
+          <TransactionIdentity
+            account={account}
+            appearance={appearance}
+            category={displayedCategory}
+            categoryAppearance={
+              variedCategories ? undefined : categoryAppearance
+            }
+            futureLabel={futureLabel}
+            pendingLabel={pendingLabel}
+            row={row}
+            showOwner={showOwner}
+            trigger={trigger}
+          />
         </Table.Cell>
         {showAccount === true && (
           <Table.Cell data-label="Conta">{account}</Table.Cell>
@@ -246,28 +276,171 @@ function TransactionItem({
               Parcela {current}/{total}
             </span>
           )}
+          {!!editing && (
+            <DropdownMenu>
+              <Tooltip
+                content={`Ações de ${row.description || "transação"}`}
+                render={
+                  <DropdownMenu.Trigger
+                    render={
+                      <UiButton
+                        aria-label={`Ações de ${row.description || "transação"}`}
+                        className="transaction-row-menu"
+                        shape="square"
+                        type="button"
+                        variant="ghost"
+                      />
+                    }
+                  >
+                    <DotsThreeIcon size={20} />
+                  </DropdownMenu.Trigger>
+                }
+              />
+              <DropdownMenu.Content>
+                <DropdownMenu.Item
+                  className="flex items-center gap-2"
+                  onClick={categorize}
+                >
+                  <PencilSimpleIcon size={16} />
+                  Categorizar
+                </DropdownMenu.Item>
+                <DropdownMenu.Item
+                  className="flex items-center gap-2"
+                  onClick={createRule}
+                >
+                  <FlowArrowIcon size={16} />
+                  Criar regra
+                </DropdownMenu.Item>
+              </DropdownMenu.Content>
+            </DropdownMenu>
+          )}
         </Table.Cell>
       </Table.Row>
-      <LayerDialog.Content
+      <WorkspaceDialog
+        actions={
+          editing ? (
+            <>
+              <Dialog.Close
+                render={
+                  <UiButton
+                    onClick={queueCategory}
+                    type="button"
+                    variant="primary"
+                  />
+                }
+              >
+                <PencilSimpleIcon size={18} />
+                Categorizar
+              </Dialog.Close>
+              <Dialog.Close
+                render={
+                  <UiButton
+                    onClick={queueRule}
+                    type="button"
+                    variant="outline"
+                  />
+                }
+              >
+                <FlowArrowIcon size={18} />
+                Criar regra
+              </Dialog.Close>
+            </>
+          ) : undefined
+        }
         closeLabel="Fechar detalhes"
-        size="lg"
+        size="xl"
+        title="Detalhes da transação"
       >
-        <LayerDialog.Title>
-          <span className="text-xl">Detalhes da transação</span>
-        </LayerDialog.Title>
-        <LayerDialog.Body>
-          <TransactionDetailContent
-            account={account}
-            category={displayedCategory}
-            categoryAppearance={
-              variedCategories ? undefined : categoryAppearance
-            }
-            referenceDay={referenceDay}
-            row={row}
-          />
-        </LayerDialog.Body>
-      </LayerDialog.Content>
-    </LayerDialog.Root>
+        <TransactionDetailContent
+          account={account}
+          appearance={appearance}
+          category={displayedCategory}
+          categoryAppearance={variedCategories ? undefined : categoryAppearance}
+          referenceDay={referenceDay}
+          row={row}
+        />
+      </WorkspaceDialog>
+    </Dialog.Root>
+  );
+}
+
+function TransactionIdentity({
+  row,
+  account,
+  appearance,
+  category,
+  categoryAppearance,
+  showOwner,
+  trigger,
+  pendingLabel,
+  futureLabel,
+}: {
+  row: Transaction | PortalTransaction;
+  account: string;
+  appearance: AccountAppearance | undefined;
+  category: string;
+  categoryAppearance: CategoryAppearance | undefined;
+  showOwner: boolean;
+  trigger: Ref<HTMLButtonElement>;
+  pendingLabel: string;
+  futureLabel: string | undefined;
+}) {
+  const editing = useTransactionEditing();
+  const categorize = useCallback(
+    () => editing?.(row, "category"),
+    [editing, row],
+  );
+  const label = (
+    <CategoryLabel
+      category={categoryAppearance}
+      label={category}
+    />
+  );
+  return (
+    <div className="transaction-identity-row">
+      <AccountAvatar
+        account={appearance ?? { name: account }}
+        person={
+          showOwner ? { id: row.personId, name: row.personName } : undefined
+        }
+      />
+      <div>
+        <Dialog.Trigger
+          aria-label={`Ver detalhes de ${row.description || "Sem descrição"}`}
+          render={
+            <UiButton
+              className="transaction-open"
+              ref={trigger}
+              type="button"
+              variant="ghost"
+            />
+          }
+        >
+          {row.description || "Sem descrição"}
+        </Dialog.Trigger>
+        <div className="transaction-meta">
+          <span className="table-secondary">
+            {editing ? (
+              <UiButton
+                aria-label={`Categorizar ${row.description || "transação"}`}
+                className="transaction-category-button"
+                onClick={categorize}
+                type="button"
+                variant="ghost"
+              >
+                {label}
+                <PencilSimpleIcon size={14} />
+              </UiButton>
+            ) : (
+              label
+            )}
+          </span>
+          {!!pendingLabel && <Badge variant="warning">{pendingLabel}</Badge>}
+          {!!futureLabel && <Badge variant="info">{futureLabel}</Badge>}
+          {!!row.ignored && <Badge variant="secondary">Ignorada</Badge>}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -277,41 +450,47 @@ export function TransactionDetailContent({
   category,
   categoryAppearance,
   referenceDay,
+  appearance,
 }: {
   row: Transaction | PortalTransaction;
   account: string;
   category: string;
   categoryAppearance?: CategoryAppearance | undefined;
   referenceDay?: string | undefined;
+  appearance?: AccountAppearance | undefined;
 }) {
   const installments = "installments" in row ? row.installments : [];
-  const total = "totalInstallments" in row ? row.totalInstallments : null;
+  const total =
+    "totalInstallments" in row
+      ? row.totalInstallments
+      : (row.identification?.creditCardMetadata?.totalInstallments ?? null);
+  const reader = useTransactionReader();
   const current = "installmentNumber" in row ? row.installmentNumber : null;
   return (
-    <>
-      <p className="transaction-dialog-amount">
-        <strong>
-          <TransactionAmount
-            amount={amountLabel(row)}
-            available={row.amountMinor !== null}
-            tone={transactionTone(row)}
-          />
-        </strong>
-        <span>
-          {row.direction === TransactionDirection.DEBIT ? "Saída" : "Entrada"}
-        </span>
-      </p>
+    <div className="transaction-dialog-content">
+      <div className="transaction-detail-summary">
+        <AccountAvatar
+          account={appearance ?? { name: account }}
+          person={{ id: row.personId, name: row.personName }}
+        />
+        <h3>{row.description || "Sem descrição"}</h3>
+        <p className="transaction-dialog-amount">
+          <strong>
+            <TransactionAmount
+              amount={amountLabel(row)}
+              available={row.amountMinor !== null}
+              tone={transactionTone(row)}
+            />
+          </strong>
+          <span>
+            {row.direction === TransactionDirection.DEBIT ? "Saída" : "Entrada"}
+          </span>
+        </p>
+      </div>
       {row.ignored === true && (
         <Banner
           description="Este lançamento permanece disponível para consulta e está marcado como ignorado."
           title="Transação ignorada"
-        />
-      )}
-      {installments.length > 0 && (
-        <InstallmentSchedule
-          installments={installments}
-          referenceDay={referenceDay}
-          total={total}
         />
       )}
       <TransactionDetails
@@ -326,7 +505,23 @@ export function TransactionDetailContent({
         currency={row.currency}
         identification={row.identification}
       />
-    </>
+      {reader && total !== null && total > 1 ? (
+        <RelatedInstallments
+          account={appearance ?? { name: account }}
+          accountId={row.accountId}
+          id={row.id}
+        />
+      ) : (
+        installments.length > 0 && (
+          <InstallmentTable
+            account={appearance ?? { name: account }}
+            installments={installments}
+            referenceDay={referenceDay}
+            total={total}
+          />
+        )
+      )}
+    </div>
   );
 }
 
@@ -353,78 +548,6 @@ function transactionStates(
   return { futureLabel, pendingLabel };
 }
 
-function InstallmentSchedule({
-  installments,
-  total,
-  referenceDay,
-}: {
-  installments: Installment[];
-  total: number | null;
-  referenceDay: string | undefined;
-}) {
-  return (
-    <section
-      aria-label="Parcelas desta compra"
-      className="transaction-installments"
-    >
-      <h3>
-        {plural(
-          installments.length,
-          "parcela informada",
-          "parcelas informadas",
-        )}
-        {total !== null && ` de ${total}`}
-      </h3>
-      <ol>
-        {installments.map((item) => (
-          <li key={item.id}>
-            <span className="installment-number">
-              {item.installmentNumber}/{item.totalInstallments}
-            </span>
-            <time dateTime={item.date}>{dayLabel(item.date)}</time>
-            <strong>
-              <TransactionAmount
-                amount={amountLabel(item)}
-                available={item.amountMinor !== null}
-                tone={transactionTone(item)}
-              />
-            </strong>
-            <span className="installment-states">
-              {item.status === TransactionStatus.PENDING
-                ? "Pendente na origem"
-                : "Registrada na origem"}
-              {!!referenceDay && item.date > referenceDay && " · Futura"}
-              {!!item.ignored && " · Ignorada"}
-            </span>
-            {!!item.identification && (
-              <details className="installment-identification">
-                <summary>Identificação desta parcela</summary>
-                <TransactionIdentificationDetails
-                  currency={item.currency}
-                  identification={item.identification}
-                />
-              </details>
-            )}
-          </li>
-        ))}
-      </ol>
-      {total !== null && installments.length < total && (
-        <p className="muted">
-          {plural(
-            total - installments.length,
-            "parcela ainda não recebida",
-            "parcelas ainda não recebidas",
-          )}{" "}
-          da origem.
-        </p>
-      )}
-      <p className="muted">
-        O estado da origem não indica pagamento da fatura.
-      </p>
-    </section>
-  );
-}
-
 function TransactionDetails({
   row,
   account,
@@ -449,88 +572,50 @@ function TransactionDetails({
     dateLabel = "Primeira parcela conhecida em";
   }
   return (
-    <>
-      <dl className="transaction-detail">
-        <div className="transaction-identifier">
-          <dt>Descrição completa</dt>
-          <dd>{row.description || "Sem descrição"}</dd>
-        </div>
+    <dl className="transaction-detail">
+      <div>
+        <dt>{dateLabel}</dt>
+        <dd>
+          <time dateTime={anchorDate}>{dayLabel(anchorDate)}</time>
+        </dd>
+      </div>
+      <div>
+        <dt>Categoria</dt>
+        <dd>
+          <CategoryLabel
+            category={categoryAppearance}
+            label={category}
+          />
+        </dd>
+      </div>
+      {current !== null && total !== null && (
         <div>
-          <dt>{dateLabel}</dt>
+          <dt>Parcela deste registro</dt>
           <dd>
-            <time dateTime={anchorDate}>{dayLabel(anchorDate)}</time>
+            {current}/{total}
           </dd>
         </div>
-        <div>
-          <dt>Categoria</dt>
-          <dd>
-            <CategoryLabel
-              category={categoryAppearance}
-              label={category}
-            />
-          </dd>
-        </div>
-        {current !== null && total !== null && (
-          <div>
-            <dt>Parcela deste registro</dt>
-            <dd>
-              {current}/{total}
-            </dd>
-          </div>
-        )}
-        <div>
-          <dt>Conta</dt>
-          <dd>{account}</dd>
-        </div>
-        <div>
-          <dt>Titular</dt>
-          <dd>{row.personName}</dd>
-        </div>
-        <div>
-          <dt>Estado deste registro</dt>
-          <dd>
-            {row.status === TransactionStatus.PENDING
-              ? "Pendente na origem"
-              : "Registrada na origem"}
-          </dd>
-        </div>
-        <div>
-          <dt>Origem</dt>
-          <dd>{row.manual ? "Lançamento manual" : "Importado da origem"}</dd>
-        </div>
-      </dl>
-      <RecordReference>
-        <div className="transaction-identifier">
-          <dt>Identificador da conta</dt>
-          <dd>
-            <InlineCopyText
-              labels={{
-                copied: "Conta copiada",
-                copyAction: "Copiar identificador da conta",
-              }}
-            >
-              {row.accountId}
-            </InlineCopyText>
-          </dd>
-        </div>
-        <div className="transaction-identifier">
-          <dt>
-            {current !== null && total !== null
-              ? "Identificador desta parcela"
-              : "Identificador"}
-          </dt>
-          <dd>
-            <InlineCopyText
-              labels={{
-                copied: "Identificador copiado",
-                copyAction: "Copiar identificador",
-              }}
-            >
-              {row.id}
-            </InlineCopyText>
-          </dd>
-        </div>
-      </RecordReference>
-    </>
+      )}
+      <div>
+        <dt>Conta</dt>
+        <dd>{account}</dd>
+      </div>
+      <div>
+        <dt>Titular</dt>
+        <dd>{row.personName}</dd>
+      </div>
+      <div>
+        <dt>Estado deste registro</dt>
+        <dd>
+          {row.status === TransactionStatus.PENDING
+            ? "Pendente na origem"
+            : "Registrada na origem"}
+        </dd>
+      </div>
+      <div>
+        <dt>Origem</dt>
+        <dd>{row.manual ? "Lançamento manual" : "Importado da origem"}</dd>
+      </div>
+    </dl>
   );
 }

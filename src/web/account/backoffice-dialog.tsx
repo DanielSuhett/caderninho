@@ -1,5 +1,5 @@
 import { Banner } from "@cloudflare/kumo/components/banner";
-import { LayerDialog } from "@cloudflare/kumo/components/layer-dialog";
+import { Dialog } from "@cloudflare/kumo/components/dialog";
 import {
   type ComponentProps,
   type ReactNode,
@@ -11,6 +11,7 @@ import {
 
 import { UiButton } from "../ui";
 import { guardWorkspaceNavigation } from "./account-navigation";
+import { WorkspaceDialog } from "./workspace-dialog";
 
 export function BackofficeDialog({
   open,
@@ -26,7 +27,7 @@ export function BackofficeDialog({
   open: boolean;
   title: string;
   children: ReactNode;
-  primaryAction: ComponentProps<typeof LayerDialog.Actions.Primary>;
+  primaryAction: ComponentProps<typeof UiButton>;
   actionHint?: ReactNode;
   dirty: boolean;
   busy: boolean;
@@ -115,59 +116,69 @@ export function BackofficeDialog({
         ?.focus();
     });
   }, []);
-  const DialogRoot =
-    presentation === "confirmation" ? LayerDialog.Alert : LayerDialog.Root;
   return (
-    <DialogRoot
-      dismissDisabled={busy || discard}
+    <Dialog.Root
       onOpenChange={onOpenChange}
       open={open}
+      role={presentation === "confirmation" ? "alertdialog" : "dialog"}
     >
-      <LayerDialog.Content size={presentation === "editor" ? "lg" : "base"}>
-        <LayerDialog.Title>
-          <span className="text-xl">{title}</span>
-        </LayerDialog.Title>
-        <LayerDialog.Body>
-          {!!discard && (
-            <div ref={discardNotice}>
-              <Banner
-                description="Suas alterações ainda não foram salvas."
-                title="Descartar as alterações?"
-                variant="alert"
-              />
-              <div className="draft-actions">
-                <UiButton
-                  onClick={continueEditing}
-                  type="button"
-                  variant="secondary"
-                >
-                  Continuar editando
-                </UiButton>
-                <UiButton
-                  onClick={close}
-                  type="button"
-                  variant="destructive"
-                >
-                  Descartar alterações
-                </UiButton>
-              </div>
+      <WorkspaceDialog
+        actions={
+          <>
+            <UiButton
+              disabled={busy || discard}
+              onClick={requestClose}
+              type="button"
+              variant="secondary"
+            >
+              Cancelar
+            </UiButton>
+            <UiButton
+              {...primaryAction}
+              disabled={busy || discard || primaryAction.disabled}
+              variant={primaryAction.variant ?? "primary"}
+            />
+          </>
+        }
+        busy={busy || discard}
+        showClose={presentation !== "confirmation"}
+        size={presentation === "editor" ? "xl" : "lg"}
+        title={title}
+      >
+        {!!discard && (
+          <div ref={discardNotice}>
+            <Banner
+              description="Suas alterações ainda não foram salvas."
+              title="Descartar as alterações?"
+              variant="alert"
+            />
+            <div className="draft-actions">
+              <UiButton
+                onClick={continueEditing}
+                type="button"
+                variant="secondary"
+              >
+                Continuar editando
+              </UiButton>
+              <UiButton
+                onClick={close}
+                type="button"
+                variant="destructive"
+              >
+                Descartar alterações
+              </UiButton>
             </div>
-          )}
-          <div
-            inert={discard}
-            ref={editingBody}
-          >
-            {children}
-            {actionHint}
           </div>
-        </LayerDialog.Body>
-        <LayerDialog.Actions dismissLabel="Cancelar">
-          <LayerDialog.Actions.Primary
-            {...primaryAction}
-            disabled={busy || discard || primaryAction.disabled}
-          />
-        </LayerDialog.Actions>
-      </LayerDialog.Content>
-    </DialogRoot>
+        )}
+        <div
+          className="workspace-editor-body"
+          inert={discard}
+          ref={editingBody}
+        >
+          {children}
+          {actionHint}
+        </div>
+      </WorkspaceDialog>
+    </Dialog.Root>
   );
 }

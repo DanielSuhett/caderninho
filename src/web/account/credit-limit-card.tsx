@@ -17,6 +17,8 @@ export function CreditLimitCard({
   allocated,
   available,
   children,
+  action,
+  estimated = false,
 }: {
   name: string;
   identity?: AccountAppearance["identity"];
@@ -26,6 +28,8 @@ export function CreditLimitCard({
   allocated: string | null;
   available: string | null;
   children?: ReactNode;
+  action?: ReactNode;
+  estimated?: boolean;
 }) {
   const percentage = cardPercentage(allocated, limit);
   const excess = allocated !== null && BigInt(allocated) < 0n;
@@ -39,12 +43,18 @@ export function CreditLimitCard({
     unavailableReason = "O crédito informado supera o limite total.";
   }
   const values = [
-    { label: "Limite total", value: limit },
+    {
+      label: estimated ? "Limite definido por você" : "Limite total",
+      value: limit,
+    },
     {
       label: excess ? "Crédito excedente" : "Limite ocupado",
       value: excess ? (-BigInt(allocated ?? "0")).toString() : allocated,
     },
-    { label: "Disponível", value: available },
+    {
+      label: estimated ? "Disponível estimado" : "Disponível",
+      value: available,
+    },
   ];
   return (
     <LayerCard className="credit-limit-card">
@@ -56,6 +66,7 @@ export function CreditLimitCard({
         <div>
           <h3>{name}</h3>
         </div>
+        {action}
       </header>
       <dl className="credit-limit-values">
         {values.map(({ label, value }) => (

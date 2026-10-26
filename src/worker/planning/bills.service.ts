@@ -3,11 +3,61 @@ import {
   type Bill,
   monthDate,
   type PlanningState,
+  type PlanningTransaction,
+  type TransactionDetails,
   TransactionDirection,
 } from "../../domain";
 import { billingDate, recurrencePayments } from "./billing";
 import type { PlanningRepository, PlanningSnapshot } from "./entity";
 import { accounts, transactionStream } from "./projection";
+
+export function billPaymentEvidence(bill: Bill, snapshot: PlanningSnapshot) {
+  const manuallyPaid =
+    snapshot.state.billPayments.find((payment) => payment.id === bill.id)
+      ?.paid ?? false;
+  const [subsequent] = snapshot.bills
+    .filter(
+      (next) =>
+        next.accountId === bill.accountId &&
+        next.currency === bill.currency &&
+        next.dueDate > bill.dueDate,
+    )
+    .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+  return {
+    bankPaid: !!subsequent && settledByNextBill(bill, subsequent),
+    manuallyPaid,
+  };
+}
+
+export function transactionBillPayments(snapshot: PlanningSnapshot) {
+  const bills = new Map(snapshot.bills.map((bill) => [bill.id, bill]));
+  const payments = new Map<string, "bank" | "manual" | null>();
+  return (
+    row: PlanningTransaction,
+    details: TransactionDetails | undefined,
+  ) => {
+    const bill = details?.billId ? bills.get(details.billId) : undefined;
+    if (
+      !bill ||
+      bill.accountId !== row.accountId ||
+      bill.currency !== row.currency
+    ) {
+      return null;
+    }
+    if (!payments.has(bill.id)) {
+      const evidence = billPaymentEvidence(bill, snapshot);
+      let payment: "bank" | "manual" | null = null;
+      if (evidence.manuallyPaid) {
+        payment = "manual";
+      }
+      if (evidence.bankPaid) {
+        payment = "bank";
+      }
+      payments.set(bill.id, payment);
+    }
+    return payments.get(bill.id) ?? null;
+  };
+}
 
 export async function effectiveBills(context: {
   snapshot: PlanningSnapshot;
@@ -99,17 +149,10 @@ export async function effectiveBills(context: {
   }
   const combined = [...snapshot.bills, ...derived.values()];
   return combined.map((bill) => {
-    const manuallyPaid =
-      state.billPayments.find((p) => p.id === bill.id)?.paid ?? false;
-    const [subsequent] = snapshot.bills
-      .filter(
-        (b) =>
-          b.accountId === bill.accountId &&
-          b.currency === bill.currency &&
-          b.dueDate > bill.dueDate,
-      )
-      .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
-    const bankPaid = !!subsequent && settledByNextBill(bill, subsequent);
+    const { manuallyPaid, bankPaid } = billPaymentEvidence(bill, {
+      ...snapshot,
+      state,
+    });
     return {
       ...bill,
       bankConfirmationPending: manuallyPaid && !bankPaid,

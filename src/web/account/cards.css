@@ -23,33 +23,28 @@
   align-items: center;
   margin-top: 0;
 }
-.cards-months-table {
-  width: 100%;
-  font-size: 14px;
-  font-variant-numeric: tabular-nums;
-}
-.cards-months-table th {
-  font-size: 14px;
-  font-weight: 400;
-  color: var(--muted);
-}
-.cards-months-table td:not(:first-child),
-.cards-months-table th:not(:first-child) {
-  text-align: right;
-}
-.cards-months-table tbody tr + tr {
-  border-top: 1px solid var(--line);
-}
-.cards-months-table [aria-current="date"] {
-  font-weight: 500;
-}
-.cards-count {
-  display: block;
-  margin-top: 4px;
-  color: var(--muted);
-}
 .cards-installments {
-  padding: 0 16px;
+  display: grid;
+  gap: 16px;
+}
+.cards-purchase {
+  padding: 8px 20px;
+}
+.cards-purchase-identity {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  min-width: 0;
+}
+.cards-installment-current {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-end;
+}
+.cards-installment-current .cards-note {
+  margin: 0;
 }
 .cards-installments .disclosure-trigger {
   width: 100%;
@@ -92,32 +87,22 @@
     grid-template-columns: 1fr;
     gap: 8px;
   }
-  .cards-months-table thead {
-    display: none;
-  }
-  .cards-months-table tbody {
-    display: grid;
-  }
-  .cards-months-table tr {
-    display: grid;
-    grid-template-columns: 1fr;
-    padding: 12px 0;
-  }
-  .cards-months-table td {
-    display: flex;
-    gap: 12px;
-    justify-content: space-between;
-    border: 0;
-  }
-  .cards-months-table td[data-label]::before {
-    color: var(--muted);
-    content: attr(data-label);
-  }
-  .cards-count {
-    display: none;
-  }
   .cards-installment-details {
     grid-template-columns: 1fr;
+  }
+}
+@container (max-width: 340px) {
+  .cards-purchase .disclosure-leading {
+    position: static;
+  }
+  .cards-purchase .cards-purchase-identity {
+    min-height: auto;
+    padding-inline-start: 0;
+  }
+  .cards-purchase-identity {
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-start;
   }
 }
 @media (max-width: 480px) {

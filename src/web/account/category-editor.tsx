@@ -1,6 +1,7 @@
 import { Banner } from "@cloudflare/kumo/components/banner";
 import { Input } from "@cloudflare/kumo/components/input";
 import { Select } from "@cloudflare/kumo/components/select";
+import { PencilSimpleIcon, PlusIcon } from "@phosphor-icons/react";
 import {
   type ChangeEvent,
   type FormEvent,
@@ -19,10 +20,11 @@ import {
 } from "../../contracts";
 import { tryCatch } from "../../shared";
 import { randomId } from "../random-id";
-import { UiButton } from "../ui";
+import { UiButton, UiIconButton } from "../ui";
 import type { OrganizationApi } from "./account-api";
 import { BackofficeDialog } from "./backoffice-dialog";
 import { CategorySymbol, categoryIconOptions } from "./category-appearance";
+import { InfoTip } from "./info-tip";
 
 type Category = WorkspaceCatalog["categories"][number];
 type Group = WorkspaceCatalog["categoryGroups"][number];
@@ -85,6 +87,7 @@ function CategoryEditor({
   spaceId,
   close,
   saved,
+  open,
 }: {
   selection: Selection;
   catalog: WorkspaceCatalog;
@@ -93,6 +96,7 @@ function CategoryEditor({
   spaceId: string;
   close: () => void;
   saved: () => void;
+  open: boolean;
 }) {
   const { row } = selection;
   const [name, setName] = useState(row?.name ?? "");
@@ -204,7 +208,7 @@ function CategoryEditor({
       busy={busy}
       close={close}
       dirty={dirty}
-      open
+      open={open}
       presentation={removing ? "confirmation" : "compact-editor"}
       primaryAction={{
         children: actionLabel,
@@ -311,9 +315,11 @@ export function CategoryOrganization({
   spaceId: string;
   saved: () => void;
 }) {
-  const [selection, setSelection] = useState<Selection | null>(null);
+  const [selection, setSelection] = useState<Selection>({ kind: "group" });
+  const [open, setOpen] = useState(false);
+  const [session, setSession] = useState(0);
   const close = useCallback(() => {
-    setSelection(null);
+    setOpen(false);
   }, []);
   const savedEditor = useCallback(() => {
     close();
@@ -321,10 +327,14 @@ export function CategoryOrganization({
   }, [close, saved]);
   const newGroup = useCallback(() => {
     setSelection({ kind: "group" });
+    setSession((value) => value + 1);
+    setOpen(true);
   }, []);
   const edit = useCallback(
     (event: MouseEvent<HTMLButtonElement>) => {
       const { kind, id } = event.currentTarget.dataset;
+      setSession((value) => value + 1);
+      setOpen(true);
       if (kind === "category") {
         const row = catalog.categories.find((category) => category.id === id);
         if (row) {
@@ -349,14 +359,18 @@ export function CategoryOrganization({
       className="category-organization"
     >
       <div className="category-group-heading">
-        <p>Grupos reúnem categorias dentro deste espaço financeiro.</p>
-        <UiButton
+        <InfoTip label="grupos de categorias">
+          Reúna categorias neste espaço financeiro sem alterar os lançamentos.
+        </InfoTip>
+        <UiIconButton
+          label="Novo grupo de categorias"
           onClick={newGroup}
-          type="button"
-          variant="secondary"
         >
-          Novo grupo de categorias
-        </UiButton>
+          <PlusIcon
+            aria-hidden
+            size={20}
+          />
+        </UiIconButton>
       </div>
       {sections.map((group) => {
         const categories = catalog.categories.filter(
@@ -380,16 +394,17 @@ export function CategoryOrganization({
                 {group.name} <small>({categories.length})</small>
               </h3>
               {!!group.id && (
-                <UiButton
-                  aria-label={`Editar grupo ${group.name}`}
+                <UiIconButton
                   data-id={group.id}
                   data-kind="group"
+                  label={`Editar grupo ${group.name}`}
                   onClick={edit}
-                  type="button"
-                  variant="secondary"
                 >
-                  Editar
-                </UiButton>
+                  <PencilSimpleIcon
+                    aria-hidden
+                    size={20}
+                  />
+                </UiIconButton>
               )}
             </div>
             {categories.length ? (
@@ -403,23 +418,19 @@ export function CategoryOrganization({
                       />
                       <span>
                         <strong>{category.name}</strong>
-                        <small>
-                          {category.system
-                            ? "Categoria fixa"
-                            : "Categoria personalizada"}
-                        </small>
                       </span>
                     </div>
-                    <UiButton
-                      aria-label={`Editar categoria ${category.name}`}
+                    <UiIconButton
                       data-id={category.id}
                       data-kind="category"
+                      label={`Editar categoria ${category.name}`}
                       onClick={edit}
-                      type="button"
-                      variant="secondary"
                     >
-                      Editar
-                    </UiButton>
+                      <PencilSimpleIcon
+                        aria-hidden
+                        size={20}
+                      />
+                    </UiIconButton>
                   </li>
                 ))}
               </ul>
@@ -429,17 +440,17 @@ export function CategoryOrganization({
           </section>
         );
       })}
-      {!!selection && (
-        <CategoryEditor
-          api={api}
-          catalog={catalog}
-          close={close}
-          saved={savedEditor}
-          selection={selection}
-          snapshot={snapshot}
-          spaceId={spaceId}
-        />
-      )}
+      <CategoryEditor
+        api={api}
+        catalog={catalog}
+        close={close}
+        key={session}
+        open={open}
+        saved={savedEditor}
+        selection={selection}
+        snapshot={snapshot}
+        spaceId={spaceId}
+      />
     </section>
   );
 }

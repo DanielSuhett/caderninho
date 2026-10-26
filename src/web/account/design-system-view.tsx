@@ -12,10 +12,16 @@ import { useKumoToastManager } from "@cloudflare/kumo/components/toast";
 import { useCallback, useState } from "react";
 
 import { TransactionDirection, TransactionStatus } from "../../domain";
+import { demoAccounts } from "../../fixtures/finance";
 import { UiButton } from "../ui";
+import { AccountAvatar, AccountIdentity } from "./account-identity";
 import { BackofficeDialog } from "./backoffice-dialog";
 import { DesignPalette } from "./design-palette";
+import { DesignTypography } from "./design-typography";
+import { AvatarFilterRoute } from "./identity-filters";
+import { InstallmentTable } from "./installment-table";
 import { TransactionList } from "./transaction-list";
+import { TransactionReaderContext } from "./transaction-reader";
 import { EmptyView } from "./workspace-filters";
 import {
   WorkspaceDetails,
@@ -37,7 +43,7 @@ const sampleInstallment = {
   installmentNumber: 1,
   manual: false,
   personId: "demo-ana",
-  personName: "Ana (exemplo)",
+  personName: "Ana Silva",
   purchaseDate: "2026-10-01",
   status: TransactionStatus.POSTED,
   totalInstallments: 3,
@@ -93,6 +99,12 @@ export function DesignSystemView() {
         title="Fundação e tokens"
       >
         <DesignPalette />
+      </WorkspaceDetails>
+      <WorkspaceDetails
+        defaultOpen
+        title="Tipografia e leitura"
+      >
+        <DesignTypography />
       </WorkspaceDetails>
       <WorkspaceDetails
         defaultOpen
@@ -187,14 +199,60 @@ export function DesignSystemView() {
       </WorkspaceDetails>
       <WorkspaceDetails
         defaultOpen
+        title="Avatares e filtros"
+      >
+        <div className="gallery-surface">
+          <AvatarFilterRoute value="/demo/cards?month=2026-10">
+            <AccountAvatar
+              account={
+                demoAccounts.find((account) => account.id === "demo-card") ?? {
+                  name: "Cartão",
+                  type: "CREDIT",
+                }
+              }
+              person={{ id: "demo-person", name: "Ana Silva" }}
+            />
+          </AvatarFilterRoute>
+          <p>
+            Contorno externo fino, reforçado por hover ou foco. Pessoa filtra o
+            titular; banco reúne suas contas; bandeira reúne seus cartões.
+          </p>
+        </div>
+      </WorkspaceDetails>
+      <WorkspaceDetails
+        defaultOpen
         title="Transação e parcelas"
       >
-        <TransactionList
-          accounts={[{ id: "demo-card", name: "Cartão · exemplo" }]}
-          categories={[{ id: "Viagem", name: "Viagem" }]}
-          records={[samplePurchase]}
-          referenceDay="2026-10-24"
-        />
+        <div className="gallery-surface">
+          <AccountIdentity
+            account={
+              demoAccounts.find((account) => account.id === "demo-card") ?? {
+                name: "Cartão · exemplo",
+                type: "CREDIT",
+              }
+            }
+            person={{ id: "demo-ana", name: "Ana Silva" }}
+          />
+          <InstallmentTable
+            account={
+              demoAccounts.find((account) => account.id === "demo-card") ?? {
+                name: "Cartão · exemplo",
+                type: "CREDIT",
+              }
+            }
+            installments={samplePurchase.installments}
+            referenceDay="2026-10-24"
+            total={samplePurchase.totalInstallments}
+          />
+        </div>
+        <TransactionReaderContext value={null}>
+          <TransactionList
+            accounts={[{ id: "demo-card", name: "Cartão · exemplo" }]}
+            categories={[{ id: "Viagem", name: "Viagem" }]}
+            records={[samplePurchase]}
+            referenceDay="2026-10-24"
+          />
+        </TransactionReaderContext>
       </WorkspaceDetails>
       <BackofficeDialog
         busy={false}

@@ -40,7 +40,7 @@ function render(record: typeof row, showOwner = false) {
     }),
   );
 }
-test("transaction rows keep exact source money, direction and category while identifiers remain in details", () => {
+test("transactions keep exact money, direction, category and owner without technical identifiers in the interface", () => {
   const html = render(row);
   const summary = html;
   assert.ok(summary.includes("123,45 BRL"));
@@ -58,7 +58,9 @@ test("transaction rows keep exact source money, direction and category while ide
     }),
   );
   assert.ok(details.includes("Pessoa exemplo"));
-  assert.ok(details.includes("synthetic-transaction"));
+  assert.equal(details.includes("synthetic-transaction"), false);
+  assert.ok(details.includes("123,45 BRL"));
+  assert.ok(details.includes("Alimentação"));
   assert.ok(render(row, true).includes("Pessoa exemplo"));
 });
 
@@ -188,8 +190,8 @@ test("a grouped purchase identifies the displayed installment and retains source
     assert.ok(summary.includes(text));
   }
   assert.ok(details.includes("Primeira parcela conhecida em"));
-  assert.ok(
-    details.includes("O estado da origem não indica pagamento da fatura."),
-  );
+  assert.ok(details.includes("Pagamento não informado"));
+  assert.ok(details.includes("2 parcelas ainda não recebidas"));
+  assert.equal(details.includes(">Paga<"), false);
   assert.ok(details.includes("01/11/2099"));
 });

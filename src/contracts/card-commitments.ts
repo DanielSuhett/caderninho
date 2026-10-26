@@ -48,7 +48,7 @@ export const CardCommitmentsSchema = z.object({
   accounts: z.array(
     z.object({
       allocatedCreditMinor: minor.nullable(),
-      availabilitySource: z.enum(["provider", "unavailable"]),
+      availabilitySource: z.enum(["provider", "estimated", "unavailable"]),
       availableCreditMinor: minor.nullable(),
       balanceObservedAt: z.string().nullable(),
       creditLimitMinor: minor.nullable(),

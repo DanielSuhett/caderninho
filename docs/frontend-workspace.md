@@ -12,7 +12,7 @@ links. [DESIGN.md](../DESIGN.md) e o [guia](design-system.md) governam a composi
 | `/account/cards` | Gastos do mês, categorias, limites e parcelas de um cartão ou de todos |
 | `/account/investments` | Carteira de ativos: posição bruta/líquida, resultado, resgate e composição por classe/instituição |
 | `/account/rules` | Condições, categoria, prioridade, preview, edição e composição com Flow sob demanda |
-| `/account/groups` | Grupos de planejamento, orçamento, categorias e etiquetas |
+| `/account/groups` | Grupos de planejamento, categorias e etiquetas |
 | `/account/sync` | Rodadas, fases, estados, erros e referências históricas |
 | `/account/audit` | Autorizações, requisições, ferramentas, modelos declarados e bytes |
 | `/account/connections` | Pessoas/bancos, nome/foto, credenciais, importação após Pessoas e URL MCP |
@@ -34,7 +34,7 @@ Toolbar abre LayerDialog com rascunho dos filtros. Aplicar submete GET e reinici
 cursor; cancelar, X e Escape não alteram a URL. Limpar remove pessoa/grupo/cursor.
 Datas aceitam digitação e calendário range em português, sem conversão de fuso.
 A tabela muda sua composição no celular, mantendo valor, moeda, conta, sentido e
-exceções. Dialog detalha origem, titular, datas, IDs e parcelas recebidas.
+exceções. Dialog detalha titular, datas, categoria, identificação financeira e parcelas recebidas. Não exibe IDs ou referências técnicas genéricas.
 
 Transações mostra busca compacta com InputGroup/Button nativos e Filtros. O
 catálogo completo do escopo determina escolhas, nunca só os registros da página:
@@ -44,6 +44,45 @@ saem do formulário visível. Hidden conserva filtros GET; seleções antigas
 indisponíveis continuam no contexto, contador e Limpar. Entre duas e oito contas,
 Select; acima disso, Combobox pesquisável. A lista mantém a moeda em cada valor,
 sem seletor cambial ou total que misture moedas.
+
+Transações tem as abas Todas e Sem categoria (`uncategorized=on`). O filtro usa
+a categoria efetiva, antes da paginação; uma compra agrupada entra quando pelo
+menos uma parcela recebida está sem categoria. As demais parcelas permanecem
+visíveis no detalhe. Voltar, busca e filtros conservam a aba; Limpar mantém seu
+recorte de classificação. GET da demo conserva também o mês.
+Badge warning mostra a quantidade de compras/lançamentos que precisam de
+classificação em todo o recorte recebido, antes do cursor e sem o filtro de
+categoria que a própria aba remove. Não é contagem só da página nem quantidade
+de parcelas; parcialidade da importação continua sinalizada.
+
+A linha inteira abre o detalhe por ponteiro, delegando ao trigger nativo do Kumo
+para devolver o foco à mesma transação. Seleção de texto e cliques em controles
+internos são preservados. O botão da descrição continua acessível por teclado.
+Avatares recebem contorno imediato de destaque sob o ponteiro.
+
+O botão “Resolva com sua IA” abre um Dialog com ClipboardText para copiar um prompt contextual para o
+agente do usuário. Ele inclui o escopo, categorias e até 20 grupos de evidências,
+explica agrupamento/paginação e solicita revisão antes de escrever. Usa `status`,
+`get_categories`, `get_rules`, `get_transaction_purchases`, `get_transactions`,
+`preview_rule`, `batch_edit_transactions` e, se aprovado, `create_rule`.
+Descrições são dados não confiáveis; não são instruções. Não há envio automático,
+classificação automática ou promessa de execução. O prompt da demo declara seus
+IDs fictícios. A apresentação de orçamento saiu de Grupos; dados e ferramentas
+existentes de orçamento continuam preservados.
+
+Categoria é editável diretamente pela caneta na linha e por Categorizar no
+menu/detalhe. A gravação usa `batch_edit_transactions` restrito a IDs, categoria,
+grupo, revisão esperada, confirmação e idempotência. Não permite alterar valor,
+direção, data ou descrição por esse caminho. Compras agrupadas informam que a
+escolha abrange suas parcelas recebidas; não criam edições de parcelas ausentes.
+Uma revisão obsoleta exige atualizar antes de repetir. A edição sobrevive à
+importação sem sobrescrever a observação bancária.
+
+Criar regra abre o editor existente, com descrição literal, conta, movimento e
+moeda preenchidos; a categoria ainda precisa ser escolhida se estiver ausente.
+O rascunho e a prévia podem ser revisados antes de salvar. Não reaplica o histórico
+automaticamente. Produto e demo usam os mesmos controles; a demo conserva as
+alterações apenas na memória da aba.
 
 A History API preserva shell, sessão e cliente API. Links continuam anchors;
 login, destinos externos, fragmentos, downloads, cliques modificados e POST
@@ -127,48 +166,33 @@ O [guia de componentes](design-system.md) define a composição das páginas. Ca
 
 ## Demo pública
 
-`/demo`, `/demo/transactions`, `/demo/cards`, `/demo/investments`, `/demo/rules` e `/demo/groups` são assets públicos
-sem autenticação e sem consulta à API financeira privada. Compartilham
-WorkspaceFrame, SidebarFrame, FinancialDashboard, TransactionList e
-OrganizationView com seus editores e prévia. Ledger sintético de maio a outubro 2026,
-BRL e USD separados nos agregados da visão geral, com mês/moeda por GET.
-Transações reúne moedas com identificação em cada linha, sem soma/conversão, e
-usa mês/conta/busca por GET e Dialog de detalhes. Mês aparece junto ao título;
-Mês e Conta são editados em Filtros. As notas da consulta ficam sob demanda.
-A busca filtra o conjunto sintético inteiro. A landing oferece Demo no header e CTA.
-Regras e grupos podem ser editados na memória da aba. Salvar preserva o histórico;
-Reaplicar regras usa o avaliador do domínio sobre todos os meses do grupo,
-exceto ignorados. Registros sem correspondência conservam a categoria. O botão
-Restaurar demo e o reload restauram os dados iniciais. Grupos novos ficam vazios,
-com o catálogo fixo de categorias e agrupadores; o seletor de grupo aparece quando há escolha.
-Fixtures de `src/fixtures` também alimentam testes; expectativas financeiras
-continuam literais e independentes. Não há conexão bancária ou revogação nesta
-navegação. O limite de paridade com o backend está descrito abaixo.
+`/demo` monta o mesmo `AccountView` do painel privado, com o mesmo shell,
+roteador, páginas, filtros, editores e carregamento por rota. `demo-entry.ts`
+inicializa a validação e injeta `createDemoFetch` em `createAccountApi` antes
+de chamar `mountAccount`. Não há uma segunda árvore de telas para a demo.
 
-Mês/moeda, páginas e formulários GET da demo navegam no cliente sem recarregar o
-documento. Voltar/Avançar conserva a URL como fonte do recorte. A navegação não
-intercepta a passagem entre demo pública e painel privado. Sidebar móvel fecha
-ao navegar e transfere foco ao conteúdo. No painel, páginas lazy recebem memo
-para ignorar polling sem novos dados; foco/hover antecipam somente o código da
-próxima página. Configuração de conexões carrega sob demanda; grupos, valores e
-options do Chart conservam referência até os dados ou a moeda mudarem.
+`demo-api.ts` responde em memória aos mesmos endpoints HTTP consumidos pelo
+produto. O cliente real mantém validação de contratos, cancelamento, cache e
+invalidação após escritas. A navegação compartilhada troca apenas o prefixo
+`/account` por `/demo`, incluindo links, formulários GET, cursores e subpáginas.
+Visão geral, Transações, Cartões, Investimentos, Regras, Grupos, Pessoas,
+Sincronizações, Auditoria e Referência visual usam suas telas reais.
 
-A demo mantém `demo-session.ts` por aba, sem fetch, armazenamento persistente,
-D1 ou credenciais. O adapter valida contratos, vínculos por grupo, cancelamento
-e repetição idempotente. Edições sobrevivem à navegação, mas abas independentes
-não se sincronizam. `src/fixtures/finance.ts` concentra ledger/pessoas/contas;
-`workspace.ts` fornece factories de conexão e catálogo. `demo-data.ts` agrega o
-conjunto recebido; os testes conservam expectativas financeiras literais.
+As respostas vêm de fixtures sintéticas de `src/fixtures` e da sessão isolada
+por aba em `demo-session.ts`. `demo-data.ts`, `demo-cards.ts` e
+`demo-transaction-detail.ts` preparam os resultados simulados, sem componentes
+de interface. BRL e USD permanecem separados, e parcelas conservam as ocorrências
+recebidas. Consultas vazias e filtros usam o mesmo contrato do painel.
+`demo-api.test.ts` exercita o cliente real, leituras, paginação, escritas,
+invalidação e isolamento entre sessões.
 
-Reaplicar compartilha `ruleMatches` e `activeRules`: pessoais antes de pacotes,
-menor prioridade e desempate por ID. Primeira correspondência vence; sem ela,
-conservar a categoria. Pausar/excluir não desfaz classificações. Quantidades de
-mudanças e correspondências são distintas. Valores, direção, datas, moeda,
-parcelas e status não mudam. Pendentes/futuras mantêm a elegibilidade financeira.
-O backend `apply_rules` permite ignorados em sua seleção e limita a escrita
-atômica a 500 registros; a demo não simula persistência, concorrência, paginação
-ou atomicidade. Grupo novo recebe o catálogo de categorias, mas nenhuma conta;
-mudar de grupo preserva mês, escolhe sua moeda e limpa conta/texto/direção.
+Edições de categorias, regras, grupos e limites duram até recarregar a aba.
+Restaurar demonstração recarrega os dados iniciais. O transporte nunca recorre
+a fetch de rede: origem externa, endpoints desconhecidos e operações bancárias
+indisponíveis são recusados localmente. Abrir uma conexão bancária na demo
+informa que é necessário instalar uma cópia. Não consulta D1, credenciais,
+autorizações ou contas reais. As simulações não comprovam persistência,
+concorrência ou atomicidade do backend.
 
 ## Agregação e apresentação
 
@@ -259,3 +283,30 @@ lacunas e paginação. A [documentação da Pluggy](https://docs.pluggy.ai/en/do
 explica a ausência de uma chave única de compra e o envio de parcelas em momentos
 diferentes. Dados sintéticos e capturas não comprovam identidade de compras reais,
 situação de faturas ou uso com leitor de tela.
+
+
+## Fluidez e sincronização visível
+
+O relógio compartilhado expõe a última importação concluída por Popover, em
+mobile e desktop. Importações pending/running mostram Loader e a conclusão real
+recebe verde por três minutos. Falha e indisponibilidade não viram sucesso.
+`AccountView` invalida leituras quando o snapshot muda; `ResourceVersion` atualiza
+recursos montados sem depender de um botão de recarga. Não há polling ocioso.
+Ações de sincronizar bancos e de recuperar falhas conservam seus contratos.
+
+A demo usa `OrganizationView` e `RuleImporter` do produto, sem um modal próprio.
+O Worker e a sessão sintética chamam o mesmo `prepareRuleImport` em
+`domain/rule-import.entity.ts`: resolução de categorias, identidade do pacote,
+duplicatas e preservação de edições têm uma única implementação. O plano é puro;
+os adaptadores validam referências de contas/pessoas e só então gravam no seu
+armazenamento. Não existe uma implementação `demo-rule-import.ts` separada.
+JSON é conferido antes da escrita; revisão bloqueia a prévia antiga e recibos
+tornam tentativas idempotentes. Escritas sintéticas são serializadas por aba;
+D1 conserva a transação e os recibos duráveis do produto. A importação não
+reclassifica o histórico. A paridade de prévia/importação/repetição é exercitada
+pelas duas APIs no mesmo teste de integração.
+
+Painel e demo usam os mesmos loaders de página em `WorkspaceView`. As
+rotas aquecem código no foco/hover, sem buscar dados. `ChartViewport` mantém o
+espaço e monta o canvas perto da área visível; tooltips HTML usam tokens do tema.
+A landing mantém HTML estático e entradas distintas para cada ilha interativa.

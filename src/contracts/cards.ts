@@ -1,6 +1,7 @@
 import { z } from "zod/v4";
 
 import { FinancialIdentitySchema } from "../domain";
+import { identityFilterFields } from "./identity-filter";
 
 const id = z.string().min(1).max(160);
 const minor = z.string().regex(/^-?\d+$/);
@@ -12,6 +13,7 @@ const amount = z.object({
 });
 export const PortalCardsQuerySchema = z
   .object({
+    ...identityFilterFields,
     accountId: id.optional(),
     currency: z
       .string()
@@ -50,11 +52,13 @@ export const PortalCardsSchema = z.object({
         balanceObservedAt: z.string().nullable(),
         cardNumber: z.string().nullable(),
         closeDate: z.string().nullable(),
+        creditEstimated: z.boolean().default(false),
         creditLimitMinor: minor.nullable(),
         currency: z.string(),
         dueDate: z.string().nullable(),
         id,
         identity: FinancialIdentitySchema.nullish(),
+        manual: z.boolean().default(false),
         name: z.string(),
         personId: id,
         personName: z.string(),
@@ -82,6 +86,7 @@ export const PortalCardsSchema = z.object({
     refunds: amount,
   }),
   partial: z.boolean(),
+  revision: z.number().int().nonnegative().optional(),
 });
 export type PortalCards = z.infer<typeof PortalCardsSchema>["data"];
 export type PortalCardInstallment = z.infer<typeof PortalCardInstallmentSchema>;

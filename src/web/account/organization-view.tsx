@@ -1,16 +1,21 @@
 import { Badge } from "@cloudflare/kumo/components/badge";
 import { DropdownMenu } from "@cloudflare/kumo/components/dropdown";
-import { InlineCopyText } from "@cloudflare/kumo/components/inline-copy-text";
 import { LayerCard } from "@cloudflare/kumo/components/layer-card";
 import { Select } from "@cloudflare/kumo/components/select";
 import { useKumoToastManager } from "@cloudflare/kumo/components/toast";
+import { Tooltip } from "@cloudflare/kumo/components/tooltip";
+import {
+  DotsThreeIcon,
+  PencilSimpleIcon,
+  PlusIcon,
+  UploadSimpleIcon,
+} from "@phosphor-icons/react";
 import { type MouseEvent, type ReactNode, useCallback, useState } from "react";
 
 import type { PortalResponse, WorkspaceCatalog } from "../../contracts";
-import { formatBalance } from "../money";
-import { UiButton } from "../ui";
+import { UiButton, UiIconButton } from "../ui";
 import type { OrganizationApi } from "./account-api";
-import { navigateWorkspace } from "./account-navigation";
+import { navigateWorkspace, workspaceBasePath } from "./account-navigation";
 import { CategoryLabel } from "./category-appearance";
 import { CategoryOrganization } from "./category-editor";
 import { DisclosureItem } from "./disclosure-item";
@@ -27,7 +32,6 @@ import {
   useResource,
 } from "./workspace-resource";
 import {
-  RecordReference,
   WorkspaceDetails,
   WorkspaceFilters,
   WorkspaceHeading,
@@ -42,7 +46,7 @@ export function OrganizationView({
   api,
   snapshot,
   page,
-  basePath = "/account",
+  basePath = workspaceBasePath(),
   actions,
   notice,
 }: {
@@ -59,6 +63,7 @@ export function OrganizationView({
     remove?: boolean;
   } | null>(null);
   const [importing, setImporting] = useState(false);
+  const [importSession, setImportSession] = useState(0);
   const [editorOpen, setEditorOpen] = useState(false);
   const [editorSession, setEditorSession] = useState(0);
   const { add: notify } = useKumoToastManager();
@@ -69,14 +74,6 @@ export function OrganizationView({
       groups: 0,
       rules: [params.get("q"), params.get("enabled")].filter(Boolean).length,
     }[page] + Number(spaceId !== "personal");
-  const monthField = (
-    <input
-      disabled={!params.has("month")}
-      name="month"
-      type="hidden"
-      value={params.get("month") ?? ""}
-    />
-  );
   const load = useCallback(
     async (signal: AbortSignal, fresh = false) => {
       const [catalog, accountList] = await Promise.all([
@@ -116,7 +113,10 @@ export function OrganizationView({
     }
     resource.retry();
   }, [resource.retry, editor, spaceId, notify, basePath]);
-  const openImport = useCallback(() => setImporting(true), []);
+  const openImport = useCallback(() => {
+    setImportSession((value) => value + 1);
+    setImporting(true);
+  }, []);
   const closeImport = useCallback(() => setImporting(false), []);
   const importSaved = useCallback(() => {
     setImporting(false);
@@ -138,22 +138,40 @@ export function OrganizationView({
       remove: remove === "true",
     });
   }, []);
+  const filters = data ? (
+    <OrganizationFilters
+      activeCount={activeCount}
+      basePath={basePath}
+      catalog={data}
+      page={page}
+      params={params}
+      snapshot={snapshot}
+      spaceId={spaceId}
+    />
+  ) : null;
   return (
     <>
-      <WorkspaceHeading title={page === "rules" ? "Regras" : "Grupos"}>
+      <WorkspaceHeading
+        filters={page === "groups" ? filters : null}
+        title={page === "rules" ? "Regras" : "Grupos"}
+      >
         <div className="page-actions">
           {actions}
-          {page === "rules" && basePath === "/account" && (
-            <UiButton
+          {page === "rules" && (
+            <UiIconButton
               disabled={!data}
+              label="Importar regras"
               onClick={openImport}
-              type="button"
             >
-              Importar regras
-            </UiButton>
+              <UploadSimpleIcon
+                aria-hidden
+                size={20}
+              />
+            </UiIconButton>
           )}
           <UiButton
             disabled={!data}
+            icon={PlusIcon}
             onClick={newItem}
             type="button"
             variant="primary"
@@ -163,13 +181,15 @@ export function OrganizationView({
         </div>
       </WorkspaceHeading>
       {notice}
-      {importing && !!data && (
+      {!!data && (
         <RuleImporter
           accounts={data.accounts}
           api={api}
           catalog={data}
           close={closeImport}
           csrf={snapshot.csrf}
+          key={importSession}
+          open={importing}
           people={snapshot.people}
           saved={importSaved}
           spaceId={spaceId}
@@ -191,56 +211,7 @@ export function OrganizationView({
       <ResourceFeedback {...resource} />
       {!!data && (
         <>
-          <WorkspaceFilters
-            action={`${basePath}/${page}`}
-            activeCount={activeCount}
-            context={
-              {
-                groups: `Categorias e etiquetas: ${current?.name ?? spaceId}`,
-                rules: current?.name ?? spaceId,
-              }[page]
-            }
-            leading={
-              page === "rules" && (
-                <QuerySearch
-                  action={`${basePath}/rules`}
-                  compact
-                  label="Buscar regra"
-                  name="q"
-                  params={params}
-                />
-              )
-            }
-            showClear={activeCount > 0}
-          >
-            {monthField}
-            <ScopeFields
-              catalog={data}
-              compact
-              params={params}
-              person={false}
-              snapshot={snapshot}
-            />
-            {page === "rules" && (
-              <>
-                <input
-                  name="q"
-                  type="hidden"
-                  value={params.get("q") ?? ""}
-                />
-                <Select
-                  defaultValue={params.get("enabled") ?? ""}
-                  items={[
-                    { label: "Todas as regras", value: "" },
-                    { label: "Ativas", value: "true" },
-                    { label: "Pausadas", value: "false" },
-                  ]}
-                  label="Estado"
-                  name="enabled"
-                />
-              </>
-            )}
-          </WorkspaceFilters>
+          {page === "rules" && filters}
           {page === "rules" ? (
             <>
               {rules?.length ? (
@@ -306,21 +277,6 @@ export function OrganizationView({
                               people={snapshot.people}
                               rule={r}
                             />
-                            <RecordReference>
-                              <div>
-                                <dt>Identificador da regra</dt>
-                                <dd>
-                                  <InlineCopyText
-                                    labels={{
-                                      copied: "Identificador copiado",
-                                      copyAction: "Copiar identificador",
-                                    }}
-                                  >
-                                    {r.id}
-                                  </InlineCopyText>
-                                </dd>
-                              </div>
-                            </RecordReference>
                           </div>
                         </DisclosureItem>
                       </li>
@@ -357,11 +313,6 @@ export function OrganizationView({
                         <>
                           <span className="record-title">{s.name}</span>
                           <span className="record-value">{s.currency}</span>
-                          <span className="record-context">
-                            {s.budgetEnabled
-                              ? `Orçamento: ${s.monthlyBudgetMinor === null ? "valor não definido" : formatBalance(s.monthlyBudgetMinor, s.currency)}`
-                              : "Sem orçamento"}
-                          </span>
                         </>
                       }
                     >
@@ -391,28 +342,12 @@ export function OrganizationView({
                           linkLabel={"Ver transações"}
                           onOpen={openItem}
                         />
-                        <RecordReference>
-                          <div>
-                            <dt>Identificador do grupo</dt>
-                            <dd>
-                              <InlineCopyText
-                                labels={{
-                                  copied: "Identificador copiado",
-                                  copyAction: "Copiar identificador",
-                                }}
-                              >
-                                {s.id}
-                              </InlineCopyText>
-                            </dd>
-                          </div>
-                        </RecordReference>
                       </div>
                     </DisclosureItem>
                   </li>
                 ))}
               </LayerCard>
               <WorkspaceDetails
-                defaultOpen
                 hint={String(
                   data.categories.filter((category) => !category.hidden).length,
                 )}
@@ -427,7 +362,6 @@ export function OrganizationView({
                 />
               </WorkspaceDetails>
               <WorkspaceDetails
-                defaultOpen
                 hint={String(data.tags.length)}
                 title="Etiquetas"
               >
@@ -448,6 +382,89 @@ export function OrganizationView({
         </>
       )}
     </>
+  );
+}
+
+function OrganizationFilters({
+  activeCount,
+  basePath,
+  catalog,
+  page,
+  params,
+  snapshot,
+  spaceId,
+}: {
+  activeCount: number;
+  basePath: string;
+  catalog: WorkspaceCatalog;
+  page: "rules" | "groups";
+  params: URLSearchParams;
+  snapshot: PortalResponse;
+  spaceId: string;
+}) {
+  if (
+    page === "groups" &&
+    catalog.spaces.length < 2 &&
+    spaceId === "personal"
+  ) {
+    return null;
+  }
+  const current = catalog.spaces.find((space) => space.id === spaceId);
+  return (
+    <WorkspaceFilters
+      action={`${basePath}/${page}`}
+      activeCount={activeCount}
+      context={
+        {
+          groups: `Categorias e etiquetas: ${current?.name ?? spaceId}`,
+          rules: current?.name ?? spaceId,
+        }[page]
+      }
+      leading={
+        page === "rules" && (
+          <QuerySearch
+            action={`${basePath}/rules`}
+            compact
+            label="Buscar regra"
+            name="q"
+            params={params}
+          />
+        )
+      }
+      showClear={activeCount > 0}
+    >
+      <input
+        disabled={!params.has("month")}
+        name="month"
+        type="hidden"
+        value={params.get("month") ?? ""}
+      />
+      <ScopeFields
+        catalog={catalog}
+        params={params}
+        person={false}
+        snapshot={snapshot}
+      />
+      {page === "rules" && (
+        <>
+          <input
+            name="q"
+            type="hidden"
+            value={params.get("q") ?? ""}
+          />
+          <Select
+            defaultValue={params.get("enabled") ?? ""}
+            items={[
+              { label: "Todas as regras", value: "" },
+              { label: "Ativas", value: "true" },
+              { label: "Pausadas", value: "false" },
+            ]}
+            label="Estado"
+            name="enabled"
+          />
+        </>
+      )}
+    </WorkspaceFilters>
   );
 }
 
@@ -535,28 +552,39 @@ function OrganizationActions({
   const noun = kind === "rule" ? "regra" : "grupo";
   return (
     <div className="record-actions">
-      <UiButton
-        aria-label={`Editar ${noun} ${item.name}`}
+      <UiIconButton
         data-id={item.id}
         data-kind={kind}
+        label={`Editar ${noun} ${item.name}`}
         onClick={onOpen}
-        type="button"
-        variant="secondary"
       >
-        Editar
-      </UiButton>
+        <PencilSimpleIcon
+          aria-hidden
+          size={20}
+        />
+      </UiIconButton>
       <DropdownMenu>
-        <DropdownMenu.Trigger
-          aria-label={`Mais ações de ${item.name}`}
+        <Tooltip
+          content={`Mais ações de ${item.name}`}
           render={
-            <UiButton
-              type="button"
-              variant="ghost"
-            />
+            <DropdownMenu.Trigger
+              aria-label={`Mais ações de ${item.name}`}
+              render={
+                <UiButton
+                  aria-label={`Mais ações de ${item.name}`}
+                  shape="square"
+                  type="button"
+                  variant="outline"
+                />
+              }
+            >
+              <DotsThreeIcon
+                aria-hidden
+                size={20}
+              />
+            </DropdownMenu.Trigger>
           }
-        >
-          Mais ações
-        </DropdownMenu.Trigger>
+        />
         <DropdownMenu.Content>
           <DropdownMenu.LinkItem href={href}>{linkLabel}</DropdownMenu.LinkItem>
           {(kind === "rule" || item.id !== "personal") && (

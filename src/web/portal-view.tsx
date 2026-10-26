@@ -8,6 +8,7 @@ export function Portal({ children }: { children: ReactNode }) {
     <PublicLayout
       access
       description="Autorização da instalação MCP pessoal"
+      themeSwitching={false}
       title="Caderninho · instalação MCP pessoal"
     >
       <main
@@ -20,9 +21,21 @@ export function Portal({ children }: { children: ReactNode }) {
   );
 }
 
-export function accountPage() {
+export function accountPage({ demo = false }: { demo?: boolean } = {}) {
   return (
-    <Document title="Caderninho · instalação MCP pessoal">
+    <Document
+      title={
+        demo
+          ? "Demonstração · Caderninho"
+          : "Caderninho · instalação MCP pessoal"
+      }
+    >
+      {!!demo && (
+        <meta
+          content="noindex"
+          name="robots"
+        />
+      )}
       <link
         href="/account.css"
         rel="stylesheet"
@@ -32,14 +45,18 @@ export function accountPage() {
           className="account-start"
           role="status"
         >
-          Verificando sua instalação…
+          {demo
+            ? "Abrindo demonstração com dados fictícios…"
+            : "Verificando sua instalação…"}
         </p>
       </div>
       <noscript>
-        Ative JavaScript para usar o painel. O acesso MCP continua disponível.
+        {demo
+          ? "Ative JavaScript para explorar a demonstração. Nenhuma conta real é utilizada."
+          : "Ative JavaScript para usar o painel. O acesso MCP continua disponível."}
       </noscript>
       <script
-        src="/account.js"
+        src={demo ? "/demo.js" : "/account.js"}
         type="module"
       />
     </Document>

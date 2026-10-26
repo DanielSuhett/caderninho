@@ -2,7 +2,11 @@ import assert from "node:assert/strict";
 
 import { beforeEach, test } from "vitest";
 
-import { PortalCardsQuerySchema, PortalCardsSchema } from "../../src/contracts";
+import {
+  PlanningCommandSchema,
+  PortalCardsQuerySchema,
+  PortalCardsSchema,
+} from "../../src/contracts";
 import { createPlanningService } from "../../src/worker/planning";
 import { createPlanningRepository } from "../../src/worker/planning/repository";
 import { command, cookies, fixture, login } from "./access-fixture";
@@ -10,6 +14,118 @@ import { account, collect, setup, source, transaction } from "./fixture";
 import { env } from "cloudflare:workers";
 
 beforeEach(setup);
+
+test("local card limits persist across services and imports, keep observed occupancy and restore the provider value", async () => {
+  await collect(source([transaction()], [card]));
+  const initial = await service().cards(query());
+  const change = PlanningCommandSchema.parse({
+    confirmed: true,
+    creditLimitMinor: "120000",
+    expected_revision: initial.revision,
+    id: "a",
+    idempotency_key: "limit-edit",
+    spaceId: "personal",
+    tool: "update_account_settings",
+  });
+  const result = await service().execute(change);
+  assert.deepEqual(await service().execute(change), result);
+  const [edited] = (await service().cards(query())).data.accounts;
+  assert.equal(edited?.creditLimitMinor, "120000");
+  assert.equal(edited?.allocatedMinor, "30000");
+  assert.equal(edited?.availableCreditMinor, "90000");
+  assert.equal(edited?.creditEstimated, true);
+  await collect(
+    source(
+      [transaction()],
+      [
+        account({
+          ...card,
+          creditData: { availableCreditLimit: "500", creditLimit: "1100" },
+        }),
+      ],
+    ),
+    "2026-10-02T00:00:00Z",
+  );
+  const imported = await service().cards(query());
+  assert.equal(imported.data.accounts[0]?.creditLimitMinor, "120000");
+  assert.equal(imported.data.accounts[0]?.allocatedMinor, "60000");
+  assert.equal(imported.data.accounts[0]?.availableCreditMinor, "60000");
+  assert.equal(
+    (await createPlanningRepository(env.DB).read()).accountDetails[0]
+      ?.creditLimitMinor,
+    "110000",
+  );
+  await assert.rejects(
+    service().execute(
+      PlanningCommandSchema.parse({
+        ...change,
+        creditLimitMinor: "1",
+        idempotency_key: "stale-limit",
+      }),
+    ),
+    { message: "RESTART_REQUIRED" },
+  );
+  await service().execute(
+    PlanningCommandSchema.parse({
+      ...change,
+      creditLimitMinor: null,
+      expected_revision: imported.revision,
+      idempotency_key: "restore-limit",
+    }),
+  );
+  const [restored] = (await service().cards(query())).data.accounts;
+  assert.equal(restored?.creditLimitMinor, "110000");
+  assert.equal(restored?.availableCreditMinor, "50000");
+  assert.equal(restored?.creditEstimated, false);
+});
+
+test("the portal permits only confirmed revision-checked limit edits and rejects bank accounts or extra account fields", async () => {
+  await collect(source([transaction()], [card, account({ id: "bank" })]));
+  const app = fixture();
+  const cookie = cookies(await login(app));
+  const report = await service().cards(query());
+  const edit = {
+    confirmed: true,
+    creditLimitMinor: "0",
+    expected_revision: report.revision,
+    id: "a",
+    idempotency_key: "portal-limit",
+    spaceId: "personal",
+    tool: "update_account_settings",
+  };
+  assert.equal(
+    (
+      await command(app, cookie, "planning", {
+        command: { ...edit, name: "Other name" },
+      })
+    ).status,
+    400,
+  );
+  assert.equal(
+    (
+      await command(app, cookie, "planning", {
+        command: { ...edit, confirmed: false },
+      })
+    ).status,
+    400,
+  );
+  assert.equal(
+    (
+      await command(app, cookie, "planning", {
+        command: { ...edit, id: "bank" },
+      })
+    ).status,
+    400,
+  );
+  assert.equal(
+    (await command(app, cookie, "planning", { command: edit })).status,
+    200,
+  );
+  assert.equal(
+    (await service().cards(query())).data.accounts[0]?.creditLimitMinor,
+    "0",
+  );
+});
 const card = account({
   creditData: {
     availableCreditLimit: "700",

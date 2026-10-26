@@ -2,6 +2,8 @@ import type { FinancialOverview, FinancialSummary } from "../contracts";
 import {
   AccountType,
   CategoryKind,
+  type FinancialIdentityFilter,
+  matchesFinancialIdentity,
   SpendingGroupBy,
   TransactionStatus,
   transactionMatchesText,
@@ -13,11 +15,7 @@ import {
   demoLedger,
   demoReferenceDay,
 } from "../fixtures/finance";
-import {
-  monthPeriod,
-  selectedMonth,
-  shiftMonth,
-} from "./account/dashboard-period";
+import { monthPeriod, shiftMonth } from "./account/dashboard-period";
 export interface DemoData {
   accounts: FinancialOverview["accounts"];
   categories: typeof demoCategories;
@@ -28,9 +26,26 @@ export const initialDemoData: DemoData = {
   categories: demoCategories,
   records: demoLedger,
 };
-export function selectedDemoMonth(value: string | null) {
-  const month = selectedMonth(value, demoReferenceDay);
-  return month >= "2026-05" && month <= "2026-10" ? month : "2026-10";
+export function scopedDemoData(
+  data: DemoData,
+  filter: FinancialIdentityFilter & { personId?: string | undefined },
+): DemoData {
+  const accounts = data.accounts.filter(
+    (account) =>
+      (!filter.personId || account.personId === filter.personId) &&
+      matchesFinancialIdentity(account.identity, filter),
+  );
+  const accountIds = new Set(accounts.map((account) => account.id));
+  const byIdentity = !!(filter.institutionId || filter.cardBrand);
+  return {
+    ...data,
+    accounts,
+    records: data.records.filter(
+      (row) =>
+        (!filter.personId || row.personId === filter.personId) &&
+        (!byIdentity || accountIds.has(row.accountId)),
+    ),
+  };
 }
 function hasAmount(
   row: DemoRecord,
@@ -40,7 +55,7 @@ function hasAmount(
 function totalAmount(value: bigint, unknown: number) {
   return unknown ? null : value.toString();
 }
-function summarize(
+export function demoSummary(
   from: string,
   to: string,
   groupBy: SpendingGroupBy,
@@ -127,14 +142,17 @@ export function demoOverview(
   data: DemoData = initialDemoData,
 ): FinancialOverview {
   const { from, to } = monthPeriod(month);
-  return { ...summarize(from, to, "category", data), accounts: data.accounts };
+  return {
+    ...demoSummary(from, to, "category", data),
+    accounts: data.accounts,
+  };
 }
 export function demoMonthly(
   month: string,
   data: DemoData = initialDemoData,
 ): FinancialSummary {
-  return summarize(
-    `${shiftMonth(month, -5)}-01`,
+  return demoSummary(
+    `${shiftMonth(month, -23)}-01`,
     monthPeriod(month).to,
     "month",
     data,

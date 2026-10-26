@@ -1,4 +1,6 @@
+import { Badge } from "@cloudflare/kumo/components/badge";
 import { Sidebar } from "@cloudflare/kumo/components/sidebar";
+import { Tooltip } from "@cloudflare/kumo/components/tooltip";
 import {
   ArrowsClockwiseIcon,
   BankIcon,
@@ -24,15 +26,17 @@ import {
 import type { PortalResponse } from "../../contracts";
 import { tryCatch } from "../../shared";
 import type { createAccountApi } from "./account-api";
+import { accountPath, workspaceHref } from "./account-navigation";
 import type { AuditView as AuditComponent } from "./audit-view";
 import type { DesignSystemView as DesignSystemComponent } from "./design-system-view";
 import type { OrganizationView as OrganizationComponent } from "./organization-view";
 import type { OverviewView as OverviewComponent } from "./overview-view";
 import { PersonDirectory } from "./person-identity";
 import type { SyncHistoryView as SyncHistoryComponent } from "./sync-history-view";
+import { TransactionReaderProvider } from "./transaction-reader";
 import type { TransactionsView as TransactionsComponent } from "./transactions-view";
 import { WorkspacePageError } from "./workspace-page";
-import { scopedHref } from "./workspace-resource";
+import { ResourceVersion, scopedHref } from "./workspace-resource";
 import { SidebarFrame, WorkspaceFrame } from "./workspace-shell";
 import { WorkspaceSkeleton } from "./workspace-ui";
 
@@ -120,7 +124,7 @@ function preloadPage(event: FocusEvent<HTMLElement> | MouseEvent<HTMLElement>) {
   if (!href) {
     return;
   }
-  const path = new URL(href, location.href).pathname;
+  const path = accountPath(new URL(href, location.href).pathname);
   const load = pageLoaders[path];
   if (load) {
     // Warm code on intent only; queries still belong to the mounted page.
@@ -177,15 +181,21 @@ export function WorkspaceView({
   command,
   busy,
   route,
+  dataVersion,
+  readError,
+  demo = false,
 }: {
   route: string;
+  dataVersion: number;
+  readError: boolean;
   children: ReactNode;
   api: ReturnType<typeof createAccountApi>;
   snapshot: PortalResponse;
   command: (action: string) => void;
   busy: boolean;
+  demo?: boolean;
 }) {
-  const path = location.pathname;
+  const path = accountPath(location.pathname);
   const logout = useCallback(() => command("logout"), [command]);
   let content = children;
   if (path === "/account/cards") {
@@ -261,72 +271,133 @@ export function WorkspaceView({
     content = <DesignSystemView key={route} />;
   }
   return (
-    <PersonDirectory value={snapshot.people}>
-      <WorkspaceFrame
-        navigation={
-          <WorkspaceNavigation
-            busy={busy}
-            logout={logout}
-            snapshot={snapshot}
-          />
-        }
-        route={route}
-      >
-        <div
-          className="workspace-page"
-          key={route}
+    <ResourceVersion value={dataVersion}>
+      <PersonDirectory value={snapshot.people}>
+        <TransactionReaderProvider
+          api={api}
+          csrf={snapshot.csrf}
+          spaceId={
+            new URLSearchParams(location.search).get("space") ?? "personal"
+          }
         >
-          <Suspense fallback={<WorkspaceSkeleton />}>{content}</Suspense>
-        </div>
-      </WorkspaceFrame>
-    </PersonDirectory>
+          <WorkspaceFrame
+            brandHref={scopedHref(
+              "/account",
+              new URLSearchParams(location.search),
+            )}
+            demo={demo}
+            failed={snapshot.connections.some(
+              (connection) => connection.importStatus === "failed",
+            )}
+            navigation={
+              <WorkspaceNavigation
+                busy={busy}
+                demo={demo}
+                logout={logout}
+              />
+            }
+            route={route}
+            syncing={snapshot.connections.some(
+              (connection) =>
+                connection.importStatus === "pending" ||
+                connection.importStatus === "running",
+            )}
+            unavailable={readError}
+            updatedAt={
+              snapshot.connections
+                .map((connection) => connection.lastSuccessAt)
+                .filter((value): value is string => !!value)
+                .sort()
+                .at(-1) ?? null
+            }
+          >
+            <div
+              className="workspace-page"
+              key={route}
+            >
+              {!!demo && (
+                <div className="demo-toolbar">
+                  <Tooltip
+                    content="Dados fictícios. As alterações duram até recarregar a aba."
+                    render={
+                      <button type="button">
+                        <Badge variant="secondary">Demo</Badge>
+                      </button>
+                    }
+                  />
+                </div>
+              )}
+              <Suspense fallback={<WorkspaceSkeleton />}>{content}</Suspense>
+            </div>
+          </WorkspaceFrame>
+        </TransactionReaderProvider>
+      </PersonDirectory>
+    </ResourceVersion>
   );
 }
 
 function WorkspaceNavigation({
-  snapshot,
   busy,
   logout,
+  demo,
 }: {
-  snapshot: PortalResponse;
   busy: boolean;
   logout: () => void;
+  demo: boolean;
 }) {
-  const path = location.pathname;
+  const path = accountPath(location.pathname);
   const params = new URLSearchParams(location.search);
+  const reset = useCallback(() => location.reload(), []);
   return (
-    <SidebarFrame
-      brandHref="/account"
-      footer={`${snapshot.people.length} ${snapshot.people.length === 1 ? "pessoa" : "pessoas"} · ${snapshot.connections.length} ${snapshot.connections.length === 1 ? "conexão" : "conexões"}`}
-    >
-      <Sidebar.Group>
-        <Sidebar.GroupLabel>Instalação pessoal</Sidebar.GroupLabel>
-        <nav aria-label="Páginas do Caderninho">
-          <Sidebar.Menu>
-            {pages.map((page) => (
-              <Sidebar.MenuButton
-                active={path === page.path}
-                aria-current={path === page.path ? "page" : undefined}
-                className="text-base"
-                href={scopedHref(page.path, params)}
-                icon={page.icon}
-                key={page.path}
-                onFocus={preloadPage}
-                onMouseEnter={preloadPage}
-                tooltip={page.name}
-              >
-                {page.name}
-              </Sidebar.MenuButton>
-            ))}
-          </Sidebar.Menu>
-        </nav>
-      </Sidebar.Group>
+    <SidebarFrame brandHref={scopedHref("/account", params)}>
+      <nav aria-label="Páginas do Caderninho">
+        {[
+          {
+            name: "Finanças",
+            paths: [
+              "/account",
+              "/account/transactions",
+              "/account/cards",
+              "/account/investments",
+            ],
+          },
+          { name: "Organização", paths: ["/account/rules", "/account/groups"] },
+          {
+            name: "Instalação",
+            paths: ["/account/connections", "/account/sync", "/account/audit"],
+          },
+        ].map((group) => (
+          <Sidebar.Group key={group.name}>
+            <Sidebar.GroupLabel>{group.name}</Sidebar.GroupLabel>
+            <Sidebar.Menu>
+              {group.paths
+                .map((target) => pages.find((page) => page.path === target))
+                .filter((page) => page !== undefined)
+                .map((page) => (
+                  <Sidebar.MenuButton
+                    active={path === page.path}
+                    aria-current={path === page.path ? "page" : undefined}
+                    className="text-base"
+                    href={scopedHref(page.path, params)}
+                    icon={page.icon}
+                    key={page.path}
+                    onFocus={preloadPage}
+                    onMouseEnter={preloadPage}
+                    tooltip={page.name}
+                  >
+                    {page.name}
+                  </Sidebar.MenuButton>
+                ))}
+            </Sidebar.Menu>
+          </Sidebar.Group>
+        ))}
+      </nav>
       <Sidebar.Group>
         <Sidebar.Menu>
           <Sidebar.MenuButton
             active={path === "/account/design-system"}
             className="text-base"
-            href="/account/design-system"
+            href={workspaceHref("/account/design-system")}
             icon={PaletteIcon}
             onFocus={preloadPage}
             onMouseEnter={preloadPage}
@@ -334,6 +405,16 @@ function WorkspaceNavigation({
           >
             Referência visual
           </Sidebar.MenuButton>
+          {demo ? (
+            <>
+              <Sidebar.MenuButton href="/#install-title">
+                Instalar minha cópia
+              </Sidebar.MenuButton>
+              <Sidebar.MenuButton onClick={reset}>
+                Restaurar demonstração
+              </Sidebar.MenuButton>
+            </>
+          ) : null}
           <Sidebar.MenuButton
             className="text-base"
             disabled={busy}

@@ -7,6 +7,7 @@ import {
   MonthlySpendingResponseSchema,
   PlanningCommandSchema,
   PortalTransactionListSchema,
+  PortalTransactionQuerySchema,
   SyncHistoryResultSchema,
   TransactionListSchema,
   WorkspaceCatalogSchema,
@@ -20,6 +21,337 @@ import { account, collect, setup, source, transaction } from "./fixture";
 import { env } from "cloudflare:workers";
 
 beforeEach(setup);
+
+test("an exact portal transaction expands all received installments across months and only confirms linked invoice payments", async () => {
+  const metadata = {
+    cardNumber: "4242",
+    purchaseDate: "2026-05-01",
+    totalInstallments: 4,
+  };
+  const rows = [
+    {
+      billId: "may-bill",
+      date: "2026-05-01",
+      id: "first",
+      status: "POSTED" as const,
+    },
+    {
+      billId: "june-bill",
+      date: "2026-06-01",
+      id: "second",
+      status: "POSTED" as const,
+    },
+    {
+      billId: "nov-bill",
+      date: "2026-11-01",
+      id: "third",
+      status: "PENDING" as const,
+    },
+    {
+      billId: "foreign-bill",
+      date: "2026-12-01",
+      id: "fourth",
+      status: "POSTED" as const,
+    },
+  ].map((row, index) =>
+    transaction({
+      amount: "-100.35",
+      description: "Structured purchase",
+      ...row,
+      creditCardMetadata: {
+        ...metadata,
+        billId: row.billId,
+        installmentNumber: index + 1,
+      },
+    }),
+  );
+  const bill = (
+    id: string,
+    accountId: string,
+    dueDate: string,
+    paid = false,
+  ) => ({
+    accountId,
+    amountMinor: "10035",
+    charges: [],
+    currency: "BRL",
+    dueDate,
+    id,
+    minimumMinor: null,
+    observedAt: "2026-10-24T15:00:00Z",
+    payments: paid
+      ? [{ amountMinor: "10035", currency: "BRL", date: "2026-06-02" }]
+      : [],
+  });
+  await collect({
+    ...source(rows, [
+      account({ type: "CREDIT" }),
+      account({ id: "b", type: "CREDIT" }),
+    ]),
+    products: (input) => {
+      if (input.kind !== "bills") {
+        return Promise.resolve({ kind: input.kind, next: null, records: [] });
+      }
+      return Promise.resolve({
+        kind: "bills",
+        next: null,
+        records:
+          input.id === "b"
+            ? [bill("foreign-bill", "b", "2026-12-02")]
+            : [
+                bill("may-bill", "a", "2026-06-02"),
+                bill("june-bill", "a", "2026-07-02", true),
+                bill("nov-bill", "a", "2026-12-02"),
+              ],
+      });
+    },
+  });
+  const service = createPlanningService(
+    createPlanningRepository(env.DB),
+    () => new Date("2026-10-24T15:00:00Z"),
+  );
+  await service.execute(
+    PlanningCommandSchema.parse({
+      confirmed: true,
+      id: "june-bill",
+      idempotency_key: "synthetic-june-paid",
+      spaceId: "personal",
+      tool: "mark_bill_paid",
+    }),
+  );
+  const query = PortalTransactionQuerySchema.parse({
+    accountId: "a",
+    include_ignored: true,
+    limit: 1,
+    spaceId: "personal",
+    tool: "get_portal_transactions",
+    transactionId: "third",
+  });
+  const result = PortalTransactionListSchema.parse(
+    await service.portalTransactions(query),
+  );
+  const [purchase] = result.data.records;
+  assert.equal(purchase?.anchorDate, "2026-05-01");
+  assert.deepEqual(
+    purchase?.installments.map((row) => row.id),
+    ["first", "second", "third", "fourth"],
+  );
+  assert.deepEqual(
+    purchase?.installments.map((row) => row.amountMinor),
+    ["-10035", "-10035", "-10035", "-10035"],
+  );
+  assert.deepEqual(
+    purchase?.installments.map((row) => row.billPayment),
+    ["bank", "manual", null, null],
+  );
+  assert.equal(purchase?.installments[2]?.status, "PENDING");
+  assert.equal(result.data.cursor, null);
+  const wrongAccount = PortalTransactionListSchema.parse(
+    await service.portalTransactions({ ...query, accountId: "b" }),
+  );
+  assert.deepEqual(wrongAccount.data.records, []);
+  const missing = PortalTransactionListSchema.parse(
+    await service.portalTransactions({
+      ...query,
+      transactionId: "not-received",
+    }),
+  );
+  assert.deepEqual(missing.data.records, []);
+});
+
+test("uncategorized filtering precedes pagination and keeps a purchase when only a later installment lacks a category", async () => {
+  await collect(
+    source(
+      [
+        transaction({
+          category: "Groceries",
+          date: "2026-10-20",
+          id: "categorized",
+        }),
+        transaction({ category: null, date: "2026-10-19", id: "missing" }),
+        transaction({
+          category: "Groceries",
+          creditCardMetadata: {
+            installmentNumber: 1,
+            purchaseDate: "2026-10-10",
+            totalInstallments: 2,
+          },
+          date: "2026-10-10",
+          description: "Course",
+          id: "first",
+        }),
+        transaction({
+          category: null,
+          creditCardMetadata: {
+            installmentNumber: 2,
+            purchaseDate: "2026-10-10",
+            totalInstallments: 2,
+          },
+          date: "2026-11-10",
+          description: "Course",
+          id: "second",
+        }),
+      ],
+      [account({ type: "CREDIT" })],
+    ),
+  );
+  const service = createPlanningService(
+    createPlanningRepository(env.DB),
+    () => new Date("2026-10-24T15:00:00Z"),
+  );
+  const input = {
+    limit: 1,
+    spaceId: "personal",
+    tool: "get_transaction_purchases",
+    uncategorized: true,
+  };
+  const first = PortalTransactionListSchema.parse(
+    await service.execute(PlanningCommandSchema.parse(input)),
+  );
+  assert.deepEqual(
+    first.data.records.map((row) => row.id),
+    ["missing"],
+  );
+  assert.ok(first.data.cursor);
+  assert.equal(first.data.uncategorizedCount, 2);
+  const second = PortalTransactionListSchema.parse(
+    await service.execute(
+      PlanningCommandSchema.parse({ ...input, cursor: first.data.cursor }),
+    ),
+  );
+  assert.deepEqual(
+    second.data.records[0]?.installments.map((row) => row.id),
+    ["first", "second"],
+  );
+  assert.equal(second.data.cursor, null);
+  assert.equal(second.data.uncategorizedCount, 2);
+  const filtered = PortalTransactionListSchema.parse(
+    await service.execute(
+      PlanningCommandSchema.parse({ ...input, text: "Course" }),
+    ),
+  );
+  assert.equal(filtered.data.uncategorizedCount, 1);
+  await assert.rejects(
+    service.execute(
+      PlanningCommandSchema.parse({
+        ...input,
+        cursor: first.data.cursor,
+        uncategorized: false,
+      }),
+    ),
+    { message: "RESTART_REQUIRED" },
+  );
+  const occurrences = TransactionListSchema.parse(
+    await service.execute(
+      PlanningCommandSchema.parse({
+        spaceId: "personal",
+        tool: "get_transactions",
+        uncategorized: true,
+      }),
+    ),
+  );
+  assert.deepEqual(occurrences.data.records.map((row) => row.id).sort(), [
+    "missing",
+    "second",
+  ]);
+});
+
+test("portal categorization is revision checked, idempotent and category only while preserving source money and later imports", async () => {
+  const imported = transaction({
+    amount: "-9007199254740993.01",
+    category: null,
+    date: "2026-10-20",
+    description: "Synthetic merchant",
+    id: "uncategorized",
+  });
+  await collect(source([imported]));
+  const app = fixture();
+  const cookie = cookies(await login(app));
+  const query = {
+    future: false,
+    limit: 1,
+    order: "date_desc",
+    spaceId: "personal",
+    tool: "get_portal_transactions",
+  };
+  const before = PortalTransactionListSchema.parse(
+    await (await command(app, cookie, "query", { query })).json(),
+  );
+  const catalog = WorkspaceCatalogSchema.parse(
+    await (
+      await app.request("/api/account/catalog?spaceId=personal", {
+        headers: { Cookie: cookie },
+      })
+    ).json(),
+  );
+  const category = catalog.categories.find(
+    (item) => item.kind === "expense" && !item.hidden,
+  );
+  assert.ok(category);
+  const edit = {
+    category: category.id,
+    confirmed: true,
+    expected_revision: before.data.revision,
+    idempotency_key: "manual-category",
+    ids: ["uncategorized"],
+    spaceId: "personal",
+    tool: "batch_edit_transactions",
+  };
+  const rejected = await Promise.all(
+    [
+      { ...edit, amountMinor: "1" },
+      { ...edit, direction: "CREDIT" },
+      { ...edit, confirmed: false },
+      { ...edit, expected_revision: undefined },
+    ].map((forbidden) =>
+      command(app, cookie, "planning", { command: forbidden }),
+    ),
+  );
+  assert.deepEqual(
+    rejected.map((response) => response.status),
+    [400, 400, 400, 400],
+  );
+  assert.equal(
+    (await command(app, cookie, "planning", { command: edit })).status,
+    200,
+  );
+  assert.equal(
+    (await command(app, cookie, "planning", { command: edit })).status,
+    200,
+  );
+  assert.equal(
+    (
+      await command(app, cookie, "planning", {
+        command: { ...edit, category: null, idempotency_key: "stale-category" },
+      })
+    ).status,
+    409,
+  );
+  await collect(source([imported]));
+  const service = createPlanningService(createPlanningRepository(env.DB));
+  const result = TransactionListSchema.parse(
+    await service.execute(
+      PlanningCommandSchema.parse({
+        spaceId: "personal",
+        tool: "get_transactions",
+      }),
+    ),
+  );
+  const row = result.data.records.find((item) => item.id === "uncategorized");
+  assert.equal(row?.category, category.id);
+  assert.equal(row?.amountMinor, "-900719925474099301");
+  assert.equal(row?.direction, "DEBIT");
+  assert.equal(row?.description, "Synthetic merchant");
+  const after = PortalTransactionListSchema.parse(
+    await service.execute(
+      PlanningCommandSchema.parse({
+        ...query,
+        tool: "get_transaction_purchases",
+      }),
+    ),
+  );
+  assert.equal(after.data.uncategorizedCount, 0);
+});
 
 test("purchase cursors require a restart when the financial day changes", async () => {
   await collect(

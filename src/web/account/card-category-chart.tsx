@@ -7,6 +7,7 @@ import { useMemo } from "react";
 import type { PortalCards, WorkspaceCatalog } from "../../contracts";
 import { formatBalance } from "../money";
 import { useTheme } from "../use-theme";
+import { chartTooltip } from "./chart-tooltip";
 import { safeChartValues } from "./financial-presentation";
 
 const echarts = await import("echarts/core");
@@ -66,7 +67,7 @@ export function CardCategoryChart({
         ],
         textStyle: { fontFamily: "Inter, sans-serif", fontSize: 14 },
         tooltip: {
-          renderMode: "richText",
+          ...chartTooltip,
           trigger: "item",
           valueFormatter: (value: unknown) =>
             typeof value === "number"

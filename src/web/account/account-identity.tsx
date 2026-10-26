@@ -1,12 +1,14 @@
-import { Tooltip } from "@cloudflare/kumo/components/tooltip";
 import { BankIcon, CreditCardIcon } from "@phosphor-icons/react";
 import { useEffect, useRef, useState } from "react";
 
 import {
+  cardBrandKey,
   type FinancialIdentity,
   institutionLogoUrl,
   type Person,
 } from "../../domain";
+import { type AvatarPart, AvatarStack } from "./avatar-stack";
+import { cardBrandLabel, useAvatarFilter } from "./identity-filters";
 import { PersonAvatar } from "./person-identity";
 
 const brands: Record<string, string | undefined> = {
@@ -27,7 +29,6 @@ const brands: Record<string, string | undefined> = {
   UNIONPAY: new URL("../assets/card-brands/unionpay.svg", import.meta.url).href,
   VISA: new URL("../assets/card-brands/visa.svg", import.meta.url).href,
 };
-const brandSeparators = /[\s_-]/g;
 export interface AccountAppearance {
   identity?: FinancialIdentity | null | undefined;
   name: string;
@@ -73,15 +74,15 @@ function AccountLogo({ src, credit }: { src: string | null; credit: boolean }) {
 export function AccountAvatar({
   account,
   person,
+  filterable = true,
 }: {
   account: AccountAppearance;
   person?: Person | undefined;
+  filterable?: boolean;
 }) {
   const bank = institutionLogoUrl(account.identity?.institution?.logoUrl);
   const brand = account.identity?.cardBrand;
-  const card = brand
-    ? (brands[brand.toUpperCase().replace(brandSeparators, "")] ?? null)
-    : null;
+  const card = brand ? (brands[cardBrandKey(brand)] ?? null) : null;
   const credit = account.type === "CREDIT" || !!brand;
   const description =
     [
@@ -91,35 +92,65 @@ export function AccountAvatar({
     ]
       .filter(Boolean)
       .join(" · ") || account.name;
+  const personFilter = useAvatarFilter(
+    "person",
+    person?.id,
+    person?.name ?? "",
+    filterable,
+  );
+  const bankFilter = useAvatarFilter(
+    "institutionId",
+    account.identity?.institution?.id,
+    account.identity?.institution?.name ?? "",
+    filterable,
+  );
+  const brandFilter = useAvatarFilter(
+    "cardBrand",
+    brand,
+    brand ? cardBrandLabel(brand) : "",
+    filterable,
+  );
+  const items: AvatarPart[] = [];
+  if (person) {
+    items.push({
+      content: <PersonAvatar person={person} />,
+      key: "person",
+      label: person.name,
+      ...personFilter,
+    });
+  }
+  const institution = account.identity?.institution;
+  if (institution || !brand) {
+    items.push({
+      content: (
+        <AccountLogo
+          credit={bank ? false : credit}
+          src={bank}
+        />
+      ),
+      key: "bank",
+      label: institution?.name ?? account.name,
+      ...bankFilter,
+    });
+  }
+  if (brand) {
+    items.push({
+      content: (
+        <AccountLogo
+          credit
+          src={card}
+        />
+      ),
+      key: "brand",
+      label: cardBrandLabel(brand),
+      ...brandFilter,
+    });
+  }
   return (
-    <Tooltip
-      content={description}
-      render={
-        <span
-          aria-label={description}
-          className="account-avatar-stack"
-          role="img"
-        >
-          {!!person && (
-            <span className="account-avatar-owner">
-              <PersonAvatar
-                person={person}
-                size={32}
-              />
-            </span>
-          )}
-          <AccountLogo
-            credit={bank ? false : credit}
-            src={bank ?? card}
-          />
-          {!!bank && !!card && (
-            <AccountLogo
-              credit
-              src={card}
-            />
-          )}
-        </span>
-      }
+    <AvatarStack
+      className="account-avatar-stack"
+      items={items}
+      label={description}
     />
   );
 }
@@ -134,6 +165,7 @@ export function AccountIdentity({
     <span className="account-identity">
       <AccountAvatar
         account={account}
+        filterable={false}
         person={person}
       />
       <span>{account.name}</span>

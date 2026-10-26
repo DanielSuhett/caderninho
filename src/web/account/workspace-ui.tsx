@@ -1,23 +1,25 @@
 import { Badge } from "@cloudflare/kumo/components/badge";
-import { RefreshButton as KumoRefreshButton } from "@cloudflare/kumo/components/button";
 import { SkeletonLine } from "@cloudflare/kumo/components/loader";
 import { Text } from "@cloudflare/kumo/components/text";
 import { Toolbar } from "@cloudflare/kumo/components/toolbar";
-import { Tooltip } from "@cloudflare/kumo/components/tooltip";
 import { SlidersHorizontalIcon } from "@phosphor-icons/react";
 import { type ReactNode, useId } from "react";
 
+import type { FinancialIdentity } from "../../domain";
 import { DisclosureItem } from "./disclosure-item";
 import { FilterDialog } from "./filter-dialog";
+import { IdentityFilterChips } from "./identity-filters";
 import { InfoTip } from "./info-tip";
 
 export function WorkspaceHeading({
   title,
   description,
+  filters,
   children,
 }: {
   title: string;
   description?: string;
+  filters?: ReactNode;
   children?: ReactNode;
 }) {
   return (
@@ -32,31 +34,13 @@ export function WorkspaceHeading({
           {!!description && <InfoTip label={title}>{description}</InfoTip>}
         </Text>
       </div>
-      {children}
+      {!!(filters || children) && (
+        <div className="page-actions">
+          {filters}
+          {children}
+        </div>
+      )}
     </header>
-  );
-}
-
-export function RefreshButton({
-  onClick,
-  disabled = false,
-  label = "Atualizar dados",
-}: {
-  onClick: () => void;
-  disabled?: boolean;
-  label?: string;
-}) {
-  return (
-    <Tooltip
-      content={label}
-      render={
-        <KumoRefreshButton
-          aria-label={label}
-          disabled={disabled}
-          onClick={onClick}
-        />
-      }
-    />
   );
 }
 
@@ -98,6 +82,7 @@ export function WorkspaceFilters({
   leading,
   identity,
   showClear,
+  identities = [],
 }: {
   action: string;
   children: ReactNode;
@@ -106,60 +91,60 @@ export function WorkspaceFilters({
   leading?: ReactNode;
   identity?: ReactNode;
   showClear?: boolean;
+  identities?: Array<{ identity?: FinancialIdentity | null | undefined }>;
 }) {
   const formId = useId();
   const filters = new URLSearchParams(location.search);
   filters.delete("grid");
+  const identityCount =
+    Number(!!filters.get("institutionId")) + Number(!!filters.get("cardBrand"));
+  const count = activeCount + identityCount;
   return (
     <div className="filter-toolbar">
       {leading}
-      <Toolbar aria-label="Filtros da consulta">
-        <FilterDialog
-          formId={formId}
-          title="Filtros"
-          trigger={
-            <>
-              {identity}
-              <SlidersHorizontalIcon
-                aria-hidden="true"
-                size={20}
-              />
-              Filtros{activeCount > 0 ? ` · ${activeCount}` : ""}
-            </>
-          }
-        >
-          <form
-            action={action}
-            className="workspace-filters"
-            id={formId}
-            method="get"
+      <div className="scope-filter-actions">
+        {identity}
+        <Toolbar aria-label="Filtros da consulta">
+          <FilterDialog
+            formId={formId}
+            title="Filtros"
+            trigger={
+              <>
+                <SlidersHorizontalIcon
+                  aria-hidden="true"
+                  size={20}
+                />
+                Filtros{count > 0 ? ` · ${count}` : ""}
+              </>
+            }
           >
-            {children}
-            <a
-              className="filter-clear"
-              href={action}
+            <form
+              action={action}
+              className="workspace-filters"
+              id={formId}
+              method="get"
             >
-              Limpar filtros
-            </a>
-          </form>
-        </FilterDialog>
-        {(showClear ?? (activeCount > 0 || filters.size > 0)) && (
-          <Toolbar.Link href={action}>Limpar</Toolbar.Link>
-        )}
-      </Toolbar>
+              {children}
+              <a
+                className="filter-clear"
+                href={action}
+              >
+                Limpar filtros
+              </a>
+            </form>
+          </FilterDialog>
+          {(identityCount > 0 ||
+            (showClear ?? (activeCount > 0 || filters.size > 0))) && (
+            <Toolbar.Link href={action}>Limpar</Toolbar.Link>
+          )}
+        </Toolbar>
+      </div>
+      <IdentityFilterChips
+        identities={identities}
+        params={filters}
+      />
       {!!context && <span className="sr-only">{context}</span>}
     </div>
-  );
-}
-
-export function RecordReference({ children }: { children: ReactNode }) {
-  return (
-    <DisclosureItem
-      className="record-reference"
-      summary="Referência técnica"
-    >
-      <dl className="detail-list">{children}</dl>
-    </DisclosureItem>
   );
 }
 

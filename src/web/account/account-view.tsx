@@ -10,7 +10,7 @@ import {
   accountFailureMessage,
   type ManagementOutcome,
 } from "./account-feedback";
-import { useWorkspaceNavigation } from "./account-navigation";
+import { accountPath, useWorkspaceNavigation } from "./account-navigation";
 import { createConnectWidget } from "./connect-widget";
 import type { ConnectionActivity } from "./connection-journey";
 import type { DashboardView as DashboardComponent } from "./dashboard-view";
@@ -26,7 +26,13 @@ const DashboardView = lazy<typeof DashboardComponent>(async () => {
   return { default: data.DashboardView };
 });
 
-export function AccountView() {
+export function AccountView({
+  api: suppliedApi,
+  demo = false,
+}: {
+  api?: ReturnType<typeof createAccountApi>;
+  demo?: boolean;
+}) {
   const route = useWorkspaceNavigation();
   const [snapshot, setSnapshot] = useState<PortalResponse>();
   const [message, setMessage] = useState("");
@@ -34,6 +40,7 @@ export function AccountView() {
   const [activity, setActivity] = useState<ConnectionActivity | null>(null);
   const [observedAt, setObservedAt] = useState<string | null>(null);
   const [readError, setReadError] = useState(false);
+  const [dataVersion, setDataVersion] = useState(0);
   const personId = new URLSearchParams(location.search).get("person") ?? "";
   const lifetime = useRef<AbortController | null>(null);
   const locked = useRef(false);
@@ -42,7 +49,9 @@ export function AccountView() {
   const schedulePoll = useRef<((active: boolean) => void) | null>(null);
   const refreshNow = useRef<(() => void) | null>(null);
   const cancelAttempt = useRef<(() => Promise<void>) | null>(null);
-  const [api] = useState(() => createAccountApi(location.origin));
+  const [api] = useState(
+    () => suppliedApi ?? createAccountApi(location.origin),
+  );
   const [widget] = useState(createConnectWidget);
   const refresh = useCallback(
     async (signal: AbortSignal) => {
@@ -55,7 +64,9 @@ export function AccountView() {
       setObservedAt(new Date().toISOString());
       setReadError(false);
       const fingerprint = JSON.stringify(state);
-      if (!signal.aborted && fingerprint !== snapshotFingerprint.current) {
+      if (fingerprint !== snapshotFingerprint.current) {
+        api.invalidate();
+        setDataVersion((value) => value + 1);
         snapshotFingerprint.current = fingerprint;
         setSnapshot(state);
       }
@@ -123,7 +134,7 @@ export function AccountView() {
           return;
         }
         if (action === "logout") {
-          location.assign("/account/login");
+          location.assign(demo ? "/" : "/account/login");
           return;
         }
         await refresh(signal);
@@ -149,10 +160,16 @@ export function AccountView() {
         );
       }
     },
-    [snapshot, refresh, api],
+    [snapshot, refresh, api, demo],
   );
   const connect = useCallback(
     async (profileId: string, itemId?: string) => {
+      if (demo) {
+        setMessage(
+          "A demonstração usa bancos fictícios. Instale sua cópia para conectar um banco real.",
+        );
+        return;
+      }
       const signal = lifetime.current?.signal;
       if (!(snapshot && signal) || locked.current) {
         return;
@@ -261,7 +278,7 @@ export function AccountView() {
         setMessage(accountFailureMessage(error));
       }
     },
-    [snapshot, command, api, widget],
+    [snapshot, command, api, widget, demo],
   );
   const manage = useCallback(
     async (input: HouseholdCommand): Promise<ManagementOutcome> => {
@@ -359,6 +376,9 @@ export function AccountView() {
       api={api}
       busy={busy}
       command={onCommand}
+      dataVersion={dataVersion}
+      demo={demo}
+      readError={readError}
       route={route}
       snapshot={snapshot}
     >
@@ -376,7 +396,7 @@ export function AccountView() {
         readError={readError}
         refresh={onRefresh}
         section={
-          location.pathname === "/account/connections"
+          accountPath(location.pathname) === "/account/connections"
             ? "connections"
             : "overview"
         }

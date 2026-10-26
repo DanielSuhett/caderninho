@@ -6,6 +6,7 @@ import {
   InvestmentListSchema,
   PortalCardsSchema,
   type PortalMutation,
+  PortalTransactionListSchema,
   RulePreviewSchema,
 } from "../../contracts";
 import { demoLedger, transactionFixture } from "../../fixtures/finance";
@@ -17,6 +18,69 @@ const conflictPattern = /IDEMPOTENCY_CONFLICT/;
 const linkedPattern = /SPACE_NOT_EMPTY/;
 const protectedPattern = /SPACE_PROTECTED/;
 const { signal } = new AbortController();
+test("a demo installment opens the complete received purchase instead of only the selected month", async () => {
+  const session = createDemoSession();
+  const row = session
+    .view()
+    .records.find(
+      (item) =>
+        item.description === "Ferramentas de desenvolvimento" &&
+        item.date === "2026-10-12",
+    );
+  assert.ok(row);
+  const result = PortalTransactionListSchema.parse(
+    await session.api.query(
+      {
+        accountId: row.accountId,
+        limit: 1,
+        spaceId: "personal",
+        tool: "get_portal_transactions",
+        transactionId: row.id,
+      },
+      "synthetic",
+      signal,
+    ),
+  );
+  const installments = result.data.records[0]?.installments;
+  assert.equal(installments?.length, 12);
+  assert.equal(installments?.at(0)?.date, "2026-05-12");
+  assert.equal(installments?.at(-1)?.date, "2027-04-12");
+  assert.equal(installments?.at(-1)?.status, "PENDING");
+  assert.equal(installments?.at(0)?.billPayment, "bank");
+  assert.equal(installments?.at(-1)?.billPayment, undefined);
+});
+test("manual demo categorization preserves money, checks revision and retries without duplicating changes", async () => {
+  const session = createDemoSession();
+  const row = session.view().records.find((item) => item.category === null);
+  assert.ok(row);
+  const edit: PortalMutation = {
+    category: "market",
+    confirmed: true,
+    expected_revision: session.revision(),
+    idempotency_key: "categorize-demo",
+    ids: [row.id],
+    spaceId: "personal",
+    tool: "batch_edit_transactions",
+  };
+  await save(session, edit);
+  const revision = session.revision();
+  await save(session, edit);
+  assert.equal(session.revision(), revision);
+  assert.deepEqual(
+    session.view().records.find((item) => item.id === row.id),
+    { ...row, category: "market" },
+  );
+  await assert.rejects(
+    save(session, { ...edit, category: null, idempotency_key: "stale-demo" }),
+    { message: "RESTART_REQUIRED" },
+  );
+  assert.deepEqual(
+    createDemoSession()
+      .view()
+      .records.find((item) => item.id === row.id),
+    row,
+  );
+});
 function save(
   session: ReturnType<typeof createDemoSession>,
   command: PortalMutation,

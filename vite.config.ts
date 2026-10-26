@@ -3,10 +3,10 @@ import { fileURLToPath } from "node:url";
 
 import { defineConfig, type Plugin } from "vite";
 
-import { demoPage } from "./src/web/demo-page";
 import { renderPage } from "./src/web/document";
 import { landingPage } from "./src/web/landing-view";
 import { notFoundPage } from "./src/web/not-found-view";
+import { accountPage } from "./src/web/portal-view";
 
 function copyPortalAssets(): Plugin {
   return {
@@ -40,13 +40,17 @@ function copyPortalAssets(): Plugin {
               "demo/investments",
               "demo/rules",
               "demo/groups",
+              "demo/connections",
+              "demo/sync",
+              "demo/audit",
+              "demo/design-system",
             ].map(async (path) => {
               await mkdir(new URL(`${path}/`, destination), {
                 recursive: true,
               });
               await writeFile(
                 new URL(`${path}/index.html`, destination),
-                renderPage(demoPage()),
+                renderPage(accountPage({ demo: true })),
               );
             }),
           );
@@ -106,7 +110,12 @@ function copyPortalAssets(): Plugin {
               new URL(name, destination),
             ),
           ),
-          ...["InterVariable.woff2", "Inter-LICENSE.txt"].map((name) =>
+          ...[
+            "InterVariable.woff2",
+            "Inter-LICENSE.txt",
+            "SourceSerif4Variable-Roman.woff2",
+            "SourceSerif4-LICENSE.md",
+          ].map((name) =>
             copyFile(
               new URL(`src/web/assets/fonts/${name}`, root),
               new URL(`fonts/${name}`, destination),
@@ -162,8 +171,14 @@ export default defineConfig({
             : "[name][extname]",
         chunkFileNames: "chunks/[name]-[hash].js",
         entryFileNames: "[name].js",
-        manualChunks: (id) =>
-          id.includes("/node_modules/zod/") ? "validation" : undefined,
+        manualChunks: (id) => {
+          if (id.includes("/node_modules/zod/")) {
+            return "validation";
+          }
+          if (id.endsWith("/src/shared/result.ts")) {
+            return "result";
+          }
+        },
       },
     },
     target: "es2022",

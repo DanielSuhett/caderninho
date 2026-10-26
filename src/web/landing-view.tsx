@@ -1,7 +1,13 @@
 import { LayerCard } from "@cloudflare/kumo/components/layer-card";
-import { ArrowRightIcon, CheckIcon } from "@phosphor-icons/react";
+import {
+  ArrowRightIcon,
+  CheckIcon,
+  GithubLogoIcon,
+} from "@phosphor-icons/react";
 
 import { Document } from "./document";
+import { LandingFaq } from "./landing-faq";
+import { LandingHeroPreview } from "./landing-hero-preview";
 import {
   LandingMetadata,
   landingDescription,
@@ -29,8 +35,10 @@ const quotas = [
 
 function InstallLink({
   variant = "primary",
+  label = "Instalar na minha Cloudflare",
 }: {
   variant?: "primary" | "secondary";
+  label?: string;
 } = {}) {
   return (
     <UiLink
@@ -38,7 +46,7 @@ function InstallLink({
       size="lg"
       variant={variant}
     >
-      Instalar na minha Cloudflare
+      {label}
     </UiLink>
   );
 }
@@ -66,6 +74,13 @@ export function landingPage({
           <link
             href="/landing.css"
             rel="stylesheet"
+          />
+          <link
+            as="font"
+            crossOrigin="anonymous"
+            href="/fonts/SourceSerif4Variable-Roman.woff2"
+            rel="preload"
+            type="font/woff2"
           />
         </>
       }
@@ -123,38 +138,53 @@ export function landingPage({
             aria-labelledby="hero-title"
             className="hero"
           >
-            <p className="hero-kicker">Suas finanças no ChatGPT e Claude</p>
-            <h1 id="hero-title">
-              Código aberto.
-              <br />
-              De graça.
-            </h1>
-            <p className="hero-description">
-              Veja contas, cartões e investimentos em um só lugar. Consulte suas
-              finanças no painel ou converse com seus dados na IA que você
-              escolher.
-            </p>
-            <div className="hero-actions">
-              <UiLink
-                href="/demo?month=2026-10"
-                size="lg"
-                variant="primary"
-              >
-                Explorar a demo
-              </UiLink>
-              <InstallLink variant="secondary" />
+            <div className="hero-grid">
+              <div className="hero-intro">
+                <p className="hero-kicker">
+                  <a
+                    aria-label="Código aberto no GitHub, licença MIT"
+                    className="hero-source"
+                    href={repository}
+                  >
+                    <GithubLogoIcon
+                      aria-hidden
+                      size={22}
+                    />
+                    Código aberto.
+                  </a>{" "}
+                  <span>De graça.</span>
+                </p>
+                <h1 id="hero-title">
+                  Suas finanças,
+                  <br />
+                  na sua IA.
+                </h1>
+                <p className="hero-description">
+                  Contas, cartões e investimentos em uma base que é sua. No
+                  painel, no ChatGPT ou no Claude.
+                </p>
+                <div className="hero-actions">
+                  <UiLink
+                    href="/demo?month=2026-10"
+                    size="lg"
+                    variant="primary"
+                  >
+                    Explorar a demo
+                  </UiLink>
+                  <InstallLink
+                    label="Instalar"
+                    variant="secondary"
+                  />
+                </div>
+                <p className="hero-note">
+                  Demo sem cadastro. Instalação na sua Cloudflare.{" "}
+                  <a href="#free-tier">
+                    Serviços externos têm planos e limites.
+                  </a>
+                </p>
+              </div>
+              <LandingHeroPreview />
             </div>
-            <a
-              className="hero-source"
-              href={repository}
-            >
-              Ver código no GitHub · licença MIT
-            </a>
-            <p className="hero-note">
-              Demo com dados fictícios, sem cadastro. Para usar seus dados,
-              instale na sua Cloudflare. Serviços externos têm planos e limites
-              próprios. <a href="#free-tier">Entenda os custos.</a>
-            </p>
             <figure
               aria-labelledby="network-title"
               className="network-figure"
@@ -298,7 +328,7 @@ export function landingPage({
                   Você controla o acesso
                 </dt>
                 <dd>
-                  Acompanhe chamadas e revogue autorizações em Observabilidade.
+                  Acompanhe chamadas e revogue autorizações na Auditoria MCP.
                 </dd>
               </div>
             </dl>
@@ -511,7 +541,7 @@ export function landingPage({
                 <div>
                   <h3>Copie seu endereço MCP</h3>
                   <p>
-                    Em Conexões, copie a URL para conectar seu assistente MCP.
+                    Em Pessoas, copie a URL para conectar seu assistente MCP.
                   </p>
                   <code className="endpoint-example">
                     https://sua-instancia.workers.dev/mcp
@@ -544,8 +574,8 @@ export function landingPage({
                 <div>
                   <h3>Confirme a conexão</h3>
                   <p>
-                    Peça o status do Caderninho. Confira a chamada em
-                    Observabilidade e a data da última sincronização.
+                    Peça o status do Caderninho. Confira a chamada em Auditoria
+                    MCP e a data da última importação.
                   </p>
                 </div>
               </li>
@@ -601,70 +631,8 @@ export function landingPage({
             <div className="section-intro">
               <h2 id="faq-title">Antes de conectar</h2>
             </div>
-            <div className="faq-list">
-              <details>
-                <summary>
-                  É grátis mesmo? O que significa código aberto?
-                </summary>
-                <p>
-                  O software Caderninho é grátis, sem assinatura, e o código
-                  está no GitHub sob licença MIT. Você pode ler, modificar e
-                  hospedar sua própria cópia. Cloudflare, Meu Pluggy e o cliente
-                  de IA têm planos e limites próprios.{" "}
-                  <a href="#free-tier">Veja as condições de cada serviço.</a>
-                </p>
-              </details>
-              <details>
-                <summary>O que é o Caderninho?</summary>
-                <p>
-                  Um organizador de finanças pessoais de código aberto que você
-                  instala na sua Cloudflare. Reúne contas, cartões, transações e
-                  investimentos para consultar no painel ou em assistentes de
-                  IA. O MCP (Model Context Protocol) conecta esses assistentes à
-                  sua base, com acesso autorizado por você.
-                </p>
-              </details>
-              <details>
-                <summary>O que preciso para começar?</summary>
-                <p>
-                  Uma conta Cloudflare para instalar o Caderninho e uma conta
-                  Meu Pluggy para conectar os bancos. Para consultar por IA,
-                  escolha um cliente com MCP remoto e OAuth, como ChatGPT ou
-                  Claude. A disponibilidade depende do plano do cliente, da
-                  instituição financeira e da cobertura da Pluggy.
-                </p>
-              </details>
-              <details>
-                <summary>
-                  Sem lock-in significa que posso usar qualquer LLM?
-                </summary>
-                <p>
-                  Clientes com MCP remoto e OAuth acessam a mesma base. Cada
-                  aplicativo define seus modelos e planos; conversas não são
-                  transferidas entre eles.
-                </p>
-                <p>
-                  O padrão aberto permite trocar de assistente. A infraestrutura
-                  usa Cloudflare e a conexão bancária, Pluggy.
-                </p>
-              </details>
-              <details>
-                <summary>Quem recebe meus dados?</summary>
-                <p>
-                  O histórico fica na sua Cloudflare. Resultados consultados
-                  chegam ao cliente e ao modelo escolhido, sob as políticas
-                  desse provedor. Credenciais Pluggy ficam nos seus secrets.
-                </p>
-              </details>
-              <details>
-                <summary>
-                  As consultas sempre usam os dados mais recentes?
-                </summary>
-                <p>
-                  Usam a última cópia sincronizada, com data e cobertura nos
-                  resultados. Importações parciais e falhas continuam visíveis.
-                </p>
-              </details>
+            <div id="landing-faq">
+              <LandingFaq />
             </div>
           </section>
           <section

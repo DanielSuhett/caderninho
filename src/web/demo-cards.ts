@@ -5,9 +5,11 @@ import type {
 } from "../contracts";
 import {
   cardChargeStatus,
+  cardCredit,
   createCardActivity,
   isCardExpense,
   isCardInstallment,
+  matchesFinancialIdentity,
 } from "../domain";
 import { demoPeople, demoReferenceDay } from "../fixtures/finance";
 import type { DemoData } from "./demo-data";
@@ -15,6 +17,7 @@ import type { DemoData } from "./demo-data";
 export function demoCards(
   query: PortalCardsQuery,
   data: DemoData,
+  limits: Map<string, string> = new Map(),
 ): PortalCards {
   const activity = createCardActivity({
     month: query.month,
@@ -24,20 +27,24 @@ export function demoCards(
     .filter(
       (account) =>
         account.type === "CREDIT" &&
-        (!query.personId || account.personId === query.personId),
+        (!query.personId || account.personId === query.personId) &&
+        matchesFinancialIdentity(account.identity, query),
     )
     .map((account) => ({
+      ...cardCredit({
+        available: account.id === "demo-card-extra" ? "1000000" : "761240",
+        limit: "1000000",
+        localLimit: limits.get(account.id),
+      }),
       allocatedMinor: account.id === "demo-card-extra" ? "0" : "238760",
-      availableCreditMinor:
-        account.id === "demo-card-extra" ? "1000000" : "761240",
       balanceObservedAt: account.balanceObservedAt ?? null,
       cardNumber: account.id === "demo-card-extra" ? "8080" : "4242",
       closeDate: "2026-10-25",
-      creditLimitMinor: "1000000",
       currency: account.currency,
       dueDate: "2026-11-02",
       id: account.id,
       identity: account.identity,
+      manual: false,
       name: account.name,
       personId: account.personId,
       personName:

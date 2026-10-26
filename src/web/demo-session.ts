@@ -10,7 +10,10 @@ import {
   activeRules,
   categoryCatalog,
   investmentPortfolio,
+  matchesFinancialIdentity,
+  prepareRuleImport,
   ruleMatches,
+  transactionMatchesText,
 } from "../domain";
 import { cardCommitmentsFixture } from "../fixtures/card-commitments";
 import {
@@ -22,9 +25,11 @@ import {
 } from "../fixtures/finance";
 import { demoInvestments } from "../fixtures/investments";
 import { workspaceFixture } from "../fixtures/workspace";
+import { tryCatch } from "../shared";
 import type { OrganizationApi } from "./account/account-api";
 import { demoCards } from "./demo-cards";
-import type { DemoData } from "./demo-data";
+import { type DemoData, demoSummary, scopedDemoData } from "./demo-data";
+import { demoTransactionDetail } from "./demo-transaction-detail";
 import { randomId } from "./random-id";
 
 function demoCommitments(
@@ -96,6 +101,12 @@ function validateRule(command: RuleCommand, group: Group, data: DemoData) {
   required(
     group.categories.find((category) => category.id === command.categoryId),
   );
+  validateRuleReferences(command, data);
+}
+function validateRuleReferences(
+  command: Pick<RuleCommand, "accountId" | "filter">,
+  data: DemoData,
+) {
   const accounts = new Set(data.accounts.map((account) => account.id));
   if (command.accountId && !accounts.has(command.accountId)) {
     throw new Error("NOT_FOUND");
@@ -193,7 +204,10 @@ function mutateCategoryCatalog(group: Group, command: ParsedMutation) {
   }
 }
 
-function local<T>(signal: AbortSignal, operation: () => T): Promise<T> {
+function local<T>(
+  signal: AbortSignal,
+  operation: () => T | Promise<T>,
+): Promise<T> {
   return Promise.resolve().then(() => {
     signal.throwIfAborted();
     return operation();
@@ -214,6 +228,9 @@ export function createDemoSession({
   let revision = 0;
   const listeners = new Set<() => void>();
   const receipts = new Map<string, string>();
+  const cardLimits = new Map<string, string>();
+  const importPrefixes = new Map<string, string>();
+  let writing = Promise.resolve();
   function publish() {
     revision += 1;
     for (const listener of listeners) {
@@ -228,12 +245,96 @@ export function createDemoSession({
       records: spaceId === "personal" ? records : [],
     };
   }
+  function catalogFor(spaceId: string): WorkspaceCatalog {
+    return structuredClone({ ...required(groups.get(spaceId)), spaces });
+  }
+  function financialData(
+    query: Extract<PortalQuery, { tool: "get_overview" | "generate_chart" }>,
+  ) {
+    const data = scopedDemoData(view(query.spaceId), query);
+    return {
+      ...data,
+      records: data.records.filter(
+        (row) =>
+          (!query.accountId || row.accountId === query.accountId) &&
+          (!query.currency || row.currency === query.currency) &&
+          (!query.direction || row.direction === query.direction) &&
+          (!query.categoryId || row.category === query.categoryId) &&
+          (!query.status || row.status === query.status) &&
+          (!query.text || transactionMatchesText(row, query.text)) &&
+          (!query.uncategorized || row.category === null),
+      ),
+    };
+  }
+  function updateCardLimit(
+    command: Extract<ParsedMutation, { tool: "update_account_settings" }>,
+  ) {
+    if (command.expected_revision !== revision) {
+      throw new Error("RESTART_REQUIRED");
+    }
+    const account = required(
+      view(command.spaceId).accounts.find((row) => row.id === command.id),
+    );
+    if (account.type !== "CREDIT") {
+      throw new Error("CARD_REQUIRED");
+    }
+    if (command.creditLimitMinor === null) {
+      cardLimits.delete(command.id);
+    } else {
+      cardLimits.set(command.id, command.creditLimitMinor);
+    }
+  }
+  function categorizeTransactions(
+    command: Extract<ParsedMutation, { tool: "batch_edit_transactions" }>,
+    group: Group,
+  ) {
+    if (command.expected_revision !== revision) {
+      throw new Error("RESTART_REQUIRED");
+    }
+    if (command.category !== null) {
+      required(group.categories.find((item) => item.id === command.category));
+    }
+    const selected = new Set(command.ids);
+    const scoped = view(command.spaceId).records;
+    for (const id of selected) {
+      required(scoped.find((item) => item.id === id));
+    }
+    records = records.map((row) =>
+      selected.has(row.id) ? { ...row, category: command.category } : row,
+    );
+  }
+  function importRules(
+    command: Extract<ParsedMutation, { tool: "import_rules" }>,
+  ) {
+    if (command.revision !== revision) {
+      throw new Error("RESTART_REQUIRED");
+    }
+    const prepared = prepareImport(command);
+    if (
+      prepared.result.categories.some(
+        (category) =>
+          category.status === "invalid" || category.status === "ambiguous",
+      )
+    ) {
+      throw new Error("INVALID_RULE_IMPORT_CATEGORY");
+    }
+    groups.set(command.spaceId, prepared.group);
+  }
   function mutate(command: ParsedMutation) {
     const group = required(groups.get(command.spaceId));
     if (mutateCategoryCatalog(group, command)) {
       return;
     }
     switch (command.tool) {
+      case "import_rules":
+        importRules(command);
+        break;
+      case "batch_edit_transactions":
+        categorizeTransactions(command, group);
+        break;
+      case "update_account_settings":
+        updateCardLimit(command);
+        break;
       case "create_rule":
       case "update_rule": {
         validateRule(command, group, view(command.spaceId));
@@ -334,11 +435,67 @@ export function createDemoSession({
         throw new Error("UNSUPPORTED_DEMO_OPERATION");
     }
   }
+  function prepareImport(
+    input: Pick<
+      Extract<ParsedMutation, { tool: "import_rules" }>,
+      "spaceId" | "pack" | "categoryIds"
+    >,
+  ) {
+    const group = required(groups.get(input.spaceId));
+    const key = JSON.stringify([input.spaceId, input.pack.id]);
+    let prefix = importPrefixes.get(key);
+    if (!prefix) {
+      // Stable across preview/apply, scoped to this tab; getRandomValues also
+      // works on HTTP LAN previews where crypto.subtle is unavailable.
+      prefix = `demo:pack:${randomId()}:`;
+      importPrefixes.set(key, prefix);
+    }
+    const plan = prepareRuleImport({
+      ...input,
+      categories: group.categories.map((category) => ({
+        ...category,
+        spaceId: input.spaceId,
+      })),
+      prefix,
+      revision,
+      rules: group.rules.map(({ pack: _origin, ...rule }) => ({
+        ...rule,
+        filter: rule.filter ?? null,
+        spaceId: input.spaceId,
+      })),
+    });
+    for (const rule of plan.rules) {
+      validateRuleReferences(rule, view(input.spaceId));
+    }
+    return {
+      group: {
+        ...group,
+        categories: [
+          ...group.categories,
+          ...plan.categories.map(
+            ({ spaceId: _spaceId, ...category }) => category,
+          ),
+        ],
+        rules: [
+          ...group.rules,
+          ...plan.rules.map(({ spaceId: _spaceId, ...rule }) => rule),
+        ],
+      },
+      result: plan.result,
+    };
+  }
+
   const queries: Partial<{
     [Tool in keyof PortalQueryResults]: (
       query: PortalQuery & { tool: Tool },
-    ) => PortalQueryResults[Tool];
+    ) => PortalQueryResults[Tool] | Promise<PortalQueryResults[Tool]>;
   }> = {
+    generate_chart: (query) => ({
+      data: {
+        ...demoSummary(query.from, query.to, "month", financialData(query)),
+        groupBy: "month",
+      },
+    }),
     get_accounts: (query) => ({
       data: {
         records: view(query.spaceId).accounts.map((account) => ({
@@ -364,12 +521,22 @@ export function createDemoSession({
         demoInvestments.filter(
           (row) =>
             row.spaceId === query.spaceId &&
-            (!query.personId || row.personId === query.personId),
+            (!query.personId || row.personId === query.personId) &&
+            matchesFinancialIdentity(row.identity, query),
         ),
         query,
       ),
       partial: false,
     }),
+    get_overview: (query) => {
+      const data = financialData(query);
+      return {
+        data: {
+          ...demoSummary(query.from, query.to, "category", data),
+          accounts: data.accounts,
+        },
+      };
+    },
     get_portal_cards: (query) => ({
       data: demoCards(
         {
@@ -378,32 +545,50 @@ export function createDemoSession({
           spaceId: query.spaceId ?? "personal",
         },
         view(query.spaceId ?? "personal"),
+        cardLimits,
       ),
       partial: false,
+      revision,
     }),
+    get_portal_transactions: (query) =>
+      demoTransactionDetail(query, view(query.spaceId ?? "personal"), revision),
+    preview_rule_import: async (query) => {
+      const { RuleImportPackageSchema } = await import("../contracts");
+      return {
+        data: prepareImport({
+          ...query,
+          categoryIds: query.categoryIds ?? {},
+          pack: RuleImportPackageSchema.parse(query.pack),
+        }).result,
+      };
+    },
   };
   const api: OrganizationApi = {
-    catalog: (spaceId, signal) =>
-      local(signal, () =>
-        structuredClone({ ...required(groups.get(spaceId)), spaces }),
-      ),
+    catalog: (spaceId, signal) => local(signal, () => catalogFor(spaceId)),
     planning: async (command, _csrf, signal) => {
       const { PortalMutationSchema: mutationSchema } = await import(
         "../contracts"
       );
-      return local(signal, () => {
-        const payload = JSON.stringify(command);
-        const previous = receipts.get(command.idempotency_key);
-        if (previous && previous !== payload) {
-          throw new Error("IDEMPOTENCY_CONFLICT");
-        }
-        if (!previous) {
-          mutate(mutationSchema.parse({ command, csrf: _csrf }).command);
-          receipts.set(command.idempotency_key, payload);
-          publish();
-        }
-        return { ok: true };
-      });
+      const result = writing.then(() =>
+        local(signal, () => {
+          const payload = JSON.stringify(command);
+          const previous = receipts.get(command.idempotency_key);
+          if (previous && previous !== payload) {
+            throw new Error("IDEMPOTENCY_CONFLICT");
+          }
+          if (!previous) {
+            mutate(mutationSchema.parse({ command, csrf: _csrf }).command);
+            receipts.set(command.idempotency_key, payload);
+            publish();
+          }
+          return { ok: true };
+        }),
+      );
+      // Failed commands release the synthetic write queue; callers receive the error.
+      writing = tryCatch(result).then(
+        ({ data: _data, error: _error }) => undefined,
+      );
+      return await result;
     },
     previewRule: (input, signal) =>
       local(signal, () => {
@@ -480,11 +665,13 @@ export function createDemoSession({
       publish();
       return { changed, matched };
     },
+    catalog: catalogFor,
     reset() {
       spaces = structuredClone(catalog.spaces);
       groups = new Map([["personal", structuredClone(catalog)]]);
       records = structuredClone(ledger);
       receipts.clear();
+      importPrefixes.clear();
       publish();
     },
     revision: () => revision,

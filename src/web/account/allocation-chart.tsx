@@ -11,6 +11,7 @@ import {
   categorySlices,
   percentageLabel,
 } from "./allocation-presentation";
+import { chartTooltip } from "./chart-tooltip";
 
 const echarts = await import("echarts/core");
 echarts.use([PieChart, TooltipComponent, AriaComponent, CanvasRenderer]);
@@ -56,8 +57,7 @@ export function AllocationChart({
         ],
         textStyle: { fontFamily: "Inter, sans-serif", fontSize: 14 },
         tooltip: {
-          renderMode: "richText",
-          textStyle: { fontSize: 14 },
+          ...chartTooltip,
           trigger: "item",
           valueFormatter: (value: unknown) =>
             typeof value === "number" ? percentageLabel(value) : "",

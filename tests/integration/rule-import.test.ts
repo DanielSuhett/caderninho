@@ -5,9 +5,12 @@ import { z } from "zod/v4";
 
 import {
   PlanningCommandSchema,
+  type PortalMutation,
   RuleImportPackageSchema,
+  type RuleImportResult,
   RuleImportResultSchema,
 } from "../../src/contracts";
+import { createDemoSession } from "../../src/web/demo-session";
 import { createPlanningService } from "../../src/worker/planning";
 import { createPlanningRepository } from "../../src/worker/planning/repository";
 import {
@@ -74,6 +77,80 @@ function fixture() {
 }
 const identify = (value: unknown) =>
   z.object({ id: z.string() }).parse(value).id;
+
+function report(result: RuleImportResult) {
+  return {
+    ...result,
+    categories: result.categories.map(({ id: _id, ...category }) => category),
+    revision: 0,
+  };
+}
+
+test("product and demo import the same JSON with matching previews and preserve edits on replay", async () => {
+  const f = fixture();
+  const demo = createDemoSession();
+  const { signal } = new AbortController();
+  const history = structuredClone(demo.view().records);
+  const previewDemo = async () =>
+    (
+      await demo.api.query(
+        { pack, spaceId: "personal", tool: "preview_rule_import" },
+        "synthetic",
+        signal,
+      )
+    ).data;
+  const productPreview = await f.preview();
+  const demoPreview = await previewDemo();
+  assert.deepEqual(report(demoPreview), report(productPreview));
+  await f.write("import_rules", { pack, revision: productPreview.revision });
+  await demo.api.planning(
+    {
+      confirmed: true,
+      idempotency_key: "shared-import",
+      pack,
+      revision: demoPreview.revision,
+      spaceId: "personal",
+      tool: "import_rules",
+    },
+    "synthetic",
+    signal,
+  );
+  const productRule = (await f.repository.read()).state.rules.find(
+    (rule) => rule.pack?.id === pack.id,
+  );
+  const demoRule = demo
+    .catalog("personal")
+    .rules.find((rule) => rule.pack?.id === pack.id);
+  assert.ok(productRule);
+  assert.ok(demoRule);
+  const { pack: _origin, ...editable } = demoRule;
+  const edit: PortalMutation = {
+    ...editable,
+    confirmed: true,
+    enabled: false,
+    idempotency_key: "shared-edit",
+    name: "Minha regra pausada",
+    priority: 700,
+    spaceId: "personal",
+    tool: "update_rule",
+  };
+  await f.write("update_rule", {
+    ...edit,
+    categoryId: productRule.categoryId,
+    id: productRule.id,
+  });
+  await demo.api.planning(edit, "synthetic", signal);
+  const productReplay = await f.preview();
+  const demoReplay = await previewDemo();
+  assert.deepEqual(report(demoReplay), report(productReplay));
+  assert.equal(productReplay.rulesCreated, 0);
+  assert.equal(productReplay.rulesExisting, 1);
+  assert.equal(productReplay.rules[0]?.enabled, false);
+  assert.equal(productReplay.rules[0]?.name, "Minha regra pausada");
+  assert.equal(productReplay.rules[0]?.priority, 700);
+  assert.deepEqual(demo.view().records, history);
+  assert.deepEqual((await f.repository.read()).state.edits, []);
+});
 
 test("generic preview is read-only; revision guards stale confirmation, exact retry and concurrent double click are atomic", async () => {
   const f = fixture();

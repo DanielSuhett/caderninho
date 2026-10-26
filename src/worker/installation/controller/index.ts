@@ -134,6 +134,18 @@ export function installationRoutes(access: Hono<PortalEnv>) {
     if (input.query.tool === "get_portal_transactions") {
       return c.json(await service.portalTransactions(input.query));
     }
+    if (
+      input.query.tool === "get_overview" ||
+      input.query.tool === "generate_chart" ||
+      input.query.tool === "get_investments"
+    ) {
+      return c.json(
+        await service.execute(input.query, {
+          cardBrand: input.query.cardBrand,
+          institutionId: input.query.institutionId,
+        }),
+      );
+    }
     return c.json(await service.execute(input.query));
   });
   app.post("/api/account/planning", async (c) => {

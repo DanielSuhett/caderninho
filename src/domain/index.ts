@@ -3,6 +3,7 @@ export {
   allocatedCredit,
   CardChargeStatus,
   cardChargeStatus,
+  cardCredit,
   createCardActivity,
   isCardExpense,
   isCardInstallment,
@@ -62,8 +63,11 @@ export {
   normalizeTransaction,
 } from "./finance-model";
 export {
+  cardBrandKey,
   type FinancialIdentity,
+  type FinancialIdentityFilter,
   institutionLogoUrl,
+  matchesFinancialIdentity,
 } from "./financial-identity.entity";
 export { FinancialIdentitySchema } from "./financial-identity.schema";
 export {
@@ -142,7 +146,11 @@ export {
   SpendingGroupBy,
   TransactionOrder,
 } from "./query.entity";
-export { resolveRuleImportCategory } from "./rule-import.entity";
+export {
+  prepareRuleImport,
+  type RuleImportPackage,
+  type RuleImportResult,
+} from "./rule-import.entity";
 export type { RuleCondition, RuleFilter } from "./rules.entity";
 export {
   activeRules,

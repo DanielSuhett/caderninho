@@ -1,6 +1,5 @@
 import { Badge } from "@cloudflare/kumo/components/badge";
 import { Banner } from "@cloudflare/kumo/components/banner";
-import { InlineCopyText } from "@cloudflare/kumo/components/inline-copy-text";
 import { LayerCard } from "@cloudflare/kumo/components/layer-card";
 import { Link } from "@cloudflare/kumo/components/link";
 import { Meter } from "@cloudflare/kumo/components/meter";
@@ -18,6 +17,7 @@ import type { AuditReport, PortalResponse } from "../../contracts";
 import { tryCatch } from "../../shared";
 import { UiButton } from "../ui";
 import type { createAccountApi } from "./account-api";
+import { workspaceHref } from "./account-navigation";
 import { BackofficeDialog } from "./backoffice-dialog";
 import { CursorPagination } from "./cursor-pagination";
 import { DisclosureItem } from "./disclosure-item";
@@ -28,8 +28,6 @@ import {
   useResource,
 } from "./workspace-resource";
 import {
-  RecordReference,
-  RefreshButton,
   WorkspaceDetails,
   WorkspaceFilters,
   WorkspaceHeading,
@@ -96,7 +94,7 @@ export function AuditView({
   );
   const resource = useResource(load);
   const { data } = resource;
-  const [activityOpen, setActivityOpen] = useState(true);
+  const [activityOpen, setActivityOpen] = useState(false);
   const activitySection = useRef<HTMLDivElement>(null);
   const showActivity = useCallback(() => {
     setActivityOpen(true);
@@ -141,35 +139,35 @@ export function AuditView({
     );
     resource.retry();
   }, [api, confirm, busy, snapshot.csrf, resource.retry]);
+  const filters = (
+    <WorkspaceFilters
+      action={workspaceHref("/account/audit")}
+      activeCount={params.get("days") && params.get("days") !== "7" ? 1 : 0}
+      context={
+        params.get("days") === "1"
+          ? "Últimas 24 horas"
+          : `Últimos ${params.get("days") || "7"} dias`
+      }
+    >
+      <Select
+        defaultValue={params.get("days") || "7"}
+        items={[
+          { label: "24 horas", value: "1" },
+          { label: "7 dias", value: "7" },
+          { label: "30 dias", value: "30" },
+        ]}
+        label="Período"
+        name="days"
+      />
+    </WorkspaceFilters>
+  );
   return (
     <>
-      <WorkspaceHeading title="Auditoria MCP">
-        <RefreshButton
-          disabled={resource.loading || busy}
-          label="Atualizar auditoria"
-          onClick={resource.retry}
-        />
-      </WorkspaceHeading>
-      <WorkspaceFilters
-        action="/account/audit"
-        activeCount={params.get("days") && params.get("days") !== "7" ? 1 : 0}
-        context={
-          params.get("days") === "1"
-            ? "Últimas 24 horas"
-            : `Últimos ${params.get("days") || "7"} dias`
-        }
-      >
-        <Select
-          defaultValue={params.get("days") || "7"}
-          items={[
-            { label: "24 horas", value: "1" },
-            { label: "7 dias", value: "7" },
-            { label: "30 dias", value: "30" },
-          ]}
-          label="Período"
-          name="days"
-        />
-      </WorkspaceFilters>
+      <WorkspaceHeading
+        filters={filters}
+        title="Auditoria MCP"
+      />
+
       <BackofficeDialog
         busy={busy}
         close={cancelRevoke}
@@ -218,7 +216,12 @@ export function AuditView({
                 </UiButton>
               }
               className="feedback"
-              description={<>{data.totals.errors} falhas no período.</>}
+              description={
+                <>
+                  {data.totals.errors}{" "}
+                  {data.totals.errors === 1 ? "falha" : "falhas"} no período.
+                </>
+              }
               variant="alert"
             />
           )}
@@ -226,7 +229,12 @@ export function AuditView({
             aria-labelledby="audit-access"
             className="workspace-section"
           >
-            <h2 id="audit-access">Assistentes autorizados</h2>
+            <h2
+              className={data.grants.length ? undefined : "sr-only"}
+              id="audit-access"
+            >
+              Assistentes autorizados
+            </h2>
             {data.grants.length ? (
               <LayerCard
                 aria-label="Assistentes autorizados"
@@ -273,6 +281,12 @@ export function AuditView({
                           </div>
 
                           <div>
+                            <dt>Aplicativo</dt>
+                            <dd>
+                              <code>{grant.clientId}</code>
+                            </dd>
+                          </div>
+                          <div>
                             <dt>Permissões OAuth</dt>
                             <dd>{grant.scope.join(", ") || "Acesso ao MCP"}</dd>
                           </div>
@@ -304,21 +318,6 @@ export function AuditView({
                         >
                           Revogar acesso
                         </UiButton>
-                        <RecordReference>
-                          <div>
-                            <dt>Cliente declarado</dt>
-                            <dd>
-                              <InlineCopyText
-                                labels={{
-                                  copied: "Identificador copiado",
-                                  copyAction: "Copiar identificador",
-                                }}
-                              >
-                                {grant.clientId}
-                              </InlineCopyText>
-                            </dd>
-                          </div>
-                        </RecordReference>
                       </div>
                     </DisclosureItem>
                   </li>
@@ -326,23 +325,24 @@ export function AuditView({
               </LayerCard>
             ) : (
               <EmptyView title="Nenhum assistente autorizado">
-                <Link href="/account/connections">Conectar assistente</Link>
+                <Link href={workspaceHref("/account/connections")}>
+                  Conectar assistente
+                </Link>
               </EmptyView>
             )}
             <CursorPagination
-              count={data.grants.length}
               first={
                 params.get("grantCursor")
-                  ? `/account/audit?days=${data.days}`
+                  ? workspaceHref(`/account/audit?days=${data.days}`)
                   : null
               }
               next={
                 data.grantCursor
-                  ? `/account/audit?${new URLSearchParams({ days: String(data.days), grantCursor: data.grantCursor })}`
+                  ? workspaceHref(
+                      `/account/audit?${new URLSearchParams({ days: String(data.days), grantCursor: data.grantCursor })}`,
+                    )
                   : null
               }
-              noun="autorizações"
-              singular="autorização"
             />
           </section>
           <div ref={activitySection}>

@@ -1,15 +1,31 @@
 import { Banner } from "@cloudflare/kumo/components/banner";
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 
 import { tryCatch } from "../../shared";
 import { UiButton } from "../ui";
+import {
+  accountPath,
+  workspaceBasePath,
+  workspaceHref,
+} from "./account-navigation";
 import { DisclosureItem } from "./disclosure-item";
 import { WorkspaceSkeleton } from "./workspace-ui";
+
+export const ResourceVersion = createContext(0);
 
 export function useResource<T>(
   load: (signal: AbortSignal, fresh: boolean) => Promise<T>,
 ) {
   const [version, setVersion] = useState(0);
+  const sourceVersion = useContext(ResourceVersion);
+  const previousVersion = useRef(sourceVersion);
   const previousLoad = useRef(load);
   const [state, setState] = useState<{
     data: T | undefined;
@@ -21,12 +37,14 @@ export function useResource<T>(
     const controller = new AbortController();
     const sameQuery = previousLoad.current === load;
     previousLoad.current = load;
+    const sourceChanged = previousVersion.current !== sourceVersion;
+    previousVersion.current = sourceVersion;
     setState((previous) => ({
       data: sameQuery ? previous.data : undefined,
       error: false,
       loading: true,
     }));
-    tryCatch(() => load(controller.signal, version > 0)).then(
+    tryCatch(() => load(controller.signal, version > 0 || sourceChanged)).then(
       ({ data, error }) => {
         if (controller.signal.aborted) {
           return;
@@ -44,7 +62,7 @@ export function useResource<T>(
       () => undefined,
     );
     return () => controller.abort();
-  }, [load, version]);
+  }, [load, version, sourceVersion]);
   return { ...state, retry };
 }
 export function ResourceFeedback({
@@ -112,7 +130,17 @@ export function ResourceFeedback({
                   <a href={location.pathname}>Limpar todos os filtros</a>
                 </li>
                 <li>
-                  <a href="/account/login">Entrar novamente</a>
+                  <a
+                    href={
+                      workspaceBasePath() === "/demo"
+                        ? "/demo/"
+                        : "/account/login"
+                    }
+                  >
+                    {workspaceBasePath() === "/demo"
+                      ? "Restaurar demonstração"
+                      : "Entrar novamente"}
+                  </a>
                 </li>
               </ul>
             </DisclosureItem>
@@ -133,11 +161,22 @@ export function momentLabel(value: string | null) {
 }
 export function scopedHref(path: string, params: URLSearchParams) {
   const query = new URLSearchParams();
-  for (const key of ["person", "space", "month"]) {
+  const keys = ["person", "space", "month", "currency"];
+  if (
+    [
+      "/account",
+      "/account/transactions",
+      "/account/cards",
+      "/account/investments",
+    ].includes(accountPath(path))
+  ) {
+    keys.push("institutionId", "cardBrand");
+  }
+  for (const key of keys) {
     const value = params.get(key);
     if (value) {
       query.set(key, value);
     }
   }
-  return `${path}${query.size ? `?${query}` : ""}`;
+  return `${workspaceHref(path)}${query.size ? `?${query}` : ""}`;
 }

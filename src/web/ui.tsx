@@ -1,5 +1,6 @@
 import { Button, LinkButton } from "@cloudflare/kumo/components/button";
 import { Checkbox } from "@cloudflare/kumo/components/checkbox";
+import { Tooltip } from "@cloudflare/kumo/components/tooltip";
 import { type ComponentProps, useState } from "react";
 
 interface DataAttributes {
@@ -27,6 +28,33 @@ export function UiLink(props: ComponentProps<typeof LinkButton>) {
     <LinkButton
       size="base"
       {...props}
+    />
+  );
+}
+
+export function UiIconButton({
+  label,
+  className = "",
+  ...props
+}: Omit<
+  ComponentProps<typeof UiButton>,
+  "aria-label" | "aria-labelledby" | "shape" | "title"
+> & {
+  label: string;
+}) {
+  return (
+    <Tooltip
+      content={label}
+      render={
+        <UiButton
+          {...props}
+          aria-label={label}
+          className={`compact-icon-action ${className}`}
+          shape="square"
+          type="button"
+          variant={props.variant ?? "outline"}
+        />
+      }
     />
   );
 }

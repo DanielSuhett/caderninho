@@ -128,6 +128,7 @@ export function createAccountApi(
           fresh,
         ),
       ),
+    invalidate: () => cache.clear(),
     manage: async (input: HouseholdCommand, signal: AbortSignal) =>
       HouseholdResultSchema.parse(await request("/manage", signal, input)),
     planning: async (

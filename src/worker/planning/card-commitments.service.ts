@@ -1,5 +1,6 @@
 import type { CardCommitments, CardCommitmentsQuery } from "../../contracts";
 import {
+  cardCredit,
   monthDate,
   type PlanningTransaction,
   type TransactionDetails,
@@ -271,26 +272,27 @@ export async function cardCommitments(input: {
     accounts: selectedAccounts.map((account) => {
       const detail = details.get(account.id);
       const setting = settings.get(account.id);
-      const limit = account.manual
-        ? (setting?.creditLimitMinor ?? null)
-        : (detail?.creditLimitMinor ?? null);
-      const available = account.manual
-        ? null
-        : (detail?.availableCreditMinor ?? null);
+      const credit = cardCredit({
+        available: detail?.availableCreditMinor ?? null,
+        limit: detail?.creditLimitMinor ?? null,
+        localLimit: setting?.creditLimitMinor,
+      });
+      const limit = credit.creditLimitMinor;
+      const available = credit.availableCreditMinor;
       const allocated =
-        limit !== null &&
-        available !== null &&
-        BigInt(limit) >= BigInt(available)
-          ? (BigInt(limit) - BigInt(available)).toString()
+        credit.allocatedCreditMinor !== null &&
+        BigInt(credit.allocatedCreditMinor) >= 0n
+          ? credit.allocatedCreditMinor
           : null;
       let limitSource: CardCommitments["accounts"][number]["limitSource"] =
         "unavailable";
       if (limit !== null) {
-        limitSource = account.manual ? "manual" : "provider";
+        limitSource = credit.creditEstimated ? "manual" : "provider";
       }
+      const source = credit.creditEstimated ? "estimated" : "provider";
       return {
         allocatedCreditMinor: allocated,
-        availabilitySource: available === null ? "unavailable" : "provider",
+        availabilitySource: available === null ? "unavailable" : source,
         availableCreditMinor: available,
         balanceObservedAt: account.balanceObservedAt,
         creditLimitMinor: limit,

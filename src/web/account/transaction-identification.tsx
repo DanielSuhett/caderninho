@@ -3,6 +3,7 @@ import type {
   TransactionParticipant,
 } from "../../domain";
 import { formatBalance } from "../money";
+import { DisclosureItem } from "./disclosure-item";
 
 type Field = readonly [string, string | number | null | undefined];
 
@@ -99,90 +100,92 @@ export function TransactionIdentificationDetails({
           title="Estabelecimento"
         />
       )}
-      <IdentificationSection
-        fields={[
-          ["Descrição original", identification.descriptionRaw],
-          ["Data informada pela origem", identification.date],
-          ["Categoria da origem", identification.category],
-          ["Código da categoria", identification.categoryId],
-          ["Tipo de operação", identification.operationType],
-          [
-            "Informação da operação",
-            identification.operationTypeAdditionalInfo,
-          ],
-          ["Identificador na instituição", identification.providerId],
-          ["Código da instituição", identification.providerCode],
-          ["Ordem no dia", identification.order],
-          ["Recebida pela Pluggy em", identification.createdAt],
-          ["Atualizada na Pluggy em", identification.updatedAt],
-        ]}
-        title="Identificação na origem"
-      />
-      <IdentificationSection
-        fields={[
-          [
-            "Valor da transação na conta",
-            identification.amountInAccountCurrency,
-          ],
-          ["Saldo após o lançamento", identification.balance],
-        ]}
-        title="Valores na moeda da conta"
-      />
-      {!!payment && (
+      <DisclosureItem summary="Dados recebidos da origem">
         <IdentificationSection
           fields={[
-            ["Método", payment.paymentMethod],
-            ["Motivo", payment.reason],
-            ["Referência", payment.referenceNumber],
-            ["Referência do recebedor", payment.receiverReferenceId],
-            ["Autenticação", payment.authenticationCode],
+            ["Descrição original", identification.descriptionRaw],
+            ["Data informada pela origem", identification.date],
+            ["Categoria da origem", identification.category],
+            ["Código da categoria", identification.categoryId],
+            ["Tipo de operação", identification.operationType],
+            [
+              "Informação da operação",
+              identification.operationTypeAdditionalInfo,
+            ],
+            ["Identificador na instituição", identification.providerId],
+            ["Código da instituição", identification.providerCode],
+            ["Ordem no dia", identification.order],
+            ["Recebida pela Pluggy em", identification.createdAt],
+            ["Atualizada na Pluggy em", identification.updatedAt],
           ]}
-          title="Pagamento"
+          title="Identificação na origem"
         />
-      )}
-      <Participant
-        participant={payment?.payer}
-        title="Pagador"
-      />
-      <Participant
-        participant={payment?.receiver}
-        title="Recebedor"
-      />
-      {!!boleto && (
         <IdentificationSection
           fields={[
-            ["Linha digitável", boleto.digitableLine],
-            ["Código de barras", boleto.barcode],
-            ["Valor original", money(boleto.baseAmountMinor)],
-            ["Juros", money(boleto.interestAmountMinor)],
-            ["Multa", money(boleto.penaltyAmountMinor)],
-            ["Desconto", money(boleto.discountAmountMinor)],
+            [
+              "Valor da transação na conta",
+              identification.amountInAccountCurrency,
+            ],
+            ["Saldo após o lançamento", identification.balance],
           ]}
-          title="Boleto"
+          title="Valores na moeda da conta"
         />
-      )}
-      {!!card && (
-        <IdentificationSection
-          fields={[
-            ["Final do cartão", card.cardNumber],
-            ["MCC do estabelecimento", card.payeeMCC],
-            ["Data da compra", card.purchaseDate],
-            ["Data e hora na instituição", card.transactionDateTime],
-            ["Forma de pagamento", card.paymentType],
-            ["Parcela", card.installmentNumber],
-            ["Total de parcelas", card.totalInstallments],
-            ["Valor total da compra", money(card.totalAmountMinor)],
-            ["Identificador da fatura", card.billId],
-            ["Previsão da fatura", card.billForecastDate],
-            ["Lançada na fatura em", card.billPostDate],
-            ["Tipo de tarifa", card.feeType],
-            ["Descrição da tarifa", card.feeTypeAdditionalInfo],
-            ["Tipo de crédito", card.otherCreditsType],
-            ["Descrição do crédito", card.otherCreditsAdditionalInfo],
-          ]}
-          title="Dados do cartão na origem"
+        {!!payment && (
+          <IdentificationSection
+            fields={[
+              ["Método", payment.paymentMethod],
+              ["Motivo", payment.reason],
+              ["Referência", payment.referenceNumber],
+              ["Referência do recebedor", payment.receiverReferenceId],
+              ["Autenticação", payment.authenticationCode],
+            ]}
+            title="Pagamento"
+          />
+        )}
+        <Participant
+          participant={payment?.payer}
+          title="Pagador"
         />
-      )}
+        <Participant
+          participant={payment?.receiver}
+          title="Recebedor"
+        />
+        {!!boleto && (
+          <IdentificationSection
+            fields={[
+              ["Linha digitável", boleto.digitableLine],
+              ["Código de barras", boleto.barcode],
+              ["Valor original", money(boleto.baseAmountMinor)],
+              ["Juros", money(boleto.interestAmountMinor)],
+              ["Multa", money(boleto.penaltyAmountMinor)],
+              ["Desconto", money(boleto.discountAmountMinor)],
+            ]}
+            title="Boleto"
+          />
+        )}
+        {!!card && (
+          <IdentificationSection
+            fields={[
+              ["Final do cartão", card.cardNumber],
+              ["MCC do estabelecimento", card.payeeMCC],
+              ["Data da compra", card.purchaseDate],
+              ["Data e hora na instituição", card.transactionDateTime],
+              ["Forma de pagamento", card.paymentType],
+              ["Parcela", card.installmentNumber],
+              ["Total de parcelas", card.totalInstallments],
+              ["Valor total da compra", money(card.totalAmountMinor)],
+              ["Identificador da fatura", card.billId],
+              ["Previsão da fatura", card.billForecastDate],
+              ["Lançada na fatura em", card.billPostDate],
+              ["Tipo de tarifa", card.feeType],
+              ["Descrição da tarifa", card.feeTypeAdditionalInfo],
+              ["Tipo de crédito", card.otherCreditsType],
+              ["Descrição do crédito", card.otherCreditsAdditionalInfo],
+            ]}
+            title="Dados do cartão na origem"
+          />
+        )}
+      </DisclosureItem>
     </>
   );
 }

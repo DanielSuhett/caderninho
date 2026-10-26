@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { isWorkspaceUrl } from "../account-navigation";
+import {
+  accountPath,
+  isWorkspaceUrl,
+  workspaceHref,
+} from "../account-navigation";
 import { createReadCache } from "../read-cache";
 
 await test("navigation only handles internal workspace destinations, retaining native auth and anchor navigation", () => {
@@ -161,10 +165,29 @@ await test("demo rules and groups keep their public route during client navigati
     "/demo/rules/",
     "/demo/groups",
     "/demo/groups/",
+    "/demo/connections/",
+    "/demo/sync/",
+    "/demo/audit/",
+    "/demo/design-system/",
   ]) {
     assert.equal(
       isWorkspaceUrl(new URL(`${path}?space=personal`, current), current),
       true,
     );
   }
+});
+
+await test("the same app routes resolve under private and demo prefixes without crossing installations", () => {
+  assert.equal(accountPath("/demo/transactions/"), "/account/transactions");
+  assert.equal(accountPath("/account/cards"), "/account/cards");
+  assert.equal(
+    workspaceHref("/account/cards?month=2026-10", "/demo/transactions/"),
+    "/demo/cards?month=2026-10",
+  );
+  assert.equal(
+    workspaceHref("/account/cards?month=2026-10", "/account"),
+    "/account/cards?month=2026-10",
+  );
+  assert.equal(workspaceHref("/demo/groups", "/demo"), "/demo/groups");
+  assert.equal(workspaceHref("/", "/demo"), "/");
 });

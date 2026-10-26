@@ -15,8 +15,8 @@ import {
   PlanningError,
   type PlanningState,
   type PlanningTransaction,
+  prepareRuleImport,
   type Rule,
-  resolveRuleImportCategory,
   ruleMatches,
   sacSchedule,
   TransactionDirection,
@@ -45,6 +45,13 @@ export async function planningMutation(
   },
 ) {
   const { snapshot, state, repository, now } = context;
+  if (
+    "expected_revision" in command &&
+    command.expected_revision !== undefined &&
+    command.expected_revision !== snapshot.revision
+  ) {
+    throw new Error(PlanningError.RESTART_REQUIRED);
+  }
   if (
     "personId" in command &&
     command.personId &&
@@ -131,23 +138,39 @@ export async function planningMutation(
     }
     row.personId = personId;
   }
-  function handleUpdateAccountSettings(
+  function validateAccountSettings(
     input: Extract<PlanningCommand, { tool: "update_account_settings" }>,
+    source: PlanningAccount,
+    row: AccountSettings,
   ) {
-    const row = settings(input.id);
-    assignManualOwner(row, input.personId);
     if (
-      input.creditLimitMinor !== undefined ||
-      input.closeDay !== undefined ||
-      input.dueDay !== undefined
+      input.expected_revision !== undefined &&
+      input.expected_revision !== snapshot.revision
     ) {
+      throw new Error(PlanningError.RESTART_REQUIRED);
+    }
+    if (input.closeDay !== undefined || input.dueDay !== undefined) {
       if (!row.manual) {
         throw new Error(PlanningError.SOURCE_READ_ONLY);
       }
-      if (row.type !== AccountType.CREDIT) {
+      if (source.type !== AccountType.CREDIT) {
         throw new Error(PlanningError.CARD_REQUIRED);
       }
     }
+    if (
+      input.creditLimitMinor !== undefined &&
+      source.type !== AccountType.CREDIT
+    ) {
+      throw new Error(PlanningError.CARD_REQUIRED);
+    }
+  }
+  function handleUpdateAccountSettings(
+    input: Extract<PlanningCommand, { tool: "update_account_settings" }>,
+  ) {
+    const source = account(input.id);
+    const row = settings(input.id);
+    validateAccountSettings(input, source, row);
+    assignManualOwner(row, input.personId);
     if (input.name !== undefined) {
       row.name = input.name;
     }
@@ -761,150 +784,38 @@ export async function planningMutation(
     if (input.tool === "import_rules" && input.revision !== snapshot.revision) {
       throw new Error(PlanningError.RESTART_REQUIRED);
     }
-    const { pack } = input;
-    const prefix = `pack:${await hash([input.spaceId, pack.id])}:`;
-    const categoryIds = new Map<string, string>();
-    const mappings = new Map(Object.entries(input.categoryIds));
-    const pending = new Set(
-      pack.rules
-        .filter((r) => !state.rules.some((old) => old.id === prefix + r.key))
-        .map((r) => r.categoryKey),
-    );
-    const result: RuleImportResult = {
-      categories: [],
-      categoriesCreated: 0,
-      packId: pack.id,
+    const plan = prepareRuleImport({
+      categories: state.categories,
+      categoryIds: input.categoryIds,
+      pack: input.pack,
+      prefix: `pack:${await hash([input.spaceId, input.pack.id])}:`,
       revision: snapshot.revision,
-      rules: [],
-      rulesCreated: 0,
-      rulesExisting: 0,
-      version: pack.version,
-    };
-    function resolveCategory(target: (typeof pack.categories)[number]) {
-      const base = {
-        id: null,
-        key: target.key,
-        kind: target.kind,
-        name: target.name,
-      };
-      if (!pending.has(target.key)) {
-        result.categories.push({ ...base, status: "unused" });
-        return;
-      }
-      const stableId = `${prefix}category:${target.key}`;
-      const resolved = resolveRuleImportCategory({
-        categories: state.categories,
-        kind: target.kind,
-        mappedId: mappings.get(target.key),
-        name: target.name,
-        spaceId: input.spaceId,
-        stableId,
-      });
-      if (resolved.status === "ambiguous" || resolved.status === "invalid") {
-        result.categories.push({ ...base, status: resolved.status });
-        return;
-      }
-      const categorySelected = resolved.category;
-      const row =
-        categorySelected ??
-        handleCreateCategory(
-          {
-            kind: target.kind,
-            name: target.name,
-            spaceId: input.spaceId,
-            tool: "create_category",
-          },
-          stableId,
-        );
-      categoryIds.set(target.key, row.id);
-      if (!categorySelected) {
-        result.categoriesCreated += 1;
-      }
-      result.categories.push({
-        ...base,
-        id: row.id,
-        name: row.name,
-        status: categorySelected ? "existing" : "create",
-      });
-    }
-    pack.categories.forEach(resolveCategory);
-    const blocked = result.categories.some(
-      (c) => c.status === "ambiguous" || c.status === "invalid",
+      rules: state.rules,
+      spaceId: input.spaceId,
+    });
+    const blocked = plan.result.categories.some(
+      (resolution) =>
+        resolution.status === "ambiguous" || resolution.status === "invalid",
     );
     if (blocked && input.tool === "import_rules") {
       throw new Error(PlanningError.INVALID_RULE_IMPORT_CATEGORY);
     }
-    function signature(
-      rule: Pick<
-        Rule,
-        "accountId" | "direction" | "categoryId" | "text" | "filter"
-      >,
-    ) {
-      return hash({
-        accountId: rule.accountId,
-        categoryId: rule.categoryId,
-        direction: rule.direction,
-        filter: rule.filter ?? null,
-        text: rule.text,
-      });
-    }
-    const fingerprints = new Set(
-      await Promise.all(
-        state.rules.filter((r) => r.spaceId === input.spaceId).map(signature),
-      ),
-    );
-    const candidates = await Promise.all(
-      pack.rules.map(async (definition) => {
-        const categoryId = categoryIds.get(definition.categoryKey);
-        return {
-          categoryId,
-          definition,
-          fingerprint: categoryId
-            ? await signature({ ...definition, categoryId })
-            : null,
-        };
-      }),
-    );
-    function appendRule(candidate: (typeof candidates)[number]) {
-      const { definition, categoryId, fingerprint } = candidate;
-      const id = prefix + definition.key;
-      const existing = state.rules.find((r) => r.id === id);
-      const categoryName =
-        state.categories.find(
-          (c) => c.id === (existing?.categoryId ?? categoryId),
-        )?.name ??
-        found(pack.categories.find((c) => c.key === definition.categoryKey))
-          .name;
-      const display = {
-        categoryName,
-        enabled: existing?.enabled ?? definition.enabled,
-        key: definition.key,
-        name: existing?.name ?? definition.name,
-        priority: existing?.priority ?? definition.priority,
-      };
-      if (existing || (fingerprint && fingerprints.has(fingerprint))) {
-        result.rules.push({ ...display, status: "existing" });
-        result.rulesExisting += 1;
-        return;
-      }
-      if (!(categoryId && fingerprint)) {
-        result.rules.push({ ...display, status: "blocked" });
-        return;
-      }
-      const { key, categoryKey: _categoryKey, ...native } = definition;
-      handleCreateRule(
-        { ...native, categoryId, spaceId: input.spaceId, tool: "create_rule" },
+    for (const target of plan.categories) {
+      handleCreateCategory(
         {
-          id,
-          pack: { id: pack.id, key, version: pack.version },
+          kind: target.kind,
+          name: target.name,
+          spaceId: target.spaceId,
+          tool: "create_category",
         },
+        target.id,
       );
-      fingerprints.add(fingerprint);
-      result.rules.push({ ...display, status: "create" });
-      result.rulesCreated += 1;
     }
-    candidates.forEach(appendRule);
-    return result;
+    for (const rule of plan.rules) {
+      const { id, pack, ...native } = rule;
+      handleCreateRule({ ...native, tool: "create_rule" }, { id, pack });
+    }
+    return plan.result;
   }
 
   function handleCreateGoal(

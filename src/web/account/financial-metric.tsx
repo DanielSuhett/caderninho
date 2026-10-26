@@ -34,7 +34,7 @@ export function FinancialMetric({
           }
         >
           {value === null ? (
-            "Indisponível"
+            <span className="metric-unavailable">Indisponível</span>
           ) : (
             <MoneyValue value={value.slice(0, -(currency.length + 1))} />
           )}

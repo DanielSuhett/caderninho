@@ -9,11 +9,13 @@ export function PublicLayout({
   title,
   description,
   access = false,
+  themeSwitching = true,
 }: {
   children: ReactNode;
   title: string;
   description: string;
   access?: boolean;
+  themeSwitching?: boolean;
 }) {
   return (
     <Document
@@ -29,6 +31,7 @@ export function PublicLayout({
           />
         </>
       }
+      themeSwitching={themeSwitching}
       title={title}
     >
       <div className="public-shell">
@@ -50,7 +53,7 @@ export function PublicLayout({
             aria-label="Navegação principal"
             className="public-nav"
           >
-            <ThemeToggle />
+            {!!themeSwitching && <ThemeToggle />}
             {access ? (
               <a href="/">Conhecer o produto</a>
             ) : (

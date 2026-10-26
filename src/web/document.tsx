@@ -7,10 +7,12 @@ export function Document({
   title,
   head,
   children,
+  themeSwitching = true,
 }: {
   title: string;
   head?: ReactNode;
   children: ReactNode;
+  themeSwitching?: boolean;
 }) {
   return (
     <html
@@ -24,7 +26,7 @@ export function Document({
           name="viewport"
         />
         <title>{title}</title>
-        <DesignHead />
+        <DesignHead themeSwitching={themeSwitching} />
         {head}
       </head>
       <body>

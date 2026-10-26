@@ -1,8 +1,7 @@
 import { Banner } from "@cloudflare/kumo/components/banner";
-import { Input } from "@cloudflare/kumo/components/input";
 import { Link } from "@cloudflare/kumo/components/link";
 import { Select } from "@cloudflare/kumo/components/select";
-import { useCallback, useState } from "react";
+import { type ComponentProps, useCallback, useState } from "react";
 
 import {
   type PortalResponse,
@@ -16,6 +15,7 @@ import {
 } from "../../domain";
 import { UiCheckbox } from "../ui";
 import type { createAccountApi } from "./account-api";
+import { workspaceHref } from "./account-navigation";
 import { CursorPagination } from "./cursor-pagination";
 import {
   AccountFilter,
@@ -23,7 +23,13 @@ import {
   DateRangeFields,
   QuerySearch,
 } from "./filter-fields";
+import { identityParameters } from "./identity-filters";
 import { PersonStack } from "./person-identity";
+import {
+  CategorizationGuide,
+  TransactionTabs,
+} from "./transaction-categorization";
+import { TransactionEditing } from "./transaction-editing";
 import { TransactionList } from "./transaction-list";
 import { EmptyView, ScopeFields } from "./workspace-filters";
 import { dayLabel, ResourceFeedback, useResource } from "./workspace-resource";
@@ -41,6 +47,7 @@ export function TransactionsView({
   const load = useCallback(
     async (signal: AbortSignal, fresh = false) => {
       const query = PortalTransactionQuerySchema.parse({
+        ...identityParameters(params),
         future: params.get("future") === "on",
         limit: 50,
         order: TransactionOrder.date_desc,
@@ -60,6 +67,7 @@ export function TransactionsView({
         ),
         ...(params.get("person") && { personId: params.get("person") }),
         include_ignored: params.get("ignored") === "on",
+        uncategorized: params.get("uncategorized") === "on",
       });
       const [catalog, accounts, result] = await Promise.all([
         api.catalog(spaceId, signal, fresh),
@@ -101,13 +109,31 @@ export function TransactionsView({
   return (
     <>
       <WorkspaceHeading title="Transações" />
+      <TransactionTabs
+        basePath={workspaceHref("/account/transactions")}
+        params={params}
+        uncategorizedCount={data?.result.data.uncategorizedCount}
+      />
       <ResourceFeedback {...resource} />
       {!!data && !!presentation && (
-        <>
+        <TransactionEditing
+          accounts={data.accounts}
+          api={api}
+          catalog={data.catalog}
+          revision={data.result.data.revision}
+          saved={resource.retry}
+          snapshot={snapshot}
+          spaceId={spaceId}
+        >
           <WorkspaceFilters
-            action="/account/transactions"
+            action={
+              params.get("uncategorized") === "on"
+                ? workspaceHref("/account/transactions?uncategorized=on")
+                : workspaceHref("/account/transactions")
+            }
             activeCount={presentation.activeCount}
             context={presentation.context}
+            identities={data.accounts}
             identity={
               <PersonStack
                 people={snapshot.people}
@@ -116,7 +142,7 @@ export function TransactionsView({
             }
             leading={
               <QuerySearch
-                action="/account/transactions"
+                action={workspaceHref("/account/transactions")}
                 compact
                 label="Buscar transação"
                 name="text"
@@ -125,91 +151,14 @@ export function TransactionsView({
             }
             showClear={presentation.activeCount > 0 || spaceId !== "personal"}
           >
-            <ScopeFields
+            <TransactionFilterFields
+              accounts={data.accounts}
               catalog={data.catalog}
-              compact
+              multiplePeople={presentation.multiplePeople}
               params={params}
-              person={presentation.multiplePeople}
+              showOwner={showOwner}
               snapshot={snapshot}
             />
-            <div className="filter-wide">
-              <Input
-                defaultValue={params.get("text") ?? ""}
-                label="Buscar transação"
-                maxLength={240}
-                name="text"
-                placeholder="Ex.: mercado, aluguel, salário"
-                type="search"
-              />
-            </div>
-            <div className="advanced-filter-grid">
-              <DateRangeFields
-                from={params.get("from") ?? ""}
-                to={params.get("to") ?? ""}
-              />
-              <Select
-                defaultValue={params.get("direction") ?? ""}
-                items={[
-                  { label: "Entradas e saídas", value: "" },
-                  { label: "Saídas", value: TransactionDirection.DEBIT },
-                  { label: "Entradas", value: TransactionDirection.CREDIT },
-                ]}
-                label="Movimento"
-                name="direction"
-              />
-              <AccountFilter
-                accounts={data.accounts}
-                showOwner={showOwner}
-                value={params.get("accountId") ?? ""}
-              />
-              <CatalogField
-                defaultValue={params.get("categoryId") ?? ""}
-                items={[
-                  { label: "Todas as categorias", value: "" },
-                  ...data.catalog.categories
-                    .filter(
-                      (c) => !c.hidden || c.id === params.get("categoryId"),
-                    )
-                    .map((c) => ({
-                      appearance: c,
-                      label: c.name,
-                      value: c.id,
-                    })),
-                ]}
-                label="Categoria"
-                name="categoryId"
-              />
-              <Select
-                defaultValue={params.get("status") ?? ""}
-                items={[
-                  { label: "Todos", value: "" },
-                  {
-                    label: "Registradas na origem",
-                    value: TransactionStatus.POSTED,
-                  },
-                  {
-                    label: "Pendentes na origem",
-                    value: TransactionStatus.PENDING,
-                  },
-                ]}
-                label="Estado"
-                name="status"
-              />
-              <div className="checkbox-label">
-                <UiCheckbox
-                  defaultChecked={future}
-                  label="Lançamentos futuros"
-                  name="future"
-                />
-              </div>
-              <div className="checkbox-label">
-                <UiCheckbox
-                  defaultChecked={params.get("ignored") === "on"}
-                  label="Incluir ignoradas"
-                  name="ignored"
-                />
-              </div>
-            </div>
           </WorkspaceFilters>
           {!!data.result.partial && (
             <Banner
@@ -218,7 +167,7 @@ export function TransactionsView({
                 <>
                   Histórico parcial.{" "}
                   <Link
-                    href="/account/sync"
+                    href={workspaceHref("/account/sync")}
                     variant="current"
                   >
                     Ver importações
@@ -226,6 +175,13 @@ export function TransactionsView({
                 </>
               }
               variant="secondary"
+            />
+          )}
+          {params.get("uncategorized") === "on" && (
+            <CategorizationGuide
+              categories={data.catalog.categories}
+              params={params}
+              records={data.result.data.records}
             />
           )}
           {data.result.data.records.length ? (
@@ -238,24 +194,31 @@ export function TransactionsView({
               showOwner={showOwner}
             />
           ) : (
-            <EmptyView title="Nenhuma transação neste recorte">
+            <EmptyView
+              title={
+                params.get("uncategorized") === "on"
+                  ? "Nenhuma transação sem categoria neste recorte"
+                  : "Nenhuma transação neste recorte"
+              }
+            >
               {future
                 ? "Nenhum lançamento futuro encontrado. Volte ao histórico ou altere os filtros."
-                : "Altere os filtros ou importe suas conexões na página Conexões."}
+                : "Altere os filtros ou importe seus bancos em Pessoas."}
             </EmptyView>
           )}
           <CursorPagination
-            count={data.result.data.records.length}
             first={
-              params.has("cursor") ? `/account/transactions?${first}` : null
+              params.has("cursor")
+                ? workspaceHref(`/account/transactions?${first}`)
+                : null
             }
             next={
-              data.result.data.cursor ? `/account/transactions?${next}` : null
+              data.result.data.cursor
+                ? workspaceHref(`/account/transactions?${next}`)
+                : null
             }
-            noun="transações"
-            singular="transação"
           />
-        </>
+        </TransactionEditing>
       )}
     </>
   );
@@ -365,4 +328,112 @@ function scopeLabel({
     return fallback;
   }
   return items.find((item) => item.id === value)?.name ?? missing;
+}
+
+function TransactionFilterFields({
+  catalog,
+  accounts,
+  multiplePeople,
+  showOwner,
+  params,
+  snapshot,
+}: {
+  catalog: WorkspaceCatalog;
+  accounts: ComponentProps<typeof AccountFilter>["accounts"];
+  multiplePeople: boolean;
+  showOwner: boolean;
+  params: URLSearchParams;
+  snapshot: PortalResponse;
+}) {
+  const future = params.get("future") === "on";
+  return (
+    <>
+      <ScopeFields
+        catalog={catalog}
+        params={params}
+        person={multiplePeople}
+        snapshot={snapshot}
+      />
+      <input
+        name="text"
+        type="hidden"
+        value={params.get("text") ?? ""}
+      />
+      {!!params.get("uncategorized") && (
+        <input
+          name="uncategorized"
+          type="hidden"
+          value="on"
+        />
+      )}
+      <div className="advanced-filter-grid">
+        <DateRangeFields
+          from={params.get("from") ?? ""}
+          to={params.get("to") ?? ""}
+        />
+        <Select
+          defaultValue={params.get("direction") ?? ""}
+          items={[
+            { label: "Entradas e saídas", value: "" },
+            { label: "Saídas", value: TransactionDirection.DEBIT },
+            { label: "Entradas", value: TransactionDirection.CREDIT },
+          ]}
+          label="Movimento"
+          name="direction"
+        />
+        <AccountFilter
+          accounts={accounts}
+          showOwner={showOwner}
+          value={params.get("accountId") ?? ""}
+        />
+        {params.get("uncategorized") !== "on" && (
+          <CatalogField
+            defaultValue={params.get("categoryId") ?? ""}
+            items={[
+              { label: "Todas as categorias", value: "" },
+              ...catalog.categories
+                .filter((c) => !c.hidden || c.id === params.get("categoryId"))
+                .map((c) => ({
+                  appearance: c,
+                  label: c.name,
+                  value: c.id,
+                })),
+            ]}
+            label="Categoria"
+            name="categoryId"
+          />
+        )}
+        <Select
+          defaultValue={params.get("status") ?? ""}
+          items={[
+            { label: "Todos", value: "" },
+            {
+              label: "Registradas na origem",
+              value: TransactionStatus.POSTED,
+            },
+            {
+              label: "Pendentes na origem",
+              value: TransactionStatus.PENDING,
+            },
+          ]}
+          label="Estado"
+          name="status"
+        />
+        <div className="checkbox-label">
+          <UiCheckbox
+            defaultChecked={future}
+            label="Lançamentos futuros"
+            name="future"
+          />
+        </div>
+        <div className="checkbox-label">
+          <UiCheckbox
+            defaultChecked={params.get("ignored") === "on"}
+            label="Incluir ignoradas"
+            name="ignored"
+          />
+        </div>
+      </div>
+    </>
+  );
 }

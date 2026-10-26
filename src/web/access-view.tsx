@@ -25,8 +25,7 @@ export function accessPage({
     ? `/account/login?${new URLSearchParams({ returnTo: target })}`
     : "/account/login";
   let heading = "Entrar nesta instalação";
-  let intro =
-    "Use a senha definida na sua instalação para gerenciar conexões, dados e assistentes.";
+  let intro = "Entre para cuidar dos seus bancos e assistentes.";
   if (generated) {
     intro =
       "Use a chave da sua instalação para entrar e autorizar seus assistentes.";
@@ -53,7 +52,7 @@ export function accessPage({
         tabIndex={-1}
       >
         <LayerCard className="public-surface">
-          <p className="public-kicker">Seu Caderninho · acesso privado</p>
+          <p className="public-kicker">Acesso privado</p>
           <h1>{heading}</h1>
           <p className="access-intro">{intro}</p>
           <div className="access-origin">

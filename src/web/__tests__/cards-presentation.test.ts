@@ -15,7 +15,6 @@ const query = PortalCardsQuerySchema.parse({
   month: "2026-10",
   tool: "get_portal_cards",
 });
-const monthHref = (month: string) => `/demo/cards?month=${month}`;
 test("the card demo uses the shared ledger, reports only received months and shows the complete spending denominator", () => {
   const { data } = PortalCardsSchema.parse({
     data: demoCards(query, initialDemoData),
@@ -29,7 +28,6 @@ test("the card demo uses the shared ledger, reports only received months and sho
       accountId: "",
       categories: initialDemoData.categories,
       data,
-      monthHref,
       nextHref: null,
       showOwner: false,
     }),
@@ -37,8 +35,8 @@ test("the card demo uses the shared ledger, reports only received months and sho
   assert.ok(html.includes("Gastos confirmados"));
   assert.ok(html.includes("em compras"));
   assert.ok(html.includes("Sobre Gastos confirmados"));
-  assert.ok(html.includes("Parcela 6 de 12"));
-  assert.ok(html.includes("Sem parcelas recebidas"));
+  assert.ok(html.includes("6/12 neste mês"));
+  assert.equal(html.includes("Parcelas por mês"), false);
   assert.equal(html.includes("Parcela 13 de 12"), false);
 });
 test("the card scope keeps card selection inline and limits the filter dialog to owner or group choices", () => {
@@ -91,7 +89,6 @@ test("known zero limits and missing provider limits have different explanations"
             creditLimitMinor: limit,
           })),
         },
-        monthHref,
         nextHref: null,
         showOwner: false,
       }),

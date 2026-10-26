@@ -6,19 +6,17 @@ import type { PortalResponse } from "../../contracts";
 import { ChartType, SpendingGroupBy, TransactionOrder } from "../../domain";
 import { tryCatch } from "../../shared";
 import type { createAccountApi } from "./account-api";
-import { navigateWorkspace } from "./account-navigation";
+import { navigateWorkspace, workspaceHref } from "./account-navigation";
 import { monthPeriod, selectedMonth, shiftMonth } from "./dashboard-period";
 import { FinancialDashboard } from "./financial-dashboard";
 import { displayCurrency } from "./financial-presentation";
+import { identityParameters } from "./identity-filters";
 import { PeriodPicker } from "./period-picker";
 import { PersonStack } from "./person-identity";
+import { TransactionEditing } from "./transaction-editing";
 import { ScopeFields } from "./workspace-filters";
 import { ResourceFeedback, useResource } from "./workspace-resource";
-import {
-  RefreshButton,
-  WorkspaceFilters,
-  WorkspaceHeading,
-} from "./workspace-ui";
+import { WorkspaceFilters, WorkspaceHeading } from "./workspace-ui";
 
 export function OverviewView({
   api,
@@ -38,7 +36,11 @@ export function OverviewView({
   const load = useCallback(
     async (signal: AbortSignal, fresh = false) => {
       const queryPeriod = monthPeriod(month);
-      const scope = { spaceId, ...(personId && { personId }) };
+      const scope = {
+        spaceId,
+        ...(personId && { personId }),
+        ...identityParameters(params),
+      };
       const [overview, monthly, catalog, recent] = await Promise.all([
         api.query(
           { tool: "get_overview", ...scope, ...queryPeriod },
@@ -51,7 +53,7 @@ export function OverviewView({
             {
               tool: "generate_chart",
               ...scope,
-              from: `${shiftMonth(month, -5)}-01`,
+              from: `${shiftMonth(month, -23)}-01`,
               groupBy: SpendingGroupBy.month,
               to: queryPeriod.to,
               type: ChartType.line,
@@ -84,7 +86,7 @@ export function OverviewView({
         recent,
       };
     },
-    [api, month, personId, snapshot.csrf, spaceId],
+    [api, month, personId, snapshot.csrf, spaceId, params],
   );
   const resource = useResource(load);
   const { data } = resource;
@@ -114,78 +116,100 @@ export function OverviewView({
     selectedPerson?.name ?? "Todas as pessoas",
     currency,
   ].join(" · ");
-  const transactionsHref = `/account/transactions?${new URLSearchParams({ space: spaceId, ...period, ...(personId && { person: personId }) })}`;
+  const transactionScope = new URLSearchParams({
+    currency,
+    space: spaceId,
+    ...period,
+    ...(personId && { person: personId }),
+    ...identityParameters(params),
+  });
+  const transactionsHref = workspaceHref(
+    `/account/transactions?${transactionScope}`,
+  );
+  const filters = data ? (
+    <WorkspaceFilters
+      action={workspaceHref("/account")}
+      activeCount={Number(!!personId) + Number(spaceId !== "personal")}
+      context={context}
+      identities={data.overview.accounts}
+      identity={
+        <PersonStack
+          people={snapshot.people}
+          personId={personId}
+        />
+      }
+      showClear={!!personId || spaceId !== "personal"}
+    >
+      <ScopeFields
+        catalog={data.catalog}
+        params={params}
+        snapshot={snapshot}
+      />
+      <input
+        name="month"
+        type="hidden"
+        value={month}
+      />
+      <Select
+        className="w-full"
+        defaultValue={currency}
+        items={currencies.map((value) => ({ label: value, value }))}
+        label="Moeda"
+        name="currency"
+      />
+    </WorkspaceFilters>
+  ) : null;
   return (
     <>
-      <WorkspaceHeading title="Visão geral">
+      <WorkspaceHeading
+        filters={filters}
+        title="Visão geral"
+      >
         <div className="page-actions">
           <PeriodPicker
             month={month}
             onChange={changeMonth}
-          />
-          <RefreshButton
-            disabled={resource.loading}
-            label="Atualizar resumo financeiro"
-            onClick={resource.retry}
           />
         </div>
       </WorkspaceHeading>
       <ResourceFeedback {...resource} />
       {!!data && (
         <>
-          <WorkspaceFilters
-            action="/account"
-            activeCount={Number(!!personId) + Number(spaceId !== "personal")}
-            context={context}
-            identity={
-              <PersonStack
-                people={snapshot.people}
-                personId={personId}
-              />
-            }
-            showClear={!!personId || spaceId !== "personal"}
-          >
-            <ScopeFields
-              catalog={data.catalog}
-              params={params}
-              snapshot={snapshot}
-            />
-            <input
-              name="month"
-              type="hidden"
-              value={month}
-            />
-            <Select
-              className="w-full"
-              defaultValue={currency}
-              items={currencies.map((value) => ({ label: value, value }))}
-              label="Moeda"
-              name="currency"
-            />
-          </WorkspaceFilters>
           {!!data.overview.partial && (
             <Banner
               description={
                 <span>
                   Este resumo usa os dados recebidos.{" "}
-                  <a href="/account/connections">Conferir conexões</a>.
+                  <a href={workspaceHref("/account/connections")}>
+                    Conferir conexões
+                  </a>
+                  .
                 </span>
               }
               title="Histórico parcial"
               variant="secondary"
             />
           )}
-          <FinancialDashboard
-            categories={data.catalog.categories}
-            currency={currency}
-            monthly={data.monthly}
-            overview={data.overview}
-            people={snapshot.people}
-            records={data.recent.data.records}
-            rulesHref="/account/rules"
-            showOwner={!personId}
-            transactionsHref={transactionsHref}
-          />
+          <TransactionEditing
+            accounts={data.overview.accounts}
+            api={api}
+            catalog={data.catalog}
+            revision={data.recent.data.revision}
+            saved={resource.retry}
+            snapshot={snapshot}
+            spaceId={spaceId}
+          >
+            <FinancialDashboard
+              categories={data.catalog.categories}
+              currency={currency}
+              monthly={data.monthly}
+              overview={data.overview}
+              people={snapshot.people}
+              records={data.recent.data.records}
+              showOwner={!personId}
+              transactionsHref={transactionsHref}
+            />
+          </TransactionEditing>
         </>
       )}
     </>

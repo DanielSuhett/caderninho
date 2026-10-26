@@ -1,15 +1,18 @@
 import { Badge } from "@cloudflare/kumo/components/badge";
 import { Banner } from "@cloudflare/kumo/components/banner";
-import { InlineCopyText } from "@cloudflare/kumo/components/inline-copy-text";
 import { LayerCard } from "@cloudflare/kumo/components/layer-card";
-import { Link } from "@cloudflare/kumo/components/link";
 import { Select } from "@cloudflare/kumo/components/select";
+import { ArrowRightIcon } from "@phosphor-icons/react";
 import { useCallback, useState } from "react";
 
 import type { PortalResponse } from "../../contracts";
+import { UiLink } from "../ui";
 import type { createAccountApi } from "./account-api";
+import { AccountIdentity } from "./account-identity";
+import { workspaceHref } from "./account-navigation";
 import { CursorPagination } from "./cursor-pagination";
 import { DisclosureItem } from "./disclosure-item";
+import { bankAppearance } from "./setup-banks";
 import { EmptyView } from "./workspace-filters";
 import {
   momentLabel,
@@ -17,8 +20,6 @@ import {
   useResource,
 } from "./workspace-resource";
 import {
-  RecordReference,
-  RefreshButton,
   WorkspaceDetails,
   WorkspaceFilters,
   WorkspaceHeading,
@@ -70,57 +71,57 @@ export function SyncHistoryView({
   }
   const first = new URLSearchParams(params);
   first.delete("cursor");
+  const filters = (
+    <WorkspaceFilters
+      action={workspaceHref("/account/sync")}
+      activeCount={params.get("status") ? 1 : 0}
+      context={
+        snapshot.people.find((p) => p.id === params.get("person"))?.name ??
+        "Todas as pessoas"
+      }
+    >
+      {!!params.get("connectionId") && (
+        <input
+          name="connectionId"
+          type="hidden"
+          value={params.get("connectionId") ?? ""}
+        />
+      )}
+      <Select
+        defaultValue={params.get("person") ?? ""}
+        items={[
+          { label: "Todas as pessoas", value: "" },
+          ...snapshot.people.map((p) => ({ label: p.name, value: p.id })),
+        ]}
+        label="Pessoa"
+        name="person"
+      />
+      <input
+        name="space"
+        type="hidden"
+        value={params.get("space") ?? "personal"}
+      />
+      <Select
+        defaultValue={params.get("status") ?? ""}
+        items={[
+          { label: "Todas as rodadas", value: "" },
+          ...Object.entries(statuses).map(([id, name]) => ({
+            label: name,
+            value: id,
+          })),
+        ]}
+        label="Estado"
+        name="status"
+      />
+    </WorkspaceFilters>
+  );
   return (
     <>
-      <WorkspaceHeading title="Sincronizações">
-        <RefreshButton
-          disabled={resource.loading}
-          label="Atualizar histórico"
-          onClick={resource.retry}
-        />
-      </WorkspaceHeading>
-      <WorkspaceFilters
-        action="/account/sync"
-        activeCount={params.get("status") ? 1 : 0}
-        context={
-          snapshot.people.find((p) => p.id === params.get("person"))?.name ??
-          "Todas as pessoas"
-        }
-      >
-        {!!params.get("connectionId") && (
-          <input
-            name="connectionId"
-            type="hidden"
-            value={params.get("connectionId") ?? ""}
-          />
-        )}
-        <Select
-          defaultValue={params.get("person") ?? ""}
-          items={[
-            { label: "Todas as pessoas", value: "" },
-            ...snapshot.people.map((p) => ({ label: p.name, value: p.id })),
-          ]}
-          label="Pessoa"
-          name="person"
-        />
-        <input
-          name="space"
-          type="hidden"
-          value={params.get("space") ?? "personal"}
-        />
-        <Select
-          defaultValue={params.get("status") ?? ""}
-          items={[
-            { label: "Todas as rodadas", value: "" },
-            ...Object.entries(statuses).map(([id, name]) => ({
-              label: name,
-              value: id,
-            })),
-          ]}
-          label="Estado"
-          name="status"
-        />
-      </WorkspaceFilters>
+      <WorkspaceHeading
+        filters={filters}
+        title="Sincronizações"
+      />
+
       <ResourceFeedback {...resource} />
       {!!data && (
         <>
@@ -130,108 +131,101 @@ export function SyncHistoryView({
               className="record-list"
               render={<ol />}
             >
-              {data.records.map((r) => (
-                <li key={r.id}>
-                  <DisclosureItem
-                    className="record-item"
-                    summary={
-                      <>
-                        <span className="record-title">{r.profileName}</span>
-                        <span className="record-value">
-                          <Badge
-                            variant={
-                              (
-                                {
-                                  failed: "error",
-                                  pending: "warning",
-                                  running: "info",
-                                  succeeded: "success",
-                                } as const
-                              )[r.status]
-                            }
-                          >
-                            {statuses[r.status]}
-                          </Badge>
-                        </span>
-                        <span className="record-context">{r.personName}</span>
-                        <span className="record-meta">
-                          <time dateTime={r.admittedAt}>
-                            Início {momentLabel(r.admittedAt)}
-                          </time>
-                          {r.status === "running" && (
-                            <span>
-                              {r.phase
-                                ? (phases[r.phase] ?? r.phase)
-                                : "Aguardando início"}
-                            </span>
-                          )}
-                          {!!r.error && (
-                            <span data-tone="error">Dados preservados</span>
-                          )}
-                        </span>
-                      </>
-                    }
-                  >
-                    <div className="record-detail">
-                      <dl className="detail-list">
-                        <div>
-                          <dt>Última etapa</dt>
-                          <dd>
-                            {r.phase
-                              ? (phases[r.phase] ?? r.phase)
-                              : "Não registrada"}
-                          </dd>
-                        </div>
-                        <div>
-                          <dt>Etapas confirmadas</dt>
-                          <dd>{r.sequence}</dd>
-                        </div>
-                        <div>
-                          <dt>Encerramento</dt>
-                          <dd>{finishLabel(r.finishedAt, r.status)}</dd>
-                        </div>
-                      </dl>
-                      {!!r.error && (
-                        <Banner
-                          className="feedback"
-                          description={
-                            <>
-                              Interrompida: <code>{r.error}</code>. As páginas
-                              confirmadas foram preservadas. Consulte o estado
-                              da conexão antes de tentar uma nova importação.
-                            </>
-                          }
-                          variant="error"
-                        />
-                      )}
-                      <Link href="/account/connections">
-                        Ver conexões e atualização
-                      </Link>
-                      <RecordReference>
-                        <div>
-                          <dt>Rodada</dt>
-                          <dd>
-                            <InlineCopyText
-                              labels={{
-                                copied: "Identificador copiado",
-                                copyAction: "Copiar identificador",
-                              }}
+              {data.records.map((r) => {
+                const connection = snapshot.connections.find(
+                  (row) => row.id === r.connectionId,
+                );
+                return (
+                  <li key={r.id}>
+                    <DisclosureItem
+                      className="record-item sync-history-item"
+                      summary={
+                        <>
+                          <span className="record-title">
+                            {connection ? (
+                              <AccountIdentity
+                                account={bankAppearance(connection)}
+                              />
+                            ) : (
+                              r.profileName
+                            )}
+                          </span>
+                          <span className="record-value">
+                            <Badge
+                              variant={
+                                (
+                                  {
+                                    failed: "error",
+                                    pending: "warning",
+                                    running: "info",
+                                    succeeded: "success",
+                                  } as const
+                                )[r.status]
+                              }
                             >
-                              {r.id}
-                            </InlineCopyText>
-                          </dd>
-                        </div>
-                        <div>
-                          <dt>Conexão</dt>
-                          <dd>
-                            <code>{r.connectionId}</code>
-                          </dd>
-                        </div>
-                      </RecordReference>
-                    </div>
-                  </DisclosureItem>
-                </li>
-              ))}
+                              {statuses[r.status]}
+                            </Badge>
+                          </span>
+                          <span className="record-context">{r.personName}</span>
+                          <span className="record-meta">
+                            <time dateTime={r.admittedAt}>
+                              Início {momentLabel(r.admittedAt)}
+                            </time>
+                            {r.status === "running" && (
+                              <span>
+                                {r.phase
+                                  ? (phases[r.phase] ?? r.phase)
+                                  : "Aguardando início"}
+                              </span>
+                            )}
+                            {!!r.error && (
+                              <span data-tone="error">Dados preservados</span>
+                            )}
+                          </span>
+                        </>
+                      }
+                    >
+                      <div className="record-detail">
+                        <dl className="detail-list">
+                          <div>
+                            <dt>Acesso Pluggy</dt>
+                            <dd>{r.profileName}</dd>
+                          </div>
+                          {!!r.phase && (
+                            <div>
+                              <dt>Última etapa</dt>
+                              <dd>{phases[r.phase] ?? r.phase}</dd>
+                            </div>
+                          )}
+                          <div>
+                            <dt>Encerramento</dt>
+                            <dd>{finishLabel(r.finishedAt, r.status)}</dd>
+                          </div>
+                        </dl>
+                        {!!r.error && (
+                          <Banner
+                            className="feedback"
+                            description={
+                              <>
+                                Interrompida: <code>{r.error}</code>. As páginas
+                                confirmadas foram preservadas. Consulte o estado
+                                da conexão antes de tentar uma nova importação.
+                              </>
+                            }
+                            variant="error"
+                          />
+                        )}
+                        <UiLink
+                          href={workspaceHref("/account/connections")}
+                          variant="outline"
+                        >
+                          Ver conexão <ArrowRightIcon size={16} />
+                        </UiLink>
+                      </div>
+                    </DisclosureItem>
+                  </li>
+                );
+              })}
             </LayerCard>
           ) : (
             <EmptyView title="Nenhuma rodada neste recorte">
@@ -240,11 +234,12 @@ export function SyncHistoryView({
             </EmptyView>
           )}
           <CursorPagination
-            count={data.records.length}
-            first={params.has("cursor") ? `/account/sync?${first}` : null}
-            next={data.cursor ? `/account/sync?${next}` : null}
-            noun="rodadas"
-            singular="rodada"
+            first={
+              params.has("cursor")
+                ? workspaceHref(`/account/sync?${first}`)
+                : null
+            }
+            next={data.cursor ? workspaceHref(`/account/sync?${next}`) : null}
           />
           <WorkspaceDetails title="Sobre este histórico">
             {" "}

@@ -27,30 +27,24 @@
   overflow-wrap: anywhere;
 }
 
-.design-token[data-token="accent"] > span {
-  background: var(--accent);
-}
-.design-token[data-token="line"] > span {
-  background: var(--line);
-}
-.design-token[data-token="muted"] > span {
-  background: var(--muted);
-}
-.design-token[data-token="page"] > span {
+.design-surface-canvas {
+  padding: 24px;
+  margin-block: 24px;
+  outline: 1px solid var(--hairline);
   background: var(--page);
+  border-radius: 12px;
 }
-.design-token[data-token="success-text"] > span {
-  background: var(--success-text);
+.design-surface-card {
+  display: grid;
+  gap: 12px;
+  justify-items: start;
+  padding: 20px 24px;
 }
-.design-token[data-token="surface"] > span {
-  background: var(--surface);
-}
-.design-token[data-token="surface-hover"] > span {
-  background: var(--surface-hover);
-}
-.design-token[data-token="surface-raised"] > span {
-  background: var(--surface-raised);
-}
-.design-token[data-token="text"] > span {
-  background: var(--text);
+@media (max-width: 480px) {
+  .design-surface-canvas {
+    padding: 16px;
+  }
+  .design-surface-card {
+    padding: 16px;
+  }
 }

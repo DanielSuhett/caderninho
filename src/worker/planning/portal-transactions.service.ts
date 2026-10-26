@@ -7,12 +7,12 @@ import type {
 import {
   AccountType,
   localDay,
-  monthDate,
   type PlanningTransaction,
   type TransactionDetails,
-  TransactionDirection,
   transactionMatchesText,
 } from "../../domain";
+import { installmentGroupKey } from "../../domain/card-installments";
+import { transactionBillPayments } from "./bills.service";
 import { planningCursor } from "./cursor";
 import type { PlanningRepository, PlanningSnapshot } from "./entity";
 import { found, transactionStream, validateSelection } from "./projection";
@@ -21,32 +21,6 @@ type PageRow = z.infer<
   typeof PortalTransactionListSchema
 >["data"]["records"][number];
 type InstallmentRow = PageRow["installments"][number];
-
-function installmentKey(row: InstallmentRow) {
-  if (row.installmentNumber === null || row.totalInstallments === null) {
-    return null;
-  }
-  if (
-    row.direction !== TransactionDirection.DEBIT ||
-    row.totalInstallments < 2 ||
-    row.installmentNumber < 1 ||
-    row.installmentNumber > row.totalInstallments
-  ) {
-    return null;
-  }
-  const firstMonth = row.purchaseDate
-    ? ""
-    : monthDate(row.date, 1 - row.installmentNumber).slice(0, 7);
-  return JSON.stringify([
-    row.accountId,
-    row.cardNumber,
-    row.currency,
-    row.description.trim().toLocaleLowerCase(),
-    row.amountMinor,
-    row.totalInstallments,
-    row.purchaseDate ? `purchase:${row.purchaseDate}` : `month:${firstMonth}`,
-  ]);
-}
 
 function pageRow(members: InstallmentRow[], ambiguous = false): PageRow {
   const sorted = members.toSorted(
@@ -87,11 +61,16 @@ function matches(
   day: string,
 ) {
   return (
-    (input.future ? row.anchorDate > day : row.anchorDate <= day) &&
+    (!input.transactionId ||
+      members.some((member) => member.id === input.transactionId)) &&
+    (!!input.transactionId ||
+      (input.future ? row.anchorDate > day : row.anchorDate <= day)) &&
     (!input.from || row.anchorDate >= input.from) &&
     (!input.to || row.anchorDate <= input.to) &&
     (!input.categoryId ||
       members.some((member) => member.category === input.categoryId)) &&
+    (!input.uncategorized ||
+      members.some((member) => member.category === null)) &&
     (!input.direction ||
       members.some((member) => member.direction === input.direction)) &&
     (!input.status ||
@@ -106,10 +85,12 @@ function matches(
 function record(
   row: PlanningTransaction,
   details: TransactionDetails | undefined,
+  billPayment: InstallmentRow["billPayment"],
 ): InstallmentRow {
   return {
     accountId: row.accountId,
     amountMinor: row.amountMinor,
+    billPayment,
     cardNumber: details?.cardNumber ?? null,
     category: row.category,
     classification: row.classification ?? null,
@@ -154,7 +135,11 @@ export async function portalTransactions(
       .map((account) => account.id),
   );
   const groups = new Map<string, InstallmentRow[]>();
+  const billPayment = transactionBillPayments(snapshot);
   const selected: { key: string; row: PageRow }[] = [];
+  let uncategorizedCount = 0;
+  const { categoryId: _categoryId, ...reviewScope } = input;
+  const reviewSelection = { ...reviewScope, uncategorized: true };
   const key = (row: PageRow) => `${row.anchorDate}:${row.id}`;
   function retainBest(candidate: { key: string; row: PageRow }) {
     if (selected.length < limit + 1) {
@@ -192,6 +177,9 @@ export async function portalTransactions(
     selected[index] = candidate;
   }
   function add(row: PageRow, members: InstallmentRow[]) {
+    if (matches(row, members, reviewSelection, day)) {
+      uncategorizedCount += 1;
+    }
     if (!matches(row, members, input, day) || (after && key(row) >= after)) {
       return;
     }
@@ -200,14 +188,17 @@ export async function portalTransactions(
   const stream = transactionStream(repository, snapshot);
   for await (const page of stream({
     accountId: input.accountId,
+    cardBrand: input.cardBrand,
     currency: input.currency,
     include_ignored: input.include_ignored,
+    institutionId: input.institutionId,
     personId: input.personId,
     spaceId: input.spaceId,
   })) {
-    const item = record(page, details.get(page.id));
+    const extra = details.get(page.id);
+    const item = record(page, extra, billPayment(page, extra));
     const groupKey = creditAccounts.has(item.accountId)
-      ? installmentKey(item)
+      ? installmentGroupKey(item)
       : null;
     if (!groupKey) {
       add(pageRow([item]), [item]);
@@ -235,5 +226,7 @@ export async function portalTransactions(
     cursor: more && last ? cursorState.encode(key(last)) : null,
     records,
     referenceDay: day,
+    revision: snapshot.revision,
+    uncategorizedCount,
   };
 }

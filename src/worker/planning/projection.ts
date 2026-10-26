@@ -5,7 +5,9 @@ import {
   CLASSIFICATION_VERSION,
   connectionPartial,
   type FinancialIdentity,
+  type FinancialIdentityFilter,
   fixedCategoryId,
+  matchesFinancialIdentity,
   type PlanningAccount,
   PlanningError,
   type PlanningState,
@@ -129,12 +131,14 @@ export function cardCatalog(snapshot: PlanningSnapshot, state: PlanningState) {
 export interface Selection {
   accountId?: string | undefined;
   accountIds?: string[] | undefined;
+  cardBrand?: string | undefined;
   cardNumber?: string | undefined;
   categoryId?: string | undefined;
   currency?: string | undefined;
   direction?: string | undefined;
   from?: string | undefined;
   include_ignored?: boolean | undefined;
+  institutionId?: string | undefined;
   investments?: boolean;
   personId?: string | undefined;
   profileId?: string | undefined;
@@ -143,9 +147,14 @@ export interface Selection {
   tagId?: string | undefined;
   text?: string | undefined;
   to?: string | undefined;
+  uncategorized?: boolean | undefined;
 }
-export function planningSelection(command: PlanningCommand): Selection {
+export function planningSelection(
+  command: PlanningCommand,
+  identityFilter: FinancialIdentityFilter = {},
+): Selection {
   return {
+    ...identityFilter,
     spaceId: command.spaceId,
     ...("personId" in command &&
       command.personId && { personId: command.personId }),
@@ -163,6 +172,8 @@ export function planningSelection(command: PlanningCommand): Selection {
     ...("status" in command && command.status && { status: command.status }),
     ...("text" in command && command.text && { text: command.text }),
     include_ignored: "include_ignored" in command && command.include_ignored,
+    ...("uncategorized" in command &&
+      command.uncategorized && { uncategorized: true }),
   };
 }
 export function validatePeriod(input: {
@@ -265,7 +276,12 @@ export function transactionStream(
       (!selection.to || row.date <= selection.to) &&
       (!selection.accountId || row.accountId === selection.accountId) &&
       (!selection.accountIds || selection.accountIds.includes(row.accountId)) &&
+      matchesFinancialIdentity(
+        accountMap.get(row.accountId)?.identity,
+        selection,
+      ) &&
       (!selection.categoryId || row.category === selection.categoryId) &&
+      (!selection.uncategorized || row.category === null) &&
       (!selection.currency || row.currency === selection.currency) &&
       (!selection.tagId || row.tagIds.includes(selection.tagId)) &&
       (!selection.direction || row.direction === selection.direction) &&
@@ -320,6 +336,7 @@ export function transactionStream(
           row.spaceId === selection.spaceId &&
           (!selection.accountIds || selection.accountIds.includes(row.id)) &&
           (!selection.accountId || row.id === selection.accountId) &&
+          matchesFinancialIdentity(row.identity, selection) &&
           (!selection.personId || row.personId === selection.personId) &&
           (!selection.profileId || row.profileId === selection.profileId),
       )
@@ -380,7 +397,8 @@ export function planningCoverage(
       (row.spaceId === selection.spaceId || movedAccountIds.has(row.id)) &&
       (!selection.personId || row.personId === selection.personId) &&
       (!selection.accountId || row.id === selection.accountId) &&
-      (!selection.accountIds || selection.accountIds.includes(row.id)),
+      (!selection.accountIds || selection.accountIds.includes(row.id)) &&
+      matchesFinancialIdentity(row.identity, selection),
   );
   const connectionIds = new Set(
     selectedAccounts.flatMap((row) =>

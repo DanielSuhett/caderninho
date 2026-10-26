@@ -70,11 +70,15 @@ const selection = {
   tagId: id.optional(),
   text: z.string().max(240).optional(),
   to: day.optional(),
+  uncategorized: z
+    .boolean()
+    .optional()
+    .describe("Somente lançamentos sem categoria efetiva."),
 };
 const analysisPeriod = { ...selection, from: day, to: day };
 const accountFields = {
   closeDay: z.number().int().min(1).max(31).optional(),
-  creditLimitMinor: amount.optional(),
+  creditLimitMinor: amount.nullable().optional(),
   dueDay: z.number().int().min(1).max(31).optional(),
   hidden: z.boolean().optional(),
   name: text.optional(),
@@ -201,6 +205,7 @@ export const planningTools = {
     schema: z
       .object({
         ...mutation,
+        expected_revision: z.number().int().nonnegative().optional(),
         ids: z.array(id).min(1).max(500),
         ...transactionFields,
       })
@@ -897,9 +902,16 @@ export const planningTools = {
   }),
   update_account_settings: planningTool("update_account_settings", {
     description:
-      "Editar apresentação; limite e ciclo somente para cartões manuais.",
+      "Editar apresentação e definir limite local de cartão; null restaura o limite importado. Não altera o banco. Ciclo somente para cartões manuais.",
     readOnly: false,
-    schema: z.object({ ...mutation, id, ...accountFields }).strict(),
+    schema: z
+      .object({
+        ...mutation,
+        id,
+        ...accountFields,
+        expected_revision: z.number().int().nonnegative().optional(),
+      })
+      .strict(),
   }),
   update_card: planningTool("update_card", {
     description: "Renomear ou ocultar cartão adicional.",

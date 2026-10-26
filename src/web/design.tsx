@@ -1,4 +1,8 @@
-export function DesignHead() {
+export function DesignHead({
+  themeSwitching = true,
+}: {
+  themeSwitching?: boolean;
+}) {
   return (
     <>
       <link
@@ -17,10 +21,12 @@ export function DesignHead() {
         rel="apple-touch-icon"
         sizes="180x180"
       />
-      <script
-        async
-        src="/theme.js"
-      />
+      {!!themeSwitching && (
+        <script
+          async
+          src="/theme.js"
+        />
+      )}
       <link
         as="font"
         crossOrigin="anonymous"

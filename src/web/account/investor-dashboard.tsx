@@ -11,11 +11,12 @@ import type {
 import { tryCatch } from "../../shared";
 import { formatBalance } from "../money";
 import { MoneyValue } from "../money-value";
-import { AccountIdentity } from "./account-identity";
+import { AccountAvatar } from "./account-identity";
 import { amountProportion, percentageLabel } from "./allocation-presentation";
+import { AnalysisSection } from "./analysis-section";
+import { ChartViewport } from "./chart-viewport";
 import { DisclosureItem } from "./disclosure-item";
 import { FinancialMetric } from "./financial-metric";
-import { InfoTip } from "./info-tip";
 import { dayLabel } from "./workspace-resource";
 
 export const investmentTypeNames: Record<string, string | undefined> = {
@@ -95,24 +96,23 @@ function Allocation({
     (row) => row.unknownCount || BigInt(row.knownMinor) < 0n,
   );
   return (
-    <LayerCard className="analysis-card cards-category-card">
-      <header className="analysis-heading">
-        <h2>{title}</h2>
-        <InfoTip label={title}>
-          Composição da posição bruta. Exclui posições resgatadas e fora do
-          patrimônio.
-        </InfoTip>
-      </header>
+    <AnalysisSection
+      currency={currency}
+      hint="Composição da posição bruta. Exclui posições resgatadas e fora do patrimônio."
+      title={title}
+    >
       <div className="cards-category-content">
         {complete && total > 0n ? (
           <div className="financial-donut">
-            <Suspense fallback={<p role="status">Carregando gráfico…</p>}>
-              <Chart
-                categories={slices}
-                currency={currency}
-                description={title}
-              />
-            </Suspense>
+            <ChartViewport height={240}>
+              <Suspense fallback={<p role="status">Carregando gráfico…</p>}>
+                <Chart
+                  categories={slices}
+                  currency={currency}
+                  description={title}
+                />
+              </Suspense>
+            </ChartViewport>
             <div className="financial-donut-center">
               <span>{groups.length}</span>
               <span className="cards-note">
@@ -155,7 +155,7 @@ function Allocation({
           ))}
         </ul>
       </div>
-    </LayerCard>
+    </AnalysisSection>
   );
 }
 function PositionDetails({ row }: { row: InvestmentList[number] }) {
@@ -347,14 +347,13 @@ export function InvestorDashboard({
           <span>Resultado</span>
           <span>Atualização</span>
         </div>
-        {rows.map((row) => (
-          <DisclosureItem
-            className="investor-position"
-            key={row.id}
-            summary={
-              <span className="investor-position-grid">
-                <span className="investor-position-identity">
-                  <AccountIdentity
+        <div className="investor-position-list">
+          {rows.map((row) => (
+            <LayerCard key={row.id}>
+              <DisclosureItem
+                className="investor-position"
+                leading={
+                  <AccountAvatar
                     account={row}
                     person={
                       showOwner && people.length > 1
@@ -362,41 +361,48 @@ export function InvestorDashboard({
                         : undefined
                     }
                   />
-                  <span className="investor-position-meta">
-                    {investmentTypeNames[row.type] ?? row.type}
-                    {row.details?.status === "TOTAL_WITHDRAWAL" && (
-                      <Badge>Resgatado</Badge>
-                    )}
-                    {!row.included && <Badge>Fora do patrimônio</Badge>}
-                    {row.details?.status === "PENDING" && (
-                      <Badge>Pendente</Badge>
-                    )}
-                    {!!row.manual && <Badge>Manual</Badge>}
+                }
+                summary={
+                  <span className="investor-position-grid">
+                    <span className="investor-position-identity">
+                      <span className="account-identity">{row.name}</span>
+                      <span className="investor-position-meta">
+                        {investmentTypeNames[row.type] ?? row.type}
+                        {row.details?.status === "TOTAL_WITHDRAWAL" && (
+                          <Badge>Resgatado</Badge>
+                        )}
+                        {!row.included && <Badge>Fora do patrimônio</Badge>}
+                        {row.details?.status === "PENDING" && (
+                          <Badge>Pendente</Badge>
+                        )}
+                        {!!row.manual && <Badge>Manual</Badge>}
+                      </span>
+                    </span>
+                    <span>
+                      <small className="investor-mobile-label">Bruto</small>
+                      <Money
+                        amount={row.amountMinor}
+                        currency={currency}
+                      />
+                    </span>
+                    <span>
+                      <small className="investor-mobile-label">Resultado</small>
+                      <Money
+                        amount={row.details?.profitMinor}
+                        currency={currency}
+                      />
+                    </span>
+                    <span className="cards-note">
+                      {row.date ? dayLabel(row.date) : "Data não informada"}
+                    </span>
                   </span>
-                </span>
-                <span>
-                  <small className="investor-mobile-label">Bruto</small>
-                  <Money
-                    amount={row.amountMinor}
-                    currency={currency}
-                  />
-                </span>
-                <span>
-                  <small className="investor-mobile-label">Resultado</small>
-                  <Money
-                    amount={row.details?.profitMinor}
-                    currency={currency}
-                  />
-                </span>
-                <span className="cards-note">
-                  {row.date ? dayLabel(row.date) : "Data não informada"}
-                </span>
-              </span>
-            }
-          >
-            <PositionDetails row={row} />
-          </DisclosureItem>
-        ))}
+                }
+              >
+                <PositionDetails row={row} />
+              </DisclosureItem>
+            </LayerCard>
+          ))}
+        </div>
       </section>
     </div>
   );

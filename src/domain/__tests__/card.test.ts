@@ -4,9 +4,41 @@ import { test } from "node:test";
 import {
   allocatedCredit,
   type CardActivityRow,
+  cardCredit,
   createCardActivity,
   isCardExpense,
 } from "../card.entity";
+
+test("local limits retain exact observed occupancy, preserve zero and leave incomplete credit unknown", () => {
+  assert.deepEqual(
+    cardCredit({
+      available: "900719925474099300",
+      limit: "900719925474099301",
+      localLimit: "900719925474099302",
+    }),
+    {
+      allocatedCreditMinor: "1",
+      availableCreditMinor: "900719925474099301",
+      creditEstimated: true,
+      creditLimitMinor: "900719925474099302",
+    },
+  );
+  assert.equal(
+    cardCredit({ available: "60", limit: "100", localLimit: "0" })
+      .availableCreditMinor,
+    "-40",
+  );
+  assert.equal(
+    cardCredit({ available: "60", limit: null, localLimit: "100" })
+      .availableCreditMinor,
+    null,
+  );
+  assert.equal(
+    cardCredit({ available: "60", limit: "100", localLimit: null })
+      .creditEstimated,
+    false,
+  );
+});
 
 const row = (input: Partial<CardActivityRow> = {}): CardActivityRow => ({
   amountMinor: "-10000",

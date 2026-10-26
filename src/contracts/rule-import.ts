@@ -1,6 +1,10 @@
 import { z } from "zod/v4";
 
-import { CategoryKind } from "../domain";
+import {
+  CategoryKind,
+  type RuleImportPackage as RuleImportPackageEntity,
+  type RuleImportResult as RuleImportResultEntity,
+} from "../domain";
 import { RuleFieldsSchema } from "./rules";
 
 export const RULE_IMPORT_MAX_BYTES = 65_536;
@@ -84,7 +88,7 @@ export const RuleImportPackageSchema = z
         });
       }
     });
-  });
+  }) satisfies z.ZodType<RuleImportPackageEntity>;
 export const RuleImportFields = {
   categoryIds: z.record(key, z.string().min(1).max(160)).default({}),
   pack: RuleImportPackageSchema,
@@ -119,6 +123,6 @@ export const RuleImportResultSchema = z.object({
   rulesCreated: z.number().int(),
   rulesExisting: z.number().int(),
   version: z.number().int(),
-});
+}) satisfies z.ZodType<RuleImportResultEntity>;
 export type RuleImportPackage = z.infer<typeof RuleImportPackageSchema>;
 export type RuleImportResult = z.infer<typeof RuleImportResultSchema>;

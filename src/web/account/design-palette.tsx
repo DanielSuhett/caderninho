@@ -1,4 +1,7 @@
+import { Button } from "@cloudflare/kumo/components/button";
 import { Grid } from "@cloudflare/kumo/components/grid";
+import { LayerCard } from "@cloudflare/kumo/components/layer-card";
+import { Popover } from "@cloudflare/kumo/components/popover";
 import { Text } from "@cloudflare/kumo/components/text";
 
 import { colorTokens } from "../design-tokens";
@@ -7,8 +10,8 @@ export function DesignPalette() {
   return (
     <>
       <Text>
-        Inter local, conteúdo de 16 px, metadados de 14 px e títulos em sentence
-        case. Superfícies escuras e estados vêm do Kumo.
+        Fundo, superfícies e contornos têm papéis equivalentes nos dois temas.
+        Alterne o tema para comparar os mesmos componentes.
       </Text>
       <Grid
         gap="sm"
@@ -20,15 +23,36 @@ export function DesignPalette() {
             data-token={name}
             key={name}
           >
-            <span aria-hidden />
+            <span
+              aria-hidden
+              style={{ backgroundColor: value }}
+            />
             <Text bold>{name}</Text>
             <code>{value}</code>
           </div>
         ))}
       </Grid>
+      <div className="design-surface-canvas">
+        <LayerCard className="design-surface-card">
+          <Text bold>Superfície de conteúdo</Text>
+          <Text variant="secondary">
+            Fundo neutro, contorno discreto e sombra curta. Painéis flutuantes
+            usam mais elevação.
+          </Text>
+          <Popover>
+            <Popover.Trigger render={<Button variant="secondary" />}>
+              Ver painel flutuante
+            </Popover.Trigger>
+            <Popover.Content>
+              <Popover.Title>Mais próximo de você</Popover.Title>
+              <Text>Mesma superfície, com sombra de sobreposição.</Text>
+            </Popover.Content>
+          </Popover>
+        </LayerCard>
+      </div>
       <Text variant="secondary">
         Layouts usam intervalos de 4, 8, 12, 16, 24 e 32 px. Raios, sombras e
-        foco pertencem aos componentes.
+        foco seguem a escala compartilhada, sem molduras adicionais.
       </Text>
     </>
   );

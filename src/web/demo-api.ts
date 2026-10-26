@@ -1,0 +1,155 @@
+import {
+  AuditSelectionSchema,
+  HouseholdCommandSchema,
+  PortalMutationSchema,
+  PortalQuerySchema,
+  RulePreviewSchema,
+  SyncHistorySelectionSchema,
+} from "../contracts";
+import { RunStatus } from "../domain";
+import { demoReferenceDay } from "../fixtures/finance";
+import { demoPortalFixture } from "../fixtures/workspace";
+import { tryCatch } from "../shared";
+import { createDemoSession } from "./demo-session";
+import { randomId } from "./random-id";
+
+// Injected only by demo-entry. Every request terminates here, including unknown
+// endpoints: a public demo can never fall through to an installation's API.
+export function createDemoFetch(
+  origin: string,
+  session = createDemoSession(),
+): typeof fetch {
+  const snapshot = { ...demoPortalFixture(), origin };
+  const read = (url: URL) => {
+    switch (url.pathname) {
+      case "/api/account":
+        return snapshot;
+      case "/api/account/catalog":
+        return session.catalog(url.searchParams.get("spaceId") ?? "personal");
+      case "/api/account/history": {
+        const selection = SyncHistorySelectionSchema.parse(
+          Object.fromEntries(url.searchParams),
+        );
+        return {
+          cursor: null,
+          records: snapshot.connections
+            .filter(
+              (row) =>
+                (!selection.connectionId ||
+                  row.id === selection.connectionId) &&
+                (!selection.personId || row.personId === selection.personId) &&
+                (!selection.status || selection.status === RunStatus.succeeded),
+            )
+            .map((row) => ({
+              admittedAt: `${demoReferenceDay}T11:59:00.000Z`,
+              connectionId: row.id,
+              error: null,
+              finishedAt: row.lastSuccessAt,
+              id: `demo-import:${row.id}`,
+              personId: row.personId,
+              personName: row.personName,
+              phase: null,
+              profileId: row.profileId,
+              profileName: row.profileName,
+              sequence: 1,
+              status: RunStatus.succeeded,
+            })),
+        };
+      }
+      case "/api/account/audit": {
+        const { days } = AuditSelectionSchema.parse(
+          Object.fromEntries(url.searchParams),
+        );
+        return {
+          clients: [],
+          daily: [],
+          days,
+          grantCursor: null,
+          grants: [],
+          models: [],
+          recent: [],
+          since: `${demoReferenceDay}T00:00:00.000Z`,
+          totals: {
+            cancelled: 0,
+            durationMs: 0,
+            errors: 0,
+            inputBytes: 0,
+            outputBytes: 0,
+            requests: 0,
+            toolCalls: 0,
+          },
+        };
+      }
+      default:
+        return null;
+    }
+  };
+  const write = async (request: Request, url: URL) => {
+    const input: unknown = await request.json();
+    switch (url.pathname) {
+      case "/api/account/query": {
+        const { query, csrf } = PortalQuerySchema.parse(input);
+        return await session.api.query(query, csrf, request.signal);
+      }
+      case "/api/account/planning": {
+        const { command, csrf } = PortalMutationSchema.parse(input);
+        return await session.api.planning(command, csrf, request.signal);
+      }
+      case "/api/account/rule-preview":
+        return await session.api.previewRule(
+          RulePreviewSchema.parse(input),
+          request.signal,
+        );
+      case "/api/account/manage": {
+        const command = HouseholdCommandSchema.parse(input);
+        if (command.action !== "save_person") {
+          throw new Error("UNSUPPORTED_DEMO_OPERATION");
+        }
+        const id = command.id ?? `demo:${randomId()}`;
+        const existing = snapshot.people.find((row) => row.id === id);
+        const person = {
+          ...existing,
+          id,
+          name: command.name,
+          ...(command.photo !== undefined && { photo: command.photo ?? "" }),
+        };
+        snapshot.people = [
+          ...snapshot.people.filter((row) => row.id !== id),
+          person,
+        ];
+        return { id };
+      }
+      case "/api/account/logout":
+        return { ok: true };
+      default:
+        return null;
+    }
+  };
+  return async (input, init) => {
+    const request = new Request(input, init);
+    request.signal.throwIfAborted();
+    const url = new URL(request.url);
+    if (url.origin !== origin || !url.pathname.startsWith("/api/account")) {
+      return Response.json(
+        { error: "DEMO_ENDPOINT_UNAVAILABLE" },
+        { status: 404 },
+      );
+    }
+    const { data, error } = await tryCatch(() =>
+      request.method === "GET" ? read(url) : write(request, url),
+    );
+    request.signal.throwIfAborted();
+    if (error) {
+      const conflict =
+        error.message === "RESTART_REQUIRED" ||
+        error.message === "IDEMPOTENCY_CONFLICT";
+      return Response.json(
+        { error: "DEMO_OPERATION_FAILED" },
+        { status: conflict ? 409 : 400 },
+      );
+    }
+    return data === null
+      ? Response.json({ error: "DEMO_ENDPOINT_UNAVAILABLE" }, { status: 404 })
+      : Response.json(data);
+  };
+}

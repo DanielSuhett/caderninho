@@ -1,11 +1,11 @@
 import { Badge } from "@cloudflare/kumo/components/badge";
 import { Empty } from "@cloudflare/kumo/components/empty";
-import { InlineCopyText } from "@cloudflare/kumo/components/inline-copy-text";
 import { LayerCard } from "@cloudflare/kumo/components/layer-card";
 import { Link } from "@cloudflare/kumo/components/link";
 import { SkeletonLine } from "@cloudflare/kumo/components/loader";
 import { Meter } from "@cloudflare/kumo/components/meter";
 import { Table } from "@cloudflare/kumo/components/table";
+import { ArrowRightIcon } from "@phosphor-icons/react";
 import { lazy, Suspense, useMemo } from "react";
 import type { z } from "zod/v4";
 
@@ -14,16 +14,19 @@ import type {
   FinancialSummary,
   PortalTransactionListSchema,
 } from "../../contracts";
-import { AccountType } from "../../domain";
 import { tryCatch } from "../../shared";
 import { formatBalance } from "../money";
-import { AccountIdentity } from "./account-identity";
+import { UiLink } from "../ui";
+import { AccountAvatar } from "./account-identity";
+import { AnalysisSection } from "./analysis-section";
 import type { CategoryAppearance } from "./category-appearance";
+import { ChartViewport } from "./chart-viewport";
 import { DisclosureItem } from "./disclosure-item";
 import { FinancialMetric } from "./financial-metric";
 import { categoryVolumes, summaryCurrency } from "./financial-presentation";
 import { InfoTip } from "./info-tip";
 import type { MonthlySpendingChart } from "./monthly-spending-chart";
+import { PersonIdentity } from "./person-identity";
 import { TransactionList } from "./transaction-list";
 import { dayLabel } from "./workspace-resource";
 
@@ -78,7 +81,6 @@ export interface FinancialDashboardProps {
   people: Array<{ id: string; name: string }>;
   recentScope?: string;
   records: RecentRecords;
-  rulesHref?: string;
   showOwner?: boolean;
   transactionsHref: string;
 }
@@ -92,7 +94,6 @@ export function FinancialDashboard({
   records,
   transactionsHref,
   recentScope = "Todas as moedas · últimos registros recebidos no período",
-  rulesHref,
 }: FinancialDashboardProps) {
   const { accounts, bankBalance, total } = summaryCurrency(overview, currency);
   const groups = categoryVolumes(overview, currency);
@@ -121,14 +122,14 @@ export function FinancialDashboard({
             <FinancialMetric
               amount={income}
               currency={currency}
-              hint="Categorias explícitas · no período"
+              hint="Categorias explícitas no período. Ignorados, pendentes, futuros, transferências e pagamentos de fatura ficam fora."
               label="Receitas classificadas"
               tone="income"
             />
             <FinancialMetric
               amount={expense}
               currency={currency}
-              hint="Estornos descontados · no período"
+              hint="Categorias explícitas no período, com estornos descontados. Ignorados, pendentes, futuros, transferências e pagamentos de fatura ficam fora. Cada parcela conta na data do lançamento recebido."
               label="Despesas classificadas"
               tone="expense"
             />
@@ -139,44 +140,31 @@ export function FinancialDashboard({
               label="Fluxo bancário"
             />
           </dl>
-          {!!total?.unclassifiedCount && (
-            <p className="financial-summary-note">
-              Movimentos sem classificação: {total.unclassifiedCount}. Fora das
-              receitas e despesas.{" "}
-              {!!rulesHref && <Link href={rulesHref}>Conferir regras</Link>}
-            </p>
-          )}
           {!!unknown && (
             <p className="financial-summary-note">
               Registros sem valor conhecido: {unknown}. Totais do período
               indisponíveis; os dados recebidos continuam consultáveis.
             </p>
           )}
-          <DisclosureItem summary="Critérios">
-            <p className="summary-policy">
-              Somente registros confirmados até a data de referência. Ignorados,
-              pendentes e futuros ficam fora dos agregados. Receitas e despesas
-              usam categorias explícitas; transferências e pagamentos de fatura
-              ficam fora dessas duas somas. Fluxo bancário usa entradas e saídas
-              das contas bancárias. Parcelas são consideradas na data de cada
-              lançamento recebido. Saldos são a última observação importada, não
-              o fechamento do mês escolhido.
-            </p>
-          </DisclosureItem>
         </LayerCard>
       </section>
       <div className="financial-analysis-grid">
-        <LayerCard className="analysis-card">
-          <header className="analysis-heading">
-            <h2>Despesas por categoria</h2>
-            <span>{currency}</span>
-            <InfoTip label="despesas por categoria">
+        <AnalysisSection
+          currency={currency}
+          hint={
+            <>
               Categorias explícitas, com estornos descontados. Barras comparam o
               volume absoluto observado.{" "}
               {unknown > 0 ? "Somente valores conhecidos." : ""}
-            </InfoTip>
-          </header>
-          <div className="analysis-body">
+            </>
+          }
+          title="Despesas por categoria"
+        >
+          <div
+            className={
+              groups.length ? "analysis-body" : "analysis-body analysis-empty"
+            }
+          >
             {groups.length ? (
               <>
                 <CategoryRows
@@ -198,13 +186,14 @@ export function FinancialDashboard({
               </>
             ) : (
               <Empty
-                description="Categorias de despesa aparecem aqui após a classificação dos dados recebidos."
+                className="border-0 bg-transparent shadow-none"
+                contents={<Link href={transactionsHref}>Ver transações</Link>}
                 size="sm"
                 title="Nenhuma despesa classificada"
               />
             )}
           </div>
-        </LayerCard>
+        </AnalysisSection>
         <MonthlyAnalysis
           currency={currency}
           monthly={monthly}
@@ -228,6 +217,7 @@ export function FinancialDashboard({
           />
         ) : (
           <Empty
+            className="border-0 bg-transparent shadow-none"
             description="Escolha outro mês ou confira suas conexões."
             size="sm"
             title="Nenhuma transação neste período"
@@ -271,16 +261,15 @@ function MonthlyAnalysis({
     monthly?.totals.find((item) => item.currency === currency)
       ?.unknownAmountCount ?? 0;
   return (
-    <LayerCard className="analysis-card">
-      <header className="analysis-heading">
-        <h2>Despesas por mês</h2>
-        <span>{currency}</span>
-        <InfoTip label="despesas por mês">
-          {monthly
-            ? `${dayLabel(monthly.from)} a ${dayLabel(monthly.to)} · sem projeção`
-            : "Série temporariamente indisponível"}
-        </InfoTip>
-      </header>
+    <AnalysisSection
+      currency={currency}
+      hint={
+        monthly
+          ? `${dayLabel(monthly.from)} a ${dayLabel(monthly.to)} · sem projeção`
+          : "Série temporariamente indisponível"
+      }
+      title="Despesas por mês"
+    >
       {!!monthly?.partial && (
         <p className="analysis-caption">
           Histórico parcial também nesta série.
@@ -292,32 +281,42 @@ function MonthlyAnalysis({
           as despesas conhecidas.
         </p>
       )}
-      <div className="analysis-body">
+      <div
+        className={
+          monthlyGroups.length
+            ? "analysis-body"
+            : "analysis-body analysis-empty"
+        }
+      >
         {monthlyGroups.length ? (
-          <Suspense
-            fallback={
-              <div className="chart-loading">
-                <SkeletonLine
-                  maxWidth={90}
-                  minWidth={80}
-                />
-                <SkeletonLine
-                  maxWidth={90}
-                  minWidth={80}
-                />
-              </div>
-            }
-          >
-            <MonthlyChart
-              currency={currency}
-              groups={monthlyGroups}
-            />
-          </Suspense>
+          <ChartViewport height={320}>
+            <Suspense
+              fallback={
+                <div className="chart-loading">
+                  <SkeletonLine
+                    maxWidth={90}
+                    minWidth={80}
+                  />
+                  <SkeletonLine
+                    maxWidth={90}
+                    minWidth={80}
+                  />
+                </div>
+              }
+            >
+              <MonthlyChart
+                currency={currency}
+                groups={monthlyGroups}
+                key={`${currency}:${monthly?.to}`}
+              />
+            </Suspense>
+          </ChartViewport>
         ) : (
           <Empty
+            className="border-0 bg-transparent shadow-none"
             description={
               monthly
-                ? "O gráfico aparece com despesas classificadas no período."
+                ? "Escolha outro período ou classifique os lançamentos."
                 : "O restante do resumo continua disponível. Use Atualizar para tentar novamente."
             }
             size="sm"
@@ -347,7 +346,7 @@ function MonthlyAnalysis({
           </Table>
         </DisclosureItem>
       )}
-    </LayerCard>
+    </AnalysisSection>
   );
 }
 function CategoryRows({
@@ -404,26 +403,27 @@ export function AccountBalances({
         <li key={account.id}>
           <DisclosureItem
             className="record-item"
+            leading={
+              <AccountAvatar
+                account={account}
+                person={
+                  showOwner && people.length > 1
+                    ? people.find((person) => person.id === account.personId)
+                    : undefined
+                }
+              />
+            }
             summary={
               <>
                 <span className="record-title bank-heading">
-                  <AccountIdentity
-                    account={account}
-                    person={
-                      showOwner && people.length > 1
-                        ? people.find(
-                            (person) => person.id === account.personId,
-                          )
-                        : undefined
-                    }
-                  />
+                  {account.name}
                 </span>
                 <span className="record-value">
                   {formatBalance(account.balanceMinor, account.currency)}
                 </span>
                 <span className="record-meta">
-                  {account.type === AccountType.CREDIT && (
-                    <span>Cartão · não é dinheiro disponível</span>
+                  {!!account.manual && (
+                    <Badge variant="secondary">Manual</Badge>
                   )}
                   <span>
                     {account.balanceObservedAt
@@ -437,35 +437,28 @@ export function AccountBalances({
               </>
             }
           >
-            <div className="record-detail">
-              <dl className="detail-list">
-                <div>
-                  <dt>Titular</dt>
-                  <dd>
-                    {people.find((person) => person.id === account.personId)
-                      ?.name ?? "Titular não identificado"}
-                  </dd>
-                </div>
-                <div>
-                  <dt>Origem</dt>
-                  <dd>{account.manual ? "Conta manual" : "Conta importada"}</dd>
-                </div>
-              </dl>
-              <Link
+            <div className="record-detail account-balance-detail">
+              <div className="record-owner">
+                <span className="sr-only">Titular</span>
+                <PersonIdentity
+                  person={
+                    people.find((person) => person.id === account.personId) ?? {
+                      id: account.personId,
+                      name: "Titular não identificado",
+                    }
+                  }
+                />
+              </div>
+              <UiLink
                 href={`${transactionsHref}${transactionsHref.includes("?") ? "&" : "?"}${new URLSearchParams({ accountId: account.id })}`}
+                variant="outline"
               >
-                Ver transações desta conta
-              </Link>
-              <DisclosureItem summary="Referência técnica">
-                <InlineCopyText
-                  labels={{
-                    copied: "Identificador copiado",
-                    copyAction: "Copiar identificador",
-                  }}
-                >
-                  {account.id}
-                </InlineCopyText>
-              </DisclosureItem>
+                Ver transações{" "}
+                <ArrowRightIcon
+                  aria-hidden
+                  size={16}
+                />
+              </UiLink>
             </div>
           </DisclosureItem>
         </li>

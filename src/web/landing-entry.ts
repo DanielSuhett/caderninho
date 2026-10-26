@@ -1,7 +1,12 @@
-import { tryCatch } from "../shared";
+import { tryCatch } from "../shared/result";
 
 const reduced = matchMedia("(prefers-reduced-motion: reduce)");
-for (const id of ["mcp-flow", "landing-rule", "landing-performance"]) {
+for (const id of [
+  "mcp-flow",
+  "landing-rule",
+  "landing-performance",
+  "landing-faq",
+]) {
   const explanation = document.getElementById(id);
   if (!explanation) {
     continue;
@@ -12,17 +17,37 @@ for (const id of ["mcp-flow", "landing-rule", "landing-performance"]) {
         return;
       }
       load.disconnect();
-      const { data, error } = await tryCatch(() => import("./mcp-flow"));
-      // Optional enhancement: a failed chunk leaves the static explanation intact.
-      if (error) {
+      if (id === "landing-faq") {
+        const { data, error } = await tryCatch(
+          () => import("./landing-faq-client"),
+        );
+        if (!error) {
+          data.mountLandingFaq(explanation);
+        }
         return;
       }
-      if (id === "mcp-flow") {
+      if (id === "landing-performance") {
+        const { data, error } = await tryCatch(
+          () => import("./landing-performance-client"),
+        );
+        if (!error) {
+          data.mountLandingPerformance(explanation);
+        }
+        return;
+      }
+      if (id === "landing-rule") {
+        const { data, error } = await tryCatch(
+          () => import("./landing-rule-client"),
+        );
+        if (!error) {
+          data.mountLandingRule(explanation);
+        }
+        return;
+      }
+      const { data, error } = await tryCatch(() => import("./mcp-flow"));
+      // A failed optional enhancement leaves the static explanation intact.
+      if (!error) {
         data.mountMcpFlow(explanation);
-      } else if (id === "landing-performance") {
-        data.mountLandingPerformance(explanation);
-      } else {
-        data.mountLandingRule(explanation);
       }
     },
     { rootMargin: "240px" },
@@ -48,7 +73,7 @@ if (!reduced.matches) {
     { threshold: 0.05 },
   );
   for (const section of document.querySelectorAll(
-    "main > section:not(.hero) h2, .section-intro > p, .rule-stage, .freedom-list > div, .connection-guide > li, .cost-surface, .faq-list > details, .install-section",
+    "main > section:not(.hero) h2, .section-intro > p, .rule-stage, .freedom-list > div, .connection-guide > li, .cost-surface, .faq-item, .install-section",
   )) {
     reveal.observe(section);
   }

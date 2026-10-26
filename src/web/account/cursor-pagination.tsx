@@ -6,17 +6,11 @@ import { navigateWorkspace } from "./account-navigation";
 
 // The API has a forward cursor and a restart URL, not a total or a previous cursor.
 export function CursorPagination({
-  count,
   next,
   first,
-  noun = "registros",
-  singular = "registro",
 }: {
-  count: number;
   next: string | null;
   first: string | null;
-  noun?: string;
-  singular?: string;
 }) {
   const advance = useCallback(
     (page: number) => {
@@ -26,17 +20,11 @@ export function CursorPagination({
     },
     [next],
   );
-  if (!(count || first || next)) {
+  if (!(first || next)) {
     return null;
   }
-  const label = count === 1 ? singular : noun;
   return (
     <div className="pagination">
-      {count > 0 && (
-        <span>
-          {count} {label} nesta página
-        </span>
-      )}
       {!!first && <Link href={first}>Voltar ao início</Link>}
       {!!next && (
         <Pagination

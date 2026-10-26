@@ -140,6 +140,33 @@ export function allocatedCredit(
     : (BigInt(limit) - BigInt(available)).toString();
 }
 
+// Keep observed occupancy; a local limit changes only the estimated availability.
+export function cardCredit({
+  limit,
+  available,
+  localLimit,
+}: {
+  limit: string | null;
+  available: string | null;
+  localLimit?: string | null | undefined;
+}) {
+  const allocated = allocatedCredit(limit, available);
+  const edited = localLimit !== null && localLimit !== undefined;
+  let resolvedAvailable = available;
+  if (edited) {
+    resolvedAvailable =
+      allocated === null
+        ? null
+        : (BigInt(localLimit) - BigInt(allocated)).toString();
+  }
+  return {
+    allocatedCreditMinor: allocated,
+    availableCreditMinor: resolvedAvailable,
+    creditEstimated: edited,
+    creditLimitMinor: localLimit ?? limit,
+  };
+}
+
 export function isCardExpense({
   direction,
   categoryKind,

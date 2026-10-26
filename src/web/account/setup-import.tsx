@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef } from "react";
 import type { PortalResponse } from "../../contracts";
 import { UiButton, UiLink } from "../ui";
 import { AccountAvatar } from "./account-identity";
+import { workspaceHref } from "./account-navigation";
 import { importFailureMessage } from "./connection-journey";
 import { BankStatus, bankAppearance } from "./setup-banks";
 
@@ -99,7 +100,10 @@ export function SetupImport({
       aria-labelledby="import-heading"
       className="setup-import"
     >
-      <h2 id="import-heading">
+      <h2
+        className={failed ? undefined : "sr-only"}
+        id="import-heading"
+      >
         {failed ? "A importação precisa de atenção" : "Importando seus bancos"}
       </h2>
       {!!(active || busy) && (
@@ -179,27 +183,26 @@ export function SetupImport({
         })}
       </ul>
       <div className="draft-actions">
-        {!(active || busy) && (
+        {!(active || busy) && !!(retryIds.length || ids.length) && (
           <UiButton
             onClick={retry}
             type="button"
           >
-            {retryIds.length || ids.length
-              ? "Tentar novamente"
-              : "Atualizar progresso"}
+            Tentar novamente
           </UiButton>
         )}
         {!(active || busy) && failed && available && (
           <UiButton
             onClick={complete}
             type="button"
+            variant="primary"
           >
-            Continuar com dados disponíveis
+            Conectar assistente
           </UiButton>
         )}
         {available && (
           <UiLink
-            href="/account/transactions"
+            href={workspaceHref("/account/transactions")}
             variant="outline"
           >
             Consultar dados disponíveis

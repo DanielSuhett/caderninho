@@ -5,6 +5,7 @@ import { ClockCounterClockwiseIcon } from "@phosphor-icons/react";
 import type { ConnectionInfo } from "../../contracts";
 import { UiLink } from "../ui";
 import { type AccountAppearance, AccountAvatar } from "./account-identity";
+import { workspaceHref } from "./account-navigation";
 
 export function bankAppearance(connection: ConnectionInfo): AccountAppearance {
   const institution = Object.values(connection.accounts).find(
@@ -71,7 +72,7 @@ export function SetupBanks({ connections }: { connections: ConnectionInfo[] }) {
                 <UiLink
                   aria-label={`Ver histórico de ${appearance.name}`}
                   href={
-                    "/account/sync?" +
+                    workspaceHref("/account/sync?") +
                     new URLSearchParams({ connectionId: connection.id })
                   }
                   shape="square"

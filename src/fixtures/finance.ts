@@ -217,6 +217,7 @@ export const demoLedger = [0, 1, 2, 3, 4, 5]
       {
         accountId: "demo-card",
         amountMinor: "-14900",
+        billPayment: index < 3 ? "bank" : null,
         cardNumber: "4242",
         category: "tools",
         day: 12,

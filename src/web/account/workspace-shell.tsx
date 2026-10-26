@@ -9,6 +9,11 @@ import {
 } from "react";
 
 import { ThemeToggle } from "../theme-toggle";
+import { AvatarFilterRoute } from "./identity-filters";
+import {
+  SyncStatusContext,
+  SyncStatusIndicator,
+} from "./sync-status-indicator";
 
 function RouteNavigation({ route }: { route: string }) {
   const { setOpenMobile } = useSidebar();
@@ -38,33 +43,50 @@ export function WorkspaceFrame({
   navigation,
   children,
   footer,
+  brandHref,
+  updatedAt,
+  syncing = false,
+  failed = false,
+  unavailable = false,
+  demo = false,
 }: {
   route: string;
   navigation: ReactNode;
   children: ReactNode;
   footer?: string;
+  brandHref: string;
+  updatedAt?: string | null;
+  syncing?: boolean;
+  failed?: boolean;
+  unavailable?: boolean;
+  demo?: boolean;
 }) {
   return (
-    <Sidebar.Provider
-      className="workspace"
-      mobileBreakpoint={760}
+    <SyncStatusContext
+      value={{ demo, failed, syncing, unavailable, updatedAt }}
     >
-      <RouteNavigation route={route} />
-      {navigation}
-      <WorkspaceContent {...(footer && { footer })}>
-        {children}
-      </WorkspaceContent>
-    </Sidebar.Provider>
+      <Sidebar.Provider
+        className="workspace"
+        mobileBreakpoint={760}
+      >
+        <RouteNavigation route={route} />
+        {navigation}
+        <WorkspaceContent
+          brandHref={brandHref}
+          {...(footer && { footer })}
+        >
+          <AvatarFilterRoute value={route}>{children}</AvatarFilterRoute>
+        </WorkspaceContent>
+      </Sidebar.Provider>
+    </SyncStatusContext>
   );
 }
 export function SidebarFrame({
   brandHref,
   children,
-  footer,
 }: {
   brandHref: string;
   children: ReactNode;
-  footer: string;
 }) {
   const { state, isMobile, openMobile } = useSidebar();
   const restoreMenuTrigger = useCallback(() => {
@@ -105,21 +127,20 @@ export function SidebarFrame({
       onKeyDown={containMobileTab}
       {...(isMobile && { "aria-modal": openMobile, role: "dialog" })}
     >
-      <Sidebar.Header>
-        <a
-          aria-label="Caderninho, visão geral"
-          className="workspace-brand"
-          href={brandHref}
-        >
-          <NotebookIcon
-            aria-hidden
-            size={20}
-          />
-          {showLabels === true && <span>Caderninho</span>}
-        </a>
-      </Sidebar.Header>
-      <Sidebar.Content>{children}</Sidebar.Content>
-      <Sidebar.Footer className="workspace-sidebar-footer">
+      <Sidebar.Header className="workspace-sidebar-header">
+        {showLabels === true && (
+          <a
+            aria-label="Caderninho, visão geral"
+            className="workspace-brand"
+            href={brandHref}
+          >
+            <NotebookIcon
+              aria-hidden
+              size={20}
+            />
+            {showLabels === true && <span>Caderninho</span>}
+          </a>
+        )}
         {isMobile ? (
           <Sidebar.Close
             aria-label="Fechar navegação"
@@ -128,10 +149,15 @@ export function SidebarFrame({
         ) : (
           <Sidebar.Trigger aria-label="Alternar navegação" />
         )}
-        {showLabels === true && !!footer && (
-          <p className="sidebar-installation">{footer}</p>
+      </Sidebar.Header>
+      <Sidebar.Content>{children}</Sidebar.Content>
+      <Sidebar.Footer className="workspace-sidebar-footer">
+        {!isMobile && (
+          <>
+            <SyncStatusIndicator />
+            <ThemeToggle />
+          </>
         )}
-        {!isMobile && <ThemeToggle />}
       </Sidebar.Footer>
     </Sidebar>
   );
@@ -139,9 +165,11 @@ export function SidebarFrame({
 function WorkspaceContent({
   children,
   footer = "",
+  brandHref,
 }: {
   children: ReactNode;
   footer?: string;
+  brandHref: string;
 }) {
   const { isMobile, openMobile } = useSidebar();
   return (
@@ -155,16 +183,26 @@ function WorkspaceContent({
       >
         Ir para o conteúdo
       </a>
-      <header className="workspace-mobile-header">
-        <Sidebar.Trigger
-          aria-controls="workspace-navigation"
-          aria-expanded={openMobile}
-          aria-label="Abrir navegação"
-          id="workspace-menu-trigger"
-        />
-        <span>Caderninho</span>
-        <ThemeToggle />
-      </header>
+      {isMobile === true && (
+        <header className="workspace-mobile-header">
+          <Sidebar.Trigger
+            aria-controls="workspace-navigation"
+            aria-expanded={openMobile}
+            aria-label="Abrir navegação"
+            id="workspace-menu-trigger"
+          />
+          <a
+            className="workspace-brand"
+            href={brandHref}
+          >
+            Caderninho
+          </a>
+          <div className="workspace-header-actions">
+            <SyncStatusIndicator />
+            <ThemeToggle />
+          </div>
+        </header>
+      )}
       <main
         className="workspace-content"
         data-layout-grid={

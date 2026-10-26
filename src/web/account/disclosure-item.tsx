@@ -9,6 +9,7 @@ export function DisclosureItem({
   open,
   onOpenChange,
   defaultOpen,
+  leading,
 }: {
   summary: ReactNode;
   children: ReactNode;
@@ -16,7 +17,22 @@ export function DisclosureItem({
   open?: boolean;
   defaultOpen?: boolean;
   onOpenChange?: (open: boolean) => void;
+  leading?: ReactNode;
 }) {
+  const trigger = (
+    <Collapsible.DefaultTrigger className="disclosure-trigger text-base">
+      <span className="disclosure-label">{summary}</span>
+    </Collapsible.DefaultTrigger>
+  );
+  let heading = trigger;
+  if (leading) {
+    heading = (
+      <div className="disclosure-summary">
+        <div className="disclosure-leading">{leading}</div>
+        {trigger}
+      </div>
+    );
+  }
   return (
     <Collapsible.Root
       {...(defaultOpen !== undefined && { defaultOpen })}
@@ -24,15 +40,13 @@ export function DisclosureItem({
       {...(onOpenChange && { onOpenChange })}
       className={`disclosure-item ${className}`}
     >
-      <Collapsible.DefaultTrigger className="disclosure-trigger text-base">
-        <span className="disclosure-label">{summary}</span>
-      </Collapsible.DefaultTrigger>
-      <Collapsible.DefaultPanel
+      {heading}
+      <Collapsible.Panel
         className="disclosure-panel"
         keepMounted
       >
-        {children}
-      </Collapsible.DefaultPanel>
+        <div className="disclosure-content">{children}</div>
+      </Collapsible.Panel>
     </Collapsible.Root>
   );
 }

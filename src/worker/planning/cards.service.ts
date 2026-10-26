@@ -5,12 +5,13 @@ import type {
 } from "../../contracts";
 import {
   AccountType,
-  allocatedCredit,
   cardChargeStatus,
+  cardCredit,
   createCardActivity,
   isCardExpense,
   isCardInstallment,
   localDay,
+  matchesFinancialIdentity,
   monthDate,
   type PlanningTransaction,
   type TransactionDetails,
@@ -57,26 +58,34 @@ function selectedCards(
     found(selected.find((account) => account.id === input.accountId));
   }
   const details = new Map(snapshot.accountDetails.map((row) => [row.id, row]));
-  return selected.map((account) => {
-    const extra = details.get(account.id);
-    const limit = extra?.creditLimitMinor ?? null;
-    const available = extra?.availableCreditMinor ?? null;
-    return {
-      allocatedMinor: allocatedCredit(limit, available),
-      availableCreditMinor: available,
-      balanceObservedAt: account.balanceObservedAt,
-      cardNumber: extra?.cardNumber ?? null,
-      closeDate: extra?.closeDate ?? null,
-      creditLimitMinor: limit,
-      currency: account.currency,
-      dueDate: extra?.dueDate ?? null,
-      id: account.id,
-      identity: account.identity ?? null,
-      name: account.name,
-      personId: account.personId,
-      personName: account.personName,
-    };
-  });
+  return selected
+    .filter((account) => matchesFinancialIdentity(account.identity, input))
+    .map((account) => {
+      const extra = details.get(account.id);
+      const credit = cardCredit({
+        available: extra?.availableCreditMinor ?? null,
+        limit: extra?.creditLimitMinor ?? null,
+        localLimit: snapshot.state.accounts.find((row) => row.id === account.id)
+          ?.creditLimitMinor,
+      });
+      return {
+        allocatedMinor: credit.allocatedCreditMinor,
+        availableCreditMinor: credit.availableCreditMinor,
+        balanceObservedAt: account.balanceObservedAt,
+        cardNumber: extra?.cardNumber ?? null,
+        closeDate: extra?.closeDate ?? null,
+        creditEstimated: credit.creditEstimated,
+        creditLimitMinor: credit.creditLimitMinor,
+        currency: account.currency,
+        dueDate: extra?.dueDate ?? null,
+        id: account.id,
+        identity: account.identity ?? null,
+        manual: account.manual,
+        name: account.name,
+        personId: account.personId,
+        personName: account.personName,
+      };
+    });
 }
 
 export async function portalCards(

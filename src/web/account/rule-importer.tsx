@@ -1,5 +1,7 @@
 import { Banner } from "@cloudflare/kumo/components/banner";
+import { Link } from "@cloudflare/kumo/components/link";
 import { Select } from "@cloudflare/kumo/components/select";
+import { UploadSimpleIcon } from "@phosphor-icons/react";
 import {
   type ChangeEvent,
   useCallback,
@@ -41,6 +43,7 @@ export function RuleImporter({
   spaceId,
   close,
   saved,
+  open,
 }: {
   api: OrganizationApi;
   catalog: WorkspaceCatalog;
@@ -50,6 +53,7 @@ export function RuleImporter({
   spaceId: string;
   close: () => void;
   saved: () => void;
+  open: boolean;
 }) {
   const [pack, setPack] = useState<RuleImportPackage | null>(null);
   const [fileName, setFileName] = useState("");
@@ -63,6 +67,7 @@ export function RuleImporter({
   const inFlight = useRef<AbortController | null>(null);
   const receipt = useRef({ key: "", payload: "" });
   const fileInput = useRef<HTMLInputElement>(null);
+  const openFile = useCallback(() => fileInput.current?.click(), []);
   useEffect(() => () => inFlight.current?.abort(), []);
   const categoryIds = useMemo(
     () =>
@@ -230,7 +235,7 @@ export function RuleImporter({
       busy={busy === "save"}
       close={close}
       dirty={!!pack}
-      open
+      open={open}
       primaryAction={{
         children: label,
         disabled:
@@ -242,33 +247,40 @@ export function RuleImporter({
       title="Importar regras"
     >
       <div className="backoffice-form rule-import-review">
-        <p>
-          Grupo:{" "}
-          <strong>
-            {catalog.spaces.find((s) => s.id === spaceId)?.name ?? spaceId}
-          </strong>
+        <p className="muted">
+          {catalog.spaces.find((s) => s.id === spaceId)?.name ?? spaceId}
         </p>
         <p>
-          JSON com até 100 regras, 50 categorias e 64 KiB. A importação não
-          reclassifica o histórico.
+          Importe regras para as próximas importações. Seu histórico mantém as
+          categorias atuais.
         </p>
-        <label className="rule-import-file">
-          Arquivo JSON de regras
+        <div className="rule-import-file">
           <input
             accept=".json,application/json"
             aria-label="Arquivo JSON de regras"
             disabled={!!busy}
+            hidden
             onChange={chooseFile}
             ref={fileInput}
             type="file"
           />
-        </label>
-        <a
+          <UiButton
+            disabled={!!busy}
+            onClick={openFile}
+            type="button"
+            variant="outline"
+          >
+            <UploadSimpleIcon size={18} />
+            Escolher arquivo JSON
+          </UiButton>
+          <p className="muted">Até 100 regras, 50 categorias e 64 KiB.</p>
+        </div>
+        <Link
           download
           href="/rule-packs/brasil.json"
         >
           Baixar JSON Brasil de exemplo
-        </a>
+        </Link>
         {!!message && (
           <Banner
             description={message}
@@ -279,8 +291,11 @@ export function RuleImporter({
         {!!pack && (
           <>
             <p>
-              {fileName}: {pack.rules.length} regras e {pack.categories.length}{" "}
-              categorias. Pacote {pack.id}, versão {pack.version}.
+              {fileName}: {pack.rules.length}{" "}
+              {pack.rules.length === 1 ? "regra" : "regras"} e{" "}
+              {pack.categories.length}{" "}
+              {pack.categories.length === 1 ? "categoria" : "categorias"}.
+              Pacote {pack.id}, versão {pack.version}.
             </p>
             <UiButton
               disabled={busy === "save"}
@@ -298,9 +313,17 @@ export function RuleImporter({
           >
             <h3>Prévia da importação</h3>
             <p>
-              {preview.data.rulesCreated} regras novas;{" "}
-              {preview.data.rulesExisting} já existentes;{" "}
-              {preview.data.categoriesCreated} categorias novas.
+              {preview.data.rulesCreated}{" "}
+              {preview.data.rulesCreated === 1 ? "regra nova" : "regras novas"};{" "}
+              {preview.data.rulesExisting}{" "}
+              {preview.data.rulesExisting === 1
+                ? "já existente"
+                : "já existentes"}
+              ; {preview.data.categoriesCreated}{" "}
+              {preview.data.categoriesCreated === 1
+                ? "categoria nova"
+                : "categorias novas"}
+              .
             </p>
             {!(preview.data.rulesCreated || blocked) && (
               <p>Todas as regras já existem. Nenhuma alteração será gravada.</p>
@@ -405,9 +428,10 @@ function ImportCategory({
       </p>
       {category.status !== "unused" && (
         <Select
+          className="w-full min-w-0"
           disabled={busy}
           items={[
-            { label: "Usar correspondência pelo nome", value: "" },
+            { label: "Pelo nome", value: "" },
             ...catalog.categories
               .filter((c) => !c.hidden && c.kind === category.kind)
               .map((c) => ({ label: c.name, value: c.id })),

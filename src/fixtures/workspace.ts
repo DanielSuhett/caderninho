@@ -6,10 +6,17 @@ import type {
 import {
   AccountType,
   ImportPhase,
+  RunStatus,
   SpaceType,
   TransactionDirection,
 } from "../domain";
-import { demoCategories, demoCategoryGroups, demoPeople } from "./finance";
+import {
+  demoAccounts,
+  demoCategories,
+  demoCategoryGroups,
+  demoPeople,
+  demoReferenceDay,
+} from "./finance";
 
 export function connectionFixture(
   input: Partial<ConnectionInfo> = {},
@@ -92,8 +99,44 @@ export function workspaceFixture(): WorkspaceCatalog {
 }
 export function demoPortalFixture() {
   return portalFixture({
+    connections: demoPeople.map((person) =>
+      connectionFixture({
+        accounts: Object.fromEntries(
+          demoAccounts
+            .filter((account) => account.personId === person.id)
+            .map((account) => [
+              account.id,
+              {
+                balanceMinor: account.balanceMinor,
+                balanceObservedAt: account.balanceObservedAt ?? null,
+                currency: account.currency,
+                ...(account.identity && { identity: account.identity }),
+                name: account.name,
+                type: account.type,
+              },
+            ]),
+        ),
+        hasTransactions: true,
+        id: `demo-connection:${person.id}`,
+        importCheckpoint: null,
+        importStatus: RunStatus.succeeded,
+        lastSuccessAt: `${demoReferenceDay}T12:00:00.000Z`,
+        partial: false,
+        personId: person.id,
+        personName: person.name,
+        profileId: `demo-profile:${person.id}`,
+        profileName: `Meu Pluggy · ${person.name}`,
+      }),
+    ),
     origin: "https://demo.example.test",
-    people: demoPeople,
-    profiles: [],
+    people: structuredClone(demoPeople),
+    profiles: demoPeople.map((person) => ({
+      configured: true,
+      connectionCount: 1,
+      enabled: true,
+      id: `demo-profile:${person.id}`,
+      name: `Meu Pluggy · ${person.name}`,
+      personId: person.id,
+    })),
   });
 }

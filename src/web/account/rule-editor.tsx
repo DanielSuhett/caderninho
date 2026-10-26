@@ -47,6 +47,13 @@ import { RulePreview } from "./rule-preview";
 
 type Rule = WorkspaceCatalog["rules"][number];
 type FieldEvent = ChangeEvent<HTMLInputElement>;
+interface TransactionRuleSeed {
+  accountId: string;
+  category: string | null;
+  currency: string;
+  description: string;
+  direction: string;
+}
 function initialLegacyText(rule?: Rule) {
   return rule?.filter ? rule.text : "";
 }
@@ -58,6 +65,23 @@ function initialCategory(rule: Rule | undefined, catalog: WorkspaceCatalog) {
     ""
   );
 }
+function initialRuleFields(
+  rule: Rule | undefined,
+  catalog: WorkspaceCatalog,
+  seed: TransactionRuleSeed | undefined,
+) {
+  return {
+    category: seed ? (seed.category ?? "") : initialCategory(rule, catalog),
+    currency: rule?.filter?.currency ?? seed?.currency ?? "",
+    legacyAccount: rule?.accountId ?? seed?.accountId ?? "",
+    legacyDirection: rule?.direction ?? seed?.direction ?? "",
+    legacyText: initialLegacyText(rule),
+    name:
+      rule?.name ??
+      (seed ? `Classificar ${seed.description}`.slice(0, 240) : ""),
+    priority: String(rule?.priority ?? 100),
+  };
+}
 export function RuleEditor({
   open,
   api,
@@ -66,6 +90,7 @@ export function RuleEditor({
   accounts,
   spaceId,
   rule,
+  seed,
   close,
   saved,
 }: {
@@ -76,21 +101,16 @@ export function RuleEditor({
   accounts: { id: string; name: string; personName: string }[];
   spaceId: string;
   rule?: Rule;
+  seed?: TransactionRuleSeed | undefined;
   close: () => void;
   saved: () => void;
 }) {
-  const [fields, setFields] = useState({
-    category: initialCategory(rule, catalog),
-    currency: rule?.filter?.currency ?? "",
-    legacyAccount: rule?.accountId ?? "",
-    legacyDirection: rule?.direction ?? "",
-    legacyText: initialLegacyText(rule),
-    name: rule?.name ?? "",
-    priority: String(rule?.priority ?? 100),
-  });
+  const [fields, setFields] = useState(() =>
+    initialRuleFields(rule, catalog, seed),
+  );
   const [enabled, setEnabled] = useState(rule?.enabled ?? true);
   const [alternatives, setAlternatives] = useState(() =>
-    initialAlternatives(rule),
+    initialAlternatives(rule, seed?.description),
   );
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -340,7 +360,7 @@ export function RuleEditor({
       open={open}
       primaryAction={{
         children: submitLabel,
-        disabled: !draft.success,
+        disabled: !(draft.success && fields.category),
         form: formId,
         type: "submit",
       }}
@@ -378,6 +398,8 @@ export function RuleEditor({
               label="Categoria"
               name="category"
               onValueChange={onCategory}
+              placeholder="Escolha uma categoria"
+              required
               value={fields.category}
             />
             <Input
@@ -447,6 +469,7 @@ export function RuleEditor({
             value={fields.currency}
           />
           {!!(
+            seed ||
             rule?.accountId ||
             rule?.direction ||
             (rule?.filter && rule.text)

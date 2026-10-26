@@ -14,16 +14,17 @@ import {
 import { type FormEvent, type MouseEvent, useCallback, useState } from "react";
 
 import type { HouseholdCommand, PortalResponse } from "../../contracts";
-import { UiButton, UiLink } from "../ui";
+import { UiButton, UiIconButton, UiLink } from "../ui";
 import type { ManagementOutcome } from "./account-feedback";
+import { AccountIdentity } from "./account-identity";
+import { workspaceHref } from "./account-navigation";
 import { BackofficeDialog } from "./backoffice-dialog";
 import type { ConnectionActivity } from "./connection-journey";
 import { DisclosureItem } from "./disclosure-item";
 import { HouseholdPanel } from "./household-view";
 import { PersonEditor } from "./person-editor";
 import { PersonIdentity } from "./person-identity";
-import { SetupBanks } from "./setup-banks";
-import { SetupIconButton } from "./setup-icon-button";
+import { bankAppearance, SetupBanks } from "./setup-banks";
 import { SetupImport } from "./setup-import";
 import { SetupStep, usePeopleSetup } from "./use-people-setup";
 import { WorkspaceHeading } from "./workspace-ui";
@@ -189,17 +190,10 @@ export function DashboardView(props: DashboardProps) {
           <PersonEditor
             busy={busy}
             changed={model.markDirty}
+            onCancel={model.cancelForm}
             onSubmit={model.savePerson}
             person={model.person ?? { id: "new", name: "" }}
           />
-          <UiButton
-            disabled={busy}
-            onClick={model.cancelForm}
-            type="button"
-            variant="outline"
-          >
-            Cancelar
-          </UiButton>
         </section>
       )}
       {model.step === SetupStep.credentials && (
@@ -276,10 +270,11 @@ export function DashboardView(props: DashboardProps) {
       {model.step === SetupStep.assistant && (
         <AssistantSetup snapshot={snapshot} />
       )}
-      {model.step !== SetupStep.importing && (
+      {model.step === SetupStep.people && (
         <UiLink
-          href="/account/transactions"
-          variant="outline"
+          className="setup-defer"
+          href={workspaceHref("/account/transactions")}
+          variant="ghost"
         >
           Continuar depois
         </UiLink>
@@ -335,7 +330,7 @@ function AssistantSetup({ snapshot }: { snapshot: PortalResponse }) {
         esta instalação.
       </p>
       <UiLink
-        href="/account"
+        href={workspaceHref("/account")}
         variant="primary"
       >
         Abrir meu painel
@@ -398,13 +393,13 @@ function PeopleBanks({
             ))
           )}
         </fieldset>
-        <SetupIconButton
+        <UiIconButton
           disabled={busy || !model.person}
           label="Editar nome e foto"
           onClick={model.editPerson}
         >
           <PencilSimpleIcon size={20} />
-        </SetupIconButton>
+        </UiIconButton>
       </div>
       {help === true && (
         <p>
@@ -434,7 +429,7 @@ function PeopleBanks({
           {snapshot.connections.map((connection) => (
             <DisclosureItem
               key={connection.id}
-              summary={<>Ajustar conexão de {connection.personName}</>}
+              summary={<AccountIdentity account={bankAppearance(connection)} />}
             >
               <UiButton
                 data-profile={connection.profileId ?? "default"}
@@ -506,45 +501,45 @@ function SetupActions({
       aria-label="Ações de pessoas e bancos"
       className="setup-actions"
     >
-      <SetupIconButton
+      <UiIconButton
         disabled={busy}
         label="Adicionar banco"
         onClick={model.addBank}
       >
         <PlusIcon size={20} />
-      </SetupIconButton>
+      </UiIconButton>
       {!!snapshot.connections.length && (
-        <SetupIconButton
+        <UiIconButton
           disabled={busy}
           label="Adicionar outra pessoa"
           onClick={model.addPerson}
         >
           <UserPlusIcon size={20} />
-        </SetupIconButton>
+        </UiIconButton>
       )}
-      <SetupIconButton
+      <UiIconButton
         aria-expanded={help}
         label="Como conectar bancos"
         onClick={toggleHelp}
       >
         <QuestionIcon size={20} />
-      </SetupIconButton>
-      <SetupIconButton
+      </UiIconButton>
+      <UiIconButton
         aria-expanded={settings}
         label="Ajustes de pessoas e credenciais"
         onClick={toggleSettings}
       >
         <GearIcon size={20} />
-      </SetupIconButton>
+      </UiIconButton>
       {!!snapshot.connections.length && (
-        <SetupIconButton
+        <UiIconButton
           disabled={busy}
           label="Concluir pessoas e importar"
           onClick={model.finishPeople}
           variant="primary"
         >
           <ArrowRightIcon size={20} />
-        </SetupIconButton>
+        </UiIconButton>
       )}
     </fieldset>
   );

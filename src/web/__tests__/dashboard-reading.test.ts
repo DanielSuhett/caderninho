@@ -92,7 +92,7 @@ test("the overview preserves zero card balances and their meaning without repeat
   const html = renderBalances(snapshot);
   assert.ok(html.includes("Cartão exemplo"));
   assert.ok(html.includes("0,00 BRL"));
-  assert.ok(html.includes("Cartão · não é dinheiro disponível"));
+  assert.equal(html.includes("não é dinheiro disponível"), false);
   assert.equal(html.includes("22/10/2026"), false);
   assert.equal(html.includes("Importação concluída"), false);
   assert.ok(

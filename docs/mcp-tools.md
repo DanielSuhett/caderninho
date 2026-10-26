@@ -98,7 +98,7 @@ Gerado por `npm run docs:mcp` a partir do registro de ferramentas.
 | `unlink_goal_asset` | escrita local | — | Remover vínculo de patrimônio. |
 | `unlink_goal_transaction` | escrita local | — | Desvincular transação e contribuição associada sem excluir histórico. |
 | `unmark_bill_paid` | escrita local | — | Alterar apenas confirmação manual da fatura; nunca enviar pagamento ao banco. |
-| `update_account_settings` | escrita local | — | Editar apresentação; limite e ciclo somente para cartões manuais. |
+| `update_account_settings` | escrita local | — | Editar apresentação e definir limite local de cartão; null restaura o limite importado. Não altera o banco. Ciclo somente para cartões manuais. |
 | `update_card` | escrita local | — | Renomear ou ocultar cartão adicional. |
 | `update_category` | escrita local | — | Configurar ícone, cor e grupo de qualquer categoria. Nomes de categorias fixas são protegidos. |
 | `update_category_group` | escrita local | — | Editar nome, ícone ou cor de um agrupador de categorias. |

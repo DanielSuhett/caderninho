@@ -12,6 +12,8 @@ import {
 
 import type { Person } from "../../domain";
 import { UiButton } from "../ui";
+import { type AvatarPart, AvatarStack } from "./avatar-stack";
+import { AvatarFilterRoute, avatarFilterHref } from "./identity-filters";
 
 export const PersonDirectory = createContext<Person[]>([]);
 
@@ -111,27 +113,38 @@ export function PersonStack({
   people: Person[];
   personId?: string;
 }) {
+  const route = useContext(AvatarFilterRoute);
   const selected = personId
     ? people.filter((person) => person.id === personId)
     : people;
-  if (!selected.length) {
+  if (people.length < 2 || !selected.length) {
     return null;
   }
-  return (
-    <span
-      aria-hidden="true"
-      className="person-stack"
-    >
-      {selected.slice(0, 3).map((person) => (
-        <PersonAvatar
-          key={person.id}
-          person={person}
-        />
-      ))}
-      {selected.length > 3 && (
+  const items: AvatarPart[] = selected.slice(0, 3).map((person) => {
+    const target = route ? avatarFilterHref(route, "person", person.id) : null;
+    return {
+      content: <PersonAvatar person={person} />,
+      key: person.id,
+      ...target,
+      label: `${target?.selected ? "Remover filtro de" : "Filtrar por"} ${person.name}`,
+    };
+  });
+  if (selected.length > 3) {
+    items.push({
+      content: (
         <span className="person-stack-count">+{selected.length - 3}</span>
-      )}
-    </span>
+      ),
+      key: "more",
+      label: `Mais ${selected.length - 3} pessoas`,
+    });
+  }
+  return (
+    <AvatarStack
+      className="person-stack"
+      decorative={!route}
+      items={items}
+      label="Filtrar por pessoa"
+    />
   );
 }
 

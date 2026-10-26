@@ -8,8 +8,6 @@ import {
 const paths = new Set([
   "/account",
   "/account/cards",
-  "/demo/cards",
-  "/demo/cards/",
   "/account/audit",
   "/account/transactions",
   "/account/investments",
@@ -18,17 +16,36 @@ const paths = new Set([
   "/account/sync",
   "/account/connections",
   "/account/design-system",
-  "/demo",
-  "/demo/",
-  "/demo/transactions",
-  "/demo/transactions/",
-  "/demo/investments",
-  "/demo/investments/",
-  "/demo/rules",
-  "/demo/rules/",
-  "/demo/groups",
-  "/demo/groups/",
 ]);
+const trailingSlash = /\/$/;
+
+export function workspaceBasePath(
+  pathname = typeof location === "undefined" ? "/account" : location.pathname,
+) {
+  return pathname === "/demo" || pathname.startsWith("/demo/")
+    ? "/demo"
+    : "/account";
+}
+
+export function accountPath(pathname: string) {
+  const path = pathname.replace(trailingSlash, "");
+  return workspaceBasePath(path) === "/demo"
+    ? `/account${path.slice("/demo".length)}`
+    : path;
+}
+
+export function workspaceHref(path: string, pathname?: string) {
+  if (
+    !(
+      path === "/account" ||
+      path.startsWith("/account/") ||
+      path.startsWith("/account?")
+    )
+  ) {
+    return path;
+  }
+  return workspaceBasePath(pathname) + path.slice("/account".length);
+}
 const navigationEvent = "caderninho:navigate";
 let navigationGuard: (() => boolean) | null = null;
 export function guardWorkspaceNavigation(guard: () => boolean) {
@@ -43,9 +60,9 @@ export function guardWorkspaceNavigation(guard: () => boolean) {
 export function isWorkspaceUrl(destination: URL, current: URL) {
   return (
     destination.origin === current.origin &&
-    destination.pathname.startsWith("/demo") ===
-      current.pathname.startsWith("/demo") &&
-    paths.has(destination.pathname) &&
+    workspaceBasePath(destination.pathname) ===
+      workspaceBasePath(current.pathname) &&
+    paths.has(accountPath(destination.pathname)) &&
     !destination.hash
   );
 }
