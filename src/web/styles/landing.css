@@ -39,7 +39,7 @@
   text-decoration: none;
 }
 .landing-header nav {
-  font-size: 14px;
+  font-size: 16px;
 }
 .landing-header nav > a {
   display: inline-flex;
@@ -1022,9 +1022,6 @@ summary {
   .landing-header nav {
     gap: 16px;
   }
-  .landing-header .nav-secondary {
-    display: none;
-  }
   .network-heading {
     flex-direction: column;
     gap: 8px;
@@ -1058,7 +1055,10 @@ summary {
     padding-inline: 16px;
   }
   .landing-header {
+    flex-wrap: wrap;
+    gap: 8px 24px;
     min-height: 72px;
+    padding-block: 12px;
   }
   .landing-header nav {
     gap: 12px;
@@ -1196,12 +1196,6 @@ summary {
 @media (max-width: 360px) {
   .hero h1 {
     font-size: 40px;
-  }
-  .landing-header nav {
-    gap: 8px;
-  }
-  .landing-header .nav-entry {
-    display: none;
   }
 }
 @media (prefers-reduced-motion: no-preference) {

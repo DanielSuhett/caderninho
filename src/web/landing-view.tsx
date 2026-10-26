@@ -102,35 +102,10 @@ export function landingPage({
             Caderninho
           </a>
           <nav aria-label="Navegação principal">
-            <a href="#conectar">Conectar IA</a>
-            <a
-              className="nav-secondary"
-              href="#regras"
-            >
-              Regras
-            </a>
-            <a
-              className="nav-secondary"
-              href="#free-tier"
-            >
-              Custos
-            </a>
+            <a href="https://docs.usecaderninho.com/">Documentação</a>
             <a href="/demo?month=2026-10">Demo</a>
-            <a
-              className="nav-secondary"
-              href="#desempenho"
-            >
-              Performance
-            </a>
             <ThemeToggle />
-            {!publicSite && (
-              <a
-                className="nav-entry"
-                href="/account"
-              >
-                Entrar
-              </a>
-            )}
+            {!publicSite && <a href="/account">Entrar</a>}
           </nav>
         </header>
         <main id="conteudo">
