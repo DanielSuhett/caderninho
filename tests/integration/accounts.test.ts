@@ -169,7 +169,6 @@ test("global Pluggy account IDs select connections and BANK totals without repea
       "accountId",
       "amountMinor",
       "category",
-      "classification",
       "currency",
       "date",
       "description",

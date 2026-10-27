@@ -142,9 +142,9 @@ carregada sob demanda. Grupos/valores/options do Chart conservam referência at�
 os dados ou a moeda mudarem. A demo mantém o shell ao navegar por GET.
 O helper puro da landing importa shared/result diretamente, sem carregar HTTP.
 
-Gráficos compartilham `chart-tooltip.ts`: HTML com superfície opaca, texto e
-borda dos tokens, resposta imediata e contenção no próprio gráfico. `ChartViewport`
-reserva altura e monta o canvas uma vez, a até 160 px da área visível; legenda e
+Gráficos compartilham `svg-chart.tsx`: SVG leve, tooltip HTML com superfície
+opaca, texto e borda dos tokens, resposta imediata e contenção no próprio
+gráfico. `ChartViewport` reserva altura e monta o gráfico uma vez, a até 160 px da área visível; legenda e
 tabela permanecem disponíveis. Não carregar o editor de regras/transações ao
 abrir Investimentos na demo. As ilhas MCP, regra, performance e FAQ da landing
 têm entradas separadas e conservam o fallback HTML se uma melhoria falhar.
@@ -180,10 +180,10 @@ dinheiro disponível. Parcelas usam datas e metadados estruturados da origem;
 Importação mostra fase/conta reais e segue consultável quando parcial. Não há
 progresso global com denominador conhecido no contrato Pluggy atual.
 A visão geral usa os agregados existentes `get_overview` e `generate_chart`,
-com período completo por moeda. Chart nativo Kumo com ECharts 6.1 carrega sob demanda;
-tabela alternativa preserva valores exatos e continua disponível quando o chunk
-falha. O namespace de echarts/core é importado dinamicamente com LineChart, Grid,
-Tooltip, Aria e CanvasRenderer; evite namespace import estático. Categoria usa
+com período completo por moeda. Gráficos são SVG próprios e leves
+(`account/svg-chart.tsx`), carregados sob demanda; tabela alternativa preserva
+valores exatos e continua disponível quando o chunk falha. Tooltip responde a
+ponteiro e setas do teclado. Categoria usa
 Meter relativo com texto explícito, sem sugerir cota.
 [Políticas dos agregados](frontend-workspace.md#agregação-e-apresentação).
 

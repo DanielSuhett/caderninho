@@ -1,6 +1,5 @@
-import { z } from "zod/v4";
-
-// Initialize CSP-safe validation before constructing any application schemas.
-z.config({ jitless: true });
 const { mountAccount } = await import("./mount-account");
 mountAccount();
+
+// Module scope for top-level await; the entry has no static imports.
+export {};

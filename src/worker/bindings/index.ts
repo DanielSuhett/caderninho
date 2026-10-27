@@ -1,7 +1,5 @@
 import type { OAuthHelpers } from "@cloudflare/workers-oauth-provider";
 
-import type { ClefBinding } from "../sync/entity";
-
 export interface DurableInstance {
   id: string;
   status: () => Promise<{ status: string }>;
@@ -22,10 +20,8 @@ export interface RuleWorkflow {
 export interface Bindings {
   ADMIN_ACCESS_HASH?: string;
   ADMIN_PASSWORD?: string;
-  AI?: ClefBinding;
   ASSETS?: Cloudflare.Env["ASSETS"];
   CF_VERSION_METADATA: Cloudflare.Env["CF_VERSION_METADATA"];
-  CLEF_ENABLED?: string;
   DB: Cloudflare.Env["DB"];
   FINANCE: DurableWorkflow;
   LOGIN_LIMITER: {

@@ -8,6 +8,25 @@ import { landingPage } from "./src/web/landing-view";
 import { notFoundPage } from "./src/web/not-found-view";
 import { accountPage } from "./src/web/portal-view";
 
+const domainSchema = /\/src\/domain\/[^/]+\.schema\.ts$/;
+
+const phosphorDefinition = /\/@phosphor-icons\/react\/dist\/defs\/\w+\.es\.js$/;
+const unusedIconWeight =
+  /^ {2}\[\n {4}"(?:duotone|light|thin)",\n[\s\S]*?\n {2}\],?$\n?/gm;
+
+// Phosphor ships six weights per icon. The product and Kumo render only
+// regular, bold and fill, so the other paths never reach the browser.
+function phosphorWeights(): Plugin {
+  return {
+    name: "phosphor-weights",
+    transform(code, id) {
+      if (phosphorDefinition.test(id)) {
+        return code.replace(unusedIconWeight, "");
+      }
+    },
+  };
+}
+
 function copyPortalAssets(): Plugin {
   return {
     async closeBundle() {
@@ -75,6 +94,7 @@ function copyPortalAssets(): Plugin {
         [
           "demo.js",
           "landing.js",
+          "preload-helper.js",
           "account.css",
           "social-card.png",
           "social-card-open-source-v3.png",
@@ -110,10 +130,11 @@ function copyPortalAssets(): Plugin {
               new URL(name, destination),
             ),
           ),
+          // Versioned subsets: rename the file whenever its glyphs change.
           ...[
-            "InterVariable.woff2",
+            "Inter-4.001-latin.woff2",
             "Inter-LICENSE.txt",
-            "SourceSerif4Variable-Roman.woff2",
+            "SourceSerif4-4.005-latin-500.woff2",
             "SourceSerif4-LICENSE.md",
           ].map((name) =>
             copyFile(
@@ -125,7 +146,7 @@ function copyPortalAssets(): Plugin {
       );
       await writeFile(
         new URL("_headers", output),
-        `/*\n  Referrer-Policy: same-origin\n  X-Content-Type-Options: nosniff\n  Content-Security-Policy: default-src 'none'; font-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://cdn.pluggy.ai/assets/connector-icons/; frame-ancestors 'none'; base-uri 'none'; form-action 'self'\n\n/chunks/*\n  Cache-Control: public, max-age=31536000, immutable\n`,
+        `/*\n  Referrer-Policy: same-origin\n  X-Content-Type-Options: nosniff\n  Content-Security-Policy: default-src 'none'; font-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://cdn.pluggy.ai/assets/connector-icons/; frame-ancestors 'none'; base-uri 'none'; form-action 'self'\n\n/chunks/*\n  Cache-Control: public, max-age=31536000, immutable\n\n/fonts/*.woff2\n  Cache-Control: public, max-age=31536000, immutable\n`,
       );
       await Promise.all(
         ["kumo.css", "_headers"].map((name) =>
@@ -169,19 +190,34 @@ export default defineConfig({
           names.some((name) => name.endsWith(".css"))
             ? "account.css"
             : "[name][extname]",
-        chunkFileNames: "chunks/[name]-[hash].js",
-        entryFileNames: "[name].js",
-        manualChunks: (id) => {
-          if (id.includes("/node_modules/zod/")) {
-            return "validation";
-          }
-          if (id.endsWith("/src/shared/result.ts")) {
-            return "result";
-          }
+        // Entries import the helper statically; a stable root name lets HTML
+        // modulepreload it instead of adding a round trip after each entry.
+        chunkFileNames: ({ name }) =>
+          name === "preload-helper"
+            ? "preload-helper.js"
+            : "chunks/[name]-[hash].js",
+        codeSplitting: {
+          groups: [
+            // Zod's config is tiny; the validator loads only with schemas.
+            {
+              name: "validation-config",
+              priority: 3,
+              test: /\/node_modules\/zod\/v4\/core\/(core|util)\.js$|\/src\/web\/validation-config\.ts$/,
+            },
+            { name: "validation", priority: 2, test: /\/node_modules\/zod\// },
+            { name: "result", priority: 1, test: /\/src\/shared\/result\.ts$/ },
+          ],
         },
+        entryFileNames: "[name].js",
+      },
+      // Contracts and domain schemas only construct Zod objects at load time.
+      // Pages that never parse an input should not download the validator.
+      treeshake: {
+        moduleSideEffects: (id) =>
+          !(id.includes("/src/contracts/") || domainSchema.test(id)),
       },
     },
     target: "es2022",
   },
-  plugins: [copyPortalAssets()],
+  plugins: [phosphorWeights(), copyPortalAssets()],
 });

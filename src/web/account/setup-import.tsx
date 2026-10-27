@@ -135,7 +135,6 @@ export function SetupImport({
           const phaseLabels = {
             accounts: "Identificando contas",
             bills: "Importando faturas",
-            classification: "Classificando transações",
             finish: "Concluindo",
             investments: "Importando investimentos",
             loans: "Importando empréstimos",

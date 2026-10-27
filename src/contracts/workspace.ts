@@ -9,7 +9,6 @@ import {
   RunStatus,
   SpaceType,
   SpendingGroupBy,
-  TransactionClassificationSchema,
   TransactionDirection,
   TransactionIdentificationSchema,
   TransactionStatus,
@@ -140,7 +139,6 @@ const TransactionRecordSchema = z.object({
   accountId: id,
   amountMinor: minor,
   category: z.string().nullable(),
-  classification: TransactionClassificationSchema.nullish(),
   currency: z.string(),
   date: z.string(),
   description: z.string(),
@@ -199,16 +197,6 @@ export type PortalQueryResults = {
     (typeof portalQueryResponses)[Tool]
   >;
 };
-const queryValidators: {
-  [Tool in keyof PortalQueryResults]: z.ZodType<PortalQueryResults[Tool]>;
-} = portalQueryResponses;
-export function parsePortalQueryResult<Tool extends keyof PortalQueryResults>(
-  tool: Tool,
-  value: unknown,
-): PortalQueryResults[Tool] {
-  return queryValidators[tool].parse(value);
-}
-
 export const SyncHistorySelectionSchema = z
   .object({
     connectionId: id.optional(),

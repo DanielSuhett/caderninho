@@ -7,22 +7,12 @@ import {
   RunStatus,
 } from "../domain";
 import { HouseholdCatalogSchema } from "./household";
-import type { AccountConnectToken, PortalResponse } from "./portal.types";
-export const AccountFailureCodeSchema = z.enum([
-  "APPLICATION_CHANGE_REQUIRES_NEW_PROFILE",
-  "CREDENTIALS_REQUIRED",
-  "NOT_FOUND",
-  "PROFILE_DISABLED",
-  "PROFILE_EXISTS",
-  "PROFILE_OWNER_IMMUTABLE",
-  "SOURCE_IDENTITY_MISMATCH",
-  "UPSTREAM_AUTH",
-  "UPSTREAM_FORBIDDEN",
-  "UPSTREAM_RATE_LIMIT",
-  "UPSTREAM_TIMEOUT",
-  "UPSTREAM_UNAVAILABLE",
-]);
-export type AccountFailureCode = z.infer<typeof AccountFailureCodeSchema>;
+import {
+  type AccountConnectToken,
+  AccountFailureCode,
+  type PortalResponse,
+} from "./portal.types";
+export const AccountFailureCodeSchema = z.enum(AccountFailureCode);
 export const PortalResponseSchema = z.object({
   ...HouseholdCatalogSchema.shape,
   configured: z.boolean(),
@@ -52,7 +42,6 @@ export const PortalResponseSchema = z.object({
             ImportPhase.investments,
             ImportPhase.loans,
             ImportPhase.bills,
-            ImportPhase.classification,
             ImportPhase.finish,
           ]),
         })

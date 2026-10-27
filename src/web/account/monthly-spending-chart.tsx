@@ -1,30 +1,11 @@
-import { Chart, ChartPalette } from "@cloudflare/kumo/components/chart";
-import { LineChart } from "echarts/charts";
-import {
-  AriaComponent,
-  GridComponent,
-  TooltipComponent,
-} from "echarts/components";
-import { CanvasRenderer } from "echarts/renderers";
 import { useCallback, useMemo, useState } from "react";
 
 import type { FinancialSummary } from "../../contracts";
-import { ChartType } from "../../domain";
 import { formatBalance } from "../money";
-import { useTheme } from "../use-theme";
-import { chartTooltip } from "./chart-tooltip";
 import { monthLabel } from "./dashboard-period";
 import { safeChartValues } from "./financial-presentation";
 import { MonthSlider } from "./month-slider";
-
-const echarts = await import("echarts/core");
-echarts.use([
-  LineChart,
-  GridComponent,
-  TooltipComponent,
-  AriaComponent,
-  CanvasRenderer,
-]);
+import { attentionColor, LineChart } from "./svg-chart";
 
 export function MonthlySpendingChart({
   groups,
@@ -47,77 +28,13 @@ export function MonthlySpendingChart({
   const values = useMemo(() => safeChartValues(visibleGroups), [visibleGroups]);
   const moveWindow = useCallback((month: string) => setEndMonth(month), []);
   const windowLabel = `${monthLabel(visibleGroups[0]?.group ?? endMonth)} — ${monthLabel(visibleGroups.at(-1)?.group ?? endMonth)}`;
-  const dark = useTheme() === "dark";
-  const expenseColor = ChartPalette.semantic("Attention", dark);
-  const options = useMemo(
-    () =>
-      ({
-        animation: false,
-        aria: {
-          description: `Despesas classificadas por mês, em ${currency}. Valores exatos disponíveis na tabela abaixo.`,
-          enabled: true,
-        },
-        backgroundColor: "transparent",
-        grid: { bottom: 32, containLabel: false, left: 70, right: 12, top: 24 },
-        series: [
-          {
-            areaStyle: { color: expenseColor, opacity: 0.04 },
-            clip: false,
-            connectNulls: false,
-            data: values ?? [],
-            itemStyle: { color: expenseColor },
-            lineStyle: { color: expenseColor, width: 2 },
-            name: `Despesas · ${currency}`,
-            symbol: "circle",
-            symbolSize: 7,
-            type: ChartType.line,
-          },
-        ],
-        textStyle: { fontFamily: "Inter, sans-serif", fontSize: 14 },
-        tooltip: {
-          ...chartTooltip,
-          trigger: "axis",
-          valueFormatter: (value: unknown) =>
-            typeof value === "number"
-              ? formatBalance(Math.trunc(value).toString(), currency)
-              : "Valor indisponível",
-        },
-        xAxis: {
-          axisLabel: {
-            color: ChartPalette.text("primary", dark),
-            fontSize: 14,
-            formatter: (value: string) => value.slice(0, 3),
-          },
-          axisLine: {
-            lineStyle: { color: ChartPalette.text("secondary", dark) },
-          },
-          axisTick: { show: false },
-          boundaryGap: false,
-          data: visibleGroups.map((group) =>
-            monthLabel(group.group).replace(" de ", " "),
-          ),
-          type: "category",
-        },
-        yAxis: {
-          axisLabel: {
-            color: ChartPalette.text("primary", dark),
-            fontSize: 14,
-            formatter: (value: number) =>
-              formatBalance(Math.trunc(value).toString(), currency).replace(
-                ` ${currency}`,
-                "",
-              ),
-          },
-          splitLine: {
-            lineStyle: {
-              color: ChartPalette.text("secondary", dark),
-              opacity: 0.2,
-            },
-          },
-          type: "value",
-        },
-      }) satisfies Parameters<typeof Chart>[0]["options"],
-    [currency, dark, expenseColor, visibleGroups, values],
+  const formatValue = useCallback(
+    (value: number) => formatBalance(Math.trunc(value).toString(), currency),
+    [currency],
+  );
+  const formatAxis = useCallback(
+    (value: number) => formatValue(value).replace(` ${currency}`, ""),
+    [currency, formatValue],
   );
   if (!values) {
     return (
@@ -129,11 +46,17 @@ export function MonthlySpendingChart({
   }
   return (
     <>
-      <Chart
-        echarts={echarts}
+      <LineChart
+        color={attentionColor}
+        description={`Despesas classificadas por mês, em ${currency}. Valores exatos disponíveis na tabela abaixo.`}
+        formatAxis={formatAxis}
+        formatValue={formatValue}
         height={260}
-        isDarkMode={dark}
-        options={options}
+        labels={visibleGroups.map((group) =>
+          monthLabel(group.group).replace(" de ", " "),
+        )}
+        seriesName={`Despesas · ${currency}`}
+        values={values}
       />
       <MonthSlider
         label="Janela de meses"

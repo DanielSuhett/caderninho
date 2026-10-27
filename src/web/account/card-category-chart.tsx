@@ -1,17 +1,9 @@
-import { Chart, ChartPalette } from "@cloudflare/kumo/components/chart";
-import { PieChart } from "echarts/charts";
-import { AriaComponent, TooltipComponent } from "echarts/components";
-import { CanvasRenderer } from "echarts/renderers";
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 
 import type { PortalCards, WorkspaceCatalog } from "../../contracts";
 import { formatBalance } from "../money";
-import { useTheme } from "../use-theme";
-import { chartTooltip } from "./chart-tooltip";
 import { safeChartValues } from "./financial-presentation";
-
-const echarts = await import("echarts/core");
-echarts.use([PieChart, TooltipComponent, AriaComponent, CanvasRenderer]);
+import { DonutChart } from "./svg-chart";
 
 export function CardCategoryChart({
   groups,
@@ -22,7 +14,6 @@ export function CardCategoryChart({
   categories: WorkspaceCatalog["categories"];
   currency: string;
 }) {
-  const dark = useTheme() === "dark";
   const values = useMemo(
     () =>
       safeChartValues(
@@ -34,48 +25,21 @@ export function CardCategoryChart({
       ),
     [currency, groups],
   );
-  const options = useMemo(
+  const slices = useMemo(
     () =>
-      ({
-        animation: false,
-        aria: {
-          description: `Gastos confirmados por categoria, em ${currency}, antes dos estornos. A legenda apresenta valores exatos.`,
-          enabled: true,
-        },
-        backgroundColor: "transparent",
-        series: [
-          {
-            center: ["50%", "50%"],
-            data: groups.map((row, index) => {
-              const category = categories.find(
-                (item) => item.id === row.categoryId,
-              );
-              return {
-                itemStyle: {
-                  color:
-                    category?.color ?? ChartPalette.text("secondary", dark),
-                },
-                name: category?.name ?? "Sem categoria",
-                value: values?.[index] ?? 0,
-              };
-            }),
-            emphasis: { scale: false },
-            label: { show: false },
-            radius: ["58%", "82%"],
-            type: "pie",
-          },
-        ],
-        textStyle: { fontFamily: "Inter, sans-serif", fontSize: 14 },
-        tooltip: {
-          ...chartTooltip,
-          trigger: "item",
-          valueFormatter: (value: unknown) =>
-            typeof value === "number"
-              ? formatBalance(Math.trunc(value).toString(), currency)
-              : "Valor não informado",
-        },
-      }) satisfies Parameters<typeof Chart>[0]["options"],
-    [categories, currency, dark, groups, values],
+      groups.map((row, index) => {
+        const category = categories.find((item) => item.id === row.categoryId);
+        return {
+          color: category?.color ?? "var(--chart-muted)",
+          name: category?.name ?? "Sem categoria",
+          value: values?.[index] ?? 0,
+        };
+      }),
+    [categories, groups, values],
+  );
+  const formatValue = useCallback(
+    (value: number) => formatBalance(Math.trunc(value).toString(), currency),
+    [currency],
   );
   if (!values) {
     return (
@@ -85,11 +49,11 @@ export function CardCategoryChart({
     );
   }
   return (
-    <Chart
-      echarts={echarts}
+    <DonutChart
+      description={`Gastos confirmados por categoria, em ${currency}, antes dos estornos. A legenda apresenta valores exatos.`}
+      formatValue={formatValue}
       height={240}
-      isDarkMode={dark}
-      options={options}
+      slices={slices}
     />
   );
 }

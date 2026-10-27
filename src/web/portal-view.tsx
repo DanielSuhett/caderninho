@@ -37,6 +37,10 @@ export function accountPage({ demo = false }: { demo?: boolean } = {}) {
         />
       )}
       <link
+        href="/preload-helper.js"
+        rel="modulepreload"
+      />
+      <link
         href="/account.css"
         rel="stylesheet"
       />

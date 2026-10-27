@@ -29,6 +29,18 @@ export interface HttpResponseMetadata {
   type?: ResponseType;
 }
 
+export interface FetchJsonRequest {
+  fetcher?: typeof fetch;
+  init: Omit<RequestInit, "body" | "signal"> & {
+    body?: unknown;
+    signal: AbortSignal;
+  };
+  input: string;
+  inspect?: (response: Response) => void;
+  maxResponseSize: number;
+  timeoutMs: number;
+}
+
 export interface JsonRequest {
   client: KyInstance;
   input: Input;

@@ -33,7 +33,6 @@ import type {
   ScheduledPayment,
   Space,
   Tag,
-  TransactionClassification,
   TransactionDetails,
   TransactionDirection,
   TransactionEdit,
@@ -72,9 +71,6 @@ export const transactions = sqliteTable(
     accountId: text("account_id").notNull(),
     amountMinor: text("amount_minor"),
     category: text("category"),
-    classification: text("classification", {
-      mode: "json",
-    }).$type<TransactionClassification>(),
     currency: text("currency").notNull(),
     date: text("date").notNull(),
     description: text("description").notNull(),
@@ -86,10 +82,6 @@ export const transactions = sqliteTable(
     status: text("status").$type<TransactionStatus>().notNull(),
   },
   (t) => [
-    check(
-      "transaction_classification_json",
-      sql`${t.classification} IS NULL OR json_valid(${t.classification})`,
-    ),
     check(
       "transaction_identification_json",
       sql`${t.identification} IS NULL OR json_valid(${t.identification})`,

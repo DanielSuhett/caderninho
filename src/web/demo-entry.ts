@@ -1,6 +1,3 @@
-import { z } from "zod/v4";
-
-z.config({ jitless: true });
 const [{ mountAccount }, { createDemoFetch }, { createAccountApi }] =
   await Promise.all([
     import("./mount-account"),
@@ -11,3 +8,6 @@ mountAccount({
   api: createAccountApi(location.origin, createDemoFetch(location.origin)),
   demo: true,
 });
+
+// Module scope for top-level await; the entry has no static imports.
+export {};

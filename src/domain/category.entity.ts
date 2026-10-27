@@ -1,8 +1,4 @@
 import {
-  TransactionDirection,
-  type TransactionProjection,
-} from "./finance.entity";
-import {
   type Category,
   type CategoryGroup,
   CategoryKind,
@@ -580,41 +576,4 @@ export function pluggyCategory(
   category: string | null,
 ): FixedCategoryKey | null {
   return category ? (providerCategories.get(labelKey(category)) ?? null) : null;
-}
-
-export const CLASSIFICATION_VERSION = 1;
-export const CLEF_MIN_CONFIDENCE = 0.8;
-export interface TransactionClassification {
-  category: FixedCategoryKey;
-  confidence: number;
-  inputHash: string;
-  model: "clef-flash";
-  version: number;
-}
-// Identity documents, bank coordinates, balances and identifiers are kept in the
-// private ledger. Only evidence of purpose goes to the classifier. CNPJ is not a lookup.
-export function classificationState(row: TransactionProjection) {
-  const identity = row.identification;
-  return {
-    counterparty:
-      row.direction === TransactionDirection.DEBIT
-        ? (identity?.paymentData?.receiver?.name ?? null)
-        : (identity?.paymentData?.payer?.name ?? null),
-    description: row.description,
-    descriptionRaw: identity?.descriptionRaw ?? null,
-    direction: row.direction,
-    merchant: identity?.merchant
-      ? {
-          businessName: identity.merchant.businessName,
-          category: identity.merchant.category,
-          cnae: identity.merchant.cnae,
-          name: identity.merchant.name,
-        }
-      : null,
-    operationType: identity?.operationType ?? null,
-    operationTypeAdditionalInfo: identity?.operationTypeAdditionalInfo ?? null,
-    payeeMCC: identity?.creditCardMetadata?.payeeMCC ?? null,
-    paymentMethod: identity?.paymentData?.paymentMethod ?? null,
-    reason: identity?.paymentData?.reason ?? null,
-  };
 }

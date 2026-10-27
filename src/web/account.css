@@ -1023,6 +1023,73 @@
 .chart-unavailable {
   color: var(--muted);
 }
+:root {
+  --chart-label: #6b7280;
+  --chart-muted: #9ca3af;
+}
+:root[data-mode="dark"] {
+  --chart-label: #9ca3af;
+  --chart-muted: #6b7280;
+}
+.svg-chart {
+  position: relative;
+  width: 100%;
+  touch-action: pan-y;
+}
+.svg-chart svg {
+  display: block;
+  overflow: visible;
+  font-size: 14px;
+}
+.svg-chart-label {
+  font-variant-numeric: tabular-nums;
+  fill: var(--chart-label);
+}
+.svg-chart-grid {
+  stroke: var(--chart-muted);
+  stroke-opacity: 0.2;
+}
+.svg-chart-axis {
+  stroke: var(--chart-muted);
+}
+.svg-chart-point {
+  fill: var(--surface, Canvas);
+  stroke-width: 2;
+}
+.svg-chart-tooltip {
+  position: absolute;
+  z-index: 10;
+  display: grid;
+  gap: 4px;
+  max-width: calc(100% - 16px);
+  padding: 10px 12px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text);
+  pointer-events: none;
+  background: var(--surface-raised);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: var(--shadow-md);
+  transform: translateY(-50%);
+}
+.svg-chart-tooltip-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.svg-chart-tooltip-row strong {
+  padding-left: 12px;
+  margin-left: auto;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.svg-chart-marker {
+  flex-shrink: 0;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
 .financial-account-icon {
   display: flex;
   flex-shrink: 0;

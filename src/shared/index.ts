@@ -1,5 +1,6 @@
 export { hash, secretsEqual } from "./crypto";
 export {
+  fetchJson,
   HttpRequestError,
   httpClient,
   httpResponseFailure,

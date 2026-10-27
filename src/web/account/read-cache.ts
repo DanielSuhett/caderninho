@@ -1,13 +1,18 @@
 // Short-lived, bounded and scoped to this mounted installation. Never persisted.
-export function createReadCache(now = Date.now) {
-  const entries = new Map<string, { value: unknown; expires: number }>();
+export interface ReadCache<T> {
+  clear: () => void;
+  read: (key: string, load: () => Promise<T>, fresh?: boolean) => Promise<T>;
+}
+
+export function createReadCache<T = unknown>(now = Date.now): ReadCache<T> {
+  const entries = new Map<string, { value: T; expires: number }>();
   const pending = new Map<string, symbol>();
   return {
     clear() {
       entries.clear();
       pending.clear();
     },
-    async read(key: string, load: () => Promise<unknown>, fresh = false) {
+    async read(key: string, load: () => Promise<T>, fresh = false) {
       const entry = entries.get(key);
       if (!fresh && entry && entry.expires > now()) {
         return entry.value;

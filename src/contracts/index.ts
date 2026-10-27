@@ -35,7 +35,11 @@ export {
   ConnectionSelectionSchema,
   TransactionQuerySchema,
 } from "./finance";
-export type { HouseholdCommand } from "./household";
+export type {
+  HouseholdCommand,
+  HouseholdResult,
+  InstitutionCatalog,
+} from "./household";
 export {
   HouseholdCatalogSchema,
   HouseholdCommandSchema,
@@ -67,8 +71,7 @@ export type {
   InstallationState,
   PortalResponse,
 } from "./portal.types";
-export { PortalIssue } from "./portal.types";
-export type { AccountFailureCode } from "./portal-contract";
+export { AccountFailureCode, PortalIssue } from "./portal.types";
 export {
   AccountActionSchema,
   AccountConnectTokenSchema,
@@ -91,6 +94,7 @@ export {
   type RuleJob,
   type RuleJobCommand,
   RuleJobCommandSchema,
+  type RuleJobResponse,
   RuleJobResponseSchema,
   RuleJobSchema,
   RuleJobSelectionSchema,
@@ -123,7 +127,6 @@ export {
   PortalQuerySchema,
   PortalTransactionListSchema,
   PortalTransactionQuerySchema,
-  parsePortalQueryResult,
   SyncHistoryCursorSchema,
   SyncHistoryResultSchema,
   SyncHistorySelectionSchema,

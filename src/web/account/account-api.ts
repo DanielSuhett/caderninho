@@ -1,27 +1,26 @@
-import { z } from "zod/v4";
-
 import {
-  AccountConnectTokenSchema,
-  AccountFailureCodeSchema,
-  AuditReportSchema,
+  type AccountConnectToken,
+  AccountFailureCode,
+  type AuditReport,
   type HouseholdCommand,
-  HouseholdResultSchema,
-  InstitutionCatalogSchema,
+  type HouseholdResult,
+  type InstitutionCatalog,
   type PortalMutation,
   type PortalQuery,
   type PortalQueryResults,
-  PortalResponseSchema,
-  parsePortalQueryResult,
+  type PortalResponse,
   type RuleJobCommand,
-  RuleJobResponseSchema,
+  type RuleJobResponse,
   type RulePreviewInput,
-  RulePreviewResultSchema,
-  SyncHistoryResultSchema,
-  WorkspaceCatalogSchema,
+  type RulePreviewResult,
+  type SyncHistoryResult,
+  type WorkspaceCatalog,
 } from "../../contracts";
-import { httpClient, requestJson } from "../../shared";
+import { fetchJson } from "../../shared";
 import { AccountRequestError } from "./account-feedback";
-import { createReadCache } from "./read-cache";
+import { createReadCache, type ReadCache } from "./read-cache";
+
+const failureCodes = Object.values(AccountFailureCode);
 
 export type OrganizationApi = Pick<
   ReturnType<typeof createAccountApi>,
@@ -38,26 +37,42 @@ export function createAccountApi(
   origin: string,
   fetcher: typeof fetch = fetch,
 ) {
-  const cache = createReadCache();
-  const client = httpClient.extend({
-    fetch: fetcher,
-    hooks: {
-      afterResponse: [
-        ({ response }) => {
-          if (response.ok) {
-            return;
-          }
-          const code = AccountFailureCodeSchema.safeParse(
-            response.headers.get("X-Caderninho-Error"),
-          );
-          if (code.success) {
-            throw new AccountRequestError(code.data);
-          }
-        },
-      ],
-    },
-  });
-  const request = async (
+  // Responses come from this installation's typed API: only inputs are parsed.
+  const caches = {
+    audit: createReadCache<AuditReport>(),
+    catalog: createReadCache<WorkspaceCatalog>(),
+    history: createReadCache<SyncHistoryResult>(),
+  };
+  const queries: {
+    [Tool in PortalQuery["tool"]]: ReadCache<PortalQueryResults[Tool]>;
+  } = {
+    generate_chart: createReadCache(),
+    get_accounts: createReadCache(),
+    get_card_commitments: createReadCache(),
+    get_investments: createReadCache(),
+    get_overview: createReadCache(),
+    get_portal_cards: createReadCache(),
+    get_portal_transactions: createReadCache(),
+    get_transactions: createReadCache(),
+    preview_rule_import: createReadCache(),
+  };
+  const clearCaches = () => {
+    for (const cache of [...Object.values(caches), ...Object.values(queries)]) {
+      cache.clear();
+    }
+  };
+  // A rejected request may carry an allowlisted cause for the panel.
+  const inspect = (response: Response) => {
+    if (response.ok) {
+      return;
+    }
+    const header = response.headers.get("X-Caderninho-Error");
+    const code = failureCodes.find((value) => value === header);
+    if (code) {
+      throw new AccountRequestError(code);
+    }
+  };
+  const request = async <T = unknown>(
     path: string,
     signal: AbortSignal,
     body?:
@@ -77,41 +92,39 @@ export function createAccountApi(
   ) => {
     const mutation = body && path !== "/query" && path !== "/rule-preview";
     if (mutation) {
-      cache.clear();
+      clearCaches();
     }
     try {
-      return await requestJson({
-        client,
+      return await fetchJson<T>({
+        fetcher,
+        init: { signal, ...(body && { body, method: "POST" }) },
         input: `${origin}/api/account${path}`,
-        options: {
-          signal,
-          ...(body && { json: body, method: "POST" }),
-          maxResponseSize: 1_000_000,
-          totalTimeout: 20_000,
-        },
+        inspect,
+        maxResponseSize: 1_000_000,
+        timeoutMs: 20_000,
       });
     } finally {
       if (mutation) {
-        cache.clear();
+        clearCaches();
       }
     }
   };
   return {
     audit: async (query: URLSearchParams, signal: AbortSignal, fresh = false) =>
-      AuditReportSchema.parse(
-        await cache.read(
-          `audit:${query}`,
-          () => request(`/audit?${query}`, signal),
-          fresh,
-        ),
+      caches.audit.read(
+        `audit:${query}`,
+        () => request<AuditReport>(`/audit?${query}`, signal),
+        fresh,
       ),
     catalog: async (spaceId: string, signal: AbortSignal, fresh = false) =>
-      WorkspaceCatalogSchema.parse(
-        await cache.read(
-          `catalog:${spaceId}`,
-          () => request(`/catalog?${new URLSearchParams({ spaceId })}`, signal),
-          fresh,
-        ),
+      caches.catalog.read(
+        `catalog:${spaceId}`,
+        () =>
+          request<WorkspaceCatalog>(
+            `/catalog?${new URLSearchParams({ spaceId })}`,
+            signal,
+          ),
+        fresh,
       ),
     command: async (
       action: string,
@@ -131,62 +144,56 @@ export function createAccountApi(
       signal: AbortSignal,
       fresh = false,
     ) =>
-      SyncHistoryResultSchema.parse(
-        await cache.read(
-          `history:${query}`,
-          () => request(`/history?${query}`, signal),
-          fresh,
-        ),
+      caches.history.read(
+        `history:${query}`,
+        () => request<SyncHistoryResult>(`/history?${query}`, signal),
+        fresh,
       ),
     institutions: async (profileId: string, signal: AbortSignal) =>
-      InstitutionCatalogSchema.parse(
-        await request(
-          `/institutions?${new URLSearchParams({ profileId })}`,
-          signal,
-        ),
+      request<InstitutionCatalog>(
+        `/institutions?${new URLSearchParams({ profileId })}`,
+        signal,
       ),
-    invalidate: () => cache.clear(),
+    invalidate: clearCaches,
     manage: async (input: HouseholdCommand, signal: AbortSignal) =>
-      HouseholdResultSchema.parse(await request("/manage", signal, input)),
+      request<HouseholdResult>("/manage", signal, input),
     planning: async (
       command: PortalMutation,
       csrf: string,
       signal: AbortSignal,
     ) => request("/planning", signal, { command, csrf }),
     previewRule: async (input: RulePreviewInput, signal: AbortSignal) =>
-      RulePreviewResultSchema.parse(
-        await request("/rule-preview", signal, input),
-      ),
+      request<RulePreviewResult>("/rule-preview", signal, input),
     query: async <Tool extends PortalQuery["tool"]>(
       query: PortalQuery & { tool: Tool },
       csrf: string,
       signal: AbortSignal,
       fresh = false,
     ): Promise<PortalQueryResults[Tool]> =>
-      parsePortalQueryResult(
-        query.tool,
-        await cache.read(
-          `query:${JSON.stringify(query)}`,
-          () => request("/query", signal, { csrf, query }),
-          fresh,
-        ),
+      queries[query.tool].read(
+        JSON.stringify(query),
+        () =>
+          request<PortalQueryResults[Tool]>("/query", signal, { csrf, query }),
+        fresh,
       ),
-    read: async (signal: AbortSignal) =>
-      PortalResponseSchema.parse(await request("", signal)),
+    read: async (signal: AbortSignal) => request<PortalResponse>("", signal),
     revokeGrant: async (grantId: string, csrf: string, signal: AbortSignal) =>
-      z
-        .object({ ok: z.literal(true) })
-        .parse(await request("/revoke-grant", signal, { csrf, grantId })),
+      request<{ ok: true }>("/revoke-grant", signal, { csrf, grantId }),
     ruleJob: async (
       selection: { id: string } | { spaceId: string },
       signal: AbortSignal,
     ) =>
-      RuleJobResponseSchema.parse(
-        await request(`/rule-jobs?${new URLSearchParams(selection)}`, signal),
+      (
+        await request<RuleJobResponse>(
+          `/rule-jobs?${new URLSearchParams(selection)}`,
+          signal,
+        )
       ).job,
     ruleJobs: async (input: RuleJobCommand, signal: AbortSignal) => {
-      const { job } = RuleJobResponseSchema.parse(
-        await request("/rule-jobs", signal, input),
+      const { job } = await request<RuleJobResponse>(
+        "/rule-jobs",
+        signal,
+        input,
       );
       if (!job) {
         throw new Error("NOT_FOUND");
@@ -199,12 +206,10 @@ export function createAccountApi(
       itemId?: string,
       profileId?: string,
     ) =>
-      AccountConnectTokenSchema.parse(
-        await request("/connect-token", signal, {
-          csrf,
-          ...(itemId && { itemId }),
-          ...(profileId && { profileId }),
-        }),
-      ),
+      request<AccountConnectToken>("/connect-token", signal, {
+        csrf,
+        ...(itemId && { itemId }),
+        ...(profileId && { profileId }),
+      }),
   };
 }

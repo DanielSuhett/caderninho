@@ -55,8 +55,8 @@ histórico registra cada rodada desde a admissão, sem recuperação de versões
 Contas usam seus IDs Pluggy como chaves do mapa JSON `connections.accounts`.
 Cada valor contém nome, tipo, moeda, saldo, horário de leitura e identidade financeira estruturada.
 Contas ausentes preservam os metadados e o saldo com seu horário antigo.
-Transações têm onze campos: id, account_id, date, amount_minor, currency,
-direction, status, description, category, identification e classification. A coluna JSON
+Transações têm dez campos: id, account_id, date, amount_minor, currency,
+direction, status, description, category e identification. A coluna JSON
 `identification` preserva um contrato tipado dos dados da Pluggy: descrição
 original, categoria/códigos da origem, operação, estabelecimento e CNPJ/CNAE,
 participantes/documentos/contas do pagamento, referências, dados de boleto e
@@ -96,8 +96,7 @@ Quando uma transação reimportada perde seus metadados de cartão, a publicaç�
 remove o registro auxiliar antigo no mesmo batch da transação e do checkpoint.
 Os caminhos de publicação JSON e escalar seguem a mesma regra.
 
-`transactions.classification` guarda decisões de classificação; os agrupadores
-ficam em `planning_category_groups`. O catálogo contém 33 categorias fixas em cada espaço,
+Os agrupadores ficam em `planning_category_groups`. O catálogo contém 33 categorias fixas em cada espaço,
 com ícone, cor e `groupId` em `planning_categories`; os agrupadores também têm
 ícone/cor e pertencem a um espaço. Cada categoria tem zero ou um grupo, que pode
 conter várias categorias. Remover um grupo desfaz o vínculo e preserva categorias,
@@ -105,14 +104,9 @@ regras e transações. Categorias personalizadas conservam suas referências;
 as duas categorias genéricas de apoio ficam ocultas. Os nomes do catálogo fixo são
 protegidos; sua aparência e agrupamento podem ser editados.
 
-Prioridade efetiva: edição/regra local, Clef habilitado com decisão aceita,
-conversão determinística Pluggy. Valores sem correspondência ficam sem categoria,
-com o rótulo da origem preservado. Clef é opcional e desabilitado por padrão; usa
-`clef-flash`, confiança mínima de 0,8 e opção `unknown`. A fase durável
-`classification` roda depois da importação dos dados, em páginas limitadas, com
-publicação atômica junto do checkpoint. Um hash da evidência evita repetir decisões
-aceitas sem mudanças. Falhas/quota/respostas inválidas não impedem a importação.
-Veja [categorias e classificação](categories.md) para configuração e contratos.
+Prioridade efetiva: edição/regra local, conversão determinística Pluggy. Valores
+sem correspondência ficam sem categoria, com o rótulo da origem preservado.
+Veja [categorias e classificação](categories.md) para as regras e contratos.
 
 A leitura do planejamento captura a revisão junto das tabelas. As consultas efetivas filtram contas e período no SQL e leem as origens editadas
 separadamente para preservar mudanças locais de data/conta. A lista usa paginação
@@ -249,7 +243,7 @@ com a distribuição relevante antes de mudar os índices.
 
 Publicação usa json_each com JSON transitório por página; acima de 500 mil
 unidades UTF-16, usa parâmetros escalares para respeitar o limite de string D1.
-Identificação/classificação são contratos tipados separados do payload bruto.
+Identificação é contrato tipado separado do payload bruto.
 Registro idêntico não sofre UPDATE; correção ou mudança de identificação sofre.
 IDs repetidos na mesma página usam hash para detectar duplicatas conflitantes,
 sem deduplicar por similaridade. Projeções de controle leem só campos necessários;

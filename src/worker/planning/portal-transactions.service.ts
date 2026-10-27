@@ -93,7 +93,6 @@ function record(
     billPayment,
     cardNumber: details?.cardNumber ?? null,
     category: row.category,
-    classification: row.classification ?? null,
     currency: row.currency,
     date: row.date,
     description: row.description,

@@ -10,7 +10,6 @@ import {
   FaultCode,
   FinancialIdentitySchema,
   type FinancialSource,
-  TransactionClassificationSchema,
   TransactionIdentificationSchema,
 } from "../../src/domain";
 import { createLogger } from "../../src/shared/logger";
@@ -429,7 +428,6 @@ test("MCP accumulates imported history and updates only matching source IDs", as
           accountId: z.string(),
           amountMinor: z.string().nullable(),
           category: z.string().nullable(),
-          classification: TransactionClassificationSchema.nullable(),
           currency: z.string(),
           date: z.string(),
           description: z.string(),

@@ -94,6 +94,7 @@ export const RuleJobSchema = z.object({
 export const RuleJobResponseSchema = z.object({
   job: RuleJobSchema.nullable(),
 });
+export type RuleJobResponse = z.infer<typeof RuleJobResponseSchema>;
 export type RuleJob = z.infer<typeof RuleJobSchema>;
 
 type Batch = Pick<RuleImportPackage, "categories" | "rules">;

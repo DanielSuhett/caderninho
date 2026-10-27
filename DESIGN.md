@@ -97,6 +97,10 @@ fontes durante o uso. Source Serif 4 vem da [distribuição oficial da Adobe](ht
 com eixos de peso e tamanho óptico. `font-optical-sizing: auto` respeita esses
 eixos; `font-display: swap` mantém texto disponível. A landing antecipa sua fonte
 editorial; o painel só a carrega quando a referência visual a demonstra.
+Os arquivos publicados são subconjuntos latinos (Latin-1, pontuação, setas e
+símbolos usados): Inter com pesos 400–600 e Source Serif 4 no peso 500, ambos
+com tamanho óptico. O nome do arquivo leva a versão da fonte; ao mudar glifos ou
+eixos, gere um novo nome, pois `/fonts/*.woff2` tem cache imutável.
 
 A preferência explícita por conteúdo de 16 px prevalece sobre a regra de 14 px
 da skill kumo-design. Temas usam os mesmos papéis tipográficos. Verificar acentos
@@ -429,3 +433,49 @@ inicial; a landing das instalações usa `noindex,follow` e não anuncia o domí
 público como sua própria URL. A categoria do produto aparece antes do título do hero. Consulte a [revisão SEO](docs/seo.md) para fontes,
 limites da prova e pendências de infraestrutura.
 Depois de publicar o site, conferir `https://usecaderninho.com/` no OpenGraph.xyz.
+
+## Regras de área do painel
+
+Regras específicas que antes ficavam em AGENTS.md. Consulte a seção da área que
+você vai alterar; não é preciso ler todo o documento para mudanças locais.
+
+- Produto e demo usam as mesmas telas e editores; adaptadores `demo-*` cuidam de
+  fixtures, navegação e estado em memória. Regras de negócio compartilhadas ficam
+  no domínio. Ao mudar um fluxo, teste os dois adaptadores pelo mesmo contrato,
+  preservando a persistência privada do produto.
+- Títulos de seção ficam fora das superfícies (`AnalysisSection`). Não reintroduzir
+  seções genéricas “Critérios”/“Referência técnica”, explicações óbvias de cartão
+  ou contagens técnicas na leitura financeira. Política dos valores fica na ajuda
+  contextual; erros e parcialidade continuam visíveis.
+- Ícones para ações secundárias familiares, com nome acessível e Tooltip por foco;
+  preservar rótulos necessários à decisão. Ajuda sob demanda não oculta erro,
+  consentimento ou contexto indispensável. Não obter densidade encolhendo a fonte.
+- Identidades usam contorno somente nos arcos externos, sem linhas nas interseções,
+  nos dois temas. Hover/seleção reforçam o contorno; foco usa o token de foco. Não
+  elevar avatar nem mudar a sobreposição. Avatares ficam fora do Toolbar, com gap
+  de 12 px entre identidade e ações. Opções de Select/Combobox usam avatares
+  estáticos.
+- Pessoa filtra titular, banco reúne contas por ID de instituição e bandeira reúne
+  cartões entre bancos. Preservar período/grupo, remover cursor/conta específica e
+  oferecer filtros removíveis. Aplicar o recorte antes de agregar/paginar, com
+  paridade na demo.
+- Links ficam fora de triggers de expansão. Navegação usa grupos nativos. Trigger e
+  expansão compartilham os mesmos insets.
+- Parcelas: padding de 16 px nas linhas móveis; status/pagamento usam linhas
+  completas em containers muito estreitos. Mostram toda a compra recebida na mesma
+  tabela, inclusive fora do mês. Pagamento depende da fatura vinculada, com
+  marcação manual distinta; confirmado não significa pago.
+- Posições de investimentos usam LayerCards irmãos com gap de 16 px e título
+  externo, sem cards aninhados.
+- Controles mensais compartilham a janela acessível; a marca móvel volta à visão
+  geral e a atualização vem da importação concluída, nunca da renderização.
+- FAQs usam Kumo e mantêm fallback funcional.
+- Importação de regras funciona no produto e na demo, com prévia, categorias
+  resolvidas, revisão, idempotência e histórico preservado.
+- Temas: claro usa fundo cinza e conteúdo branco; escuro usa carvão e superfícies
+  mais claras, pelos papéis de `styles/design.css`. Ajustar tokens Kumo
+  compartilhados, nunca branco/preto, bordas ou sombras isolados por página.
+  Sombra não pode ser a única separação. Ao mudar tema ou elevação, atualizar a
+  referência visual e conferir LayerCard, Dialog, Popover e campos.
+- POC continua isolada até instrução explícita para alterar o produto;
+  documentação de uma proposta não comprova sua implementação.

@@ -78,7 +78,7 @@ export function landingPage({
           <link
             as="font"
             crossOrigin="anonymous"
-            href="/fonts/SourceSerif4Variable-Roman.woff2"
+            href="/fonts/SourceSerif4-4.005-latin-500.woff2"
             rel="preload"
             type="font/woff2"
           />

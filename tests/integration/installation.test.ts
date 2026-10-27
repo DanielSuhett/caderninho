@@ -371,7 +371,6 @@ test("the source tables retain financial columns and typed transaction identific
     "account_id",
     "amount_minor",
     "category",
-    "classification",
     "currency",
     "date",
     "description",

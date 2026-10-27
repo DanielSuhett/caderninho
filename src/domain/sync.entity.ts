@@ -15,7 +15,6 @@ export type RunStatus = (typeof RunStatus)[keyof typeof RunStatus];
 export const ImportPhase = {
   accounts: "accounts",
   bills: "bills",
-  classification: "classification",
   finish: "finish",
   investments: "investments",
   loans: "loans",

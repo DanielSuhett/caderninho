@@ -30,7 +30,7 @@ export function DesignHead({
       <link
         as="font"
         crossOrigin="anonymous"
-        href="/fonts/InterVariable.woff2"
+        href="/fonts/Inter-4.001-latin.woff2"
         rel="preload"
         type="font/woff2"
       />

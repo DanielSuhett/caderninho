@@ -1,11 +1,6 @@
-import { z } from "zod/v4";
-
 import {
   AccountType,
   assertPersonalConnector,
-  CLASSIFICATION_VERSION,
-  CLEF_MIN_CONFIDENCE,
-  classificationState,
   connectorInstitution,
   detectInstitution,
   ImportPhase,
@@ -15,14 +10,12 @@ import {
   type ProductPage,
   type ProviderConnection,
   RunStatus,
-  type TransactionProjection,
 } from "../../domain";
 import { hash, tryCatch } from "../../shared";
 import {
   AdmissionStatus,
   type ImportDependencies,
   importFailure,
-  type Publication,
   type SyncRun,
   type SyncServiceDependencies,
 } from "./entity";
@@ -66,9 +59,7 @@ function afterTransactions(
   if (dependencies.source.products) {
     return ImportPhase.investments;
   }
-  return dependencies.classifier
-    ? ImportPhase.classification
-    : ImportPhase.finish;
+  return ImportPhase.finish;
 }
 // Meu Pluggy reports its own connector, so the bank comes from the names the
 // provider gives to accounts and investments. Best effort: without the catalog the
@@ -180,11 +171,6 @@ async function importTransactions(
     transactions: prepared,
   });
 }
-function afterProducts(
-  classifier: ImportDependencies["classifier"],
-): SyncRun["checkpoint"]["phase"] {
-  return classifier ? ImportPhase.classification : ImportPhase.finish;
-}
 async function identifyInvestments(
   dependencies: ImportDependencies,
   connectionId: string,
@@ -227,7 +213,7 @@ async function identifyInvestments(
   }
 }
 async function importProducts(dependencies: ImportDependencies, run: SyncRun) {
-  const { repository, source, now, classifier } = dependencies;
+  const { repository, source, now } = dependencies;
   const { phase } = run.checkpoint;
   if (
     !source.products ||
@@ -280,109 +266,10 @@ async function importProducts(dependencies: ImportDependencies, run: SyncRun) {
     next = {
       accountId: following ?? null,
       cursor: null,
-      phase: following ? ImportPhase.bills : afterProducts(classifier),
+      phase: following ? ImportPhase.bills : ImportPhase.finish,
     };
   }
   return repository.publish({ done: false, next, now: now(), products, run });
-}
-const ClassificationCursorSchema = z.object({
-  date: z.string(),
-  id: z.string(),
-});
-async function classifyPage(
-  page: TransactionProjection[],
-  classifier: NonNullable<ImportDependencies["classifier"]>,
-) {
-  const classifications: NonNullable<Publication["classifications"]> = [];
-  const decisions = new Map<
-    string,
-    Awaited<ReturnType<NonNullable<ImportDependencies["classifier"]>>>
-  >();
-  const inputs = await Promise.all(
-    page.map(async (row) => {
-      const state = classificationState(row);
-      return { inputHash: await hash(state), row, state };
-    }),
-  );
-  // Sequential, bounded page: avoid issuing a burst of inference requests.
-  async function next(index: number): Promise<void> {
-    const input = inputs[index];
-    if (!input) {
-      return;
-    }
-    const { row, state, inputHash } = input;
-    if (
-      row.classification?.inputHash === inputHash &&
-      row.classification.version === CLASSIFICATION_VERSION
-    ) {
-      return next(index + 1);
-    }
-    if (!decisions.has(inputHash)) {
-      // AI is optional enrichment. Financial publication remains successful on
-      // inference failures; projection applies deterministic Pluggy rules.
-      const { data, error } = await tryCatch(() => classifier(state));
-      decisions.set(inputHash, error ? null : data);
-    }
-    const decision = decisions.get(inputHash);
-    if (decision && decision.confidence >= CLEF_MIN_CONFIDENCE) {
-      classifications.push({
-        classification: {
-          ...decision,
-          inputHash,
-          model: "clef-flash",
-          version: CLASSIFICATION_VERSION,
-        },
-        id: row.id,
-      });
-    }
-    return next(index + 1);
-  }
-  await next(0);
-  return classifications;
-}
-async function classifyTransactions(
-  { repository, classifier, now }: ImportDependencies,
-  run: SyncRun,
-) {
-  const accountIds = Object.keys(
-    await repository.connectionAccounts(run.connectionId),
-  ).sort();
-  const accountId = run.checkpoint.accountId ?? accountIds[0];
-  const classifications: NonNullable<Publication["classifications"]> = [];
-  let next: SyncRun["checkpoint"] = {
-    accountId: null,
-    cursor: null,
-    phase: ImportPhase.finish,
-  };
-  if (accountId && classifier) {
-    const after = run.checkpoint.cursor
-      ? ClassificationCursorSchema.parse(JSON.parse(run.checkpoint.cursor))
-      : null;
-    const page = await repository.classificationPage(accountId, after);
-    classifications.push(...(await classifyPage(page, classifier)));
-    const last = page.at(-1);
-    const following = accountIds.find((id) => id > accountId);
-    if (last) {
-      next = {
-        accountId,
-        cursor: JSON.stringify({ date: last.date, id: last.id }),
-        phase: ImportPhase.classification,
-      };
-    } else if (following) {
-      next = {
-        accountId: following,
-        cursor: null,
-        phase: ImportPhase.classification,
-      };
-    }
-  }
-  return repository.publish({
-    classifications,
-    done: false,
-    next,
-    now: now(),
-    run,
-  });
 }
 async function importPage(dependencies: ImportDependencies, run: SyncRun) {
   const { repository, now } = dependencies;
@@ -408,8 +295,6 @@ async function importPage(dependencies: ImportDependencies, run: SyncRun) {
       return importAccounts(dependencies, run);
     case ImportPhase.transactions:
       return importTransactions(dependencies, run);
-    case ImportPhase.classification:
-      return classifyTransactions(dependencies, run);
     case ImportPhase.investments:
     case ImportPhase.loans:
     case ImportPhase.bills:

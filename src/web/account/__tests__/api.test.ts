@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { HttpRequestError } from "../../../shared";
+import { HttpFailureKind, HttpRequestError } from "../../../shared";
 import { createAccountApi } from "../account-api";
 import {
   AccountRequestError,
@@ -97,8 +97,12 @@ await test("expired/redirected sessions and malformed panel responses never beco
     }),
   );
   await assert.rejects(
-    createAccountApi("https://synthetic.test", async () =>
-      Response.json({ accounts: [] }),
+    createAccountApi(
+      "https://synthetic.test",
+      async () => new Response("<html>", { status: 200 }),
     ).read(signal),
+    (error) =>
+      error instanceof HttpRequestError &&
+      error.failure.kind === HttpFailureKind.invalidResponse,
   );
 });

@@ -1,13 +1,14 @@
 import ky, { isNetworkError, isResponseSizeError, isTimeoutError } from "ky";
 
 import {
+  type FetchJsonRequest,
   type HttpFailure,
   HttpFailureKind,
   type HttpResponseMetadata,
   type JsonRequest,
   type RetryDelayInput,
 } from "./http.types";
-import { tryCatch } from "./result";
+import { tryCatch, tryCatchSync } from "./result";
 
 const digitsPattern = /^\d+$/;
 
@@ -84,7 +85,8 @@ function parseRetryAfter(value: string | null | undefined) {
 }
 
 // A lost response does not prove that a mutation was rejected.
-export const httpClient = ky.create({
+// Pure: browser bundles that only use fetchJson must not keep ky.
+export const httpClient = /* @__PURE__ */ ky.create({
   headers: { Accept: "application/json" },
   redirect: "manual",
   retry: 0,
@@ -124,6 +126,76 @@ export async function requestJson<T>({
     throw transportFailure(error);
   }
   return data;
+}
+
+// Browser reads of this installation's own API: plain fetch, same failure model.
+// Streaming size limits and lossless parsing stay with ky on the Worker.
+export async function fetchJson<T>({
+  fetcher = fetch,
+  input,
+  init,
+  inspect,
+  maxResponseSize,
+  timeoutMs,
+}: FetchJsonRequest): Promise<T> {
+  const timeout = AbortSignal.timeout(timeoutMs);
+  const { body, signal, ...rest } = init;
+  // Fetchers receive a Request, like ky's, so demo and test doubles read it whole.
+  const { data: response, error } = await tryCatch(() =>
+    fetcher(
+      new Request(input, {
+        ...rest,
+        headers: {
+          Accept: "application/json",
+          ...(body !== undefined && { "Content-Type": "application/json" }),
+        },
+        redirect: "manual",
+        signal: AbortSignal.any([signal, timeout]),
+        ...(body !== undefined && { body: JSON.stringify(body) }),
+      }),
+    ),
+  );
+  if (error) {
+    throw fetchFailure(error, timeout);
+  }
+  inspect?.(response);
+  const failure = httpResponseFailure({
+    retryAfter: response.headers.get("Retry-After"),
+    status: response.status,
+    type: response.type,
+  });
+  if (failure) {
+    cancelResponse(response);
+    throw new HttpRequestError(failure);
+  }
+  if (Number(response.headers.get("Content-Length")) > maxResponseSize) {
+    cancelResponse(response);
+    throw new HttpRequestError({ kind: HttpFailureKind.tooLarge });
+  }
+  const { data: text, error: readError } = await tryCatch(() =>
+    response.text(),
+  );
+  if (readError) {
+    throw fetchFailure(readError, timeout);
+  }
+  const { data, error: parseError } = tryCatchSync(() => JSON.parse(text));
+  if (parseError) {
+    throw fetchFailure(parseError, timeout);
+  }
+  return data;
+}
+
+function fetchFailure(error: Error, timeout: AbortSignal): Error {
+  if (timeout.aborted) {
+    return new HttpRequestError({ kind: HttpFailureKind.timeout });
+  }
+  if (error instanceof SyntaxError) {
+    return new HttpRequestError({ kind: HttpFailureKind.invalidResponse });
+  }
+  if (error instanceof TypeError) {
+    return new HttpRequestError({ kind: HttpFailureKind.network });
+  }
+  return error;
 }
 
 function transportFailure(error: Error): Error {

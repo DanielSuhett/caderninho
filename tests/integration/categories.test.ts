@@ -8,22 +8,17 @@ import {
   TransactionListSchema,
   WorkspaceCatalogSchema,
 } from "../../src/contracts";
-import { fixedCategoryId, type ProviderTransaction } from "../../src/domain";
+import { fixedCategoryId } from "../../src/domain";
 import { createPlanningService } from "../../src/worker/planning";
 import { createPlanningRepository } from "../../src/worker/planning/repository";
 import { createCatalogRepository } from "../../src/worker/planning/repository/catalog.repository";
-import { runImport } from "../../src/worker/sync";
-import type { TransactionClassifier } from "../../src/worker/sync/entity";
-import { createSyncRepository } from "../../src/worker/sync/repository";
 import { command, cookies, fixture, login } from "./access-fixture";
-import { account, admit, collect, setup, source, transaction } from "./fixture";
+import { collect, setup, source, transaction } from "./fixture";
 import { env } from "cloudflare:workers";
 
 beforeEach(setup);
-function planning(enabled = false) {
-  const service = createPlanningService(
-    createPlanningRepository(env.DB, enabled),
-  );
+function planning() {
+  const service = createPlanningService(createPlanningRepository(env.DB));
   const call = (tool: string, fields: Record<string, unknown> = {}) =>
     service.execute(
       PlanningCommandSchema.parse({ spaceId: "personal", tool, ...fields }),
@@ -40,26 +35,6 @@ function planning(enabled = false) {
 }
 const identify = (value: unknown) =>
   z.object({ id: z.string() }).parse(value).id;
-async function importWithClassifier(
-  rows: ProviderTransaction[],
-  classifier: TransactionClassifier,
-  now = "2026-10-01T00:00:00.000Z",
-) {
-  const id = await admit(now);
-  const repository = createSyncRepository(env.DB);
-  await runImport(
-    {
-      classifier,
-      now: () => now,
-      repository,
-      source: source(rows),
-      steps: { do: (_name, run) => run() },
-    },
-    id,
-  );
-  return repository.read(id);
-}
-
 test("fixed catalog, group CRUD, protected names and scoped assignments round-trip through planning and portal", async () => {
   const f = planning();
   const catalog = WorkspaceCatalogSchema.parse(
@@ -184,7 +159,7 @@ test("fixed catalog, group CRUD, protected names and scoped assignments round-tr
   assert.equal(portal.status, 200);
 });
 
-test("disabled Clef maps provider categories without changing source data or requiring AI", async () => {
+test("provider categories map without changing source data or requiring AI", async () => {
   await collect(
     source([
       transaction({ category: "Groceries" }),
@@ -212,156 +187,6 @@ test("disabled Clef maps provider categories without changing source data or req
       "SELECT category FROM transactions WHERE id='t'",
     ).first("category"),
     "Groceries",
-  );
-});
-
-test("post-import Clef decisions cache unchanged evidence, fall back on failures and preserve manual overrides", async () => {
-  let calls = 0;
-  const rows = [
-    transaction({ category: "Shopping", description: "Academia sintética" }),
-    transaction({
-      category: "Shopping",
-      description: "Academia sintética",
-      id: "t2",
-    }),
-    transaction({ category: "Pharmacy", description: "Ambígua", id: "t3" }),
-  ];
-  const classifier: TransactionClassifier = async (state) => {
-    calls += 1;
-    assert.equal(
-      await env.DB.prepare("SELECT count(*) AS n FROM transactions").first("n"),
-      3,
-    );
-    if (state.description === "Ambígua") {
-      throw new Error("AI unavailable");
-    }
-    return { category: "academia", confidence: 0.95 };
-  };
-  assert.equal(
-    (await importWithClassifier(rows, classifier)).status,
-    "succeeded",
-  );
-  assert.equal(calls, 2);
-  const f = planning(true);
-  const list = () =>
-    f
-      .call("get_transactions")
-      .then((value) => TransactionListSchema.parse(value).data.records);
-  assert.equal(
-    (await list()).find((row) => row.id === "t")?.category,
-    fixedCategoryId("personal", "academia"),
-  );
-  assert.equal(
-    (await list()).find((row) => row.id === "t3")?.category,
-    fixedCategoryId("personal", "farmacia"),
-  );
-  await f.write("edit_transaction", {
-    category: fixedCategoryId("personal", "saude-geral"),
-    id: "t",
-  });
-  await importWithClassifier(rows, classifier, "2026-10-02T00:00:00.000Z");
-  assert.equal(calls, 3);
-  assert.equal(
-    (await list()).find((row) => row.id === "t")?.category,
-    fixedCategoryId("personal", "saude-geral"),
-  );
-  assert.equal(
-    TransactionListSchema.parse(
-      await planning(false).call("get_transactions"),
-    ).data.records.find((row) => row.id === "t2")?.category,
-    fixedCategoryId("personal", "compras"),
-  );
-  await collect(
-    source([
-      transaction({
-        category: "Groceries",
-        description: "Nova evidência",
-        id: "t2",
-      }),
-    ]),
-    "2026-10-03T00:00:00.000Z",
-  );
-  assert.equal(
-    (await list()).find((row) => row.id === "t2")?.category,
-    fixedCategoryId("personal", "mercado"),
-  );
-});
-
-test("classification checkpoint replay skips completed inference pages and keeps rule priority across accounts", async () => {
-  const f = planning(true);
-  await f.write("create_rule", {
-    categoryId: fixedCategoryId("personal", "saude-geral"),
-    name: "Academia local",
-    priority: 1,
-    text: "Academia",
-  });
-  const rows = Array.from({ length: 28 }, (_, index) =>
-    transaction({
-      category: "Shopping",
-      description: `Academia sintética ${index}`,
-      id: `t${String(index).padStart(2, "0")}`,
-    }),
-  );
-  rows.push(
-    transaction({
-      accountId: "b",
-      category: "Shopping",
-      description: "Academia B1",
-      id: "b1",
-    }),
-    transaction({
-      accountId: "b",
-      category: "Shopping",
-      description: "Academia B2",
-      id: "b2",
-    }),
-  );
-  const id = await admit();
-  const repository = createSyncRepository(env.DB);
-  let calls = 0;
-  let replayed = false;
-  await runImport(
-    {
-      classifier: () => {
-        calls += 1;
-        return Promise.resolve({ category: "academia", confidence: 0.9 });
-      },
-      now: () => "2026-10-01T00:00:00.000Z",
-      repository,
-      source: source(rows, [account(), account({ id: "b" })]),
-      steps: {
-        do: async (_name, operation) => {
-          const before = await repository.read(id);
-          const result = await operation();
-          if (before.checkpoint.phase === "classification" && !replayed) {
-            replayed = true;
-            const count = calls;
-            assert.deepEqual(await operation(), result);
-            assert.equal(calls, count);
-          }
-          return result;
-        },
-      },
-    },
-    id,
-  );
-  assert.equal((await repository.read(id)).status, "succeeded");
-  assert.equal(replayed, true);
-  assert.equal(calls, 30);
-  const { records } = TransactionListSchema.parse(
-    await f.call("get_transactions"),
-  ).data;
-  assert.equal(records.length, 30);
-  assert.ok(
-    records.every(
-      (row) => row.category === fixedCategoryId("personal", "saude-geral"),
-    ),
-  );
-  assert.equal(
-    await env.DB.prepare(
-      "SELECT count(*) AS n FROM transactions WHERE classification IS NOT NULL",
-    ).first("n"),
-    30,
   );
 });
 

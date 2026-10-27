@@ -127,7 +127,6 @@ function changedRows<T extends { id: string }>(before: T[], after: T[]) {
 }
 export function createPlanningRepository(
   binding: D1Database,
-  clefEnabled = false,
 ): PlanningRepository {
   const db = database(binding);
   async function revision() {
@@ -565,7 +564,6 @@ export function createPlanningRepository(
           accountDetails: [],
           accounts: importedAccounts(origins, owners, persons),
           bills: [],
-          clefEnabled,
           connections: origins,
           owners,
           partial: origins.some(connectionPartial),
@@ -630,7 +628,6 @@ export function createPlanningRepository(
         accountDetails: accountDetails.map((r) => r.data),
         accounts: importedAccounts(origins, owners, persons),
         bills: bills.map((r) => r.data),
-        clefEnabled,
         connections: origins,
         owners,
         partial: !origins.length || origins.some(connectionPartial),

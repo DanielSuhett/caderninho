@@ -1,10 +1,12 @@
+import "./validation-config";
+
 import { Toasty } from "@cloudflare/kumo/components/toast";
 import { TooltipProvider } from "@cloudflare/kumo/components/tooltip";
 import { KumoLocaleProvider } from "@cloudflare/kumo/utils";
 import type { ComponentProps } from "react";
 import { createRoot } from "react-dom/client";
 
-import { AccountView } from "./account";
+import { AccountView, preloadCurrentPage } from "./account";
 
 import "./account.css";
 import "./account/audit.css";
@@ -26,6 +28,7 @@ function Account(props: ComponentProps<typeof AccountView>) {
 export function mountAccount(props: ComponentProps<typeof AccountView> = {}) {
   const root = document.getElementById("account-root");
   if (root) {
+    preloadCurrentPage();
     createRoot(root).render(<Account {...props} />);
   }
 }

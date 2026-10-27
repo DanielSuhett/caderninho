@@ -119,19 +119,26 @@ const pageLoaders: Record<string, (() => Promise<unknown>) | undefined> = {
   "/account/transactions": loadTransactions,
 };
 
-function preloadPage(event: FocusEvent<HTMLElement> | MouseEvent<HTMLElement>) {
-  const href = event.currentTarget.getAttribute("href");
-  if (!href) {
-    return;
-  }
-  const path = accountPath(new URL(href, location.href).pathname);
-  const load = pageLoaders[path];
+// Warm code only; queries still belong to the mounted page.
+function warmPage(pathname: string) {
+  const load = pageLoaders[accountPath(pathname)];
   if (load) {
-    // Warm code on intent only; queries still belong to the mounted page.
     tryCatch(load).then(
       ({ data: _data, error: _error }) => undefined,
       () => undefined,
     );
+  }
+}
+
+// The current page's code downloads while the installation is being read.
+export function preloadCurrentPage() {
+  warmPage(location.pathname);
+}
+
+function preloadPage(event: FocusEvent<HTMLElement> | MouseEvent<HTMLElement>) {
+  const href = event.currentTarget.getAttribute("href");
+  if (href) {
+    warmPage(new URL(href, location.href).pathname);
   }
 }
 const pages = [

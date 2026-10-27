@@ -8,16 +8,10 @@ export {
   isCardExpense,
   isCardInstallment,
 } from "./card.entity";
-export type {
-  FixedCategoryKey,
-  TransactionClassification,
-} from "./category.entity";
+export type { FixedCategoryKey } from "./category.entity";
 export {
   CategoryIcon,
-  CLASSIFICATION_VERSION,
-  CLEF_MIN_CONFIDENCE,
   categoryCatalog,
-  classificationState,
   defaultCategoryGroups,
   fixedCategories,
   fixedCategoryId,
@@ -28,7 +22,6 @@ export {
   CategoryColorSchema,
   CategoryIconSchema,
   FixedCategoryKeySchema,
-  TransactionClassificationSchema,
 } from "./category.schema";
 export { ChartType, financialCharts } from "./chart.entity";
 export {

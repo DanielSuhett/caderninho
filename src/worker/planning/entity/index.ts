@@ -15,7 +15,6 @@ export interface PlanningSnapshot {
   accountDetails: AccountDetails[];
   accounts: PlanningAccount[];
   bills: Bill[];
-  clefEnabled?: boolean;
   connections: (typeof connections.$inferSelect)[];
   owners: ConnectionOwner[];
   partial: boolean;

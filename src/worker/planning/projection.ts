@@ -2,7 +2,6 @@ import type { PlanningCommand } from "../../contracts";
 import {
   AccountType,
   CategoryKind,
-  CLASSIFICATION_VERSION,
   connectionPartial,
   type FinancialIdentity,
   type FinancialIdentityFilter,
@@ -242,11 +241,7 @@ export function transactionStream(
     }
     const account = accountMap.get(edit?.accountId ?? row.accountId);
     const spaceId = edit?.spaceId ?? account?.spaceId ?? "personal";
-    const automatic =
-      snapshot.clefEnabled &&
-      row.classification?.version === CLASSIFICATION_VERSION
-        ? row.classification.category
-        : pluggyCategory(row.category);
+    const automatic = pluggyCategory(row.category);
     const sourceCategory = state.categories.some(
       (category) =>
         category.id === row.category && category.spaceId === spaceId,

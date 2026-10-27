@@ -1,13 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { transactionIdentificationInput } from "../../fixtures/transaction-identification";
 import {
   categoryCatalog,
-  classificationState,
   fixedCategories,
   fixedCategoryId,
-  normalizeTransaction,
   pluggyCategory,
 } from "..";
 
@@ -106,38 +103,4 @@ test("deterministic provider rules preserve specific meaning and map broad label
       `Known provider label: ${label}`,
     );
   }
-});
-
-test("AI evidence contains merchant activity and purpose without sending private identity coordinates or provider labels", () => {
-  const row = normalizeTransaction(
-    {
-      ...transactionIdentificationInput,
-      accountId: "a",
-      amount: "-10",
-      currencyCode: "BRL",
-      date: "2026-10-01",
-      description: "Mercado sintético",
-      id: "t",
-      status: "POSTED",
-      type: "DEBIT",
-    },
-    "a",
-  );
-  const state = classificationState(row);
-  assert.equal(state.merchant?.cnae, row.identification?.merchant?.cnae);
-  assert.equal(state.reason, row.identification?.paymentData?.reason);
-  const serialized = JSON.stringify(state);
-  for (const field of [
-    "cnpj",
-    "documentNumber",
-    "accountNumber",
-    "routingNumber",
-    "balance",
-    "amountMinor",
-    "providerId",
-    "referenceNumber",
-  ]) {
-    assert.equal(serialized.includes(`"${field}"`), false);
-  }
-  assert.equal("category" in state, false);
 });

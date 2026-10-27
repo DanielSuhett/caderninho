@@ -36,65 +36,31 @@ A demonstração usa os mesmos contratos e dados sintéticos, sem gravar no banc
 ## Prioridade e fallback
 
 1. Edição ou regra local já aplicada.
-2. Clef habilitado, com categoria fixa válida e confiança de pelo menos 0,8.
-3. Regras determinísticas de conversão do rótulo Pluggy.
+2. Regras determinísticas de conversão do rótulo Pluggy.
 
 O catálogo e as regras estão em `src/domain/category.entity.ts`. O mapeamento
 cobre a árvore publicada da Pluggy e variantes antigas conhecidas, incluindo
 `Accomodation` e `Tolls and in vehicle payment`. Rótulos amplos recebem a
 categoria mais próxima disponível: Services/Other → Compras, Travel → Lazer,
 Transportation → Corridas. Não se infere uma categoria específica ausente no
-provedor: Casamento e Lavanderia, por exemplo, precisam de evidência do Clef ou
-de correção/regra local. Rótulos novos desconhecidos e ausentes ficam sem
+provedor: Casamento e Lavanderia, por exemplo, precisam de correção ou regra local. Rótulos novos desconhecidos e ausentes ficam sem
 categoria até haver evidência; o rótulo original continua preservado.
 
-`transactions.category` e `identification` conservam a origem. O resultado do
-Clef fica em `transactions.classification`: categoria estável, modelo, confiança,
-versão e hash da evidência. As consultas de planejamento usam a categoria efetiva
-com ID do espaço. As consultas financeiras de origem continuam retornando a
-categoria Pluggy e também expõem a classificação separada. Desligar o Clef faz
-as projeções usarem as regras Pluggy, mesmo que exista decisão Clef armazenada.
+`transactions.category` e `identification` conservam a origem. As consultas de
+planejamento usam a categoria efetiva com ID do espaço. As consultas financeiras
+de origem continuam retornando a categoria Pluggy.
 
 Investimentos e transferências ficam fora dos totais de receita/despesa. Entrada
 de empréstimo em Financiamento também é movimentação; a parcela de saída continua
 como despesa. O fluxo de caixa mantém todos os movimentos bancários.
 
-## Clef no Worker
-
-Os dois arquivos Wrangler declaram o binding `AI` e `CLEF_ENABLED="false"`.
-Para habilitar, configure `CLEF_ENABLED="true"`
-nas variáveis do Worker. Não há token de API extra: o binding usa Workers AI da
-mesma conta Cloudflare. O modelo escolhido é `@cf/cloudflare/clef-flash`.
-
-Quando habilitado, o Workflow acrescenta a fase `classification` após importar
-transações e produtos. Percorre páginas de 25 registros pelo índice de conta/data/ID;
-cada publicação confirma decisões e checkpoint no mesmo batch. IDs de steps
-existentes são preservados. Evidências iguais na página compartilham uma decisão;
-decisões aceitas com hash e versão iguais são reutilizadas nas importações
-seguintes. Mudanças na origem invalidam a classificação antiga. Erros, resposta
-inválida, quota, `unknown` e baixa confiança usam fallback. Após erro do binding,
-o adapter para de chamar IA naquela execução; uma retomada pode tentar novamente.
-
-O prompt usa descrição, descrição original, direção, nome/razão social/CNAE/ramo
-do estabelecimento, contraparte, motivo, tipo de operação e MCC. Documentos,
-CNPJ, agência/conta, referências, saldo, valor e IDs ficam no histórico privado;
-não são enviados como campos do prompt. Textos livres podem conter informação
-pessoal recebida da origem. Não existe consulta externa de CNPJ/CNAE pelo modelo.
-
-O limite gratuito é compartilhado com outros usos da conta. O código não altera
-plano, billing nem limites da Cloudflare. Em conta paga, habilitar inferência pode
-gerar cobrança após a franquia; `CLEF_ENABLED=false` evita chamadas do produto.
-
-Fontes oficiais consultadas em 24/10/2026:
-[árvore Pluggy](https://v2.docs.pluggy.ai/en/docs/products/transaction-categorization),
-[Clef Flash](https://developers.cloudflare.com/workers-ai/models/clef-flash/),
-[Workers AI pricing](https://developers.cloudflare.com/workers-ai/platform/pricing/).
+Fonte oficial da árvore de categorias:
+[árvore Pluggy](https://v2.docs.pluggy.ai/en/docs/products/transaction-categorization), consultada em 24/10/2026.
 
 ## Evidência
 
 Testes locais cobrem catálogo inicial, CRUD/vínculos/idempotência/escopo,
-respostas do adapter, classificação após importação, cache, fallback, desligamento
-e precedência manual. Não medem acurácia real deste catálogo de 33 nomes.
+mapeamento determinístico da Pluggy e precedência manual.
 Deploy, migração remota e importação real exigem validação separada.
 
 O teste de custo local semeia 10 mil transações na mesma data e consulta uma

@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 
 import { beforeEach, test } from "vitest";
 
-import { createSyncRepository } from "../../src/worker/sync/repository";
 import { createSyncHistoryRepository } from "../../src/worker/sync/repository/history.repository";
 import { setup } from "./fixture";
 import { env } from "cloudflare:workers";
@@ -51,27 +50,4 @@ test("initial schema bounds history/status and tied audit scans with complete st
     await env.DB.prepare("SELECT count(*) AS n FROM mcp_audit").first("n"),
     10_000,
   );
-});
-
-test("late classification pages use an index range instead of rescanning previous transactions", async () => {
-  await env.DB.prepare(`WITH RECURSIVE records(i) AS (
-    VALUES(0) UNION ALL SELECT i+1 FROM records WHERE i<9999
-  ) INSERT INTO transactions(id,account_id,date,amount_minor,currency,direction,status,description)
-    SELECT printf('t%05d',i),'a','2026-10-01','-100','BRL','DEBIT','POSTED','Synthetic' FROM records`).run();
-  const before = await env.DB.prepare(
-    "SELECT * FROM transactions WHERE account_id='a' AND (date>'2026-10-01' OR (date='2026-10-01' AND id>'t09950')) ORDER BY date,id LIMIT 25",
-  ).all();
-  const after = await env.DB.prepare(
-    "SELECT * FROM transactions WHERE account_id='a' AND (date,id)>('2026-10-01','t09950') ORDER BY date,id LIMIT 25",
-  ).all();
-  assert.deepEqual(after.results, before.results);
-  assert.ok(after.meta.rows_read <= 51);
-  assert.ok(after.meta.rows_read < before.meta.rows_read);
-  const rows = await createSyncRepository(env.DB).classificationPage("a", {
-    date: "2026-10-01",
-    id: "t09950",
-  });
-  assert.equal(rows.length, 25);
-  assert.equal(rows[0]?.id, "t09951");
-  assert.equal(rows.at(-1)?.id, "t09975");
 });

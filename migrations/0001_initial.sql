@@ -26,8 +26,7 @@ CREATE TABLE transactions (
   amount_minor TEXT,
   description TEXT NOT NULL,
   category TEXT,
-  identification TEXT CHECK(identification IS NULL OR json_valid(identification)),
-  classification TEXT CHECK (classification IS NULL OR json_valid(classification))
+  identification TEXT CHECK(identification IS NULL OR json_valid(identification))
 );
 
 CREATE TABLE planning_revision (
@@ -155,7 +154,8 @@ CREATE TABLE pluggy_profiles (
 CREATE TABLE connection_owners (
   connection_id TEXT PRIMARY KEY NOT NULL REFERENCES connections(id) ON DELETE CASCADE,
   profile_id TEXT NOT NULL REFERENCES pluggy_profiles(id),
-  person_id TEXT NOT NULL REFERENCES people(id)
+  person_id TEXT NOT NULL REFERENCES people(id),
+  institution TEXT CHECK (institution IS NULL OR json_valid(institution))
 );
 
 CREATE TABLE sync_history (
@@ -327,7 +327,11 @@ CREATE TRIGGER planning_transactions_update AFTER UPDATE ON transactions BEGIN U
 
 CREATE TRIGGER planning_transactions_delete AFTER DELETE ON transactions BEGIN UPDATE planning_revision SET revision=revision+1 WHERE id=1; END;
 
-CREATE TRIGGER connection_default_owner AFTER INSERT ON connections BEGIN INSERT INTO connection_owners VALUES(NEW.id,'default','self'); END;
+CREATE TRIGGER connection_default_owner AFTER INSERT ON connections
+BEGIN
+  INSERT INTO connection_owners(connection_id,profile_id,person_id)
+  VALUES(NEW.id,'default','self');
+END;
 
 CREATE TRIGGER connection_owner_revision AFTER UPDATE ON connection_owners BEGIN UPDATE planning_revision SET revision=revision+1 WHERE id=1; END;
 
@@ -352,7 +356,7 @@ CREATE TRIGGER sync_history_progress AFTER UPDATE OF import_id,import_status,imp
 CREATE TRIGGER planning_apply_new_transaction_rules AFTER INSERT ON transactions
 BEGIN
   INSERT OR IGNORE INTO planning_edits(id,data)
-  SELECT NEW.id,json_object('id',NEW.id,'accountId',NEW.account_id,'manual',json('false'),'category',json_extract(data,'$.categoryId'))
+  SELECT NEW.id,json_object('id',NEW.id,'accountId',NEW.account_id,'manual',json('false'),'category',json_extract(data,'$.categoryId'),'categoryRuleId',rule.id)
   FROM planning_rules rule
   WHERE json_extract(data,'$.enabled')=1
     AND json_extract(data,'$.spaceId')=coalesce((SELECT json_extract(data,'$.spaceId') FROM planning_accounts WHERE id=NEW.account_id),'personal')
@@ -411,3 +415,20 @@ BEGIN
   ORDER BY (json_extract(data,'$.pack.id') IS NOT NULL),
     CAST(json_extract(data,'$.priority') AS INTEGER),id LIMIT 1;
 END;
+
+-- Rule imports and reapplications run as durable background jobs. Uploaded rules
+-- stay in chunks so files of any size are processed in bounded native imports.
+CREATE TABLE rule_jobs (
+  id TEXT PRIMARY KEY NOT NULL,
+  space_id TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  data TEXT NOT NULL CHECK (json_valid(data))
+);
+CREATE INDEX rule_jobs_space ON rule_jobs(space_id, created_at);
+CREATE TABLE rule_job_chunks (
+  job_id TEXT NOT NULL REFERENCES rule_jobs(id) ON DELETE CASCADE,
+  seq INTEGER NOT NULL,
+  rules TEXT NOT NULL CHECK (json_valid(rules)),
+  result TEXT CHECK (result IS NULL OR json_valid(result)),
+  PRIMARY KEY (job_id, seq)
+);

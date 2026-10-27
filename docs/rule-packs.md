@@ -55,11 +55,8 @@ política do domínio. O contrato MCP `apply_rules` mantém o comportamento padr
 os campos opcionais `preserveManual` e `expected_revision` permitem proteção e
 concorrência explícitas. A prévia do painel não registra uma nova ferramenta MCP.
 
-As migrações locais `0002_connection_institution.sql` e
-`0003_rule_category_origin.sql` acrescentam a associação da instituição e a origem
-das próximas classificações. Não reescrevem histórico nem removem dados. Uma
-instalação existente precisa aplicá-las no deploy autorizado, antes de servir
-o novo código.
+A instituição das conexões e a origem das categorias de regra estão no modelo
+inicial, `migrations/0001_initial.sql`.
 
 O motor só dobra A–Z; acentos são literais. O Brasil de exemplo exige débito
 POSTED/BRL e descrições inteiras declaradas. iFood/Rappi precisam indicar ramo.

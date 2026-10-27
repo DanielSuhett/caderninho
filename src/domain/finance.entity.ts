@@ -1,4 +1,3 @@
-import type { TransactionClassification } from "./category.entity";
 import type { FinancialIdentity } from "./financial-identity.entity";
 import type { AccountDetails, TransactionDetails } from "./planning.entity";
 import type { TransactionIdentification } from "./transaction.entity";
@@ -38,7 +37,6 @@ export interface TransactionProjection {
   accountId: string;
   amountMinor: string | null;
   category: string | null;
-  classification?: TransactionClassification | null | undefined;
   currency: string;
   date: string;
   description: string;

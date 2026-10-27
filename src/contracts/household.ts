@@ -10,6 +10,7 @@ export const InstitutionCatalogSelectionSchema = z
 export const InstitutionCatalogSchema = z.object({
   records: z.array(InstitutionSchema),
 });
+export type InstitutionCatalog = z.infer<typeof InstitutionCatalogSchema>;
 // Only bounded raster data can be stored; no third-party image requests or SVG.
 export const PersonPhotoSchema = z
   .string()
@@ -87,6 +88,7 @@ export const HouseholdResultSchema = z.union([
   z.object({ id, personId: id.optional() }),
   z.object({ ok: z.literal(true) }),
 ]);
+export type HouseholdResult = z.infer<typeof HouseholdResultSchema>;
 export const HouseholdCatalogSchema = z.object({
   people: z.array(z.object({ id, name, photo: z.string().nullish() })),
   profiles: z.array(

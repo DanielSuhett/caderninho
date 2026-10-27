@@ -109,7 +109,7 @@ validação Zod. Não cria ferramenta MCP, migração ou chamada nova à
 Pluggy. A edição usa a mutação local documentada acima. O serviço usa a projeção efetiva existente, com leitura incremental e
 detalhes limitados; valida a revisão depois da consulta.
 
-O gráfico usa Kumo Chart e ECharts PieChart carregados sob demanda. Conteúdo e
+O gráfico de rosca SVG (`svg-chart.tsx`) carrega sob demanda. Conteúdo e
 controles desta aba usam 16 px, metadados de 14 px, Inter e temas nativos. Testes locais usam apenas
 dados sintéticos; não comprovam
 disponibilidade de limites em uma instituição real ou deploy.

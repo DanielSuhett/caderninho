@@ -30,7 +30,6 @@ import { createPluggyAdapter, createProfileSource } from "../pluggy";
 import { createRuleJobService } from "../rules";
 import { createRuleJobRepository } from "../rules/repository";
 import { createSyncService } from "../sync";
-import { createClefClassifier } from "../sync/clef.adapter";
 import { createSyncRepository } from "../sync/repository";
 import { createSyncHistoryRepository } from "../sync/repository/history.repository";
 
@@ -111,8 +110,6 @@ export function financialService(env: Bindings) {
 export function synchronizationDependencies(env: Bindings) {
   const repository = createSyncRepository(env.DB);
   return {
-    ...(env.CLEF_ENABLED === "true" &&
-      env.AI && { classifier: createClefClassifier(env.AI) }),
     now: () => new Date().toISOString(),
     repository: {
       ...repository,
@@ -166,9 +163,7 @@ export function syncService(env: Bindings, now: () => Date = () => new Date()) {
 }
 
 export function planningService(env: Bindings) {
-  return createPlanningService(
-    createPlanningRepository(env.DB, env.CLEF_ENABLED === "true"),
-  );
+  return createPlanningService(createPlanningRepository(env.DB));
 }
 
 export function synchronizationHistory(
@@ -251,8 +246,5 @@ export function auditRepository(env: Bindings) {
 }
 
 export function rulePreview(env: Bindings, input: RulePreviewInput) {
-  return previewRule(
-    createPlanningRepository(env.DB, env.CLEF_ENABLED === "true"),
-    input,
-  );
+  return previewRule(createPlanningRepository(env.DB), input);
 }
