@@ -99,11 +99,7 @@ export async function connectToken(
 ) {
   return z
     .object({ accessToken: z.string().min(1).max(12_000) })
-    .parse(
-      await sdkResult(() =>
-        client.createConnectToken(itemId, { avoidDuplicates: true }),
-      ),
-    );
+    .parse(await sdkResult(() => client.createConnectToken(itemId)));
 }
 
 function transactionCursor(

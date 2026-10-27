@@ -23,6 +23,9 @@ export interface AccountMetadata {
   balanceMinor: string | null;
   balanceObservedAt: string | null;
   currency: string;
+  // Hash of "COMPE/agência/conta"; lets a second item of the same account be
+  // recognized. Never leaves the server.
+  holderKey?: string | undefined;
   identity?: FinancialIdentity | null | undefined;
   name: string;
   type: AccountType;

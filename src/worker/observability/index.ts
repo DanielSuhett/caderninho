@@ -165,7 +165,7 @@ export interface SafeFields {
   durationMs?: number;
   failed?: number;
   failure?: FailureCode;
-
+  institution?: "conflict" | "unavailable" | "unrecognized";
   outcome?: Outcome;
   pages?: number;
   phase?: SpanName | Phase;
@@ -184,6 +184,7 @@ function safeFields(input: SafeFields): SafeFields {
     ...(input.action && { action: input.action }),
     ...(input.outcome && { outcome: input.outcome }),
     ...(input.failure && { failure: input.failure }),
+    ...(input.institution && { institution: input.institution }),
     ...(input.recovery && { recovery: input.recovery }),
     ...(input.resource && { resource: input.resource }),
     ...(input.phase && { phase: input.phase }),

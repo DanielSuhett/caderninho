@@ -7,7 +7,7 @@ import {
 import { type MouseEvent, useCallback, useState } from "react";
 
 import type { ConnectionInfo, HouseholdCommand } from "../../contracts";
-import { UiIconButton, UiLink } from "../ui";
+import { UiButton, UiIconButton, UiLink } from "../ui";
 import type { createAccountApi } from "./account-api";
 import type { ManagementOutcome } from "./account-feedback";
 import { type AccountAppearance, AccountAvatar } from "./account-identity";
@@ -20,7 +20,7 @@ export function bankAppearance(connection: ConnectionInfo): AccountAppearance {
   )?.identity?.institution;
   return {
     identity: { cardBrand: null, institution: institution ?? null },
-    name: institution?.name ?? "Banco autorizado",
+    name: institution?.name ?? "Banco não identificado",
   };
 }
 
@@ -98,20 +98,34 @@ export function SetupBanks({
           const appearance = bankAppearance(connection);
           return (
             <li
-              className="setup-bank-row"
+              className={
+                appearance.identity?.institution
+                  ? "setup-bank-row"
+                  : "setup-bank-row setup-bank-row-unidentified"
+              }
               key={connection.id}
             >
               <AccountAvatar account={appearance} />
               <strong>{appearance.name}</strong>
               <BankStatus connection={connection} />
               <div className="setup-bank-actions">
-                <UiIconButton
-                  data-connection={connection.id}
-                  label={`Corrigir banco de ${appearance.name}`}
-                  onClick={open}
-                >
-                  <PencilSimpleIcon size={20} />
-                </UiIconButton>
+                {appearance.identity?.institution ? (
+                  <UiIconButton
+                    data-connection={connection.id}
+                    label={`Corrigir banco de ${appearance.name}`}
+                    onClick={open}
+                  >
+                    <PencilSimpleIcon size={20} />
+                  </UiIconButton>
+                ) : (
+                  <UiButton
+                    data-connection={connection.id}
+                    onClick={open}
+                    type="button"
+                  >
+                    Escolher banco
+                  </UiButton>
+                )}
                 <Tooltip
                   content="Ver histórico da conexão"
                   render={

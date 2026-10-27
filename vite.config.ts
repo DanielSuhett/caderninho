@@ -1,6 +1,7 @@
 import { copyFile, cp, mkdir, readFile, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
+import bancos from "logos-bancos-br/data/bancos.json" with { type: "json" };
 import { defineConfig, type Plugin } from "vite";
 
 import { renderPage } from "./src/web/document";
@@ -27,6 +28,33 @@ function phosphorWeights(): Plugin {
   };
 }
 
+// Bank logos ship as static assets named by COMPE; they never enter a JS bundle.
+async function copyBankLogos(destination: URL) {
+  const base = new URL(
+    "./",
+    import.meta.resolve("logos-bancos-br/package.json"),
+  );
+  await mkdir(new URL("bancos/", destination), { recursive: true });
+  // The logos are trademarks of their institutions; keep the package notice.
+  await Promise.all(
+    ["DISCLAIMER.md", "LICENSE"].map((name) =>
+      copyFile(new URL(name, base), new URL(`bancos/${name}`, destination)),
+    ),
+  );
+  await Promise.all(
+    bancos.banks.flatMap((bank) => {
+      const logo = bank.logo?.svg;
+      if (!(bank.compe && logo)) {
+        return [];
+      }
+      return copyFile(
+        new URL(logo, base),
+        new URL(`bancos/${bank.compe}.svg`, destination),
+      );
+    }),
+  );
+}
+
 function copyPortalAssets(): Plugin {
   return {
     async closeBundle() {
@@ -35,6 +63,7 @@ function copyPortalAssets(): Plugin {
       const site = new URL("dist/site/", root);
       await mkdir(output, { recursive: true });
       await mkdir(site, { recursive: true });
+      await copyBankLogos(output);
       await Promise.all(
         [output, site].map((destination) =>
           copyFile(
@@ -146,7 +175,7 @@ function copyPortalAssets(): Plugin {
       );
       await writeFile(
         new URL("_headers", output),
-        `/*\n  Referrer-Policy: same-origin\n  X-Content-Type-Options: nosniff\n  Content-Security-Policy: default-src 'none'; font-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://cdn.pluggy.ai/assets/connector-icons/; frame-ancestors 'none'; base-uri 'none'; form-action 'self'\n\n/chunks/*\n  Cache-Control: public, max-age=31536000, immutable\n\n/fonts/*.woff2\n  Cache-Control: public, max-age=31536000, immutable\n`,
+        `/*\n  Referrer-Policy: same-origin\n  X-Content-Type-Options: nosniff\n  Content-Security-Policy: default-src 'none'; font-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://cdn.pluggy.ai/assets/connector-icons/; frame-ancestors 'none'; base-uri 'none'; form-action 'self'\n\n/chunks/*\n  Cache-Control: public, max-age=31536000, immutable\n\n/fonts/*.woff2\n  Cache-Control: public, max-age=31536000, immutable\n\n/bancos/*\n  Cache-Control: public, max-age=86400\n`,
       );
       await Promise.all(
         ["kumo.css", "_headers"].map((name) =>

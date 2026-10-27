@@ -1,13 +1,18 @@
 import {
+  type AccountProjection,
   AccountType,
+  accountCompes,
+  accountHolderKey,
   assertPersonalConnector,
   connectorInstitution,
   detectInstitution,
   ImportPhase,
   type Institution,
+  isDuplicateConnection,
   normalizeAccount,
   normalizeTransaction,
   type ProductPage,
+  type ProviderAccount,
   type ProviderConnection,
   RunStatus,
 } from "../../domain";
@@ -15,6 +20,7 @@ import { hash, tryCatch } from "../../shared";
 import {
   AdmissionStatus,
   type ImportDependencies,
+  InstitutionIssue,
   importFailure,
   type SyncRun,
   type SyncServiceDependencies,
@@ -42,16 +48,33 @@ async function unique<T extends { id: string }>(records: T[]) {
   }
   return result;
 }
+function providerAccounts(
+  source: ImportDependencies["source"],
+  connectionId: string,
+) {
+  return source.accounts(connectionId).then(unique);
+}
+function projectedAccounts(
+  accounts: ProviderAccount[],
+  connectionId: string,
+  connector?: ProviderConnection["connector"],
+) {
+  return accounts
+    .map((row) => normalizeAccount(row, connectionId, connector))
+    .sort((left, right) =>
+      left.id < right.id ? -1 : Number(left.id > right.id),
+    );
+}
 async function catalog(
   source: ImportDependencies["source"],
   connectionId: string,
   connector?: ProviderConnection["connector"],
 ) {
-  return (await unique(await source.accounts(connectionId)))
-    .map((row) => normalizeAccount(row, connectionId, connector))
-    .sort((left, right) =>
-      left.id < right.id ? -1 : Number(left.id > right.id),
-    );
+  return projectedAccounts(
+    await providerAccounts(source, connectionId),
+    connectionId,
+    connector,
+  );
 }
 function afterTransactions(
   dependencies: ImportDependencies,
@@ -61,29 +84,10 @@ function afterTransactions(
   }
   return ImportPhase.finish;
 }
-// Meu Pluggy reports its own connector, so the bank comes from the names the
-// provider gives to accounts and investments. Best effort: without the catalog the
-// import continues and keeps the institutions found by the previous import.
-async function institutionCatalog(
-  source: ImportDependencies["source"],
+async function savedInstitution(
+  { repository }: ImportDependencies,
   connectionId: string,
 ) {
-  const { institutionCatalog: read } = source;
-  if (!read) {
-    return null;
-  }
-  const { data, error } = await tryCatch(() => read(connectionId));
-  return error ? null : data;
-}
-async function detectedInstitution(
-  { repository, source }: ImportDependencies,
-  connectionId: string,
-  evidence: string[],
-): Promise<Institution | null> {
-  const institutions = await institutionCatalog(source, connectionId);
-  if (institutions) {
-    return detectInstitution({ catalog: institutions, evidence });
-  }
   const saved = Object.values(
     await repository.connectionAccounts(connectionId),
   );
@@ -92,6 +96,69 @@ async function detectedInstitution(
       ?.institution ?? null
   );
 }
+// Meu Pluggy reports its own connector, so the bank comes from the COMPE in the
+// bank accounts' transfer number, then from the names the provider gives to
+// accounts. One item is one bank: conflicting codes leave it unknown. An
+// unavailable or unrecognizing catalog keeps what the previous import found.
+async function detectedInstitution(
+  dependencies: ImportDependencies,
+  connectionId: string,
+  accounts: ProviderAccount[],
+): Promise<Institution | null> {
+  const { institutions, reportInstitution } = dependencies;
+  const compes = accountCompes(accounts);
+  if (compes.size > 1) {
+    reportInstitution(InstitutionIssue.conflict);
+    return null;
+  }
+  const { data, error } = await tryCatch(async () => {
+    const [compe] = compes;
+    const byCode = compe ? await institutions.find(compe) : null;
+    if (byCode) {
+      return byCode;
+    }
+    return detectInstitution({
+      catalog: await institutions.list(),
+      evidence: accounts.map((account) => account.name),
+    });
+  });
+  if (error) {
+    reportInstitution(InstitutionIssue.unavailable);
+    return savedInstitution(dependencies, connectionId);
+  }
+  if (!data) {
+    reportInstitution(InstitutionIssue.unrecognized);
+    return savedInstitution(dependencies, connectionId);
+  }
+  return data;
+}
+// Another item of the same bank account would import every transaction twice.
+// Accounts are compared by hashed COMPE/agency/account, never by provider ids.
+async function rejectDuplicateConnection(
+  { repository }: ImportDependencies,
+  connectionId: string,
+  accounts: ProviderAccount[],
+  prepared: AccountProjection[],
+) {
+  const keyed = await Promise.all(
+    accounts.map(async (account) => {
+      const key = accountHolderKey(account.bankData?.transferNumber);
+      return { holderKey: key && (await hash(key)), id: account.id };
+    }),
+  );
+  const incoming: string[] = [];
+  for (const { holderKey, id } of keyed) {
+    const projection = prepared.find((account) => account.id === id);
+    if (holderKey && projection) {
+      projection.holderKey = holderKey;
+      incoming.push(holderKey);
+    }
+  }
+  const existing = new Set(await repository.otherHolderKeys(connectionId));
+  if (isDuplicateConnection(incoming, existing)) {
+    throw new Error("ACCOUNT_ALREADY_CONNECTED");
+  }
+}
 async function importAccounts(dependencies: ImportDependencies, run: SyncRun) {
   const { repository, source, now } = dependencies;
   const connection = await source.connection(run.connectionId);
@@ -99,17 +166,20 @@ async function importAccounts(dependencies: ImportDependencies, run: SyncRun) {
     throw new Error("SOURCE_IDENTITY_MISMATCH");
   }
   assertPersonalConnector(connection.connector?.id);
-  const prepared = await catalog(
-    source,
+  const accounts = await providerAccounts(source, run.connectionId);
+  const prepared = projectedAccounts(
+    accounts,
     run.connectionId,
     connection.connector,
   );
+  await rejectDuplicateConnection(
+    dependencies,
+    run.connectionId,
+    accounts,
+    prepared,
+  );
   const institution = prepared.some((account) => !account.identity?.institution)
-    ? await detectedInstitution(
-        dependencies,
-        run.connectionId,
-        prepared.map((account) => account.name),
-      )
+    ? await detectedInstitution(dependencies, run.connectionId, accounts)
     : null;
   for (const account of prepared) {
     if (institution && !account.identity?.institution) {
@@ -189,9 +259,12 @@ async function identifyInvestments(
   );
   // Provider institutions carry a CNPJ and no logo; resolve them through the
   // catalog so investments group with the accounts of the same bank.
-  const institutions = named.length
-    ? await institutionCatalog(dependencies.source, connectionId)
-    : null;
+  const { data: institutions, error } = await tryCatch(() =>
+    named.length ? dependencies.institutions.list() : Promise.resolve([]),
+  );
+  if (error) {
+    dependencies.reportInstitution(InstitutionIssue.unavailable);
+  }
   for (const investment of named) {
     const institution =
       institutions &&
@@ -203,13 +276,16 @@ async function identifyInvestments(
       investment.identity = { cardBrand: null, institution };
     }
   }
-  if (connector) {
-    for (const investment of products.records) {
-      investment.identity ??= {
-        cardBrand: null,
-        institution: connectorInstitution(connector),
-      };
-    }
+  // Positions without an issuer belong to the bank of the item they came from.
+  const unnamed = products.records.filter(
+    (investment) => !investment.identity?.institution,
+  );
+  const inherited = unnamed.length
+    ? await savedInstitution(dependencies, connectionId)
+    : null;
+  const own = inherited ?? connectorInstitution(connector);
+  for (const investment of unnamed) {
+    investment.identity = { cardBrand: null, institution: own };
   }
 }
 async function importProducts(dependencies: ImportDependencies, run: SyncRun) {

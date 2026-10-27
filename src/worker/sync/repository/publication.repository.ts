@@ -79,6 +79,9 @@ export async function publicationData(db: Database, input: Publication) {
           balanceMinor,
           balanceObservedAt,
           currency: account.currency,
+          ...((account.holderKey ?? previous?.holderKey) && {
+            holderKey: account.holderKey ?? previous?.holderKey,
+          }),
           identity: account.identity ?? previous?.identity ?? null,
           name: account.name,
           type: account.type,

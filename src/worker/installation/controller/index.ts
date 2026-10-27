@@ -122,10 +122,8 @@ export function installationRoutes(access: Hono<PortalEnv>) {
     return c.json({ ok: true });
   });
   app.get("/api/account/institutions", async (c) => {
-    const { profileId } = InstitutionCatalogSelectionSchema.parse(
-      c.req.query(),
-    );
-    return c.json({ records: await institutionCatalog(c.env, profileId) });
+    InstitutionCatalogSelectionSchema.parse(c.req.query());
+    return c.json({ records: await institutionCatalog() });
   });
   app.get("/api/account/catalog", async (c) => {
     const input = CatalogSelectionSchema.parse(c.req.query());

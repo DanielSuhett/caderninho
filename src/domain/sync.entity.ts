@@ -1,4 +1,3 @@
-import type { Institution } from "./financial-identity.entity";
 import type { ProductKind, ProductPage } from "./planning.entity";
 import type {
   ProviderAccount,
@@ -34,8 +33,6 @@ export interface CommitResult {
 export interface FinancialSource {
   accounts: (id: string) => Promise<ProviderAccount[]>;
   connection: (id: string) => Promise<ProviderConnection>;
-  // Official institution catalog visible to the connection's credentials.
-  institutionCatalog?: (connectionId: string) => Promise<Institution[]>;
   products?: (input: {
     kind: ProductKind;
     id: string;

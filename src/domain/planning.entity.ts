@@ -61,6 +61,8 @@ export interface CardSettings {
   id: string;
   name: string;
   number: string;
+  // Owner chosen for this card; null or absent follows the account's holder.
+  personId?: string | null;
 }
 export interface TransactionEdit {
   accountId?: string;

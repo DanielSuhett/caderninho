@@ -4,6 +4,7 @@ import { afterEach, beforeEach, test, vi } from "vitest";
 
 import {
   FinancialOverviewResponseSchema,
+  InstitutionCatalogSchema,
   InvestmentListSchema,
   MonthlySpendingResponseSchema,
   PlanningCommandSchema,
@@ -16,8 +17,6 @@ import { createHouseholdRepository } from "../../src/worker/household/repository
 import { createInstallationRepository } from "../../src/worker/installation/repository";
 import { createPlanningService } from "../../src/worker/planning";
 import { createPlanningRepository } from "../../src/worker/planning/repository";
-import { sourceUrl } from "../support";
-import { mockNetwork, syntheticJwt } from "../support/network";
 import { command, cookies, fixture, login } from "./access-fixture";
 import { account, collect, setup, source, transaction } from "./fixture";
 import { env } from "cloudflare:workers";
@@ -239,46 +238,10 @@ test("brand scope spans institutions, intersects the owner and follows effective
 test("catalogue association survives reimport and reaches accounts, cards and investments without changing proxy authorization", async () => {
   const { accounts, rows } = await seed();
   const bank = {
-    id: "301",
-    logoUrl: "https://cdn.pluggy.ai/assets/connector-icons/301.svg",
-    name: "Banco sintético",
+    id: "compe:260",
+    logoUrl: "/bancos/260.svg",
+    name: "Nubank",
   };
-  mockNetwork((input) => {
-    const url = sourceUrl(input);
-    if (url.pathname === "/auth") {
-      return Promise.resolve(Response.json({ apiKey: syntheticJwt() }));
-    }
-    assert.equal(url.pathname, "/connectors");
-    assert.equal(url.searchParams.get("sandbox"), "false");
-    return Promise.resolve(
-      Response.json({
-        results: [
-          {
-            id: 200,
-            imageUrl: null,
-            isSandbox: false,
-            name: "Meu Pluggy",
-            type: "PERSONAL_BANK",
-          },
-          {
-            id: 301,
-            imageUrl: bank.logoUrl,
-            isSandbox: false,
-            name: bank.name,
-            type: "PAYMENT_ACCOUNT",
-          },
-          {
-            id: 999,
-            imageUrl: null,
-            isSandbox: true,
-            name: "Sandbox",
-            type: "PERSONAL_BANK",
-          },
-        ],
-        totalPages: 1,
-      }),
-    );
-  });
   const app = fixture();
   assert.equal(
     (await app.request("/api/account/institutions?profileId=default")).status,
@@ -289,9 +252,13 @@ test("catalogue association survives reimport and reaches accounts, cards and in
     "/api/account/institutions?profileId=default",
     { headers: { Cookie: cookie } },
   );
-  assert.deepEqual(await catalogue.json(), { records: [bank] });
+  const { records } = InstitutionCatalogSchema.parse(await catalogue.json());
+  assert.deepEqual(
+    records.find((row) => row.id === bank.id),
+    bank,
+  );
   const refused = await Promise.all(
-    ["200", "999", "unknown"].map((institutionId) =>
+    ["200", "compe:999", "unknown"].map((institutionId) =>
       command(app, cookie, "manage", {
         action: "set_connection_institution",
         connectionId: "a",

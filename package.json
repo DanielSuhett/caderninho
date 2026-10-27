@@ -32,6 +32,7 @@
     "drizzle-orm": "0.45.4",
     "hono": "4.13.13",
     "ky": "2.2.0",
+    "logos-bancos-br": "0.8.3",
     "lossless-json": "4.3.1",
     "pino": "10.4.0",
     "pluggy-connect-sdk": "2.14.2",

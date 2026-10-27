@@ -1,4 +1,5 @@
 import type {
+  PortalCard,
   PortalCards,
   PortalResponse,
   WorkspaceCatalog,
@@ -16,6 +17,79 @@ export function cardPercentage(amount: string | null, total: string | null) {
   };
 }
 
+// The last digits are an observed identifier, so they stay visible even when the
+// owner named the card; an unnamed card shows only the digits.
+export function cardLabel(
+  card: Pick<PortalCard, "identified" | "name" | "number">,
+) {
+  if (!card.number) {
+    return card.identified ? card.name : "Cartão principal";
+  }
+  if (!card.identified) {
+    return `Cartão final ${card.number}`;
+  }
+  return `${card.name} · final ${card.number}`;
+}
+
+export function installmentCardLabel(
+  account: PortalCards["accounts"][number] | undefined,
+  number: string | null,
+) {
+  const card = account?.cards.find((item) =>
+    number ? item.number === number : item.primary,
+  );
+  return card ? cardLabel(card) : null;
+}
+
+export function scopeParameters(input: {
+  accountId: string;
+  cardId: string;
+  cursor: string | null;
+  personId: string;
+}) {
+  return {
+    ...(input.personId && { personId: input.personId }),
+    ...(input.accountId && { accountId: input.accountId }),
+    ...(input.cardId && { cardId: input.cardId }),
+    ...(input.cursor && { cursor: input.cursor }),
+  };
+}
+
+export function activeCardFilters(input: {
+  accountId: string;
+  cardId: string;
+  personId: string;
+  spaceId: string;
+}) {
+  return [
+    input.accountId || input.cardId,
+    input.personId,
+    input.spaceId !== "personal",
+  ].filter(Boolean).length;
+}
+
+export function cardChoices(accounts: PortalCards["accounts"]) {
+  return accounts.flatMap((account) =>
+    account.cards
+      .filter((card) => !card.hidden)
+      .map((card) => ({ account, card })),
+  );
+}
+
+// Old links may carry only the account; a card in the URL narrows to its account.
+export function focusedAccountId(
+  accounts: PortalCards["accounts"],
+  accountId: string,
+  cardId: string,
+) {
+  return (
+    accountId ||
+    accounts.find((account) => account.cards.some((card) => card.id === cardId))
+      ?.id ||
+    ""
+  );
+}
+
 export function cardScope({
   data,
   catalog,
@@ -28,6 +102,10 @@ export function cardScope({
   params: URLSearchParams;
 }) {
   const accountId = params.get("accountId");
+  const cardId = params.get("cardId");
+  const choice = cardChoices(data?.accounts ?? []).find(
+    ({ card }) => card.id === cardId,
+  );
   const personId = params.get("person");
   const spaceId = params.get("space") ?? "personal";
   const accounts = data?.accounts ?? [];
@@ -37,8 +115,9 @@ export function cardScope({
       catalog?.spaces.find((space) => space.id === spaceId)?.name ?? spaceId,
       snapshot.people.find((person) => person.id === personId)?.name ??
         (snapshot.people.length > 1 ? "Todas as pessoas" : ""),
-      accounts.find((account) => account.id === accountId)?.name ??
-        (accounts.length === 1 ? firstAccount?.name : "Todos os cartões"),
+      (choice && `${choice.account.name} · ${cardLabel(choice.card)}`) ||
+        (accounts.find((account) => account.id === accountId)?.name ??
+          (accounts.length === 1 ? firstAccount?.name : "Todos os cartões")),
       data?.currency,
     ]
       .filter(Boolean)

@@ -34,6 +34,7 @@ export const ProviderConnectionSchema = z.object({
 }) satisfies z.ZodType<ProviderConnection>;
 export const ProviderAccountSchema = z.object({
   balance: money.nullish(),
+  bankData: z.object({ transferNumber: z.string().nullish() }).nullish(),
   creditData: z
     .object({
       availableCreditLimit: money.nullish(),

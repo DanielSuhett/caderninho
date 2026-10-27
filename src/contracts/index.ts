@@ -17,6 +17,7 @@ export {
   CardCommitmentsSchema,
 } from "./card-commitments";
 export type {
+  PortalCard,
   PortalCardInstallment,
   PortalCards,
   PortalCardsQuery,
@@ -49,6 +50,7 @@ export {
   PersonPhotoSchema,
 } from "./household";
 export {
+  type InvestmentGroup,
   type InvestmentList,
   InvestmentListSchema,
   type InvestmentPortfolio,

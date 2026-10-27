@@ -455,6 +455,37 @@ test("investment demo shares the MCP portfolio contract, owner and institution f
   assert.equal(other.data.records.length, 0);
 });
 
+test("investment demo accumulates certificates of several banks through the MCP contract", async () => {
+  const session = createDemoSession();
+  const result = InvestmentListSchema.parse(
+    await session.api.query(
+      { currency: "BRL", spaceId: "personal", tool: "get_investments" },
+      "synthetic",
+      signal,
+    ),
+  );
+  const cdb = result.data.groups.find((group) => group.subtype === "CDB");
+  assert.equal(cdb?.count, 4);
+  assert.equal(cdb?.gross.totalMinor, "5354000");
+  assert.deepEqual(
+    cdb?.banks.map((bank) => bank.name),
+    ["Itaú", "Corretora Horizonte"],
+  );
+  assert.equal(cdb?.nearestDueDate, "2027-03-01");
+  assert.equal(cdb?.furthestDueDate, "2029-08-10");
+  assert.equal(
+    result.data.records.filter((row) => row.details?.subtype === "CDB").length,
+    5,
+  );
+  assert.deepEqual(cdb?.recordIds, [
+    "cdb-horizonte",
+    "cdb",
+    "cdb-prefixado",
+    "cdb-ipca",
+    "closed",
+  ]);
+});
+
 test("demo keeps both card views available through the typed query API with default scope and currency", async () => {
   const session = createDemoSession();
   const cards = PortalCardsSchema.parse(

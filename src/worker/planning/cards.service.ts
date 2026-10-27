@@ -1,4 +1,5 @@
 import type {
+  PortalCard,
   PortalCardInstallment,
   PortalCards,
   PortalCardsQuery,
@@ -18,7 +19,22 @@ import {
 } from "../../domain";
 import { planningCursor } from "./cursor";
 import type { PlanningRepository, PlanningSnapshot } from "./entity";
-import { accounts, found, transactionStream } from "./projection";
+import {
+  accounts,
+  cardCatalog,
+  cardOwnership,
+  found,
+  transactionStream,
+} from "./projection";
+
+type CardAccount = Omit<PortalCards["accounts"][number], "cards">;
+type CardLines = Map<
+  string,
+  {
+    activity: ReturnType<typeof createCardActivity>;
+    entry: ReturnType<typeof cardCatalog>[number];
+  }
+>;
 
 function installmentRecord(
   row: PlanningTransaction,
@@ -40,19 +56,105 @@ function installmentRecord(
   };
 }
 
+// Every card of an account gets its own activity. Charges without a card number
+// follow the account's primary card, so the cards always add up to the account.
+function accountCardLines(
+  accountIds: string[],
+  snapshot: PlanningSnapshot,
+  activity: Parameters<typeof createCardActivity>[0],
+) {
+  const result = new Map<string, CardLines>();
+  const wanted = new Set(accountIds);
+  const catalog = cardCatalog(snapshot, snapshot.state)
+    .filter((entry) => wanted.has(entry.accountId) && !entry.deleted)
+    .toSorted(
+      (a, b) =>
+        Number(b.primary) - Number(a.primary) ||
+        a.number.localeCompare(b.number),
+    );
+  for (const entry of catalog) {
+    const lines = result.get(entry.accountId) ?? new Map();
+    lines.set(entry.number, { activity: createCardActivity(activity), entry });
+    result.set(entry.accountId, lines);
+  }
+  return result;
+}
+
+function chargeLine(
+  lines: Map<string, CardLines>,
+  row: { accountId: string },
+  number: string | undefined | null,
+) {
+  const account = lines.get(row.accountId);
+  if (!account) {
+    return;
+  }
+  return (
+    (number && account.get(number)) ||
+    [...account.values()].find((line) => line.entry.primary)
+  );
+}
+
+// An unknown, hidden or foreign card in the URL falls back to every card.
+function focusedCard(
+  lines: Map<string, CardLines>,
+  input: Pick<PortalCardsQuery, "cardId" | "personId">,
+) {
+  if (!input.cardId) {
+    return;
+  }
+  for (const account of lines.values()) {
+    for (const { entry } of account.values()) {
+      if (
+        entry.id === input.cardId &&
+        !entry.hidden &&
+        (!input.personId || entry.personId === input.personId)
+      ) {
+        return entry;
+      }
+    }
+  }
+}
+
+function portalCardsOf(
+  lines: CardLines | undefined,
+  personId: string | undefined,
+): PortalCard[] {
+  return [...(lines?.values() ?? [])]
+    .filter(({ entry }) => !personId || entry.personId === personId)
+    .map(({ activity, entry }) => {
+      const { confirmed, future, pending } = activity.result();
+      return {
+        confirmed,
+        future,
+        hidden: entry.hidden,
+        id: entry.id,
+        identified: entry.identified,
+        name: entry.name,
+        number: entry.number === "main" ? null : entry.number,
+        pending,
+        personId: entry.personId,
+        personInherited: entry.personInherited,
+        personName: entry.personName,
+        primary: entry.primary,
+      };
+    });
+}
+
 function selectedCards(
   input: PortalCardsQuery,
   snapshot: PlanningSnapshot,
-): PortalCards["accounts"] {
+): CardAccount[] {
   found(snapshot.state.spaces.find((space) => space.id === input.spaceId));
   if (input.personId) {
     found(snapshot.people.find((person) => person.id === input.personId));
   }
+  const ownership = cardOwnership(snapshot);
   const selected = accounts(snapshot).filter(
     (account) =>
       account.type === AccountType.CREDIT &&
       account.spaceId === input.spaceId &&
-      (!input.personId || account.personId === input.personId),
+      (!input.personId || ownership.includesPerson(account, input.personId)),
   );
   if (input.accountId) {
     found(selected.find((account) => account.id === input.accountId));
@@ -101,10 +203,19 @@ export async function portalCards(
     filter: { ...selection, referenceDay },
     revision: snapshot.revision,
   });
-  const activity = createCardActivity({ month: input.month, referenceDay });
+  const activityWindow = { month: input.month, referenceDay };
+  const activity = createCardActivity(activityWindow);
   const availableCards = selectedCards(input, snapshot);
+  const cardLines = accountCardLines(
+    availableCards.map((account) => account.id),
+    snapshot,
+    activityWindow,
+  );
+  const focus = focusedCard(cardLines, input);
   const cardAccounts = availableCards.filter(
-    (account) => !input.accountId || account.id === input.accountId,
+    (account) =>
+      (!input.accountId || account.id === input.accountId) &&
+      (!focus || account.id === focus.accountId),
   );
   const metadata = new Map(
     snapshot.transactionDetails.map((row) => [row.id, row]),
@@ -151,6 +262,11 @@ export async function portalCards(
       installmentNumber: extra?.installmentNumber ?? null,
       totalInstallments: extra?.totalInstallments ?? null,
     };
+    const line = chargeLine(cardLines, row, extra?.cardNumber);
+    line?.activity.add(charge);
+    if (focus && line?.entry.id !== focus.id) {
+      continue;
+    }
     activity.add(charge);
     if (
       row.date.slice(0, 7) !== input.month ||
@@ -177,7 +293,10 @@ export async function portalCards(
   const last = records.at(-1);
   return {
     ...activity.result(),
-    accounts: availableCards,
+    accounts: availableCards.map((account) => ({
+      ...account,
+      cards: portalCardsOf(cardLines.get(account.id), input.personId),
+    })),
     currencies: [...currencies].sort(),
     currency: input.currency,
     installments: records,

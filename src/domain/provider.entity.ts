@@ -43,6 +43,8 @@ export interface ProviderConnection {
 }
 export interface ProviderAccount {
   balance?: MoneyInput;
+  // Bank accounts report "COMPE / Agência / Conta"; cards report nothing.
+  bankData?: { transferNumber?: string | null | undefined } | null | undefined;
   creditData?:
     | {
         creditLimit?: MoneyInput;

@@ -462,12 +462,17 @@ export async function planningQuery(
     input: Extract<PlanningCommand, { tool: "get_cards" }>,
   ) {
     return {
-      records: owned(cardCatalog(snapshot, state)).filter(
-        (c) =>
-          c.spaceId === input.spaceId &&
-          !c.deleted &&
-          (input.include_hidden || !c.hidden),
-      ),
+      records: scoped(cardCatalog(snapshot, state))
+        .filter(
+          (c) =>
+            !c.deleted &&
+            (input.include_hidden || !c.hidden) &&
+            (!personId || c.personId === personId),
+        )
+        .map((c) => ({
+          ...c,
+          profileId: accountMap.get(c.accountId)?.profileId ?? null,
+        })),
     };
   }
 

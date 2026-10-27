@@ -10,7 +10,7 @@ Parcelas e limites de crédito ficam em Cartões.
 Painel e MCP usam `get_investments`. O portal exige sessão, origem e CSRF; o MCP
 usa OAuth. Os filtros são grupo, pessoa, moeda, classe, instituição e estado.
 Os campos existentes de cada posição permanecem compatíveis; `details`,
-`identity` e `totals` acrescentam metadados e agregados.
+`identity`, `totals` e `groups` acrescentam metadados e agregados.
 
 ```json
 {
@@ -36,6 +36,28 @@ Um campo ausente não vira zero: o total correspondente fica nulo, com subtotal
 conhecido e quantidade de posições sem valor. Excluídos e totalmente resgatados
 ficam na lista, fora dos totais. Não inferimos rentabilidade nem histórico a
 partir de uma posição atual. Os gráficos são composição, não evolução temporal.
+
+## Posições acumuladas
+
+Posições do mesmo tipo e subtipo na mesma moeda viram um grupo, mesmo entre
+bancos: vários CDBs aparecem como uma linha "CDB". `groups` traz, por grupo,
+`gross`, `net`, `profit` e `withdrawal` somados com a mesma regra de ausência
+dos totais, `count` de posições ativas, `nearestDueDate` e `furthestDueDate`,
+`rateTypes` presentes (sem taxa média, pois não calculamos rentabilidade),
+`banks` sem repetição por valor decrescente e `recordIds` ordenados por
+vencimento, para buscar as posições individuais em `records`. Excluídos e
+totalmente resgatados entram em `recordIds`, nunca nas somas.
+
+O banco do grupo vem da instituição da posição. Sem instituição (por exemplo,
+conexão Meu Pluggy não identificada), o emissor normalizado agrupa os bancos
+apenas na apresentação; ele não vira instituição, marca nem filtro. Sem emissor,
+o banco é "Instituição não informada".
+
+No painel, a linha do grupo mostra o símbolo do banco, ou círculos sobrepostos
+quando há mais de um, e abre as posições individuais. Um grupo de uma posição
+se comporta como uma posição simples. Em "Por classe", escolher uma classe abre
+os grupos dela; em "Por instituição", escolher um banco aplica o filtro de
+instituição e escolher de novo o remove.
 
 Detalhes exibem valor aplicado, impostos, código, quantidade decimal, emissor,
 datas e taxas recebidas. Não há ordens de compra, venda, aplicação ou resgate.

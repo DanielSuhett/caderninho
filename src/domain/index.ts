@@ -71,9 +71,23 @@ export {
   InstitutionSchema,
 } from "./financial-identity.schema";
 export {
+  accountCompes,
+  accountHolderKey,
+  compeFromInstitutionId,
+  compeInstitutionId,
+  type InstitutionCatalog,
+  isDuplicateConnection,
+  normalizeCompe,
+  transferCompe,
+} from "./institution-catalog.entity";
+export {
   type InvestmentDetails,
   type InvestorPosition,
   investmentPortfolio,
+  normalizeIssuer,
+  type PositionBank,
+  positionBank,
+  UNKNOWN_BANK_ID,
 } from "./investment.entity";
 export type {
   ConnectionOwner,

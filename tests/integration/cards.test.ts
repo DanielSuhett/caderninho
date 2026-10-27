@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 
 import { beforeEach, test } from "vitest";
+import { z } from "zod/v4";
 
 import {
   PlanningCommandSchema,
@@ -155,6 +156,292 @@ const query = (input: Record<string, unknown> = {}) =>
     ...input,
   });
 
+test("each card of a CREDIT account is listed with its own spending and charges without a card number follow the primary card", async () => {
+  await collect(
+    source(
+      [
+        transaction({
+          amount: "-100",
+          category: "Groceries",
+          creditCardMetadata: metadata,
+          id: "primary-purchase",
+        }),
+        transaction({
+          amount: "-40",
+          category: "Groceries",
+          creditCardMetadata: { ...metadata, cardNumber: "8080" },
+          id: "additional-purchase",
+        }),
+        transaction({
+          amount: "-10",
+          category: "Groceries",
+          id: "unnumbered-purchase",
+        }),
+      ],
+      [card],
+    ),
+  );
+  const { data } = await service().cards(query());
+  const [credit] = data.accounts;
+  assert.deepEqual(
+    credit?.cards.map((item) => [
+      item.number,
+      item.primary,
+      item.identified,
+      item.confirmed.totalMinor,
+    ]),
+    [
+      ["4242", true, false, "11000"],
+      ["8080", false, false, "4000"],
+    ],
+  );
+  assert.equal(data.confirmed.totalMinor, "15000");
+  await service().execute(
+    PlanningCommandSchema.parse({
+      confirmed: true,
+      hidden: true,
+      id: "a:8080",
+      idempotency_key: "hide-additional",
+      spaceId: "personal",
+      tool: "update_card",
+    }),
+  );
+  const hidden = (await service().cards(query())).data;
+  assert.deepEqual(
+    hidden.accounts[0]?.cards.map((item) => [item.number, item.hidden]),
+    [
+      ["4242", false],
+      ["8080", true],
+    ],
+  );
+  assert.equal(hidden.confirmed.totalMinor, "15000");
+});
+test("a renamed card keeps its name after new imports and a stale revision is refused", async () => {
+  const transactions = [
+    transaction({
+      amount: "-40",
+      category: "Groceries",
+      creditCardMetadata: { ...metadata, cardNumber: "8080" },
+      id: "additional-purchase",
+    }),
+  ];
+  await collect(source(transactions, [card]));
+  const initial = await service().cards(query());
+  const rename = PlanningCommandSchema.parse({
+    confirmed: true,
+    expected_revision: initial.revision,
+    id: "a:8080",
+    idempotency_key: "rename-additional",
+    name: "Adicional da Laís",
+    spaceId: "personal",
+    tool: "update_card",
+  });
+  const result = await service().execute(rename);
+  assert.deepEqual(await service().execute(rename), result);
+  await assert.rejects(
+    service().execute(
+      PlanningCommandSchema.parse({ ...rename, idempotency_key: "stale" }),
+    ),
+  );
+  await collect(source([...transactions], [card]), "2026-10-02T00:00:00Z");
+  const additional = (
+    await service().cards(query())
+  ).data.accounts[0]?.cards.find((item) => item.number === "8080");
+  assert.equal(additional?.name, "Adicional da Laís");
+  assert.equal(additional?.identified, true);
+});
+test("a card owner overrides the account holder, can be cleared and is not inherited by a new card number", async () => {
+  await env.DB.prepare("INSERT INTO people(id,name) VALUES('ana','Ana')").run();
+  const additional = transaction({
+    amount: "-40",
+    category: "Groceries",
+    creditCardMetadata: { ...metadata, cardNumber: "8080" },
+    id: "additional-purchase",
+  });
+  await collect(source([additional], [card]));
+  const edit = async (personId: string | null, key: string) => {
+    const { revision } = await service().cards(query());
+    return service().execute(
+      PlanningCommandSchema.parse({
+        confirmed: true,
+        expected_revision: revision,
+        id: "a:8080",
+        idempotency_key: key,
+        personId,
+        spaceId: "personal",
+        tool: "update_card",
+      }),
+    );
+  };
+  const find = async (number: string) =>
+    (await service().cards(query())).data.accounts[0]?.cards.find(
+      (item) => item.number === number,
+    );
+  assert.deepEqual(
+    [(await find("8080"))?.personId, (await find("8080"))?.personInherited],
+    ["self", true],
+  );
+  await edit("ana", "assign");
+  assert.deepEqual(
+    [
+      (await find("8080"))?.personId,
+      (await find("8080"))?.personName,
+      (await find("8080"))?.personInherited,
+      (await find("4242"))?.personInherited,
+    ],
+    ["ana", "Ana", false, true],
+  );
+  await assert.rejects(edit("missing", "unknown-person"));
+  await collect(
+    source(
+      [
+        additional,
+        transaction({
+          amount: "-5",
+          category: "Groceries",
+          creditCardMetadata: { ...metadata, cardNumber: "9999" },
+          id: "virtual-purchase",
+        }),
+      ],
+      [card],
+    ),
+    "2026-10-02T00:00:00Z",
+  );
+  assert.equal((await find("8080"))?.personId, "ana");
+  assert.deepEqual(
+    [(await find("9999"))?.personId, (await find("9999"))?.personInherited],
+    ["self", true],
+  );
+  await edit(null, "clear");
+  assert.equal((await find("8080"))?.personInherited, true);
+});
+test("the person filter follows card owners in the panel, the card catalog and transactions, with unnumbered charges on the primary card", async () => {
+  await env.DB.prepare("INSERT INTO people(id,name) VALUES('ana','Ana')").run();
+  await collect(
+    source(
+      [
+        transaction({
+          amount: "-100",
+          category: "Groceries",
+          creditCardMetadata: metadata,
+          id: "primary-purchase",
+        }),
+        transaction({
+          amount: "-40",
+          category: "Groceries",
+          creditCardMetadata: { ...metadata, cardNumber: "8080" },
+          id: "additional-purchase",
+        }),
+        transaction({
+          amount: "-10",
+          category: "Groceries",
+          id: "unnumbered-purchase",
+        }),
+      ],
+      [card],
+    ),
+  );
+  const { revision } = await service().cards(query());
+  await service().execute(
+    PlanningCommandSchema.parse({
+      confirmed: true,
+      expected_revision: revision,
+      id: "a:8080",
+      idempotency_key: "assign-ana",
+      personId: "ana",
+      spaceId: "personal",
+      tool: "update_card",
+    }),
+  );
+  const byPerson = async (personId: string) =>
+    (await service().cards(query({ personId }))).data;
+  const [forAna, forSelf] = await Promise.all([
+    byPerson("ana"),
+    byPerson("self"),
+  ]);
+  assert.deepEqual(
+    forAna.accounts.map((item) => item.cards.map((c) => c.number)),
+    [["8080"]],
+  );
+  assert.equal(forAna.confirmed.totalMinor, "4000");
+  assert.deepEqual(
+    forSelf.accounts.map((item) => item.cards.map((c) => c.number)),
+    [["4242"]],
+  );
+  assert.equal(forSelf.confirmed.totalMinor, "11000");
+  const catalog = await service().execute(
+    PlanningCommandSchema.parse({
+      personId: "ana",
+      spaceId: "personal",
+      tool: "get_cards",
+    }),
+  );
+  assert.deepEqual(
+    z
+      .object({ records: z.array(z.object({ number: z.string() })) })
+      .parse(catalog.data)
+      .records.map((item) => item.number),
+    ["8080"],
+  );
+  const transactions = await service().execute(
+    PlanningCommandSchema.parse({
+      personId: "ana",
+      spaceId: "personal",
+      tool: "get_transactions",
+    }),
+  );
+  assert.deepEqual(
+    z
+      .object({ records: z.array(z.object({ id: z.string() })) })
+      .parse(transactions.data)
+      .records.map((item) => item.id),
+    ["additional-purchase"],
+  );
+});
+test("filtering by a card narrows the totals to that card, keeps unnumbered charges on the primary and ignores unknown cards", async () => {
+  await collect(
+    source(
+      [
+        transaction({
+          amount: "-100",
+          category: "Groceries",
+          creditCardMetadata: metadata,
+          id: "primary-purchase",
+        }),
+        transaction({
+          amount: "-40",
+          category: "Groceries",
+          creditCardMetadata: { ...metadata, cardNumber: "8080" },
+          id: "additional-purchase",
+        }),
+        transaction({
+          amount: "-10",
+          category: "Groceries",
+          id: "unnumbered-purchase",
+        }),
+      ],
+      [card],
+    ),
+  );
+  const totals = async (cardId?: string) => {
+    const { data } = await service().cards(query(cardId ? { cardId } : {}));
+    return [data.confirmed.totalMinor, data.accounts[0]?.cards.length];
+  };
+  assert.deepEqual(
+    await Promise.all([
+      totals("a:8080"),
+      totals("a:4242"),
+      totals("a:0000"),
+      totals(),
+    ]),
+    [
+      ["4000", 2],
+      ["11000", 2],
+      ["15000", 2],
+      ["15000", 2],
+    ],
+  );
+});
 test("cards use the full CREDIT-account scope, provider limits and received installments without invoice or bank double counting", async () => {
   await collect(
     source(

@@ -4,7 +4,11 @@ import { Link } from "@cloudflare/kumo/components/link";
 import { PencilSimpleIcon } from "@phosphor-icons/react";
 import { lazy, Suspense, useCallback, useMemo } from "react";
 
-import type { PortalCards, WorkspaceCatalog } from "../../contracts";
+import type {
+  PortalCard,
+  PortalCards,
+  WorkspaceCatalog,
+} from "../../contracts";
 import type { CardAmount } from "../../domain";
 import { tryCatch } from "../../shared";
 import { formatBalance, type MoneyTone } from "../money";
@@ -12,13 +16,14 @@ import { MoneyValue } from "../money-value";
 import { UiIconButton } from "../ui";
 import { AnalysisSection } from "./analysis-section";
 import { CardInstallments } from "./card-installments";
-import { cardPercentage } from "./card-presentation";
+import { cardLabel, cardPercentage } from "./card-presentation";
 import { CategoryLabel } from "./category-appearance";
 import { ChartViewport } from "./chart-viewport";
 import { CreditLimitCard } from "./credit-limit-card";
 import { monthLabel } from "./dashboard-period";
 import { FinancialMetric } from "./financial-metric";
 import { InfoTip } from "./info-tip";
+import { PersonAvatar } from "./person-identity";
 import { dayLabel, momentLabel } from "./workspace-resource";
 
 const CategoryChart = lazy(async () => {
@@ -69,14 +74,106 @@ function CardMetric({
     </FinancialMetric>
   );
 }
+function AccountCardRow({
+  card,
+  currency,
+  showOwner,
+  onEdit,
+}: {
+  card: PortalCard;
+  currency: string;
+  showOwner: boolean;
+  onEdit?: ((card: PortalCard) => void) | undefined;
+}) {
+  const edit = useCallback(() => onEdit?.(card), [card, onEdit]);
+  return (
+    <li>
+      <span className="account-card-name">
+        {showOwner ? (
+          <PersonAvatar
+            person={{ id: card.personId, name: card.personName }}
+            size={24}
+          />
+        ) : null}
+        {cardLabel(card)}
+      </span>
+      <span>{amountLabel(card.confirmed.totalMinor, currency)}</span>
+      {!!onEdit && (
+        <UiIconButton
+          label={`Editar ${cardLabel(card)}`}
+          onClick={edit}
+        >
+          <PencilSimpleIcon
+            aria-hidden
+            size={20}
+          />
+        </UiIconButton>
+      )}
+    </li>
+  );
+}
+function AccountCards({
+  cards,
+  currency,
+  showOwner,
+  onEdit,
+}: {
+  cards: PortalCard[];
+  currency: string;
+  showOwner: boolean;
+  onEdit?: ((card: PortalCard) => void) | undefined;
+}) {
+  if (cards.length < 2 && !cards.some((card) => card.number)) {
+    return null;
+  }
+  const hiddenCards = cards.filter((card) => card.hidden);
+  return (
+    <>
+      <ul
+        aria-label="Cartões desta conta"
+        className="account-cards"
+      >
+        {cards
+          .filter((card) => !card.hidden)
+          .map((card) => (
+            <AccountCardRow
+              card={card}
+              currency={currency}
+              key={card.id}
+              onEdit={onEdit}
+              showOwner={showOwner}
+            />
+          ))}
+      </ul>
+      {!!hiddenCards.length && (
+        <details className="account-cards-hidden">
+          <summary>Cartões ocultos ({hiddenCards.length})</summary>
+          <ul className="account-cards">
+            {hiddenCards.map((card) => (
+              <AccountCardRow
+                card={card}
+                currency={currency}
+                key={card.id}
+                onEdit={onEdit}
+                showOwner={showOwner}
+              />
+            ))}
+          </ul>
+        </details>
+      )}
+    </>
+  );
+}
 function LimitCard({
   account,
   showOwner,
   onEdit,
+  onEditCard,
 }: {
   account: PortalCards["accounts"][number];
   showOwner: boolean;
   onEdit?: ((account: PortalCards["accounts"][number]) => void) | undefined;
+  onEditCard?: ((card: PortalCard) => void) | undefined;
 }) {
   const edit = useCallback(() => onEdit?.(account), [account, onEdit]);
   return (
@@ -107,6 +204,12 @@ function LimitCard({
           : undefined
       }
     >
+      <AccountCards
+        cards={account.cards}
+        currency={account.currency}
+        onEdit={onEditCard}
+        showOwner={showOwner}
+      />
       <p>Observado em {momentLabel(account.balanceObservedAt)}</p>
       {!!account.creditEstimated && (
         <p>
@@ -223,6 +326,7 @@ export function CardsDashboard({
   showOwner,
   nextHref,
   onEditLimit,
+  onEditCard,
 }: {
   data: PortalCards;
   categories: WorkspaceCatalog["categories"];
@@ -232,6 +336,7 @@ export function CardsDashboard({
   onEditLimit?:
     | ((account: PortalCards["accounts"][number]) => void)
     | undefined;
+  onEditCard?: ((card: PortalCard) => void) | undefined;
 }) {
   const visibleAccounts = data.accounts.filter(
     (account) =>
@@ -291,6 +396,7 @@ export function CardsDashboard({
                   account={account}
                   key={account.id}
                   onEdit={onEditLimit}
+                  onEditCard={onEditCard}
                   showOwner={showOwner}
                 />
               ))}

@@ -6,6 +6,7 @@ import type {
 import {
   type AccountSettings,
   AccountType,
+  type CardSettings,
   CategoryKind,
   categoryCatalog,
   categoryOverrides,
@@ -214,6 +215,9 @@ export async function planningMutation(
       { tool: "update_card" | "delete_card" | "set_primary_card" }
     >,
   ) {
+    if (input.tool === "update_card") {
+      validateCardUpdate(input);
+    }
     const card = inSpace(cardCatalog(snapshot, state), input.id, input.spaceId);
     if (input.tool === "delete_card" && card.primary) {
       throw new Error(PlanningError.PRIMARY_CARD_REQUIRED);
@@ -229,7 +233,7 @@ export async function planningMutation(
         deleted: false,
         hidden: false,
         id: card.id,
-        name: card.name,
+        name: card.number === "main" ? card.name : card.number,
         number: card.number,
       };
       state.cards.push(row);
@@ -237,14 +241,36 @@ export async function planningMutation(
     if (input.tool === "delete_card") {
       row.deleted = true;
     } else {
-      if (input.hidden !== undefined) {
-        row.hidden = input.hidden;
-      }
-      if (input.name !== undefined) {
-        row.name = input.name;
-      }
+      applyCardChanges(row, input);
     }
     return row;
+  }
+  function validateCardUpdate(
+    input: Extract<PlanningCommand, { tool: "update_card" }>,
+  ) {
+    if (
+      input.expected_revision !== undefined &&
+      input.expected_revision !== snapshot.revision
+    ) {
+      throw new Error(PlanningError.RESTART_REQUIRED);
+    }
+    if (input.personId) {
+      found(snapshot.people.find((person) => person.id === input.personId));
+    }
+  }
+  function applyCardChanges(
+    row: CardSettings,
+    input: Extract<PlanningCommand, { tool: "update_card" }>,
+  ) {
+    if (input.hidden !== undefined) {
+      row.hidden = input.hidden;
+    }
+    if (input.name !== undefined) {
+      row.name = input.name;
+    }
+    if (input.personId !== undefined) {
+      row.personId = input.personId;
+    }
   }
 
   async function handleMarkBillPaid(

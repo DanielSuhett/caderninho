@@ -6,7 +6,12 @@ import {
   type TransactionDetails,
 } from "../../domain";
 import type { PlanningRepository, PlanningSnapshot } from "./entity";
-import { accounts, classification, transactionStream } from "./projection";
+import {
+  accounts,
+  cardOwnership,
+  classification,
+  transactionStream,
+} from "./projection";
 
 type Phase = "spent" | "pending" | "future";
 interface Amount {
@@ -164,12 +169,13 @@ export async function cardCommitments(input: {
       .filter((edit) => edit.spaceId === query.spaceId && !edit.deleted)
       .flatMap((edit) => (edit.accountId ? [edit.accountId] : [])),
   );
+  const ownership = cardOwnership(snapshot);
   const selectedAccounts = allAccounts.filter(
     (row) =>
       row.type === "CREDIT" &&
       (row.spaceId === query.spaceId || movedAccountIds.has(row.id)) &&
       (!query.accountId || row.id === query.accountId) &&
-      (!query.personId || row.personId === query.personId),
+      (!query.personId || ownership.includesPerson(row, query.personId)),
   );
   const accountMap = new Map(selectedAccounts.map((row) => [row.id, row]));
   const details = new Map(snapshot.accountDetails.map((row) => [row.id, row]));

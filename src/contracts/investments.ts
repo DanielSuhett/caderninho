@@ -33,9 +33,31 @@ const measure = z.object({
   totalMinor: minor.nullable(),
   unknownCount: z.number().int().nonnegative(),
 });
+const bank = z.object({
+  id: z.string(),
+  logoUrl: z.string().nullable(),
+  name: z.string(),
+});
+const group = z.object({
+  banks: z.array(bank),
+  count: z.number().int().nonnegative(),
+  currency: z.string(),
+  furthestDueDate: z.string().nullable(),
+  gross: measure,
+  id: z.string(),
+  nearestDueDate: z.string().nullable(),
+  net: measure,
+  profit: measure,
+  rateTypes: z.array(z.string()),
+  recordIds: z.array(z.string()),
+  subtype: z.string().nullable(),
+  type: z.string(),
+  withdrawal: measure,
+});
 const allocation = measure.extend({ id: z.string(), name: z.string() });
 export const InvestmentListSchema = z.object({
   data: z.object({
+    groups: z.array(group),
     records: z.array(
       z.object({
         amountMinor: minor.nullable(),
@@ -74,4 +96,5 @@ export const InvestmentListSchema = z.object({
 export type InvestmentList = z.infer<
   typeof InvestmentListSchema
 >["data"]["records"];
+export type InvestmentGroup = InvestmentPortfolio["groups"][number];
 export type InvestmentPortfolio = z.infer<typeof InvestmentListSchema>["data"];

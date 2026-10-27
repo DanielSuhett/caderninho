@@ -8,6 +8,7 @@ import { UiButton } from "../ui";
 import { createAccountApi } from "./account-api";
 import {
   accountFailureMessage,
+  connectFailureMessage,
   type ManagementOutcome,
 } from "./account-feedback";
 import { accountPath, useWorkspaceNavigation } from "./account-navigation";
@@ -43,7 +44,7 @@ export function AccountView({
   const [dataVersion, setDataVersion] = useState(0);
   const personId = new URLSearchParams(location.search).get("person") ?? "";
   const lifetime = useRef<AbortController | null>(null);
-  const locked = useRef(false);
+  const locked = useRef<boolean>(false);
   const snapshotFingerprint = useRef("");
   const readVersion = useRef(0);
   const schedulePoll = useRef<((active: boolean) => void) | null>(null);
@@ -171,7 +172,13 @@ export function AccountView({
         return;
       }
       const signal = lifetime.current?.signal;
-      if (!(snapshot && signal) || locked.current) {
+      if (!(snapshot && signal)) {
+        return;
+      }
+      if (locked.current) {
+        setMessage(
+          "Há uma operação em andamento. Aguarde ou feche a janela do Meu Pluggy antes de conectar outro banco.",
+        );
         return;
       }
       const previous = document.activeElement;
@@ -238,12 +245,10 @@ export function AccountView({
               setActivity(null);
             }
           },
-          onError: () => {
+          onError: (failure) => {
             if (release()) {
               setActivity(null);
-              setMessage(
-                "A conexão não foi concluída. Abra novamente o Meu Pluggy.",
-              );
+              setMessage(connectFailureMessage(failure));
             }
           },
           onSuccess: (id) => {

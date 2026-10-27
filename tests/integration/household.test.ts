@@ -324,6 +324,12 @@ test("two profiles with equal upstream IDs import separate histories and expose 
   assert.equal(portfolio.data.totals[0]?.net.totalMinor, "4001");
   assert.equal(portfolio.data.totals[0]?.profit.totalMinor, "-205");
   assert.equal(portfolio.data.totals[0]?.withdrawal.totalMinor, "0");
+  assert.equal(portfolio.data.groups.length, 1);
+  assert.equal(portfolio.data.groups[0]?.count, 1);
+  assert.equal(portfolio.data.groups[0]?.gross.totalMinor, "4210");
+  assert.deepEqual(portfolio.data.groups[0]?.recordIds, [
+    scopedSourceId(profileId, "i"),
+  ]);
   assert.equal(
     portfolio.data.records[0]?.details?.quantity,
     "0.123456789012345678",

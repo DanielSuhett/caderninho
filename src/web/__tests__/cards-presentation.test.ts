@@ -6,7 +6,11 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import { PortalCardsQuerySchema, PortalCardsSchema } from "../../contracts";
 import { demoPortalFixture, workspaceFixture } from "../../fixtures/workspace";
-import { cardPercentage, cardScope } from "../account/card-presentation";
+import {
+  cardLabel,
+  cardPercentage,
+  cardScope,
+} from "../account/card-presentation";
 import { CardsDashboard } from "../account/cards-dashboard";
 import { demoCards } from "../demo-cards";
 import { initialDemoData } from "../demo-data";
@@ -101,4 +105,70 @@ test("known zero limits and missing provider limits have different explanations"
   const unknown = render(null);
   assert.ok(unknown.includes("Não informado"));
   assert.ok(unknown.includes("limite ou disponível não informado"));
+});
+test("card labels always keep the observed last digits visible", () => {
+  assert.equal(
+    cardLabel({ identified: false, name: "3965", number: "3965" }),
+    "Cartão final 3965",
+  );
+  assert.equal(
+    cardLabel({ identified: true, name: "Virtual", number: "3965" }),
+    "Virtual · final 3965",
+  );
+  assert.equal(
+    cardLabel({ identified: false, name: "Conta", number: null }),
+    "Cartão principal",
+  );
+});
+test("demo card edits rename and hide a card without changing the account totals", () => {
+  const [account] = demoCards(query, initialDemoData).accounts;
+  const id = account?.cards[0]?.id ?? "";
+  const edited = demoCards(
+    query,
+    initialDemoData,
+    new Map(),
+    new Map([[id, { hidden: true, name: "Virtual" }]]),
+  );
+  const card = edited.accounts[0]?.cards[0];
+  assert.deepEqual(
+    [card?.name, card?.identified, card?.hidden],
+    ["Virtual", true, true],
+  );
+  assert.equal(
+    edited.confirmed.totalMinor,
+    demoCards(query, initialDemoData).confirmed.totalMinor,
+  );
+});
+test("demo person filter follows the card owner and an unknown or hidden card id falls back to every card", () => {
+  const all = demoCards(query, initialDemoData);
+  const [account] = all.accounts;
+  const cardId = account?.cards[0]?.id ?? "";
+  const personId = all.accounts.find(
+    (item) => item.personId !== account?.personId,
+  )?.personId;
+  assert.ok(personId);
+  const moved = new Map([[cardId, { personId }]]);
+  const forNewOwner = demoCards(
+    { ...query, personId },
+    initialDemoData,
+    new Map(),
+    moved,
+  );
+  assert.ok(
+    forNewOwner.accounts.some((item) =>
+      item.cards.some((card) => card.id === cardId),
+    ),
+  );
+  const unknown = demoCards(
+    { ...query, cardId: "missing:0000" },
+    initialDemoData,
+  );
+  assert.equal(unknown.confirmed.totalMinor, all.confirmed.totalMinor);
+  const hidden = demoCards(
+    { ...query, cardId },
+    initialDemoData,
+    new Map(),
+    new Map([[cardId, { hidden: true }]]),
+  );
+  assert.equal(hidden.confirmed.totalMinor, all.confirmed.totalMinor);
 });

@@ -6,10 +6,15 @@ import { useCallback, useState } from "react";
 import type { PortalResponse } from "../../contracts";
 import { localDay } from "../../domain";
 import type { createAccountApi } from "./account-api";
-import { AccountIdentity } from "./account-identity";
 import { navigateWorkspace, workspaceHref } from "./account-navigation";
+import { CardFilter } from "./card-filter";
 import { CardsWithLimitEditor } from "./card-limit-editor";
-import { cardScope } from "./card-presentation";
+import {
+  activeCardFilters,
+  cardScope,
+  focusedAccountId,
+  scopeParameters,
+} from "./card-presentation";
 import { selectedMonth } from "./dashboard-period";
 import { identityParameters } from "./identity-filters";
 import { PeriodPicker } from "./period-picker";
@@ -35,6 +40,7 @@ export function CardsView({
   const month = selectedMonth(params.get("month"), localDay(new Date()));
   const personId = params.get("person") ?? "";
   const accountId = params.get("accountId") ?? "";
+  const cardId = params.get("cardId") ?? "";
   const spaceId = params.get("space") ?? "personal";
   const requestedCurrency = params.get("currency");
   const cursor = params.get("cursor");
@@ -51,10 +57,8 @@ export function CardsView({
           month,
           spaceId,
           tool: "get_portal_cards",
-          ...(personId && { personId }),
           ...identityParameters(params),
-          ...(accountId && { accountId }),
-          ...(cursor && { cursor }),
+          ...scopeParameters({ accountId, cardId, cursor, personId }),
         },
         snapshot.csrf,
         signal,
@@ -64,6 +68,7 @@ export function CardsView({
     },
     [
       accountId,
+      cardId,
       params,
       api,
       cursor,
@@ -105,32 +110,12 @@ export function CardsView({
         name="currency"
       />
     ) : null;
+  const showOwner = !personId && snapshot.people.length > 1;
   const cardControl = data?.accounts.length ? (
-    <Select
-      className="w-full"
-      defaultValue={accountId}
-      items={[
-        { label: <span className="text-sm">Todos os cartões</span>, value: "" },
-        ...data.accounts.map((account) => ({
-          label: (
-            <AccountIdentity
-              account={{
-                ...account,
-                name: `${account.name}${account.cardNumber ? ` · ${account.cardNumber}` : ""}`,
-                type: "CREDIT",
-              }}
-              person={
-                !personId && snapshot.people.length > 1
-                  ? { id: account.personId, name: account.personName }
-                  : undefined
-              }
-            />
-          ),
-          value: account.id,
-        })),
-      ]}
-      label="Cartão"
-      name="accountId"
+    <CardFilter
+      accounts={data.accounts}
+      cardId={cardId}
+      showOwner={showOwner}
     />
   ) : null;
   const nextParams = new URLSearchParams(location.search);
@@ -141,23 +126,23 @@ export function CardsView({
   if (data?.nextCursor) {
     nextParams.set("cursor", data.nextCursor);
   }
+  const activeFilters = activeCardFilters({
+    accountId,
+    cardId,
+    personId,
+    spaceId,
+  });
   const filterChoices = [
     cardControl,
     currencyControl,
     snapshot.people.length > 1,
     (result?.catalog.spaces.length ?? 0) > 1,
-    accountId,
-    personId,
-    spaceId !== "personal",
+    activeFilters,
   ].some(Boolean);
   const filters = filterChoices && data && result && (
     <WorkspaceFilters
       action={basePath}
-      activeCount={
-        Number(!!personId) +
-        Number(!!accountId) +
-        Number(spaceId !== "personal")
-      }
+      activeCount={activeFilters}
       context={context}
       identities={data.accounts}
       identity={
@@ -166,7 +151,7 @@ export function CardsView({
           personId={personId}
         />
       }
-      showClear={!!(accountId || personId || spaceId !== "personal")}
+      showClear={activeFilters > 0}
     >
       <div className="cards-page cards-filter-fields">
         <ScopeFields
@@ -218,14 +203,14 @@ export function CardsView({
           )}
           {data.accounts.length ? (
             <CardsWithLimitEditor
-              accountId={accountId}
+              accountId={focusedAccountId(data.accounts, accountId, cardId)}
               api={api}
               categories={result.catalog.categories}
               data={data}
               nextHref={data.nextCursor ? `${basePath}?${nextParams}` : null}
               revision={result.revision}
               saved={resource.retry}
-              showOwner={!personId && snapshot.people.length > 1}
+              showOwner={showOwner}
               snapshot={snapshot}
               spaceId={spaceId}
             />

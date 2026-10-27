@@ -205,8 +205,8 @@ export function DashboardView(props: DashboardProps) {
           onSubmit={model.saveCredentials}
         >
           <p>
-            Configure o acesso de {model.person?.name}. Ele será reutilizado
-            para os próximos bancos.
+            Configure o acesso de {model.person?.name}. Ele será reutilizado nos
+            próximos bancos; cada banco pede só uma autorização no Meu Pluggy.
           </p>
           <Input
             autoComplete="off"

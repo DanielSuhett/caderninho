@@ -1,22 +1,32 @@
 import { Badge } from "@cloudflare/kumo/components/badge";
 import { Empty } from "@cloudflare/kumo/components/empty";
 import { LayerCard } from "@cloudflare/kumo/components/layer-card";
-import { lazy, Suspense } from "react";
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useContext,
+  useEffect,
+  useState,
+} from "react";
 
 import type {
+  InvestmentGroup,
   InvestmentList,
   InvestmentPortfolio,
   PortalResponse,
 } from "../../contracts";
+import { UNKNOWN_BANK_ID } from "../../domain";
 import { tryCatch } from "../../shared";
 import { formatBalance } from "../money";
 import { MoneyValue } from "../money-value";
-import { AccountAvatar } from "./account-identity";
+import { AccountAvatar, BankAvatar } from "./account-identity";
 import { amountProportion, percentageLabel } from "./allocation-presentation";
 import { AnalysisSection } from "./analysis-section";
 import { ChartViewport } from "./chart-viewport";
 import { DisclosureItem } from "./disclosure-item";
 import { FinancialMetric } from "./financial-metric";
+import { AvatarFilterRoute, avatarFilterHref } from "./identity-filters";
 import { dayLabel } from "./workspace-resource";
 
 export const investmentTypeNames: Record<string, string | undefined> = {
@@ -74,14 +84,56 @@ function Money({
     <MoneyValue value={formatBalance(amount, currency)} />
   );
 }
+interface AllocationAction {
+  href?: string;
+  label: string;
+  onSelect?: () => void;
+  selected?: boolean;
+}
+function AllocationName({
+  action,
+  name,
+}: {
+  action: AllocationAction | null | undefined;
+  name: string;
+}) {
+  if (!action) {
+    return <>{name}</>;
+  }
+  const label = `${name}, ${action.label}`;
+  if (action.href) {
+    return (
+      <a
+        aria-current={action.selected ? "true" : undefined}
+        aria-label={label}
+        className="investor-legend-link"
+        href={action.href}
+      >
+        {name}
+      </a>
+    );
+  }
+  return (
+    <button
+      aria-label={label}
+      className="investor-legend-link"
+      onClick={action.onSelect}
+      type="button"
+    >
+      {name}
+    </button>
+  );
+}
 function Allocation({
   groups,
   currency,
+  select,
   title,
   types = false,
 }: {
   groups: InvestmentPortfolio["totals"][number]["byType"];
   currency: string;
+  select?: (id: string) => AllocationAction | null;
   title: string;
   types?: boolean;
 }) {
@@ -134,7 +186,10 @@ function Allocation({
                   className="investor-dot"
                   style={{ backgroundColor: slice.color }}
                 />
-                {slice.name}
+                <AllocationName
+                  action={select?.(slice.id)}
+                  name={slice.name}
+                />
               </span>
               <span className="financial-category-amount">
                 <Money
@@ -209,6 +264,7 @@ function PositionDetails({ row }: { row: InvestmentList[number] }) {
       "Aplicação",
       details?.purchaseDate ? dayLabel(details.purchaseDate) : "Não informada",
     ],
+    ["Atualização", row.date ? dayLabel(row.date) : "Não informada"],
     ["Emissor", details?.issuer ?? "Não informado"],
     ["Quantidade", details?.quantity ?? "Não informada"],
     ["Indexador", details?.rateType ?? "Não informado"],
@@ -245,6 +301,198 @@ function PositionDetails({ row }: { row: InvestmentList[number] }) {
     </dl>
   );
 }
+function groupName(group: InvestmentGroup, rows: InvestmentList) {
+  if (group.subtype && acronym.test(group.subtype)) {
+    return group.subtype;
+  }
+  const [first] = rows;
+  if (rows.length === 1 && first) {
+    return first.name;
+  }
+  return investmentTypeNames[group.type] ?? group.type;
+}
+const acronym = /^[A-Z]{2,5}$/;
+function groupAnchor(group: InvestmentGroup) {
+  return `investment-group-${group.id.replace(/[^A-Za-z0-9]+/g, "-")}`;
+}
+function positionStatus(row: InvestmentList[number]) {
+  return (
+    <>
+      {row.details?.status === "TOTAL_WITHDRAWAL" && <Badge>Resgatado</Badge>}
+      {!row.included && <Badge>Fora do patrimônio</Badge>}
+      {row.details?.status === "PENDING" && <Badge>Pendente</Badge>}
+      {!!row.manual && <Badge>Manual</Badge>}
+    </>
+  );
+}
+function DueDate({ date }: { date: string | null | undefined }) {
+  return (
+    <span className="cards-note">
+      {date ? dayLabel(date) : "Sem vencimento"}
+    </span>
+  );
+}
+function ownerOf(
+  people: PortalResponse["people"],
+  showOwner: boolean,
+  row: InvestmentList[number],
+) {
+  return showOwner && people.length > 1
+    ? people.find((person) => person.id === row.personId)
+    : undefined;
+}
+function PositionRow({
+  row,
+  currency,
+  people,
+  showOwner,
+  nested = false,
+}: {
+  row: InvestmentList[number];
+  currency: string;
+  people: PortalResponse["people"];
+  showOwner: boolean;
+  nested?: boolean;
+}) {
+  const item = (
+    <DisclosureItem
+      className={
+        nested ? "investor-position investor-nested" : "investor-position"
+      }
+      leading={
+        <AccountAvatar
+          account={row}
+          person={ownerOf(people, showOwner, row)}
+        />
+      }
+      summary={
+        <span className="investor-position-grid">
+          <span className="investor-position-identity">
+            <span className="account-identity">{row.name}</span>
+            <span className="investor-position-meta">
+              {investmentTypeNames[row.type] ?? row.type}
+              {positionStatus(row)}
+            </span>
+          </span>
+          <span>
+            <small className="investor-mobile-label">Bruto</small>
+            <Money
+              amount={row.amountMinor}
+              currency={currency}
+            />
+          </span>
+          <span>
+            <small className="investor-mobile-label">Resultado</small>
+            <Money
+              amount={row.details?.profitMinor}
+              currency={currency}
+            />
+          </span>
+          <span>
+            <small className="investor-mobile-label">Vencimento</small>
+            <DueDate date={row.details?.dueDate} />
+          </span>
+        </span>
+      }
+    >
+      <PositionDetails row={row} />
+    </DisclosureItem>
+  );
+  return nested ? item : <LayerCard>{item}</LayerCard>;
+}
+function GroupRow({
+  group,
+  rows,
+  currency,
+  open,
+  onToggle,
+  people,
+  showOwner,
+}: {
+  group: InvestmentGroup;
+  rows: InvestmentList;
+  currency: string;
+  open: boolean;
+  onToggle: (id: string, open: boolean) => void;
+  people: PortalResponse["people"];
+  showOwner: boolean;
+}) {
+  const groupId = group.id;
+  const onOpenChange = useCallback(
+    (next: boolean) => onToggle(groupId, next),
+    [onToggle, groupId],
+  );
+  const unknown = group.gross.unknownCount;
+  const meta = [
+    `${group.count} ${group.count === 1 ? "posição" : "posições"}`,
+    group.count === rows.length
+      ? null
+      : `${rows.length - group.count} fora do total`,
+    group.banks.length === 1 ? group.banks[0]?.name : null,
+    group.rateTypes.join(", ") || null,
+  ].filter(Boolean);
+  return (
+    <div
+      className="investor-group-anchor"
+      id={groupAnchor(group)}
+    >
+      <LayerCard>
+        <DisclosureItem
+          className="investor-position investor-group"
+          leading={<BankAvatar banks={group.banks} />}
+          onOpenChange={onOpenChange}
+          open={open}
+          summary={
+            <span className="investor-position-grid">
+              <span className="investor-position-identity">
+                <span className="account-identity">
+                  {groupName(group, rows)}
+                </span>
+                <span className="investor-position-meta">
+                  {meta.join(" · ")}
+                </span>
+              </span>
+              <span>
+                <small className="investor-mobile-label">Bruto</small>
+                <Money
+                  amount={group.gross.knownMinor}
+                  currency={currency}
+                />
+                {!!unknown && <small>{unknown} sem valor</small>}
+              </span>
+              <span>
+                <small className="investor-mobile-label">Resultado</small>
+                <Money
+                  amount={group.profit.totalMinor}
+                  currency={currency}
+                />
+              </span>
+              <span>
+                <small className="investor-mobile-label">
+                  Próximo vencimento
+                </small>
+                <DueDate date={group.nearestDueDate} />
+              </span>
+            </span>
+          }
+        >
+          <div className="investor-group-items">
+            {rows.map((row) => (
+              <PositionRow
+                currency={currency}
+                key={row.id}
+                nested
+                people={people}
+                row={row}
+                showOwner={showOwner}
+              />
+            ))}
+          </div>
+        </DisclosureItem>
+      </LayerCard>
+    </div>
+  );
+}
 export function InvestorDashboard({
   data,
   currency,
@@ -258,6 +506,76 @@ export function InvestorDashboard({
 }) {
   const summary = data.totals.find((row) => row.currency === currency);
   const rows = data.records.filter((row) => row.currency === currency);
+  const groups = data.groups.filter((group) => group.currency === currency);
+  const route = useContext(AvatarFilterRoute);
+  const [openGroups, setOpenGroups] = useState<ReadonlySet<string>>(new Set());
+  const [reveal, setReveal] = useState<{ id: string } | null>(null);
+  useEffect(() => {
+    if (!reveal) {
+      return;
+    }
+    const anchor = document.getElementById(reveal.id);
+    const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    anchor?.scrollIntoView({
+      behavior: reduced ? "auto" : "smooth",
+      block: "start",
+    });
+    anchor
+      ?.querySelector<HTMLElement>(".disclosure-trigger")
+      ?.focus({ preventScroll: true });
+  }, [reveal]);
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  const toggleGroup = useCallback((id: string, open: boolean) => {
+    setOpenGroups((current) => {
+      const next = new Set(current);
+      if (open) {
+        next.add(id);
+      } else {
+        next.delete(id);
+      }
+      return next;
+    });
+  }, []);
+  const selectType = useCallback(
+    (type: string): AllocationAction | null => {
+      const matching = groups.filter((group) => group.type === type);
+      const [first] = matching;
+      if (!first) {
+        return null;
+      }
+      return {
+        label: "mostrar posições",
+        onSelect: () => {
+          setOpenGroups((current) => {
+            const next = new Set(current);
+            for (const group of matching) {
+              next.add(group.id);
+            }
+            return next;
+          });
+          setReveal({ id: groupAnchor(first) });
+        },
+      };
+    },
+    [groups],
+  );
+  const selectInstitution = useCallback(
+    (institutionId: string): AllocationAction | null => {
+      if (institutionId === UNKNOWN_BANK_ID || !route) {
+        return null;
+      }
+      const target = avatarFilterHref(route, "institutionId", institutionId);
+      if (!target) {
+        return null;
+      }
+      return {
+        href: target.href,
+        label: target.selected ? "remover filtro" : "filtrar posições",
+        selected: target.selected,
+      };
+    },
+    [route],
+  );
   if (!rows.length) {
     return (
       <Empty
@@ -322,12 +640,14 @@ export function InvestorDashboard({
             <Allocation
               currency={currency}
               groups={summary.byType}
+              select={selectType}
               title="Por classe"
               types
             />
             <Allocation
               currency={currency}
               groups={summary.byInstitution}
+              select={selectInstitution}
               title="Por instituição"
             />
           </div>
@@ -345,63 +665,39 @@ export function InvestorDashboard({
           <span>Ativo</span>
           <span>Bruto</span>
           <span>Resultado</span>
-          <span>Atualização</span>
+          <span>Vencimento</span>
         </div>
         <div className="investor-position-list">
-          {rows.map((row) => (
-            <LayerCard key={row.id}>
-              <DisclosureItem
-                className="investor-position"
-                leading={
-                  <AccountAvatar
-                    account={row}
-                    person={
-                      showOwner && people.length > 1
-                        ? people.find((person) => person.id === row.personId)
-                        : undefined
-                    }
-                  />
-                }
-                summary={
-                  <span className="investor-position-grid">
-                    <span className="investor-position-identity">
-                      <span className="account-identity">{row.name}</span>
-                      <span className="investor-position-meta">
-                        {investmentTypeNames[row.type] ?? row.type}
-                        {row.details?.status === "TOTAL_WITHDRAWAL" && (
-                          <Badge>Resgatado</Badge>
-                        )}
-                        {!row.included && <Badge>Fora do patrimônio</Badge>}
-                        {row.details?.status === "PENDING" && (
-                          <Badge>Pendente</Badge>
-                        )}
-                        {!!row.manual && <Badge>Manual</Badge>}
-                      </span>
-                    </span>
-                    <span>
-                      <small className="investor-mobile-label">Bruto</small>
-                      <Money
-                        amount={row.amountMinor}
-                        currency={currency}
-                      />
-                    </span>
-                    <span>
-                      <small className="investor-mobile-label">Resultado</small>
-                      <Money
-                        amount={row.details?.profitMinor}
-                        currency={currency}
-                      />
-                    </span>
-                    <span className="cards-note">
-                      {row.date ? dayLabel(row.date) : "Data não informada"}
-                    </span>
-                  </span>
-                }
-              >
-                <PositionDetails row={row} />
-              </DisclosureItem>
-            </LayerCard>
-          ))}
+          {groups.map((group) => {
+            const members = group.recordIds.flatMap((id) => {
+              const row = byId.get(id);
+              return row ? [row] : [];
+            });
+            const [only] = members;
+            if (members.length === 1 && only) {
+              return (
+                <PositionRow
+                  currency={currency}
+                  key={group.id}
+                  people={people}
+                  row={only}
+                  showOwner={showOwner}
+                />
+              );
+            }
+            return (
+              <GroupRow
+                currency={currency}
+                group={group}
+                key={group.id}
+                onToggle={toggleGroup}
+                open={openGroups.has(group.id)}
+                people={people}
+                rows={members}
+                showOwner={showOwner}
+              />
+            );
+          })}
         </div>
       </section>
     </div>

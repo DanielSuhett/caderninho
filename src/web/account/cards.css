@@ -117,3 +117,25 @@
     justify-content: space-between;
   }
 }
+.account-cards {
+  display: grid;
+  gap: 8px;
+  padding: 0;
+  margin: 12px 0 0;
+  list-style: none;
+}
+.account-cards li {
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+.account-cards-hidden {
+  margin-top: 8px;
+  font-size: 14px;
+  color: var(--muted);
+}
+.account-card-name {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+}

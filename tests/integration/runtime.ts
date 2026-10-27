@@ -13,6 +13,7 @@ import { connections } from "../../src/worker/schema";
 import { createSyncService, runImport } from "../../src/worker/sync";
 import { createSyncRepository } from "../../src/worker/sync/repository";
 import { workflowSteps } from "../../src/worker/sync/workflow";
+import { noInstitutions } from "../support";
 import {
   WorkflowEntrypoint,
   type WorkflowEvent,
@@ -152,6 +153,7 @@ export class TestWorkflow extends WorkflowEntrypoint<
           run.id,
           run.admittedAt.slice(0, 10),
         ),
+        ...noInstitutions,
         steps: {
           do: async (name, fn) => {
             const result = await steps.do(name, async () => {

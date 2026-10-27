@@ -183,8 +183,5 @@ test("widget tokens require owner CSRF/origin, bind updates to a registered Item
     },
     Promise.resolve(),
   );
-  assert.deepEqual(requests, [
-    { options: { avoidDuplicates: true } },
-    { itemId: "registered", options: { avoidDuplicates: true } },
-  ]);
+  assert.deepEqual(requests, [{}, { itemId: "registered" }]);
 });

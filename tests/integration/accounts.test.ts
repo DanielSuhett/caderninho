@@ -16,6 +16,7 @@ import { createFinancialRepository } from "../../src/worker/finance/repository";
 import { createInstallationRepository } from "../../src/worker/installation/repository";
 import { runImport } from "../../src/worker/sync";
 import { createSyncRepository } from "../../src/worker/sync/repository";
+import { noInstitutions } from "../support";
 import { cookies, fixture, login } from "./access-fixture";
 import { account, admit, collect, setup, source, transaction } from "./fixture";
 import { env } from "cloudflare:workers";
@@ -265,6 +266,7 @@ test("catalog rereads stop at a disappearing account and preserve confirmed page
         now: () => "2026-10-01T00:00:00.000Z",
         repository: createSyncRepository(env.DB),
         source: provider,
+        ...noInstitutions,
         steps: {
           do: async (_name, fn) => {
             const result = await fn();
@@ -339,6 +341,7 @@ test("a temporarily missing account cannot complete an import after the catalog 
     now: () => now,
     repository,
     source: provider,
+    ...noInstitutions,
     steps: {
       do: async (_name: string, fn: () => Promise<CommitResult>) => {
         const result = await fn();

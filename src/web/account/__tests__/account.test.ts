@@ -4,7 +4,13 @@ import test from "node:test";
 import type { PluggyConnect } from "pluggy-connect-sdk";
 
 import { required } from "../../../../tests/support";
-import { createConnectWidget } from "..";
+import {
+  AddBankAction,
+  addBankAction,
+  ConnectFailure,
+  classifyConnectError,
+  createConnectWidget,
+} from "..";
 
 const accountConnectToken = () => ({
   accessToken: "synthetic",
@@ -110,4 +116,72 @@ await test("overlapping opens wait for old widget cleanup and only the latest re
   assert.equal(initialized, 2);
   assert.equal(destroyed, 1);
   await widget.destroy();
+});
+
+await test("widget reports only the failure class of a rejected connection", async () => {
+  type Options = ConstructorParameters<typeof PluggyConnect>[0];
+  const events: Options[] = [];
+  class Widget {
+    constructor(options: Options) {
+      events.push(options);
+    }
+    init() {
+      return Promise.resolve();
+    }
+    destroy() {
+      return Promise.resolve();
+    }
+  }
+  const failures: ConnectFailure[] = [];
+  const widget = createConnectWidget(async () => ({ PluggyConnect: Widget }));
+  await widget.open({
+    ...accountConnectToken(),
+    onClose: () => undefined,
+    onError: (failure) => failures.push(failure),
+    onSuccess: () => undefined,
+  });
+  await required(events[0]).onError?.({ message: "unexpected" });
+  assert.deepEqual(failures, [ConnectFailure.Other]);
+  const item = (code: string) => ({
+    data: { item: { error: { code } } },
+    message: "synthetic bank detail",
+  });
+  assert.equal(
+    classifyConnectError({ message: "ITEM_USER_ALREADY_EXISTS" }),
+    ConnectFailure.Duplicate,
+  );
+  assert.equal(
+    classifyConnectError(item("USER_AUTHORIZATION_NOT_GRANTED")),
+    ConnectFailure.Authorization,
+  );
+  assert.equal(
+    classifyConnectError(item("SITE_NOT_AVAILABLE")),
+    ConnectFailure.Unavailable,
+  );
+  await widget.destroy();
+});
+
+await test("adding a bank reuses a configured access and only detours when it cannot", () => {
+  const person = { id: "self" };
+  const ready = { configured: true, enabled: true };
+  assert.equal(
+    addBankAction({ person, profile: ready }),
+    AddBankAction.Connect,
+  );
+  assert.equal(
+    addBankAction({ person, profile: { configured: true, enabled: false } }),
+    AddBankAction.Paused,
+  );
+  assert.equal(
+    addBankAction({ person, profile: { configured: false, enabled: true } }),
+    AddBankAction.Credentials,
+  );
+  assert.equal(
+    addBankAction({ person, profile: undefined }),
+    AddBankAction.Credentials,
+  );
+  assert.equal(
+    addBankAction({ person: undefined, profile: ready }),
+    AddBankAction.Person,
+  );
 });

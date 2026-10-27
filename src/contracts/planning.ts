@@ -921,14 +921,17 @@ export const planningTools = {
       .strict(),
   }),
   update_card: planningTool("update_card", {
-    description: "Renomear ou ocultar cartão adicional.",
+    description:
+      "Renomear, ocultar ou vincular a uma pessoa um cartão; personId null volta ao titular da conta.",
     readOnly: false,
     schema: z
       .object({
         ...mutation,
+        expected_revision: z.number().int().nonnegative().optional(),
         hidden: z.boolean().optional(),
         id,
         name: text.optional(),
+        personId: id.nullable().optional(),
       })
       .strict(),
   }),

@@ -77,17 +77,19 @@ export function createInstallationRepository(
       return {
         connections: items.map((row) => ({
           accounts: Object.fromEntries(
-            Object.entries(row.accounts).map(([id, account]) => [
-              id,
-              {
-                ...account,
-                identity: financialIdentity({
-                  identity: account.identity,
-                  institution: owners.find((o) => o.connectionId === row.id)
-                    ?.institution,
-                }),
-              },
-            ]),
+            Object.entries(row.accounts).map(
+              ([id, { holderKey: _, ...account }]) => [
+                id,
+                {
+                  ...account,
+                  identity: financialIdentity({
+                    identity: account.identity,
+                    institution: owners.find((o) => o.connectionId === row.id)
+                      ?.institution,
+                  }),
+                },
+              ],
+            ),
           ),
           hasTransactions: row.hasTransactions,
           id: row.id,

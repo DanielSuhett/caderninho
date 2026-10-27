@@ -17,7 +17,7 @@ export function createHouseholdService(dependencies: {
     clientSecret: string;
   }) => Promise<unknown>;
   defaultClientId?: string | undefined;
-  resolveInstitution?: (profileId: string, id: string) => Promise<Institution>;
+  resolveInstitution?: (id: string) => Promise<Institution>;
 }) {
   const { repository, vault } = dependencies;
   async function credentials(
@@ -150,10 +150,7 @@ export function createHouseholdService(dependencies: {
       if (!dependencies.resolveInstitution) {
         throw new Error("NOT_CONFIGURED");
       }
-      institution = await dependencies.resolveInstitution(
-        owner.profileId,
-        input.institutionId,
-      );
+      institution = await dependencies.resolveInstitution(input.institutionId);
     }
     await repository.institution(input.connectionId, institution);
     return { ok: true };

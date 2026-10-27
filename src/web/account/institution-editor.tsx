@@ -66,7 +66,7 @@ export function InstitutionEditor({
       setLoading(false);
       if (error) {
         setMessage(
-          "Não foi possível carregar os bancos da Pluggy. Tente novamente.",
+          "Não foi possível carregar a lista de bancos. Tente novamente.",
         );
         return;
       }
@@ -123,13 +123,15 @@ export function InstitutionEditor({
           (!!selected && !institutions.some((row) => row.id === selected)),
         onClick: save,
       }}
-      title="Corrigir banco"
+      title={institution ? "Corrigir banco" : "Escolher banco"}
     >
       <div className="backoffice-form">
         <p>
-          O banco é identificado pelos dados da Pluggy a cada importação.
-          Corrija somente se estiver errado; a escolha vale para as contas,
-          cartões e investimentos vinculados.
+          {institution
+            ? "O banco é identificado a cada importação. Corrija somente se estiver errado."
+            : "Não foi possível identificar o banco desta conexão."}{" "}
+          A escolha vale para as contas, cartões e investimentos vinculados e é
+          mantida nas próximas importações.
         </p>
         <ul>
           {Object.entries(connection.accounts).map(([id, account]) => (

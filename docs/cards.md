@@ -8,6 +8,27 @@ O seletor **Cartão** fica no diálogo **Filtros**, mesmo com uma única conta. 
 recalcula resumo, categorias, parcelas e limites do recorte; preserva mês,
 pessoa, grupo e moeda, e reinicia a paginação. Pessoa, grupo e moeda usam o mesmo diálogo.
 
+## Cada cartão da conta
+
+Uma conta de crédito pode reunir vários cartões (titular, virtuais, adicional): o
+banco informa o final de 4 dígitos em cada lançamento. O painel lista, dentro de
+cada conta, os cartões do catálogo (`planning_cards`) com nome, final sempre
+visível, gasto confirmado, pendente e futuro do mês. O final é um **identificador
+observado**, não prova de um cartão físico: um final novo aparece como “Cartão
+final 1234” até o dono nomeá-lo e nunca herda nome ou pessoa de outro final.
+Lançamentos sem final somam no cartão principal, portanto os cartões fecham com o
+total da conta. Limite e disponível continuam da conta e aparecem uma vez.
+
+A caneta de cada cartão abre o editor (nome, pessoa e ocultar), com sessão, CSRF,
+confirmação, recibo idempotente e `expected_revision`. Cartões ocultos ficam em
+“Cartões ocultos”; o sync nunca sobrescreve nome, pessoa ou ocultação. A pessoa do
+cartão é opcional: sem vínculo vale o titular da conta; com vínculo, ele decide o
+filtro Pessoa, totais, parcelas, compromissos e avatares (`update_card` aceita
+`personId`; `null` volta ao titular da conta). Faturas e limites seguem a conta.
+O seletor **Cartão** do diálogo Filtros usa `cardId`; um cartão desconhecido,
+oculto ou de outra pessoa na URL equivale a todos. A demo guarda as edições só na
+sessão, sem recalcular totais por pessoa.
+
 ## Gastos do mês
 
 O recorte usa grupo, pessoa, conta de cartão e moeda. Os totais percorrem todos

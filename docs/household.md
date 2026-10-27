@@ -70,6 +70,7 @@ conectar a mesma conta duas vezes quando quiser analisar totais consolidados.
 | Perfil Pluggy | `pluggy_profiles` | Aplicação, titular padrão, nome, pausa e referência privada de credenciais. |
 | Titular da conexão | `connection_owners` | Liga o histórico a uma pessoa e a um perfil; atribuição da pessoa é editável. |
 | Espaço | `planning_spaces` | Organização do planejamento; independente da pessoa e do perfil. |
+| Titular do cartão | `planning_cards.data.personId` | Opcional; sobrepõe o titular da conta nos filtros e totais daquele cartão. |
 | Conta manual | `planning_accounts.data.personId` | Titular escolhido explicitamente; ausência histórica significa `self`. |
 
 Contas, transações, faturas e cartões herdam a pessoa da conexão. Investimentos e

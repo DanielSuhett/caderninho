@@ -7,8 +7,9 @@ import type {
 } from "../../src/domain";
 import { createInstallationRepository } from "../../src/worker/installation/repository";
 import { runImport } from "../../src/worker/sync";
+import type { ImportDependencies } from "../../src/worker/sync/entity";
 import { createSyncRepository } from "../../src/worker/sync/repository";
-import { required } from "../support";
+import { noInstitutions, required } from "../support";
 import { applyD1Migrations, reset } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 
@@ -75,10 +76,15 @@ export async function collect(
   financialSource: FinancialSource,
   now = "2026-10-01T00:00:00.000Z",
   connectionId = "c",
+  institutions: Pick<
+    ImportDependencies,
+    "institutions" | "reportInstitution"
+  > = noInstitutions,
 ) {
   const id = await admit(now, connectionId);
   await runImport(
     {
+      ...institutions,
       now: () => now,
       repository: createSyncRepository(env.DB),
       source: financialSource,

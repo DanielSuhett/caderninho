@@ -5,6 +5,7 @@ import {
   type RulePreviewInput,
   type SyncHistorySelection,
 } from "../../contracts";
+import { compeFromInstitutionId } from "../../domain";
 import { createAuditRepository } from "../audit/repository";
 import type { Bindings } from "../bindings";
 import { createFinancialService } from "../finance";
@@ -14,6 +15,7 @@ import { createHouseholdRepository } from "../household/repository";
 import { createCredentialVault } from "../household/vault.adapter";
 import { createInstallationService } from "../installation";
 import { createInstallationRepository } from "../installation/repository";
+import { createInstitutionCatalog } from "../institutions/catalog.adapter";
 import {
   DiagnosticEvent,
   FailureCode,
@@ -30,9 +32,11 @@ import { createPluggyAdapter, createProfileSource } from "../pluggy";
 import { createRuleJobService } from "../rules";
 import { createRuleJobRepository } from "../rules/repository";
 import { createSyncService } from "../sync";
+import type { InstitutionIssue } from "../sync/entity";
 import { createSyncRepository } from "../sync/repository";
 import { createSyncHistoryRepository } from "../sync/repository/history.repository";
 
+const brazilianInstitutions = createInstitutionCatalog();
 export function householdService(env: Bindings) {
   return createHouseholdService({
     defaultClientId:
@@ -40,10 +44,9 @@ export function householdService(env: Bindings) {
         ? env.PLUGGY_CLIENT_ID
         : undefined,
     repository: createHouseholdRepository(env.DB),
-    resolveInstitution: async (profileId, id) => {
-      const institution = (await source(env).institutions(profileId)).find(
-        (row) => row.id === id,
-      );
+    resolveInstitution: async (id) => {
+      const compe = compeFromInstitutionId(id);
+      const institution = compe && (await brazilianInstitutions.find(compe));
       if (!institution) {
         throw new Error("NOT_FOUND");
       }
@@ -84,8 +87,8 @@ function source(env: Bindings) {
       ),
   };
 }
-export function institutionCatalog(env: Bindings, profileId: string) {
-  return source(env).institutions(profileId);
+export function institutionCatalog() {
+  return brazilianInstitutions.list();
 }
 export function installationService(env: Bindings) {
   return createInstallationService({
@@ -110,7 +113,14 @@ export function financialService(env: Bindings) {
 export function synchronizationDependencies(env: Bindings) {
   const repository = createSyncRepository(env.DB);
   return {
+    institutions: brazilianInstitutions,
     now: () => new Date().toISOString(),
+    reportInstitution: (institution: InstitutionIssue) =>
+      reportDiagnostic({
+        event: DiagnosticEvent.operation,
+        institution,
+        outcome: Outcome.partial,
+      }),
     repository: {
       ...repository,
       publish: (input: Parameters<typeof repository.publish>[0]) =>

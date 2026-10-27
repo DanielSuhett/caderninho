@@ -215,10 +215,7 @@ test("a fresh installation connects/reconnects the widget, imports cumulative pa
   await connect();
   await connect(itemId);
   await widget.destroy();
-  assert.deepEqual(tokenRequests, [
-    { options: { avoidDuplicates: true } },
-    { itemId, options: { avoidDuplicates: true } },
-  ]);
+  assert.deepEqual(tokenRequests, [{}, { itemId }]);
   assert.equal(
     dispatches.length,
     1,

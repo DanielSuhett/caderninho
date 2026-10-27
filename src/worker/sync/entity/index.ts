@@ -6,6 +6,7 @@ import {
   Fault,
   FaultCode,
   type FinancialSource,
+  type InstitutionCatalog,
   type ProductPage,
   type RunStatus,
   type TransactionProjection,
@@ -52,6 +53,8 @@ export interface SyncRepository {
   ) => Promise<Admission[]>;
   connectionAccounts: (connectionId: string) => Promise<AccountMap>;
   fail: (id: string, code: string) => Promise<void>;
+  // Account keys held by every connection except the given one.
+  otherHolderKeys: (connectionId: string) => Promise<string[]>;
   publish: (input: Publication) => Promise<CommitResult>;
   read: (id: string) => Promise<SyncRun>;
   start: (id: string) => Promise<void>;
@@ -59,8 +62,18 @@ export interface SyncRepository {
 export interface Steps {
   do: (name: string, fn: () => Promise<CommitResult>) => Promise<CommitResult>;
 }
+export const InstitutionIssue = {
+  conflict: "conflict",
+  unavailable: "unavailable",
+  unrecognized: "unrecognized",
+} as const;
+export type InstitutionIssue =
+  (typeof InstitutionIssue)[keyof typeof InstitutionIssue];
 export interface ImportDependencies {
+  institutions: InstitutionCatalog;
   now: () => string;
+  // Identification is best effort; the import never fails because of it.
+  reportInstitution: (issue: InstitutionIssue) => void;
   repository: SyncRepository;
   source: FinancialSource;
   steps: Steps;
@@ -72,6 +85,7 @@ export interface WorkflowPort {
 
 const importErrors = new Set<string>([
   ...Object.values(FaultCode),
+  "ACCOUNT_ALREADY_CONNECTED",
   "SOURCE_IDENTITY_MISMATCH",
   "SOURCE_ACCOUNTS_CHANGED",
   "DUPLICATE_CHANGED",

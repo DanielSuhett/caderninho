@@ -17,6 +17,7 @@ import { createInstallationRepository } from "../../src/worker/installation/repo
 import { withObservation } from "../../src/worker/observability";
 import { runImport } from "../../src/worker/sync";
 import { createSyncRepository } from "../../src/worker/sync/repository";
+import { noInstitutions } from "../support";
 import {
   command,
   cookies,
@@ -517,6 +518,7 @@ test("MCP accumulates imported history and updates only matching source IDs", as
             });
           },
         },
+        ...noInstitutions,
         steps: { do: (_name, fn) => fn() },
       },
       id,

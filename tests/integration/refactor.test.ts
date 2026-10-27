@@ -7,6 +7,7 @@ import { createInstallationService } from "../../src/worker/installation";
 import { createInstallationRepository } from "../../src/worker/installation/repository";
 import { runImport } from "../../src/worker/sync";
 import { createSyncRepository } from "../../src/worker/sync/repository";
+import { noInstitutions } from "../support";
 import { applyD1Migrations, reset } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 
@@ -63,6 +64,7 @@ test("one import publishes exact transactions and repeating the request reuses t
           ],
         }),
       },
+      ...noInstitutions,
       steps: { do: (_name, fn) => fn() },
     },
     id,

@@ -6,6 +6,7 @@ import {
   type FinancialIdentity,
   institutionLogoUrl,
   type Person,
+  type PositionBank,
 } from "../../domain";
 import { type AvatarPart, AvatarStack } from "./avatar-stack";
 import { cardBrandLabel, useAvatarFilter } from "./identity-filters";
@@ -151,6 +152,28 @@ export function AccountAvatar({
       className="account-avatar-stack"
       items={items}
       label={description}
+    />
+  );
+}
+const MAX_BANK_AVATARS = 3;
+// Accumulated rows show the banks behind them the way the panel shows people:
+// one symbol for one bank, overlapping symbols for several.
+export function BankAvatar({ banks }: { banks: PositionBank[] }) {
+  const items: AvatarPart[] = banks.slice(0, MAX_BANK_AVATARS).map((bank) => ({
+    content: (
+      <AccountLogo
+        credit={false}
+        src={institutionLogoUrl(bank.logoUrl)}
+      />
+    ),
+    key: bank.id,
+    label: bank.name,
+  }));
+  return (
+    <AvatarStack
+      className="account-avatar-stack"
+      items={items}
+      label={banks.map((bank) => bank.name).join(", ")}
     />
   );
 }

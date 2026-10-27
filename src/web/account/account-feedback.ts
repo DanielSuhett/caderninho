@@ -1,5 +1,6 @@
 import type { AccountFailureCode } from "../../contracts";
 import { HttpRequestError } from "../../shared";
+import { ConnectFailure } from "./account.types";
 
 export class AccountRequestError extends Error {
   readonly code: AccountFailureCode;
@@ -50,4 +51,18 @@ export function accountFailureMessage(error: Error) {
     return "Sua sessão expirou. Entre novamente para continuar.";
   }
   return "Não foi possível confirmar a alteração. Confira as contas cadastradas antes de repetir; uma resposta perdida pode ter sido salva.";
+}
+
+export function connectFailureMessage(failure: ConnectFailure) {
+  const messages: Record<ConnectFailure, string> = {
+    [ConnectFailure.Authorization]:
+      "O banco não autorizou o acesso. Abra o Meu Pluggy, conclua a autorização deste banco e tente de novo.",
+    [ConnectFailure.Duplicate]:
+      "Esta autorização já está conectada. Para atualizá-la, use Reautorizar na conexão existente.",
+    [ConnectFailure.Other]:
+      "A conexão não foi concluída. Abra novamente o Meu Pluggy.",
+    [ConnectFailure.Unavailable]:
+      "O banco está indisponível no momento. Tente novamente em alguns minutos.",
+  };
+  return messages[failure];
 }

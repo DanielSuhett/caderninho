@@ -15,6 +15,7 @@ export const PortalCardsQuerySchema = z
   .object({
     ...identityFilterFields,
     accountId: id.optional(),
+    cardId: id.optional(),
     currency: z
       .string()
       .regex(/^[A-Z]{3}$/)
@@ -43,6 +44,21 @@ export const PortalCardInstallmentSchema = z.object({
   status: z.enum(["confirmed", "pending", "future"]),
   totalInstallments: z.number().int(),
 });
+export const PortalCardSchema = z.object({
+  confirmed: amount,
+  future: amount,
+  hidden: z.boolean(),
+  id,
+  identified: z.boolean(),
+  name: z.string(),
+  number: z.string().nullable(),
+  pending: amount,
+  personId: id,
+  personInherited: z.boolean(),
+  personName: z.string(),
+  primary: z.boolean(),
+});
+export type PortalCard = z.infer<typeof PortalCardSchema>;
 export const PortalCardsSchema = z.object({
   data: z.object({
     accounts: z.array(
@@ -51,6 +67,7 @@ export const PortalCardsSchema = z.object({
         availableCreditMinor: minor.nullable(),
         balanceObservedAt: z.string().nullable(),
         cardNumber: z.string().nullable(),
+        cards: z.array(PortalCardSchema),
         closeDate: z.string().nullable(),
         creditEstimated: z.boolean().default(false),
         creditLimitMinor: minor.nullable(),

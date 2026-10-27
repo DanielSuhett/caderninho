@@ -1,4 +1,14 @@
-import { and, eq, exists, inArray, isNull, lte, or, sql } from "drizzle-orm";
+import {
+  and,
+  eq,
+  exists,
+  inArray,
+  isNull,
+  lte,
+  ne,
+  or,
+  sql,
+} from "drizzle-orm";
 
 import { IMPORT_INTERVAL, ImportPhase, RunStatus } from "../../../domain";
 import { tryCatch } from "../../../shared";
@@ -196,6 +206,17 @@ export function createSyncRepository(binding: D1Database): SyncRepository {
         .update(connections)
         .set({ importError: code, importStatus: RunStatus.failed })
         .where(and(eq(connections.importId, id), active()));
+    },
+    async otherHolderKeys(connectionId) {
+      const rows = await db
+        .select({ accounts: connections.accounts })
+        .from(connections)
+        .where(ne(connections.id, connectionId));
+      return rows.flatMap((row) =>
+        Object.values(row.accounts).flatMap((account) =>
+          account.holderKey ? [account.holderKey] : [],
+        ),
+      );
     },
     async publish(input) {
       const { run, now, next, done } = input;

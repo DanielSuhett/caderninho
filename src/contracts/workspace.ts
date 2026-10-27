@@ -273,6 +273,19 @@ export const PortalMutationSchema = z
           tool: true,
         })
         .required({ creditLimitMinor: true, expected_revision: true }),
+      planningTools.update_card.command
+        .pick({
+          confirmed: true,
+          expected_revision: true,
+          hidden: true,
+          id: true,
+          idempotency_key: true,
+          name: true,
+          personId: true,
+          spaceId: true,
+          tool: true,
+        })
+        .required({ expected_revision: true }),
       planningTools.import_rules.command,
       planningTools.apply_rules.command
         .required({ expected_revision: true })

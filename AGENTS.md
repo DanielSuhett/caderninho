@@ -20,9 +20,7 @@
 - Não carregue skills de `.agents/` nem crie subagentes sem pedido explícito.
 - Escopo segue o pedido: correção local não vira revisão global. Revisão global
   (inventário de rotas, jornadas e matriz por página) só quando pedida.
-- Cada turno relê todo o contexto: uma tarefa por sessão. Após abrir o PR ou
-  passar de ~150k tokens, entregue um resumo curto e sugira `/compact` ou nova
-  sessão. Não carregue transcrições de outras threads inteiras; peça o trecho.
+- Não carregue transcrições de outras threads inteiras; peça o trecho.
 - Não despeje arquivos com `cat`/`sed -n 1,N` longos; leia faixas pequenas
   localizadas por `grep -n`. Agrupe edições do mesmo arquivo numa só operação.
 - Não faça polling com `sleep` + `curl`; espere o processo ou use monitoramento

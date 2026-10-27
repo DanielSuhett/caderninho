@@ -76,9 +76,6 @@ export function createProfileSource(input: {
       const row = await (await adapter(profileId)).connection(upstreamId);
       return { ...row, id: scopedSourceId(profileId, row.id) };
     },
-    async institutionCatalog(id) {
-      return (await adapter(sourceIdentity(id).profileId)).institutions();
-    },
     async products(request) {
       const { profileId, upstreamId } = sourceIdentity(request.id);
       const page = await (await adapter(profileId)).products({
@@ -148,9 +145,6 @@ export function createProfileSource(input: {
   };
   return {
     ...source,
-    async institutions(profileId = DEFAULT_PROFILE) {
-      return (await adapter(profileId)).institutions();
-    },
     async token(id?: string, selectedProfile = DEFAULT_PROFILE) {
       const identity = id
         ? sourceIdentity(id)

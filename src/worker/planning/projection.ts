@@ -86,6 +86,10 @@ export function cardCatalog(snapshot: PlanningSnapshot, state: PlanningState) {
       name: string;
       hidden: boolean;
       deleted: boolean;
+      identified: boolean;
+      personId: string;
+      personInherited: boolean;
+      personName: string;
       primary: boolean;
       spaceId: string;
     }
@@ -112,20 +116,61 @@ export function cardCatalog(snapshot: PlanningSnapshot, state: PlanningState) {
     for (const number of numbers) {
       const id = `${account.id}:${number}`;
       const setting = state.cards.find((c) => c.id === id);
+      const owner = snapshot.people.find((p) => p.id === setting?.personId);
       result.set(id, {
         accountId: account.id,
         deleted: setting?.deleted ?? false,
         hidden: setting?.hidden ?? account.hidden,
         id,
+        identified: !!setting && setting.name !== setting.number,
         identity: account.identity ?? null,
         name: setting?.name ?? account.name,
         number,
+        personId: owner?.id ?? account.personId,
+        personInherited: !owner,
+        personName: owner?.name ?? account.personName,
         primary: number === main,
         spaceId: account.spaceId,
       });
     }
   }
   return [...result.values()];
+}
+// A card owner overrides the account holder. Charges without a card number
+// follow the account's primary card, so every charge has exactly one owner.
+export function cardOwnership(
+  snapshot: PlanningSnapshot,
+  state = snapshot.state,
+) {
+  const entries = cardCatalog(snapshot, state).filter(
+    (entry) => !entry.deleted,
+  );
+  const byCard = new Map(entries.map((entry) => [entry.id, entry]));
+  const primary = new Map(
+    entries
+      .filter((entry) => entry.primary)
+      .map((entry) => [entry.accountId, entry]),
+  );
+  return {
+    includesPerson(
+      account: { id: string; personId: string },
+      personId: string,
+    ) {
+      return (
+        account.personId === personId ||
+        entries.some(
+          (entry) =>
+            entry.accountId === account.id && entry.personId === personId,
+        )
+      );
+    },
+    ofCharge(accountId: string, number: string | null | undefined) {
+      return (
+        (number ? byCard.get(`${accountId}:${number}`) : undefined) ??
+        primary.get(accountId)
+      );
+    },
+  };
 }
 export interface Selection {
   accountId?: string | undefined;
@@ -199,6 +244,7 @@ export function validateSelection(
   }
   const accountList = accounts(snapshot);
   const accountMap = new Map(accountList.map((row) => [row.id, row]));
+  const ownership = cardOwnership(snapshot);
   if (selection.accountId) {
     const account = found(accountMap.get(selection.accountId));
     const moved = snapshot.state.edits.some(
@@ -209,7 +255,8 @@ export function validateSelection(
     );
     if (
       (account.spaceId !== selection.spaceId && !moved) ||
-      (selection.personId && account.personId !== selection.personId)
+      (selection.personId &&
+        !ownership.includesPerson(account, selection.personId))
     ) {
       throw new Error(PlanningError.SPACE_MISMATCH);
     }
@@ -234,12 +281,17 @@ export function transactionStream(
   const details = new Map(
     snapshot.transactionDetails.map((row) => [row.id, row]),
   );
+  const ownership = cardOwnership(snapshot, state);
   function effective(row: TransactionProjection): PlanningTransaction | null {
     const edit = edits.get(row.id);
     if (edit?.deleted) {
       return null;
     }
     const account = accountMap.get(edit?.accountId ?? row.accountId);
+    const owner = ownership.ofCharge(
+      edit?.accountId ?? row.accountId,
+      details.get(row.id)?.cardNumber,
+    );
     const spaceId = edit?.spaceId ?? account?.spaceId ?? "personal";
     const automatic = pluggyCategory(row.category);
     const sourceCategory = state.categories.some(
@@ -255,8 +307,8 @@ export function transactionStream(
       goalId: edit?.goalId ?? null,
       ignored: edit?.ignored ?? false,
       manual: edit?.manual ?? false,
-      personId: account?.personId ?? "self",
-      personName: account?.personName ?? "Eu",
+      personId: owner?.personId ?? account?.personId ?? "self",
+      personName: owner?.personName ?? account?.personName ?? "Eu",
       profileId: account?.profileId ?? null,
       spaceId,
       tagIds: edit?.tagIds ?? [],
@@ -332,7 +384,8 @@ export function transactionStream(
           (!selection.accountIds || selection.accountIds.includes(row.id)) &&
           (!selection.accountId || row.id === selection.accountId) &&
           matchesFinancialIdentity(row.identity, selection) &&
-          (!selection.personId || row.personId === selection.personId) &&
+          (!selection.personId ||
+            ownership.includesPerson(row, selection.personId)) &&
           (!selection.profileId || row.profileId === selection.profileId),
       )
       .map((row) => row.id);
@@ -386,11 +439,13 @@ export function planningCoverage(
       .filter((edit) => !edit.deleted && edit.spaceId === selection.spaceId)
       .flatMap((edit) => (edit.accountId ? [edit.accountId] : [])),
   );
+  const ownership = cardOwnership(snapshot);
   const selectedAccounts = accounts(snapshot).filter(
     (row) =>
       !selection.investments &&
       (row.spaceId === selection.spaceId || movedAccountIds.has(row.id)) &&
-      (!selection.personId || row.personId === selection.personId) &&
+      (!selection.personId ||
+        ownership.includesPerson(row, selection.personId)) &&
       (!selection.accountId || row.id === selection.accountId) &&
       (!selection.accountIds || selection.accountIds.includes(row.id)) &&
       matchesFinancialIdentity(row.identity, selection),

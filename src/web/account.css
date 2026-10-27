@@ -1807,6 +1807,42 @@
   font-size: 14px;
   color: var(--muted);
 }
+.investor-legend-link {
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-align: start;
+  text-decoration: underline;
+  text-decoration-color: var(--line);
+  text-underline-offset: 4px;
+  cursor: pointer;
+  background: none;
+  border: 0;
+  border-radius: 4px;
+}
+.investor-legend-link:hover,
+.investor-legend-link[aria-current="true"] {
+  text-decoration-color: currentcolor;
+}
+.investor-legend-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.investor-group-anchor {
+  min-width: 0;
+  scroll-margin-top: 16px;
+}
+.investor-group-items {
+  display: grid;
+  margin-inline-start: 16px;
+  border-inline-start: 2px solid var(--line);
+}
+.investor-group-items > .investor-nested + .investor-nested {
+  border-top: 1px solid var(--line);
+}
+.investor-nested > .disclosure-panel {
+  padding-inline: 16px;
+}
 .investor-details {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1840,6 +1876,19 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .investor-position-identity {
+    grid-column: 1 / -1;
+  }
+  .investor-group-items {
+    margin-inline-start: 8px;
+  }
+  .investor-nested > .disclosure-summary > .disclosure-trigger,
+  .investor-nested > .disclosure-panel {
+    padding-inline: 12px;
+  }
+  .investor-nested > .disclosure-summary > .disclosure-leading {
+    left: 12px;
+  }
+  .investor-nested .investor-position-grid > span:nth-child(2) {
     grid-column: 1 / -1;
   }
   .investor-mobile-label {
@@ -2016,6 +2065,15 @@
   display: flex;
   gap: 8px;
   align-items: center;
+}
+/* The unidentified row carries a text action; on phones it moves under the name. */
+@media (max-width: 480px) {
+  .setup-bank-row-unidentified {
+    grid-template-columns: 36px minmax(0, 1fr) auto;
+  }
+  .setup-bank-row-unidentified .setup-bank-actions {
+    grid-column: 2 / -1;
+  }
 }
 .setup-banks strong {
   font-weight: 500;

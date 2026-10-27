@@ -7,6 +7,8 @@ import {
   FaultCode,
   normalizeAccount,
   normalizeTransaction,
+  ProductKind,
+  type ProductPage,
 } from "../../src/domain";
 import { database } from "../../src/worker/database";
 import { createFinancialService } from "../../src/worker/finance";
@@ -15,6 +17,7 @@ import { createInstallationRepository } from "../../src/worker/installation/repo
 import { connections } from "../../src/worker/schema";
 import { createSyncService, runImport } from "../../src/worker/sync";
 import { createSyncRepository } from "../../src/worker/sync/repository";
+import { noInstitutions } from "../support";
 import { account, admit, collect, setup, source, transaction } from "./fixture";
 import { env } from "cloudflare:workers";
 
@@ -67,6 +70,7 @@ test("first-import admission is atomic and cannot restart a completed connection
       now: () => now,
       repository,
       source: source([]),
+      ...noInstitutions,
       steps: { do: (_name, fn) => fn() },
     },
     id,
@@ -214,6 +218,7 @@ test("partial pages keep prior success and confirmed data, reject conflicting ID
         now: () => "2026-10-02T00:00:00.000Z",
         repository,
         source: partialSource,
+        ...noInstitutions,
         steps: { do: (_name, fn) => fn() },
       },
       id,
@@ -236,6 +241,7 @@ test("partial pages keep prior success and confirmed data, reject conflicting ID
       now: () => now,
       repository,
       source: partialSource,
+      ...noInstitutions,
       steps: { do: (_name, fn) => fn() },
     },
     id,
@@ -248,6 +254,7 @@ test("partial pages keep prior success and confirmed data, reject conflicting ID
         now: () => "2026-10-03T00:00:00.000Z",
         repository,
         source: source([transaction(), transaction({ amount: "-99" })]),
+        ...noInstitutions,
         steps: { do: (_name, fn) => fn() },
       },
       conflictId,
@@ -357,6 +364,7 @@ test("a retried native step rebuilds the last committed page and terminal result
           return input.transactions(accountId, cursor);
         },
       },
+      ...noInstitutions,
       steps: {
         do: async (_name, fn) => {
           const result = await fn();
@@ -397,39 +405,166 @@ test("an unavailable native status keeps a running import active past the 24h bo
   assert.equal(admission?.status, "working");
   assert.equal(admission?.importId, id);
 });
-test("a Meu Pluggy import identifies the bank from provider names and keeps it when the catalog fails", async () => {
-  const bank = {
-    id: "301",
-    logoUrl: "https://cdn.pluggy.ai/assets/connector-icons/301.svg",
-    name: "Banco Sintético Pactual",
-  };
-  const catalog = [
-    bank,
-    { id: "302", logoUrl: null, name: "Banco Exemplo" },
-    { id: "303", logoUrl: null, name: "Banco Modelo" },
-  ];
-  const accounts = [
-    account({ id: "a", name: "Sintético Banking" }),
-    account({ id: "b", name: "Cartão Sintético Black", type: "CREDIT" }),
-  ];
-  // The first import reads the catalog; the next one finds it unavailable.
-  const responses = [catalog];
-  const provider = {
-    ...source([], accounts),
-    institutionCatalog: () => {
-      const next = responses.shift();
-      return next
-        ? Promise.resolve(next)
-        : Promise.reject(new Error("UPSTREAM_UNAVAILABLE"));
+const bank = { id: "compe:208", logoUrl: null, name: "Banco Sintético" };
+const other = { id: "compe:260", logoUrl: null, name: "Banco Exemplo" };
+const syntheticCatalog = (reports: string[] = []) => ({
+  institutions: {
+    find: async (compe: string) =>
+      [bank, other].find((row) => row.id === `compe:${compe}`) ?? null,
+    list: async () => [bank, other],
+  },
+  reportInstitution: (issue: string) => {
+    reports.push(issue);
+  },
+});
+const identities = async () =>
+  Object.values(
+    (await createInstallationRepository(env.DB).state()).connections[0]
+      ?.accounts ?? {},
+  ).map((row) => row.identity?.institution);
+const bankData = (transferNumber: string) => ({ transferNumber });
+
+test("a Meu Pluggy import identifies the bank by COMPE and lets cards inherit it", async () => {
+  const reports: string[] = [];
+  await collect(
+    source(
+      [],
+      [
+        account({ bankData: bankData("208/0001/123-4"), id: "a" }),
+        account({ id: "b", name: "Cartão Qualquer", type: "CREDIT" }),
+      ],
+    ),
+    "2026-10-01T00:00:00.000Z",
+    "c",
+    syntheticCatalog(reports),
+  );
+  assert.deepEqual(await identities(), [bank, bank]);
+  assert.deepEqual(reports, []);
+});
+
+test("investments without an issuer inherit the bank of their item", async () => {
+  const unnamed = {
+    amountMinor: "10000",
+    connectionId: "c",
+    currency: "BRL",
+    date: "2026-10-01",
+    id: "unnamed",
+    included: true,
+    manual: false,
+    name: "Fundo",
+    spaceId: "personal",
+    type: "FUND",
+  } as const;
+  const named = {
+    ...unnamed,
+    id: "named",
+    identity: {
+      cardBrand: null,
+      institution: { id: "cnpj", logoUrl: null, name: "Banco Exemplo" },
     },
   };
-  const institutions = async () =>
-    Object.values(
-      (await createInstallationRepository(env.DB).state()).connections[0]
-        ?.accounts ?? {},
-    ).map((row) => row.identity?.institution);
-  await collect(provider);
-  assert.deepEqual(await institutions(), [bank, bank]);
-  await collect(provider, "2026-10-03T00:00:00.000Z");
-  assert.deepEqual(await institutions(), [bank, bank]);
+  const records: Extract<ProductPage, { kind: "investments" }>["records"] = [
+    { ...unnamed },
+    named,
+  ];
+  const provider = {
+    ...source([], [account({ bankData: bankData("208/1/1") })]),
+    products: (input: { kind: ProductKind }): Promise<ProductPage> => {
+      if (input.kind === ProductKind.investments) {
+        return Promise.resolve({ kind: input.kind, next: null, records });
+      }
+      return Promise.resolve({ kind: input.kind, next: null, records: [] });
+    },
+  };
+  await collect(provider, "2026-10-01T00:00:00.000Z", "c", syntheticCatalog());
+  assert.deepEqual(records[0]?.identity?.institution, bank);
+  assert.deepEqual(records[1]?.identity?.institution, other);
+});
+
+test("conflicting or unusable evidence leaves the bank unknown without failing the import", async () => {
+  const reports: string[] = [];
+  await collect(
+    source(
+      [],
+      [
+        account({ bankData: bankData("208/1/1"), id: "a" }),
+        account({ bankData: bankData("260/1/1"), id: "b" }),
+      ],
+    ),
+    "2026-10-01T00:00:00.000Z",
+    "c",
+    syntheticCatalog(reports),
+  );
+  assert.deepEqual(await identities(), [null, null]);
+  assert.deepEqual(reports, ["conflict"]);
+});
+
+test("an item whose bank is not in the catalog stays unknown and is reported", async () => {
+  const reports: string[] = [];
+  await collect(
+    source(
+      [],
+      [account({ bankData: bankData("x/1/1"), name: "Conta Corrente" })],
+    ),
+    "2026-10-01T00:00:00.000Z",
+    "c",
+    syntheticCatalog(reports),
+  );
+  assert.deepEqual(await identities(), [null]);
+  assert.deepEqual(reports, ["unrecognized"]);
+});
+
+test("a second item holding the same bank account is refused, other accounts and banks are not", async () => {
+  const held = (itemId: string, transferNumber: string, id = `${itemId}-a`) =>
+    account({ bankData: bankData(transferNumber), id, itemId });
+  await collect(
+    source([], [held("c", "208/0001/123-4")]),
+    "2026-10-01T00:00:00.000Z",
+    "c",
+  );
+  const duplicate = source([], [held("dup", "208 / 0001 / 123-4")]);
+  const duplicateId = await admit("2026-10-01T00:00:00.000Z", "dup");
+  await assert.rejects(
+    runImport(
+      {
+        ...noInstitutions,
+        now: () => "2026-10-01T00:00:00.000Z",
+        repository: createSyncRepository(env.DB),
+        source: duplicate,
+        steps: { do: (_name, fn) => fn() },
+      },
+      duplicateId,
+    ),
+    { message: "ACCOUNT_ALREADY_CONNECTED" },
+  );
+  const state = await createInstallationRepository(env.DB).state();
+  const refused = state.connections.find((row) => row.id === "dup");
+  assert.equal(refused?.importError, "ACCOUNT_ALREADY_CONNECTED");
+  assert.deepEqual(refused?.accounts, {});
+  assert.equal(
+    JSON.stringify(state).includes("holderKey"),
+    false,
+    "account keys never reach the client",
+  );
+  const at = "2026-10-01T00:00:00.000Z";
+  await collect(
+    source([], [held("other-account", "208/0001/999-9")]),
+    at,
+    "other-account",
+  );
+  await collect(
+    source([], [held("other-bank", "260/0001/123-4")]),
+    at,
+    "other-bank",
+  );
+  await collect(source([], [held("no-compe", "0001/123-4")]), at, "no-compe");
+  const accepted = (await createInstallationRepository(env.DB).state())
+    .connections;
+  assert.deepEqual(accepted.map((row) => [row.id, row.importStatus]).sort(), [
+    ["c", "succeeded"],
+    ["dup", "failed"],
+    ["no-compe", "succeeded"],
+    ["other-account", "succeeded"],
+    ["other-bank", "succeeded"],
+  ]);
 });

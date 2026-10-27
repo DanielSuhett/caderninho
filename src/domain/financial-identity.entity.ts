@@ -146,9 +146,15 @@ export function matchesFinancialIdentity(
   );
 }
 
+// Bank logos are served by the deploy itself, one SVG per COMPE.
+const bundledLogo = /^\/bancos\/\d{3}\.svg$/;
+
 export function institutionLogoUrl(value: string | null | undefined) {
   if (!value) {
     return null;
+  }
+  if (bundledLogo.test(value)) {
+    return value;
   }
   try {
     const url = new URL(value);

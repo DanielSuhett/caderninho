@@ -13,6 +13,7 @@ import {
   navigateWorkspace,
   workspaceHref,
 } from "./account-navigation";
+import { AddBankAction, addBankAction } from "./connection-journey";
 import type { DashboardProps } from "./dashboard-view";
 
 export const SetupStep = {
@@ -177,17 +178,24 @@ export function usePeopleSetup(props: DashboardProps) {
     [connect, go, manage, person, profile, snapshot.csrf],
   );
   const addBank = useCallback(() => {
-    if (!(person && profile?.configured)) {
-      go(person ? SetupStep.credentials : SetupStep.person);
+    const action = addBankAction({ person, profile });
+    if (action === AddBankAction.Person) {
+      go(SetupStep.person);
       return;
     }
-    if (!profile.enabled) {
+    if (action === AddBankAction.Credentials) {
+      go(SetupStep.credentials);
+      return;
+    }
+    if (action === AddBankAction.Paused) {
       setIssue(
         "Este acesso Pluggy está pausado. Reative-o em Ajustes para conectar outro banco.",
       );
       return;
     }
-    connect(profile.id);
+    if (profile) {
+      connect(profile.id);
+    }
   }, [connect, go, person, profile]);
   const selectPerson = useCallback(
     (event: MouseEvent<HTMLButtonElement>) => {

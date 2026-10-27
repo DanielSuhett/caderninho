@@ -41,7 +41,7 @@ import { demoInvestments } from "../fixtures/investments";
 import { workspaceFixture } from "../fixtures/workspace";
 import { tryCatch, tryCatchSync } from "../shared";
 import type { OrganizationApi } from "./account/account-api";
-import { demoCards } from "./demo-cards";
+import { type DemoCardEdit, demoCards } from "./demo-cards";
 import { type DemoData, demoSummary, scopedDemoData } from "./demo-data";
 import { demoTransactionDetail } from "./demo-transaction-detail";
 import { randomId } from "./random-id";
@@ -259,6 +259,7 @@ export function createDemoSession({
   const mutationResults = new Map<string, unknown>();
   const categoryOverrides = new Map<string, string | null>();
   const cardLimits = new Map<string, string>();
+  const cardEdits = new Map<string, DemoCardEdit>();
   const importPrefixes = new Map<string, string>();
   const ruleJobs = new Map<string, DemoRuleJob>();
   let writing = Promise.resolve();
@@ -314,6 +315,25 @@ export function createDemoSession({
     } else {
       cardLimits.set(command.id, command.creditLimitMinor);
     }
+  }
+  function updateCard(
+    command: Extract<ParsedMutation, { tool: "update_card" }>,
+  ) {
+    if (command.expected_revision !== revision) {
+      throw new Error("RESTART_REQUIRED");
+    }
+    const [accountId] = command.id.split(":");
+    required(
+      view(command.spaceId).accounts.find(
+        (row) => row.id === accountId && row.type === "CREDIT",
+      ),
+    );
+    cardEdits.set(command.id, {
+      ...cardEdits.get(command.id),
+      ...(command.name !== undefined && { name: command.name }),
+      ...(command.hidden !== undefined && { hidden: command.hidden }),
+      ...(command.personId !== undefined && { personId: command.personId }),
+    });
   }
   function categorizeTransactions(
     command: Extract<ParsedMutation, { tool: "batch_edit_transactions" }>,
@@ -598,6 +618,9 @@ export function createDemoSession({
       case "update_account_settings":
         updateCardLimit(command);
         break;
+      case "update_card":
+        updateCard(command);
+        break;
       case "create_rule":
       case "update_rule": {
         validateRule(command, group, view(command.spaceId));
@@ -809,6 +832,7 @@ export function createDemoSession({
         },
         view(query.spaceId ?? "personal"),
         cardLimits,
+        cardEdits,
       ),
       partial: false,
       revision,

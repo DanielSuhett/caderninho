@@ -7,6 +7,7 @@ import { installmentGroupKey } from "../../domain/card-installments";
 import { formatBalance } from "../money";
 import { MoneyValue } from "../money-value";
 import { AccountAvatar } from "./account-identity";
+import { installmentCardLabel } from "./card-presentation";
 import { DisclosureItem } from "./disclosure-item";
 import { RelatedInstallments } from "./related-installments";
 import { dayLabel } from "./workspace-resource";
@@ -62,6 +63,10 @@ function CardPurchase({
 }) {
   const [open, setOpen] = useState(false);
   const account = data.accounts.find((item) => item.id === row.accountId);
+  const cardName =
+    (account?.cards.length ?? 0) > 1
+      ? installmentCardLabel(account, row.cardNumber)
+      : null;
   const appearance = {
     identity: account?.identity,
     name: account?.name ?? "Cartão",
@@ -90,6 +95,7 @@ function CardPurchase({
                 <span className="cards-note">
                   {row.totalInstallments} parcelas
                   {!!row.purchaseDate && ` · ${dayLabel(row.purchaseDate)}`}
+                  {!!cardName && ` · ${cardName}`}
                 </span>
               </span>
             </span>
