@@ -1,4 +1,10 @@
-import type { RulePreviewInput, SyncHistorySelection } from "../../contracts";
+import { z } from "zod/v4";
+
+import {
+  RuleImportResultSchema,
+  type RulePreviewInput,
+  type SyncHistorySelection,
+} from "../../contracts";
 import { createAuditRepository } from "../audit/repository";
 import type { Bindings } from "../bindings";
 import { createFinancialService } from "../finance";
@@ -21,6 +27,8 @@ import { createPlanningService, previewRule } from "../planning";
 import { createPlanningRepository } from "../planning/repository";
 import { createCatalogRepository } from "../planning/repository/catalog.repository";
 import { createPluggyAdapter, createProfileSource } from "../pluggy";
+import { createRuleJobService } from "../rules";
+import { createRuleJobRepository } from "../rules/repository";
 import { createSyncService } from "../sync";
 import { createClefClassifier } from "../sync/clef.adapter";
 import { createSyncRepository } from "../sync/repository";
@@ -33,6 +41,15 @@ export function householdService(env: Bindings) {
         ? env.PLUGGY_CLIENT_ID
         : undefined,
     repository: createHouseholdRepository(env.DB),
+    resolveInstitution: async (profileId, id) => {
+      const institution = (await source(env).institutions(profileId)).find(
+        (row) => row.id === id,
+      );
+      if (!institution) {
+        throw new Error("NOT_FOUND");
+      }
+      return institution;
+    },
     validate: (credentials) => createPluggyAdapter(credentials).token(),
     vault: createCredentialVault(env.OAUTH_KV),
   });
@@ -67,6 +84,9 @@ function source(env: Bindings) {
         { resource: "transactions" },
       ),
   };
+}
+export function institutionCatalog(env: Bindings, profileId: string) {
+  return source(env).institutions(profileId);
 }
 export function installationService(env: Bindings) {
   return createInstallationService({
@@ -156,6 +176,70 @@ export function synchronizationHistory(
   selection: SyncHistorySelection,
 ) {
   return createSyncHistoryRepository(env.DB).query(selection);
+}
+
+const PreviewImportSchema = z.object({ data: RuleImportResultSchema });
+const AppliedSchema = z.object({
+  changed: z.number().int(),
+  count: z.number().int(),
+  truncated: z.boolean(),
+});
+// Planning results are untyped records at this boundary; parse only the fields
+// the job consumes.
+export function ruleJobService(env: Bindings) {
+  const planning = planningService(env);
+  return createRuleJobService({
+    dispatcher: {
+      create: async (id) => {
+        await env.RULES.create({ id, params: { jobId: id } });
+      },
+    },
+    now: () => new Date().toISOString(),
+    planning: {
+      async applyRules({ key, spaceId }) {
+        const applied = AppliedSchema.parse(
+          await planning.execute({
+            confirmed: true,
+            from: "1900-01-01",
+            idempotency_key: key,
+            preserveManual: true,
+            spaceId,
+            to: "9999-12-31",
+            tool: "apply_rules",
+          }),
+        );
+        return {
+          changed: applied.changed,
+          examined: applied.count,
+          truncated: applied.truncated,
+        };
+      },
+      categories: async (spaceId) =>
+        (await workspaceCatalog(env, spaceId)).categories,
+      async importRules({ categoryIds, key, pack, spaceId }) {
+        const preview = PreviewImportSchema.parse(
+          await planning.execute({
+            categoryIds,
+            pack,
+            spaceId,
+            tool: "preview_rule_import",
+          }),
+        );
+        return RuleImportResultSchema.parse(
+          await planning.execute({
+            categoryIds,
+            confirmed: true,
+            idempotency_key: `${key}:${preview.data.revision}`,
+            pack,
+            revision: preview.data.revision,
+            spaceId,
+            tool: "import_rules",
+          }),
+        );
+      },
+    },
+    repository: createRuleJobRepository(env.DB),
+  });
 }
 
 export function workspaceCatalog(env: Bindings, spaceId: string) {

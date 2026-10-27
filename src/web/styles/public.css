@@ -82,6 +82,12 @@
   display: grid;
   gap: 20px;
 }
+.access-recovery-steps {
+  display: grid;
+  gap: 16px;
+  padding-left: 24px;
+  list-style: decimal;
+}
 .access-main details {
   margin-top: 24px;
 }

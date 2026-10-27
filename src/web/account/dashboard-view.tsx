@@ -15,6 +15,7 @@ import { type FormEvent, type MouseEvent, useCallback, useState } from "react";
 
 import type { HouseholdCommand, PortalResponse } from "../../contracts";
 import { UiButton, UiIconButton, UiLink } from "../ui";
+import type { createAccountApi } from "./account-api";
 import type { ManagementOutcome } from "./account-feedback";
 import { AccountIdentity } from "./account-identity";
 import { workspaceHref } from "./account-navigation";
@@ -35,6 +36,7 @@ export interface DashboardProps {
   cancel: () => void;
   command: (action: string, ids?: string[]) => void;
   connect: (profileId: string, id?: string) => void;
+  institutions: ReturnType<typeof createAccountApi>["institutions"];
   manage: (input: HouseholdCommand) => Promise<ManagementOutcome>;
   message: string;
   observedAt: string | null;
@@ -415,7 +417,12 @@ function PeopleBanks({
           precisa da própria conta Meu Pluggy.
         </p>
       )}
-      <SetupBanks connections={model.connections} />
+      <SetupBanks
+        connections={model.connections}
+        csrf={snapshot.csrf}
+        institutions={props.institutions}
+        manage={props.manage}
+      />
       {settings === true && (
         <section
           aria-label="Ajustes avançados"

@@ -1,6 +1,10 @@
 import { and, eq, exists, getTableColumns, inArray, sql } from "drizzle-orm";
 
-import { connectionPartial, IMPORT_INTERVAL } from "../../../domain";
+import {
+  connectionPartial,
+  financialIdentity,
+  IMPORT_INTERVAL,
+} from "../../../domain";
 import { database } from "../../database";
 import {
   connectionOwners,
@@ -72,7 +76,19 @@ export function createInstallationRepository(
       const persons = await db.select().from(people);
       return {
         connections: items.map((row) => ({
-          accounts: row.accounts,
+          accounts: Object.fromEntries(
+            Object.entries(row.accounts).map(([id, account]) => [
+              id,
+              {
+                ...account,
+                identity: financialIdentity({
+                  identity: account.identity,
+                  institution: owners.find((o) => o.connectionId === row.id)
+                    ?.institution,
+                }),
+              },
+            ]),
+          ),
           hasTransactions: row.hasTransactions,
           id: row.id,
           importCheckpoint: row.importCheckpoint

@@ -527,6 +527,7 @@ test("new connections inherit the installation owner and profile without rewriti
   ).first();
   assert.deepEqual(owner, {
     connection_id: "existing",
+    institution: null,
     person_id: "self",
     profile_id: "default",
   });

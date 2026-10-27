@@ -13,6 +13,12 @@ export interface DurableWorkflow {
   }) => Promise<DurableInstance>;
   get: (id: string) => Promise<DurableInstance>;
 }
+export interface RuleWorkflow {
+  create: (options: {
+    id: string;
+    params: { jobId: string };
+  }) => Promise<DurableInstance>;
+}
 export interface Bindings {
   ADMIN_ACCESS_HASH?: string;
   ADMIN_PASSWORD?: string;
@@ -29,4 +35,5 @@ export interface Bindings {
   OAUTH_PROVIDER: OAuthHelpers;
   PLUGGY_CLIENT_ID?: string;
   PLUGGY_CLIENT_SECRET?: string;
+  RULES: RuleWorkflow;
 }

@@ -41,6 +41,11 @@
       "name": "caderninho-onboarding-20261023-finance",
       "binding": "FINANCE",
       "class_name": "FinanceWorkflow"
+    },
+    {
+      "name": "caderninho-onboarding-20261023-rules",
+      "binding": "RULES",
+      "class_name": "RulesWorkflow"
     }
   ],
   "triggers": {

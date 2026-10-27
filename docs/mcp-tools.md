@@ -12,7 +12,7 @@ Gerado por `npm run docs:mcp` a partir do registro de ferramentas.
 | `caderninho_aggregate` | consulta/prévia | — | Totais exatos por moeda sobre todo o universo filtrado. Débito não equivale a gasto. Informe parcialidade, desconhecidos e referência temporal. |
 | `add_goal_contribution` | escrita local | — | Registrar contribuição; transação existente não é contada novamente. |
 | `analyze_categories` | consulta/prévia | sim | Analisar despesas categorizadas e itens sem categoria. |
-| `apply_rules` | escrita local | — | Aplicar regras sincronicamente a até 500 transações; operação atômica. |
+| `apply_rules` | escrita local | — | Aplicar regras sincronicamente; operação atômica. Sem preserveManual, examina até 500 transações. Com preserveManual=true, examina o período inteiro, preserva categorias manuais e ignoradas e grava até 500 alterações; repita enquanto truncated=true. |
 | `attach_transaction_tags` | escrita local | — | Alterar tags das transações selecionadas. |
 | `batch_delete_transactions` | escrita local | — | Excluir apresentação local preservando origem; confirmação e repetição idempotente. |
 | `batch_edit_transactions` | escrita local | — | Editar atomicamente até 500 transações selecionadas. |

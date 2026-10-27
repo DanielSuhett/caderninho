@@ -2,18 +2,18 @@ import assert from "node:assert/strict";
 import { readFile, stat } from "node:fs/promises";
 import test from "node:test";
 
-import { accessKeyHash } from "../../src/worker/auth";
 import { deployInstallation, prepareAccess } from "../deploy";
 
-const keyPattern = /cad_[a-f0-9]{64}/;
+const password = "synthetic-installation-password";
+const passwordInstructionsPattern = /Defina ADMIN_PASSWORD.*16 a 256/;
 
-test("first deployment uploads only the hash, returns the private link after success and removes the temporary file", async () => {
+test("first deployment installs the chosen password privately and returns an ordinary login URL", async () => {
   const messages: string[] = [];
   const calls: string[][] = [];
   let secretFile = "";
-  let storedHash = "";
   await deployInstallation({
     output: (value) => messages.push(value),
+    password,
     run: async (args) => {
       calls.push(args);
       if (args[0] === "secret") {
@@ -23,87 +23,120 @@ test("first deployment uploads only the hash, returns the private link after suc
         return "Migrations complete";
       }
       secretFile = args[2] ?? "";
-      const content = await readFile(secretFile, "utf8");
-      const data: unknown = JSON.parse(content);
-      assert.ok(
-        data && typeof data === "object" && "ADMIN_ACCESS_HASH" in data,
-      );
-      assert.equal(typeof data.ADMIN_ACCESS_HASH, "string");
-      storedHash = String(data.ADMIN_ACCESS_HASH);
-      assert.equal(content.includes("cad_"), false);
+      assert.deepEqual(JSON.parse(await readFile(secretFile, "utf8")), {
+        ADMIN_PASSWORD: password,
+      });
       assert.equal((await stat(secretFile)).mode % 0o1000, 0o600);
-      assert.equal(messages.join("").includes("cad_"), false);
+      assert.equal(messages.join("").includes(password), false);
       return "Deployed https://synthetic.owner.workers.dev";
     },
   });
   const output = messages.join("");
-  const key = output.match(keyPattern)?.[0];
-  assert.ok(key);
-  assert.equal(storedHash, await accessKeyHash(key));
-  assert.ok(output.includes(`/account/login#access_key=${key}`));
-  assert.equal(JSON.stringify(calls).includes(key), false);
+  assert.ok(output.includes("https://synthetic.owner.workers.dev/account"));
+  assert.equal(output.includes("#access_key="), false);
+  assert.equal(output.includes(password), false);
+  assert.equal(JSON.stringify(calls).includes(password), false);
+  assert.deepEqual(
+    calls.map((args) => args[0]),
+    ["secret", "d1", "deploy"],
+  );
   await assert.rejects(stat(secretFile));
 });
 
-test("redeploys preserve existing generated and legacy credentials", async () => {
+test("passwords supplied by the Cloudflare form and existing keys are preserved even if the build environment has another password", async () => {
   await Promise.all(
     ["ADMIN_ACCESS_HASH", "ADMIN_PASSWORD"].map(async (name) => {
       const messages: string[] = [];
       const calls: string[][] = [];
       await deployInstallation({
         output: (value) => messages.push(value),
+        password: "different-synthetic-password",
         run: (args) => {
           calls.push(args);
           return Promise.resolve(
-            args[0] === "secret" ? JSON.stringify([{ name }]) : "Deployed",
+            args[0] === "secret"
+              ? JSON.stringify([{ name }])
+              : "Deployed https://synthetic.owner.workers.dev",
           );
         },
       });
       assert.deepEqual(calls.at(-1), ["deploy"]);
-      assert.equal(messages.join("").includes("cad_"), false);
+      assert.equal(messages.join("").includes("synthetic-password"), false);
+      assert.ok(messages.join("").includes("/account"));
+      assert.equal(
+        await prepareAccess({
+          run: () => Promise.resolve(JSON.stringify([{ name }])),
+        }),
+        null,
+      );
     }),
   );
 });
 
-test("only an explicit missing Worker starts fresh; permission and malformed responses abort", async () => {
-  const access = await prepareAccess(() =>
-    Promise.reject(new Error("Worker not found [code: 10007]")),
-  );
-  assert.ok(access && keyPattern.test(access.key));
-  assert.ok(
-    await prepareAccess(() =>
-      Promise.reject(
-        new Error(
-          'Worker "caderninho" not found.\n\nIf this is a new Worker, run `wrangler deploy` first to create it.',
-        ),
-      ),
-    ),
-  );
+test("an unconfigured installation never migrates or publishes without a valid chosen password", async () => {
   await Promise.all(
-    ["permission denied", "invalid json"].map(async (response) => {
+    [undefined, "", "too-short", "x".repeat(257)].map(async (supplied) => {
       const calls: string[][] = [];
       await assert.rejects(
         deployInstallation({
           output: () => assert.fail("No deployment output expected"),
+          ...(supplied !== undefined && { password: supplied }),
           run: (args) => {
             calls.push(args);
-            return response === "permission denied"
-              ? Promise.reject(new Error(response))
-              : Promise.resolve(response);
+            return Promise.resolve("[]");
           },
         }),
+        passwordInstructionsPattern,
       );
       assert.equal(calls.length, 1);
     }),
   );
 });
 
-test("a failed upload never returns the key and removes its temporary hash file", async () => {
+test("only an explicitly missing Worker starts fresh; permission and malformed responses abort", async () => {
+  await Promise.all(
+    [
+      "Worker not found [code: 10007]",
+      'Worker "caderninho" not found.\n\nIf this is a new Worker, run `wrangler deploy` first to create it.',
+    ].map(async (message) => {
+      assert.deepEqual(
+        await prepareAccess({
+          password,
+          run: () => Promise.reject(new Error(message)),
+        }),
+        { ADMIN_PASSWORD: password },
+      );
+    }),
+  );
+  await Promise.all(
+    ["permission denied", "invalid json", "{}", '[{"name":null}]'].map(
+      async (response) => {
+        const calls: string[][] = [];
+        await assert.rejects(
+          deployInstallation({
+            output: () => assert.fail("No deployment output expected"),
+            password,
+            run: (args) => {
+              calls.push(args);
+              return response === "permission denied"
+                ? Promise.reject(new Error(response))
+                : Promise.resolve(response);
+            },
+          }),
+        );
+        assert.equal(calls.length, 1);
+      },
+    ),
+  );
+});
+
+test("a failed upload never returns the password and removes its temporary secret file", async () => {
   const messages: string[] = [];
   let secretFile = "";
   await assert.rejects(
     deployInstallation({
       output: (value) => messages.push(value),
+      password,
       run: (args) => {
         if (args[0] === "secret") {
           return Promise.resolve("[]");
@@ -116,6 +149,7 @@ test("a failed upload never returns the key and removes its temporary hash file"
       },
     }),
   );
-  assert.equal(messages.join("").includes("cad_"), false);
+  assert.equal(messages.join("").includes(password), false);
+  assert.equal(messages.join("").includes("/account"), false);
   await assert.rejects(stat(secretFile));
 });

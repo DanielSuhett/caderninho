@@ -262,3 +262,40 @@ function resolveRuleImportCategory(input: {
   }
   return { category, status: "existing" };
 }
+
+function comparableName(value: string) {
+  return value.trim().toLocaleLowerCase("pt-BR");
+}
+
+// Background imports never stop on a repeated category name: the stable category
+// created by an earlier import of the pack wins, then the oldest visible one.
+export function ruleImportCategoryMapping(
+  categories: readonly Category[],
+  wanted: readonly Pick<
+    RuleImportPackage["categories"][number],
+    "key" | "kind" | "name"
+  >[],
+) {
+  const mapping: Record<string, string> = {};
+  for (const target of wanted) {
+    const matches = categories
+      .filter(
+        (category) =>
+          !category.hidden &&
+          category.kind === target.kind &&
+          comparableName(category.name) === comparableName(target.name),
+      )
+      .toSorted((left, right) => left.id.localeCompare(right.id));
+    if (matches.length < 2) {
+      continue;
+    }
+    const chosen =
+      matches.find((category) =>
+        category.id.endsWith(`category:${target.key}`),
+      ) ?? matches[0];
+    if (chosen) {
+      mapping[target.key] = chosen.id;
+    }
+  }
+  return mapping;
+}

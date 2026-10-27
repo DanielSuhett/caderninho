@@ -3,6 +3,7 @@ import type { BatchItem } from "drizzle-orm/batch";
 
 import {
   connectionPartial,
+  financialIdentity,
   TransactionOrder,
   type TransactionProjection,
 } from "../../../domain";
@@ -52,6 +53,10 @@ function importedAccounts(
       connectionId: c.id,
       hidden: false,
       id,
+      identity: financialIdentity({
+        identity: a.identity,
+        institution: owners.find((o) => o.connectionId === c.id)?.institution,
+      }),
       manual: false,
       personId: owners.find((o) => o.connectionId === c.id)?.personId ?? "self",
       personName:

@@ -1,8 +1,10 @@
 # Usar o Caderninho
 
-Na primeira instalação, abra o link privado no resultado do deploy, copie a chave
-gerada e clique em Começar. Nos próximos acessos, abra `/account` e use essa chave
-ou a senha de uma instalação anterior. Em **Pessoas**, cadastre nome/foto,
+Na instalação pelo botão Cloudflare, escolha sua senha de entrada no campo
+`ADMIN_PASSWORD` (16 a 256 caracteres). Depois do deploy, abra o endereço do
+Caderninho e entre com essa senha. Não é necessário procurar chaves nos logs.
+Instalações anteriores com chave gerada continuam aceitando essa chave.
+Em **Pessoas**, cadastre nome/foto,
 configure o acesso Pluggy e autorize seus bancos. Conclua Pessoas para iniciar
 a primeira importação. O painel acompanha as fases e as páginas publicadas.
 
@@ -153,11 +155,13 @@ cookie deste navegador. Uma cópia desse cookie continua válida até completar 
 horas do login ou até trocar a chave/senha ou a versão do Worker. A expiração é
 conferida no servidor. A autenticação do painel não grava sessões no D1 ou KV.
 
-O primeiro deploy gera a chave e guarda apenas `ADMIN_ACCESS_HASH` nos secrets.
-Deploys seguintes preservam esse acesso. O link privado do primeiro deploy contém
-a chave original; guarde-a num gerenciador de senhas. O painel não recupera a
-chave pelo hash. Para recuperar acesso perdido, defina `ADMIN_PASSWORD` nos
-secrets com 16 a 256 caracteres; a senha passa a prevalecer e os cookies anteriores
+A senha escolhida no formulário de instalação é guardada como secret
+`ADMIN_PASSWORD`. Deploys seguintes preservam o acesso existente e não exibem
+credenciais nos logs. Instalações anteriores com `ADMIN_ACCESS_HASH` continuam
+aceitando sua chave; o link do deploy antigo pode conter a chave no fragmento,
+mas o painel não recupera a chave pelo hash. Para recuperar acesso perdido,
+defina `ADMIN_PASSWORD` nos secrets com 16 a 256 caracteres; a senha passa a
+prevalecer e os cookies anteriores
 perdem a validade. Publicar outra versão do Worker também os invalida. Essas
 mudanças e o logout preservam as autorizações dos assistentes; use **Revogar todos
 os assistentes** para removê-las.

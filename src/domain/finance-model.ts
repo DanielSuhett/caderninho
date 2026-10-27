@@ -4,7 +4,7 @@ import type {
   AccountProjection,
   TransactionProjection,
 } from "./finance.entity";
-import { institutionLogoUrl } from "./financial-identity.entity";
+import { connectorInstitution } from "./financial-identity.entity";
 import type {
   MoneyInput,
   ProviderAccount,
@@ -49,13 +49,7 @@ export function normalizeAccount(
         source.creditData?.brand === "OTHER"
           ? (source.creditData.brandAdditionalInfo ?? "OTHER")
           : (source.creditData?.brand ?? null),
-      institution: connector
-        ? {
-            id: String(connector.id),
-            logoUrl: institutionLogoUrl(connector.imageUrl),
-            name: connector.name ?? "Instituição",
-          }
-        : null,
+      institution: connectorInstitution(connector),
     },
     ...(source.creditData && {
       details: {

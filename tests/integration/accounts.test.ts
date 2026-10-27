@@ -69,7 +69,7 @@ test("status preserves absent accounts and unread balances with their original r
       currency: "BRL",
       identity: {
         cardBrand: null,
-        institution: { id: "200", logoUrl: null, name: "Instituição" },
+        institution: null,
       },
       name: "Renamed",
       type: "BANK",
@@ -80,7 +80,7 @@ test("status preserves absent accounts and unread balances with their original r
       currency: "BRL",
       identity: {
         cardBrand: null,
-        institution: { id: "200", logoUrl: null, name: "Instituição" },
+        institution: null,
       },
       name: "Synthetic",
       type: "CREDIT",

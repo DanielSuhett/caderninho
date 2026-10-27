@@ -1,3 +1,5 @@
+import type { Institution } from "./financial-identity.entity";
+
 export interface Person {
   id: string;
   name: string;
@@ -13,6 +15,7 @@ export interface PluggyProfile {
 }
 export interface ConnectionOwner {
   connectionId: string;
+  institution?: Institution | null | undefined;
   personId: string;
   profileId: string;
 }

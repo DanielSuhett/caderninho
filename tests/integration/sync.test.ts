@@ -397,3 +397,39 @@ test("an unavailable native status keeps a running import active past the 24h bo
   assert.equal(admission?.status, "working");
   assert.equal(admission?.importId, id);
 });
+test("a Meu Pluggy import identifies the bank from provider names and keeps it when the catalog fails", async () => {
+  const bank = {
+    id: "301",
+    logoUrl: "https://cdn.pluggy.ai/assets/connector-icons/301.svg",
+    name: "Banco Sintético Pactual",
+  };
+  const catalog = [
+    bank,
+    { id: "302", logoUrl: null, name: "Banco Exemplo" },
+    { id: "303", logoUrl: null, name: "Banco Modelo" },
+  ];
+  const accounts = [
+    account({ id: "a", name: "Sintético Banking" }),
+    account({ id: "b", name: "Cartão Sintético Black", type: "CREDIT" }),
+  ];
+  // The first import reads the catalog; the next one finds it unavailable.
+  const responses = [catalog];
+  const provider = {
+    ...source([], accounts),
+    institutionCatalog: () => {
+      const next = responses.shift();
+      return next
+        ? Promise.resolve(next)
+        : Promise.reject(new Error("UPSTREAM_UNAVAILABLE"));
+    },
+  };
+  const institutions = async () =>
+    Object.values(
+      (await createInstallationRepository(env.DB).state()).connections[0]
+        ?.accounts ?? {},
+    ).map((row) => row.identity?.institution);
+  await collect(provider);
+  assert.deepEqual(await institutions(), [bank, bank]);
+  await collect(provider, "2026-10-03T00:00:00.000Z");
+  assert.deepEqual(await institutions(), [bank, bank]);
+});

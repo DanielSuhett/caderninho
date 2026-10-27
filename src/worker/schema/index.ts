@@ -3,6 +3,7 @@ import {
   check,
   index,
   integer,
+  primaryKey,
   sqliteTable,
   text,
 } from "drizzle-orm/sqlite-core";
@@ -20,11 +21,14 @@ import type {
   Contribution,
   Goal,
   Installment,
+  Institution,
   Investment,
   Loan,
   NotificationPreference,
   Recurrence,
   Rule,
+  RuleJob,
+  RuleJobChunkResult,
   RunStatus,
   ScheduledPayment,
   Space,
@@ -205,6 +209,29 @@ export const planningReceipts = sqliteTable("planning_receipts", {
     .notNull(),
 });
 
+export const ruleJobs = sqliteTable(
+  "rule_jobs",
+  {
+    createdAt: text("created_at").notNull(),
+    data: text("data", { mode: "json" }).$type<RuleJob>().notNull(),
+    id: text("id").primaryKey(),
+    spaceId: text("space_id").notNull(),
+  },
+  (table) => [index("rule_jobs_space").on(table.spaceId, table.createdAt)],
+);
+export const ruleJobChunks = sqliteTable(
+  "rule_job_chunks",
+  {
+    jobId: text("job_id")
+      .notNull()
+      .references(() => ruleJobs.id, { onDelete: "cascade" }),
+    result: text("result", { mode: "json" }).$type<RuleJobChunkResult>(),
+    rules: text("rules", { mode: "json" }).$type<unknown[]>().notNull(),
+    seq: integer("seq").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.jobId, table.seq] })],
+);
+
 export const people = sqliteTable("people", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
@@ -224,6 +251,7 @@ export const connectionOwners = sqliteTable("connection_owners", {
   connectionId: text("connection_id")
     .primaryKey()
     .references(() => connections.id, { onDelete: "cascade" }),
+  institution: text("institution", { mode: "json" }).$type<Institution>(),
   personId: text("person_id")
     .notNull()
     .references(() => people.id),

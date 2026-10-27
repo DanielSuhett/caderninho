@@ -41,6 +41,12 @@ export function createHouseholdRepository(
         .where(eq(pluggyProfiles.id, id))
         .get();
     },
+    async institution(connectionId, institution) {
+      await db
+        .update(connectionOwners)
+        .set({ institution })
+        .where(eq(connectionOwners.connectionId, connectionId));
+    },
     async person(row) {
       await db
         .insert(people)

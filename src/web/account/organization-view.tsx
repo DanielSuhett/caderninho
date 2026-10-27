@@ -12,7 +12,12 @@ import {
 } from "@phosphor-icons/react";
 import { type MouseEvent, type ReactNode, useCallback, useState } from "react";
 
-import type { PortalResponse, WorkspaceCatalog } from "../../contracts";
+import type {
+  PortalResponse,
+  RuleJob,
+  WorkspaceCatalog,
+} from "../../contracts";
+import { RuleJobStatus } from "../../domain";
 import { UiButton, UiIconButton } from "../ui";
 import type { OrganizationApi } from "./account-api";
 import { navigateWorkspace, workspaceBasePath } from "./account-navigation";
@@ -24,6 +29,7 @@ import { DeleteOrganizationItem, GroupEditor } from "./group-editor";
 import { RuleComposition } from "./rule-composition";
 import { RuleEditor } from "./rule-editor";
 import { RuleImporter } from "./rule-importer";
+import { RuleJobNotice, ruleJobSummary, useRuleJob } from "./rule-jobs";
 import { type RuleSource, ruleSummary } from "./rule-presentation";
 import { EmptyView, ScopeFields } from "./workspace-filters";
 import {
@@ -42,6 +48,41 @@ const groupTypes = {
   family: "Família",
   personal: "Pessoal",
 };
+function RuleActions({
+  busy,
+  data,
+  openImport,
+  reapply,
+}: {
+  busy: boolean;
+  data: WorkspaceCatalog | undefined;
+  openImport: () => void;
+  reapply: () => void;
+}) {
+  return (
+    <>
+      <UiButton
+        disabled={busy || !data?.rules.some((rule) => rule.enabled)}
+        loading={busy}
+        onClick={reapply}
+        type="button"
+        variant="outline"
+      >
+        Reaplicar regras
+      </UiButton>
+      <UiIconButton
+        disabled={!data || busy}
+        label="Importar regras"
+        onClick={openImport}
+      >
+        <UploadSimpleIcon
+          aria-hidden
+          size={20}
+        />
+      </UiIconButton>
+    </>
+  );
+}
 export function OrganizationView({
   api,
   snapshot,
@@ -118,11 +159,29 @@ export function OrganizationView({
     setImporting(true);
   }, []);
   const closeImport = useCallback(() => setImporting(false), []);
-  const importSaved = useCallback(() => {
-    setImporting(false);
-    notify({ title: "Regras importadas.", variant: "success" });
-    resource.retry();
-  }, [notify, resource.retry]);
+  const jobSettled = useCallback(
+    (job: RuleJob) => {
+      api.invalidate();
+      resource.retry();
+      if (job.status === RuleJobStatus.succeeded) {
+        notify({ title: ruleJobSummary(job), variant: "success" });
+      }
+    },
+    [api, notify, resource.retry],
+  );
+  const ruleJob = useRuleJob({
+    api,
+    csrf: snapshot.csrf,
+    settled: jobSettled,
+    spaceId,
+  });
+  const importStarted = useCallback(
+    (job: RuleJob) => {
+      ruleJob.started(job);
+      resource.retry();
+    },
+    [resource.retry, ruleJob.started],
+  );
   const newItem = useCallback(() => {
     setEditor({ kind: page === "rules" ? "rule" : "space" });
     setEditorSession((value) => value + 1);
@@ -158,16 +217,12 @@ export function OrganizationView({
         <div className="page-actions">
           {actions}
           {page === "rules" && (
-            <UiIconButton
-              disabled={!data}
-              label="Importar regras"
-              onClick={openImport}
-            >
-              <UploadSimpleIcon
-                aria-hidden
-                size={20}
-              />
-            </UiIconButton>
+            <RuleActions
+              busy={ruleJob.active || ruleJob.starting}
+              data={data}
+              openImport={openImport}
+              reapply={ruleJob.reapply}
+            />
           )}
           <UiButton
             disabled={!data}
@@ -181,18 +236,22 @@ export function OrganizationView({
         </div>
       </WorkspaceHeading>
       {notice}
+      {page === "rules" && (
+        <RuleJobNotice
+          job={ruleJob.job}
+          message={ruleJob.message}
+        />
+      )}
       {!!data && (
         <RuleImporter
-          accounts={data.accounts}
           api={api}
           catalog={data}
           close={closeImport}
           csrf={snapshot.csrf}
           key={importSession}
           open={importing}
-          people={snapshot.people}
-          saved={importSaved}
           spaceId={spaceId}
+          started={importStarted}
         />
       )}
       {!!data && (

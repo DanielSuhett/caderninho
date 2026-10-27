@@ -39,6 +39,11 @@
       "name": "caderninho-finance",
       "binding": "FINANCE",
       "class_name": "FinanceWorkflow"
+    },
+    {
+      "name": "caderninho-rules",
+      "binding": "RULES",
+      "class_name": "RulesWorkflow"
     }
   ],
   "triggers": {

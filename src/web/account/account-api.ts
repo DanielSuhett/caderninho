@@ -6,11 +6,14 @@ import {
   AuditReportSchema,
   type HouseholdCommand,
   HouseholdResultSchema,
+  InstitutionCatalogSchema,
   type PortalMutation,
   type PortalQuery,
   type PortalQueryResults,
   PortalResponseSchema,
   parsePortalQueryResult,
+  type RuleJobCommand,
+  RuleJobResponseSchema,
   type RulePreviewInput,
   RulePreviewResultSchema,
   SyncHistoryResultSchema,
@@ -22,7 +25,13 @@ import { createReadCache } from "./read-cache";
 
 export type OrganizationApi = Pick<
   ReturnType<typeof createAccountApi>,
-  "catalog" | "query" | "planning" | "previewRule"
+  | "catalog"
+  | "invalidate"
+  | "query"
+  | "planning"
+  | "previewRule"
+  | "ruleJob"
+  | "ruleJobs"
 >;
 
 export function createAccountApi(
@@ -63,7 +72,8 @@ export function createAccountApi(
       | { csrf: string; command: PortalMutation }
       | RulePreviewInput
       | { csrf: string; query: PortalQuery }
-      | { csrf: string; grantId: string },
+      | { csrf: string; grantId: string }
+      | RuleJobCommand,
   ) => {
     const mutation = body && path !== "/query" && path !== "/rule-preview";
     if (mutation) {
@@ -128,6 +138,13 @@ export function createAccountApi(
           fresh,
         ),
       ),
+    institutions: async (profileId: string, signal: AbortSignal) =>
+      InstitutionCatalogSchema.parse(
+        await request(
+          `/institutions?${new URLSearchParams({ profileId })}`,
+          signal,
+        ),
+      ),
     invalidate: () => cache.clear(),
     manage: async (input: HouseholdCommand, signal: AbortSignal) =>
       HouseholdResultSchema.parse(await request("/manage", signal, input)),
@@ -160,6 +177,22 @@ export function createAccountApi(
       z
         .object({ ok: z.literal(true) })
         .parse(await request("/revoke-grant", signal, { csrf, grantId })),
+    ruleJob: async (
+      selection: { id: string } | { spaceId: string },
+      signal: AbortSignal,
+    ) =>
+      RuleJobResponseSchema.parse(
+        await request(`/rule-jobs?${new URLSearchParams(selection)}`, signal),
+      ).job,
+    ruleJobs: async (input: RuleJobCommand, signal: AbortSignal) => {
+      const { job } = RuleJobResponseSchema.parse(
+        await request("/rule-jobs", signal, input),
+      );
+      if (!job) {
+        throw new Error("NOT_FOUND");
+      }
+      return job;
+    },
     token: async (
       csrf: string,
       signal: AbortSignal,

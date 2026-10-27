@@ -6,8 +6,10 @@ import {
   CLASSIFICATION_VERSION,
   CLEF_MIN_CONFIDENCE,
   classificationState,
+  connectorInstitution,
+  detectInstitution,
   ImportPhase,
-  institutionLogoUrl,
+  type Institution,
   normalizeAccount,
   normalizeTransaction,
   type ProductPage,
@@ -68,6 +70,37 @@ function afterTransactions(
     ? ImportPhase.classification
     : ImportPhase.finish;
 }
+// Meu Pluggy reports its own connector, so the bank comes from the names the
+// provider gives to accounts and investments. Best effort: without the catalog the
+// import continues and keeps the institutions found by the previous import.
+async function institutionCatalog(
+  source: ImportDependencies["source"],
+  connectionId: string,
+) {
+  const { institutionCatalog: read } = source;
+  if (!read) {
+    return null;
+  }
+  const { data, error } = await tryCatch(() => read(connectionId));
+  return error ? null : data;
+}
+async function detectedInstitution(
+  { repository, source }: ImportDependencies,
+  connectionId: string,
+  evidence: string[],
+): Promise<Institution | null> {
+  const institutions = await institutionCatalog(source, connectionId);
+  if (institutions) {
+    return detectInstitution({ catalog: institutions, evidence });
+  }
+  const saved = Object.values(
+    await repository.connectionAccounts(connectionId),
+  );
+  return (
+    saved.find((account) => account.identity?.institution)?.identity
+      ?.institution ?? null
+  );
+}
 async function importAccounts(dependencies: ImportDependencies, run: SyncRun) {
   const { repository, source, now } = dependencies;
   const connection = await source.connection(run.connectionId);
@@ -80,6 +113,18 @@ async function importAccounts(dependencies: ImportDependencies, run: SyncRun) {
     run.connectionId,
     connection.connector,
   );
+  const institution = prepared.some((account) => !account.identity?.institution)
+    ? await detectedInstitution(
+        dependencies,
+        run.connectionId,
+        prepared.map((account) => account.name),
+      )
+    : null;
+  for (const account of prepared) {
+    if (institution && !account.identity?.institution) {
+      account.identity = { cardBrand: null, ...account.identity, institution };
+    }
+  }
   const [first] = prepared;
   return repository.publish({
     accounts: prepared,
@@ -141,35 +186,48 @@ function afterProducts(
   return classifier ? ImportPhase.classification : ImportPhase.finish;
 }
 async function identifyInvestments(
-  source: ImportDependencies["source"],
+  dependencies: ImportDependencies,
   connectionId: string,
   products: ProductPage,
 ) {
   if (products.kind !== ImportPhase.investments) {
     return;
   }
-  const connection = await source.connection(connectionId);
+  const connection = await dependencies.source.connection(connectionId);
   if (connection.id !== connectionId) {
     throw new Error("SOURCE_IDENTITY_MISMATCH");
   }
   const { connector } = connection;
+  const named = products.records.filter(
+    (investment) => investment.identity?.institution,
+  );
+  // Provider institutions carry a CNPJ and no logo; resolve them through the
+  // catalog so investments group with the accounts of the same bank.
+  const institutions = named.length
+    ? await institutionCatalog(dependencies.source, connectionId)
+    : null;
+  for (const investment of named) {
+    const institution =
+      institutions &&
+      detectInstitution({
+        catalog: institutions,
+        evidence: [investment.identity?.institution?.name ?? ""],
+      });
+    if (institution) {
+      investment.identity = { cardBrand: null, institution };
+    }
+  }
   if (connector) {
     for (const investment of products.records) {
       investment.identity ??= {
         cardBrand: null,
-        institution: {
-          id: String(connector.id),
-          logoUrl: institutionLogoUrl(connector.imageUrl),
-          name: connector.name ?? "Instituição",
-        },
+        institution: connectorInstitution(connector),
       };
     }
   }
 }
-async function importProducts(
-  { repository, source, now, classifier }: ImportDependencies,
-  run: SyncRun,
-) {
+async function importProducts(dependencies: ImportDependencies, run: SyncRun) {
+  const { repository, source, now, classifier } = dependencies;
   const { phase } = run.checkpoint;
   if (
     !source.products ||
@@ -194,7 +252,7 @@ async function importProducts(
     observedAt: now(),
     page,
   });
-  await identifyInvestments(source, run.connectionId, products);
+  await identifyInvestments(dependencies, run.connectionId, products);
   if (products.kind !== phase) {
     throw new Error("SOURCE_IDENTITY_MISMATCH");
   }

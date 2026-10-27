@@ -43,6 +43,16 @@ export function settings(): Bindings {
     OAUTH_KV: bindings.OAUTH_KV,
     PLUGGY_CLIENT_ID: "synthetic-client",
     PLUGGY_CLIENT_SECRET: "synthetic-secret",
+    RULES: {
+      create({ id }) {
+        return Promise.resolve({
+          id,
+          status() {
+            return Promise.resolve({ status: "queued" });
+          },
+        });
+      },
+    },
   };
   return {
     ...config,

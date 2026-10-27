@@ -19,6 +19,11 @@
       "name": "test-finance",
       "binding": "FINANCE",
       "class_name": "TestWorkflow"
+    },
+    {
+      "name": "test-rules",
+      "binding": "RULES",
+      "class_name": "TestRulesWorkflow"
     }
   ],
   "ratelimits": [

@@ -8,11 +8,14 @@ import {
   CatalogSelectionSchema,
   ConnectTokenActionSchema,
   HouseholdCommandSchema,
+  InstitutionCatalogSelectionSchema,
   ItemActionSchema,
   PortalMutationSchema,
   PortalQuerySchema,
   RevokeGrantSchema,
   RULE_IMPORT_MAX_BYTES,
+  RuleJobCommandSchema,
+  RuleJobSelectionSchema,
   RulePreviewSchema,
   SyncActionSchema,
   SyncHistorySelectionSchema,
@@ -33,7 +36,9 @@ import {
   auditRepository,
   householdService,
   installationService,
+  institutionCatalog,
   planningService,
+  ruleJobService,
   rulePreview,
   synchronizationHistory,
   syncService,
@@ -116,6 +121,12 @@ export function installationRoutes(access: Hono<PortalEnv>) {
     await revokeAssistantGrant(c.env.OAUTH_PROVIDER, input.grantId);
     return c.json({ ok: true });
   });
+  app.get("/api/account/institutions", async (c) => {
+    const { profileId } = InstitutionCatalogSelectionSchema.parse(
+      c.req.query(),
+    );
+    return c.json({ records: await institutionCatalog(c.env, profileId) });
+  });
   app.get("/api/account/catalog", async (c) => {
     const input = CatalogSelectionSchema.parse(c.req.query());
     return c.json(await workspaceCatalog(c.env, input.spaceId));
@@ -156,6 +167,25 @@ export function installationRoutes(access: Hono<PortalEnv>) {
       RULE_IMPORT_MAX_BYTES + 16_384,
     );
     return c.json(await planningService(c.env).execute(input.command));
+  });
+  app.get("/api/account/rule-jobs", async (c) => {
+    const selection = RuleJobSelectionSchema.parse(c.req.query());
+    const service = ruleJobService(c.env);
+    const job =
+      "id" in selection
+        ? await service.read(selection.id)
+        : await service.latest(selection.spaceId);
+    return c.json({ job });
+  });
+  // One chunk carries at most RULE_JOB_CHUNK_RULES rules, each bounded by the rule schema.
+  app.post("/api/account/rule-jobs", async (c) => {
+    const input = await command(
+      c.req.raw,
+      c.get("session").csrf,
+      RuleJobCommandSchema,
+      2_097_152,
+    );
+    return c.json({ job: await ruleJobService(c.env).command(input) });
   });
   app.post("/api/account/rule-preview", async (c) => {
     const input = await command(

@@ -2,7 +2,8 @@
 
 Na tela **Regras**, escolha **Importar regras**, selecione um JSON e confira a
 prévia. Resolva nomes de categorias ambíguos, atualize a prévia e confirme.
-A lista é atualizada depois da gravação. Cancelar/voltar não grava nada.
+A lista é atualizada depois da gravação e abre a conferência da reaplicação.
+Cancelar/voltar não grava nada no histórico.
 
 O [JSON Brasil](../public/rule-packs/brasil.json) é um arquivo externo de exemplo
 (30 regras, 9 categorias, 60 alternativas); também pode ser baixado pelo diálogo.
@@ -37,6 +38,28 @@ regra importada a torna pessoal. Não há aplicação automática ao histórico:
 novas importações normais usam o trigger existente; `preview_rule` e `apply_rules`
 continuam disponíveis para conferência e reaplicação explícita (até 500 registros).
 Excluir/pausar regra não desfaz classificações anteriores.
+
+**Reaplicar regras** fica disponível na tela Regras quando há regras ativas.
+Escolha período e, opcionalmente, conta; confira as contagens e uma amostra com
+categoria anterior e proposta. Confirmar exige a revisão da prévia e uma chave
+de idempotência, com gravação atômica de até 500 transações. Acima desse limite,
+reduza o período ou escolha uma conta; a prévia informa o corte e bloqueia a ação.
+Dados parciais são identificados. Uma alteração concorrente exige nova prévia;
+repetir a confirmação após falha de rede usa o mesmo recibo.
+
+A ação do painel preserva transações ignoradas e categorias alteradas manualmente,
+inclusive `null`. Novas classificações por regras guardam `categoryRuleId`, tanto
+no trigger da importação como na reaplicação, para permitir uma revisão futura.
+Overrides antigos sem origem conhecida são preservados. A demo usa a mesma
+política do domínio. O contrato MCP `apply_rules` mantém o comportamento padrão;
+os campos opcionais `preserveManual` e `expected_revision` permitem proteção e
+concorrência explícitas. A prévia do painel não registra uma nova ferramenta MCP.
+
+As migrações locais `0002_connection_institution.sql` e
+`0003_rule_category_origin.sql` acrescentam a associação da instituição e a origem
+das próximas classificações. Não reescrevem histórico nem removem dados. Uma
+instalação existente precisa aplicá-las no deploy autorizado, antes de servir
+o novo código.
 
 O motor só dobra A–Z; acentos são literais. O Brasil de exemplo exige débito
 POSTED/BRL e descrições inteiras declaradas. iFood/Rappi precisam indicar ramo.

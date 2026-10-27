@@ -60,6 +60,9 @@
   },
   "cloudflare": {
     "bindings": {
+      "ADMIN_PASSWORD": {
+        "description": "Sua senha para entrar no Caderninho. **Escolha de 16 a 256 caracteres** e guarde no gerenciador de senhas. Após instalar, abra o endereço do aplicativo e entre com esta senha. Não é sua senha bancária; o acesso Pluggy será configurado dentro do Caderninho."
+      },
       "DB": {
         "description": "Banco financeiro privado desta instalação. Criado pelo botão; as migrações usam o binding DB."
       },

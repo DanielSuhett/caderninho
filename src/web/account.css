@@ -133,6 +133,16 @@
 .workspace-details-body > :first-child {
   margin-top: 0;
 }
+.rule-job-skipped summary {
+  cursor: pointer;
+}
+.rule-job-skipped ul {
+  display: grid;
+  gap: 4px;
+  padding-left: 20px;
+  margin-block: 8px 0;
+  overflow-wrap: anywhere;
+}
 .filter-toolbar {
   display: flex;
   flex-wrap: wrap;
@@ -1929,11 +1939,16 @@
 }
 .setup-bank-row {
   display: grid;
-  grid-template-columns: 36px minmax(0, 1fr) auto 40px;
+  grid-template-columns: 36px minmax(0, 1fr) auto auto;
   gap: 12px;
   align-items: center;
   padding-block: 16px;
   border-bottom: 1px solid var(--line);
+}
+.setup-bank-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
 }
 .setup-banks strong {
   font-weight: 500;
