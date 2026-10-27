@@ -7,15 +7,17 @@ pelo Meu Pluggy e consulte o histórico no ChatGPT ou Claude.
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/DanielSuhett/caderninho)
 
-1. **Instale.** Clique no botão e confirme o nome do Worker. Nenhuma senha ou credencial Pluggy é pedida. Mantenha a raiz do repositório, build `npm run build` e deploy `npm run deploy`.
-2. **Abra seu acesso privado.** No resultado do deploy na Cloudflare, abra o link de acesso gerado. Copie a chave para seu gerenciador de senhas e clique em Começar. Informe nome/foto e configure Client ID e Client Secret no próprio Caderninho. Autorize cada banco pelo Meu Pluggy; os próximos reutilizam o mesmo acesso. Ao concluir Pessoas, a importação começa e abre Consultar ao terminar.
+1. **Instale.** Clique no botão, confirme o nome do Worker e escolha sua senha de entrada no campo `ADMIN_PASSWORD` (16 a 256 caracteres). Guarde-a no gerenciador de senhas. Mantenha a raiz do repositório, build `npm run build` e deploy `npm run deploy`. Nenhuma credencial bancária ou Pluggy é pedida nesta etapa.
+2. **Entre no Caderninho.** Após o deploy, abra o endereço do aplicativo e clique em Entrar. Use a senha que acabou de escolher. Informe nome/foto e configure Client ID e Client Secret no próprio Caderninho. Autorize cada banco pelo Meu Pluggy; os próximos reutilizam o mesmo acesso. Ao concluir Pessoas, a importação começa e abre Consultar ao terminar.
 3. **Conecte seu assistente.** No painel, copie o endereço `/mcp`, adicione-o ao ChatGPT ou Claude com OAuth e confirme a autorização.
 
 Conecte os bancos em [Meu Pluggy](https://meu.pluggy.ai/) antes de importá-los.
-O instalador gera uma chave aleatória e guarda somente seu hash como secret
-`ADMIN_ACCESS_HASH`. O link privado aparece no log do primeiro deploy; ele contém
-a chave, portanto não o compartilhe. Atualizações preservam o acesso existente,
-inclusive instalações anteriores com `ADMIN_PASSWORD`. O Client ID e o Client Secret da sua
+O botão lê `.dev.vars.example` na raiz e apresenta `ADMIN_PASSWORD` no formulário
+antes de instalar. A senha é guardada como secret da instalação e nunca aparece
+nos logs ou no endereço de entrada. O deploy recusa uma instalação sem credencial;
+no terminal, forneça `ADMIN_PASSWORD` pelo ambiente privado do processo. Atualizações
+preservam a senha ou a chave `ADMIN_ACCESS_HASH` das instalações anteriores.
+O Client ID e o Client Secret da sua
 aplicação no [painel Pluggy](https://dashboard.pluggy.ai/) são validados e guardados
 no cofre privado da instalação. Outra pessoa usa o próprio acesso Meu Pluggy;
 uma pessoa pode autorizar vários bancos. Instalações que já usam secrets Pluggy

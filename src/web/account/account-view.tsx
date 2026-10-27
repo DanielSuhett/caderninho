@@ -388,6 +388,7 @@ export function AccountView({
         cancel={onCancel}
         command={onCommand}
         connect={onConnect}
+        institutions={api.institutions}
         key={route}
         manage={onManage}
         message={message}

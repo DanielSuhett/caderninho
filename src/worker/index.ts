@@ -20,6 +20,7 @@ import {
   withObservation,
 } from "./observability";
 
+export { RulesWorkflow } from "./rules/workflow";
 export { FinanceWorkflow } from "./sync/workflow";
 
 function createRoutes(ctx: ExecutionContext) {

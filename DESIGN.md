@@ -360,8 +360,10 @@ substituir o logo do banco. O avatar de pessoa entra na composição quando há
 mais de uma pessoa e nenhum filtro de pessoa selecionado. Transações e filtros
 reutilizam essa composição. O combo usa círculos
 de 32 px sobrepostos em 10 px, no mesmo eixo. Bandeiras vêm de assets locais licenciados. Instituições
-usam exclusivamente `connector.imageUrl` da CDN Pluggy, sem inferir pelo nome do
-ativo. Instituição explícita de B3 prevalece; sem logo verificado, ícone genérico.
+usam URLs verificadas da CDN Pluggy. O conector Meu Pluggy autentica a integração,
+mas não identifica o banco: a associação escolhida em Pessoas vale para todas as
+contas do mesmo Item. Sem associação, a instituição permanece desconhecida. Não
+inferir pelo nome da conta ou do ativo. Instituição explícita de B3 prevalece; sem logo verificado, ícone genérico.
 Filtros, linhas, saldos e limites reutilizam a mesma identificação.
 
 Nas páginas financeiras do produto e da demo, cada parte é um link com Tooltip:

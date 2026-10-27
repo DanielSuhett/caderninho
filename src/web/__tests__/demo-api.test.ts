@@ -6,6 +6,7 @@ import { demoReferenceDay } from "../../fixtures/finance";
 import { HttpRequestError } from "../../shared";
 import { createAccountApi } from "../account/account-api";
 import { createDemoFetch } from "../demo-api";
+import { createDemoSession } from "../demo-session";
 
 const origin = "https://synthetic.test";
 const { signal } = new AbortController();
@@ -186,4 +187,72 @@ test("the demo transport rejects external and unknown endpoints and respects can
   await assert.rejects(fetcher(`${origin}/api/account`, { signal: aborted }), {
     message: "demo cancelled",
   });
+});
+
+test("bank association through the shared transport updates the connection and financial views, can be removed and resets with the session", async () => {
+  const session = createDemoSession();
+  const api = createAccountApi(origin, createDemoFetch(origin, session));
+  const snapshot = await api.read(signal);
+  const [connection] = snapshot.connections;
+  assert.ok(connection);
+  const catalogue = await api.institutions(
+    connection.profileId ?? "default",
+    signal,
+  );
+  const bank = catalogue.records.find((row) => row.id === "demo-institution");
+  assert.ok(bank);
+  await api.manage(
+    {
+      action: "set_connection_institution",
+      connectionId: connection.id,
+      csrf: snapshot.csrf,
+      institutionId: bank.id,
+    },
+    signal,
+  );
+  api.invalidate();
+  const updated = await api.read(signal);
+  assert.ok(
+    Object.values(
+      updated.connections.find((row) => row.id === connection.id)?.accounts ??
+        {},
+    ).every((row) => row.identity?.institution?.id === bank.id),
+  );
+  const cards = await api.query(
+    {
+      currency: "BRL",
+      institutionId: bank.id,
+      month: "2026-10",
+      spaceId: "personal",
+      tool: "get_portal_cards",
+    },
+    snapshot.csrf,
+    signal,
+  );
+  assert.ok(cards.data.accounts.length);
+  assert.ok(
+    cards.data.accounts.every((row) =>
+      Object.hasOwn(connection.accounts, row.id),
+    ),
+  );
+  await api.manage(
+    {
+      action: "set_connection_institution",
+      connectionId: connection.id,
+      csrf: snapshot.csrf,
+      institutionId: null,
+    },
+    signal,
+  );
+  assert.ok(
+    session
+      .view()
+      .accounts.filter((row) => Object.hasOwn(connection.accounts, row.id))
+      .every((row) => row.identity?.institution === null),
+  );
+  session.reset();
+  assert.deepEqual(
+    session.view().accounts,
+    createDemoSession().view().accounts,
+  );
 });

@@ -7,6 +7,7 @@ import {
   detectSubscriptions,
   type FinancialIdentityFilter,
   financialCharts,
+  financialIdentity,
   investmentPortfolio,
   localDay,
   matchesFinancialIdentity,
@@ -572,16 +573,20 @@ export async function planningQuery(
       owned(state.investments)
         .map((investment) => ({
           ...investment,
-          identity: investment.identity ?? {
-            cardBrand: null,
+          identity: financialIdentity({
+            identity: investment.identity,
             institution:
-              Object.values(
-                snapshot.connections.find(
-                  (connection) => connection.id === investment.connectionId,
-                )?.accounts ?? {},
-              ).find((account) => account.identity?.institution)?.identity
-                ?.institution ?? null,
-          },
+              financialIdentity({ identity: investment.identity })
+                .institution ??
+              snapshot.owners.find(
+                (owner) => owner.connectionId === investment.connectionId,
+              )?.institution ??
+              allAccounts.find(
+                (account) =>
+                  account.connectionId === investment.connectionId &&
+                  account.identity?.institution,
+              )?.identity?.institution,
+          }),
         }))
         .filter((investment) =>
           matchesFinancialIdentity(investment.identity, identityFilter),

@@ -286,6 +286,9 @@ export const PortalMutationSchema = z
         })
         .required({ creditLimitMinor: true, expected_revision: true }),
       planningTools.import_rules.command,
+      planningTools.apply_rules.command
+        .required({ expected_revision: true })
+        .extend({ preserveManual: z.literal(true) }),
       planningTools.create_category.command,
       planningTools.update_category.command,
       planningTools.delete_category.command,

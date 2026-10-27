@@ -20,40 +20,34 @@ export const ImportedRuleOriginSchema = z.object({
   key,
   version: z.number().int().positive(),
 });
+
+export const RuleImportKeySchema = key;
+export const RuleImportCategorySchema = z
+  .object({
+    key,
+    kind: z.enum([
+      CategoryKind.income,
+      CategoryKind.expense,
+      CategoryKind.transfer,
+    ]),
+    name: z.string().trim().min(1).max(240),
+  })
+  .strict();
+export const RuleImportRuleSchema = RuleFieldsSchema.omit({ categoryId: true })
+  .extend({
+    categoryKey: key,
+    key,
+  })
+  .strict()
+  .refine(
+    (rule) => !!(rule.text || rule.filter),
+    "Adicione texto ou condições compostas à regra.",
+  );
 export const RuleImportPackageSchema = z
   .object({
-    categories: z
-      .array(
-        z
-          .object({
-            key,
-            kind: z.enum([
-              CategoryKind.income,
-              CategoryKind.expense,
-              CategoryKind.transfer,
-            ]),
-            name: z.string().trim().min(1).max(240),
-          })
-          .strict(),
-      )
-      .min(1)
-      .max(50),
+    categories: z.array(RuleImportCategorySchema).min(1).max(50),
     id: key,
-    rules: z
-      .array(
-        RuleFieldsSchema.omit({ categoryId: true })
-          .extend({
-            categoryKey: key,
-            key,
-          })
-          .strict()
-          .refine(
-            (rule) => !!(rule.text || rule.filter),
-            "Adicione texto ou condições compostas à regra.",
-          ),
-      )
-      .min(1)
-      .max(RULE_IMPORT_MAX_RULES),
+    rules: z.array(RuleImportRuleSchema).min(1).max(RULE_IMPORT_MAX_RULES),
     version: z.number().int().positive(),
   })
   .strict()

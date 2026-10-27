@@ -18,6 +18,7 @@ const invalidRequests = new Set<string>([
   "CREDENTIALS_REQUIRED",
   "PROFILE_DISABLED",
   "SOURCE_IDENTITY_MISMATCH",
+  "INVALID_REQUEST",
 ]);
 export function failureStatus(
   error: Error,
@@ -37,6 +38,7 @@ export function failureStatus(
   if (
     error.message === "ITEM_LIMIT" ||
     error.message === "RESTART_REQUIRED" ||
+    error.message === "JOB_ACTIVE" ||
     error.message === "IDEMPOTENCY_CONFLICT"
   ) {
     return 409;

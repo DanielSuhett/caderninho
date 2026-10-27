@@ -1,6 +1,7 @@
 import type { HouseholdCommand } from "../../contracts";
 import {
   DEFAULT_PROFILE,
+  type Institution,
   type PluggyProfile,
   profileConfigured,
 } from "../../domain";
@@ -16,6 +17,7 @@ export function createHouseholdService(dependencies: {
     clientSecret: string;
   }) => Promise<unknown>;
   defaultClientId?: string | undefined;
+  resolveInstitution?: (profileId: string, id: string) => Promise<Institution>;
 }) {
   const { repository, vault } = dependencies;
   async function credentials(
@@ -115,6 +117,47 @@ export function createHouseholdService(dependencies: {
     );
     return { id, personId: person.id };
   }
+  async function savePerson(
+    input: Extract<HouseholdCommand, { action: "save_person" }>,
+    state: Awaited<ReturnType<HouseholdRepository["read"]>>,
+  ) {
+    if (input.id && !state.people.some((p) => p.id === input.id)) {
+      throw new Error("NOT_FOUND");
+    }
+    const person = {
+      id: input.id ?? crypto.randomUUID(),
+      name: input.name,
+      photo:
+        input.photo === undefined
+          ? (state.people.find((row) => row.id === input.id)?.photo ?? null)
+          : input.photo,
+    };
+    await repository.person(person);
+    return person;
+  }
+  async function saveInstitution(
+    input: Extract<HouseholdCommand, { action: "set_connection_institution" }>,
+    state: Awaited<ReturnType<HouseholdRepository["read"]>>,
+  ) {
+    const owner = state.owners.find(
+      (candidate) => candidate.connectionId === input.connectionId,
+    );
+    if (!owner) {
+      throw new Error("NOT_FOUND");
+    }
+    let institution: Institution | null = null;
+    if (input.institutionId) {
+      if (!dependencies.resolveInstitution) {
+        throw new Error("NOT_CONFIGURED");
+      }
+      institution = await dependencies.resolveInstitution(
+        owner.profileId,
+        input.institutionId,
+      );
+    }
+    await repository.institution(input.connectionId, institution);
+    return { ok: true };
+  }
   return {
     async assertConfigured(ids?: string[]) {
       const state = await repository.read();
@@ -150,23 +193,14 @@ export function createHouseholdService(dependencies: {
     },
     async execute(input: HouseholdCommand) {
       const state = await repository.read();
+      if (input.action === "set_connection_institution") {
+        return saveInstitution(input, state);
+      }
       if (input.action === "create_profile") {
         return createProfile(input, state);
       }
       if (input.action === "save_person") {
-        if (input.id && !state.people.some((p) => p.id === input.id)) {
-          throw new Error("NOT_FOUND");
-        }
-        const person = {
-          id: input.id ?? crypto.randomUUID(),
-          name: input.name,
-          photo:
-            input.photo === undefined
-              ? (state.people.find((row) => row.id === input.id)?.photo ?? null)
-              : input.photo,
-        };
-        await repository.person(person);
-        return person;
+        return savePerson(input, state);
       }
       if (input.action === "assign_connection") {
         if (

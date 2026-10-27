@@ -1,7 +1,15 @@
 import { z } from "zod/v4";
 
+import { InstitutionSchema } from "../domain";
+
 const id = z.string().min(1).max(160);
 const name = z.string().trim().min(1).max(80);
+export const InstitutionCatalogSelectionSchema = z
+  .object({ profileId: id.default("default") })
+  .strict();
+export const InstitutionCatalogSchema = z.object({
+  records: z.array(InstitutionSchema),
+});
 // Only bounded raster data can be stored; no third-party image requests or SVG.
 export const PersonPhotoSchema = z
   .string()
@@ -22,6 +30,14 @@ export const PersonPhotoSchema = z
     }, "Selecione uma foto JPEG, PNG ou WebP válida."),
   );
 export const HouseholdCommandSchema = z.discriminatedUnion("action", [
+  z
+    .object({
+      action: z.literal("set_connection_institution"),
+      connectionId: id,
+      csrf: z.string(),
+      institutionId: id.nullable(),
+    })
+    .strict(),
   z
     .object({
       action: z.literal("create_profile"),

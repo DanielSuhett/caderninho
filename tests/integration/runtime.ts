@@ -8,6 +8,7 @@ import { database } from "../../src/worker/database";
 import { createFinancialService } from "../../src/worker/finance";
 import { createFinancialRepository } from "../../src/worker/finance/repository";
 import { createInstallationRepository } from "../../src/worker/installation/repository";
+import { RulesWorkflow } from "../../src/worker/rules/workflow";
 import { connections } from "../../src/worker/schema";
 import { createSyncService, runImport } from "../../src/worker/sync";
 import { createSyncRepository } from "../../src/worker/sync/repository";
@@ -256,3 +257,4 @@ export default {
     return new Response("Synthetic local runtime");
   },
 };
+export class TestRulesWorkflow extends RulesWorkflow {}

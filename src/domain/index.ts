@@ -64,12 +64,19 @@ export {
 } from "./finance-model";
 export {
   cardBrandKey,
+  connectorInstitution,
+  detectInstitution,
   type FinancialIdentity,
   type FinancialIdentityFilter,
+  financialIdentity,
+  type Institution,
   institutionLogoUrl,
   matchesFinancialIdentity,
 } from "./financial-identity.entity";
-export { FinancialIdentitySchema } from "./financial-identity.schema";
+export {
+  FinancialIdentitySchema,
+  InstitutionSchema,
+} from "./financial-identity.schema";
 export {
   type InvestmentDetails,
   type InvestorPosition,
@@ -147,10 +154,29 @@ export {
   TransactionOrder,
 } from "./query.entity";
 export {
+  categoryOverrides,
+  planRuleApplication,
+  RULE_APPLICATION_LIMIT,
+  ruleApplication,
+} from "./rule-application.entity";
+export {
   prepareRuleImport,
   type RuleImportPackage,
   type RuleImportResult,
+  ruleImportCategoryMapping,
 } from "./rule-import.entity";
+export {
+  importedTotals,
+  RULE_JOB_CHUNK_RULES,
+  RULE_JOB_MAX_CHUNKS,
+  type RuleJob,
+  type RuleJobChunkResult,
+  RuleJobKind,
+  RuleJobPhase,
+  type RuleJobSkip,
+  RuleJobStatus,
+  ruleJobActive,
+} from "./rule-job.entity";
 export type { RuleCondition, RuleFilter } from "./rules.entity";
 export {
   activeRules,

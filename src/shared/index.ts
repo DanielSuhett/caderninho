@@ -10,4 +10,4 @@ export {
   type HttpFailure,
   HttpFailureKind,
 } from "./http.types";
-export { type Result, tryCatch } from "./result";
+export { type Result, tryCatch, tryCatchSync } from "./result";

@@ -4,14 +4,28 @@ import type {
   PortalMutationSchema,
   PortalQuery,
   PortalQueryResults,
+  RuleJob,
+  RuleJobCommand,
   WorkspaceCatalog,
 } from "../contracts";
 import {
   activeRules,
   categoryCatalog,
+  financialIdentity,
+  type Institution,
+  importedTotals,
   investmentPortfolio,
   matchesFinancialIdentity,
+  planRuleApplication,
   prepareRuleImport,
+  RULE_JOB_CHUNK_RULES,
+  type RuleJobChunkResult,
+  RuleJobKind,
+  RuleJobPhase,
+  RuleJobStatus,
+  ruleApplication,
+  ruleImportCategoryMapping,
+  ruleJobActive,
   ruleMatches,
   transactionMatchesText,
 } from "../domain";
@@ -25,7 +39,7 @@ import {
 } from "../fixtures/finance";
 import { demoInvestments } from "../fixtures/investments";
 import { workspaceFixture } from "../fixtures/workspace";
-import { tryCatch } from "../shared";
+import { tryCatch, tryCatchSync } from "../shared";
 import type { OrganizationApi } from "./account/account-api";
 import { demoCards } from "./demo-cards";
 import { type DemoData, demoSummary, scopedDemoData } from "./demo-data";
@@ -84,6 +98,11 @@ function demoCommitments(
 }
 type Group = Omit<WorkspaceCatalog, "spaces">;
 type ParsedMutation = z.output<typeof PortalMutationSchema>["command"];
+interface DemoRuleJob {
+  categories: unknown[];
+  chunks: Map<number, unknown[]>;
+  job: RuleJob;
+}
 type RuleCommand = Extract<
   ParsedMutation,
   { tool: "create_rule" | "update_rule" }
@@ -204,6 +223,14 @@ function mutateCategoryCatalog(group: Group, command: ParsedMutation) {
   }
 }
 
+function nativeRules(rules: WorkspaceCatalog["rules"]) {
+  return rules.map(({ pack, filter, ...rule }) => ({
+    ...rule,
+    filter: filter ?? null,
+    ...(pack && { pack }),
+  }));
+}
+
 function local<T>(
   signal: AbortSignal,
   operation: () => T | Promise<T>,
@@ -225,11 +252,15 @@ export function createDemoSession({
   let spaces = structuredClone(catalog.spaces);
   let groups = new Map<string, Group>([["personal", structuredClone(catalog)]]);
   let records = structuredClone(ledger);
+  let accountRecords = structuredClone(demoAccounts);
   let revision = 0;
   const listeners = new Set<() => void>();
   const receipts = new Map<string, string>();
+  const mutationResults = new Map<string, unknown>();
+  const categoryOverrides = new Map<string, string | null>();
   const cardLimits = new Map<string, string>();
   const importPrefixes = new Map<string, string>();
+  const ruleJobs = new Map<string, DemoRuleJob>();
   let writing = Promise.resolve();
   function publish() {
     revision += 1;
@@ -240,7 +271,7 @@ export function createDemoSession({
   function view(spaceId = "personal"): DemoData {
     const group = groups.get(spaceId);
     return {
-      accounts: spaceId === "personal" ? demoAccounts : [],
+      accounts: spaceId === "personal" ? accountRecords : [],
       categories: group?.categories ?? [],
       records: spaceId === "personal" ? records : [],
     };
@@ -302,6 +333,9 @@ export function createDemoSession({
     records = records.map((row) =>
       selected.has(row.id) ? { ...row, category: command.category } : row,
     );
+    for (const id of selected) {
+      categoryOverrides.set(id, command.category);
+    }
   }
   function importRules(
     command: Extract<ParsedMutation, { tool: "import_rules" }>,
@@ -320,12 +354,241 @@ export function createDemoSession({
     }
     groups.set(command.spaceId, prepared.group);
   }
+  function prepareApplication(input: {
+    spaceId: string;
+    from: string;
+    to: string;
+    accountId?: string | undefined;
+  }) {
+    if (input.from > input.to) {
+      throw new Error("INVALID_PERIOD");
+    }
+    const data = view(input.spaceId);
+    if (
+      input.accountId &&
+      !data.accounts.some((row) => row.id === input.accountId)
+    ) {
+      throw new Error("NOT_FOUND");
+    }
+    return planRuleApplication({
+      categoryOverrides,
+      preserveManual: true,
+      rows: data.records.filter(
+        (row) =>
+          row.date >= input.from &&
+          row.date <= input.to &&
+          (!input.accountId || row.accountId === input.accountId),
+      ),
+      rules: nativeRules(required(groups.get(input.spaceId)).rules),
+    });
+  }
+  function applyRulesInPeriod(
+    command: Extract<ParsedMutation, { tool: "apply_rules" }>,
+  ) {
+    if (command.expected_revision !== revision) {
+      throw new Error("RESTART_REQUIRED");
+    }
+    const result = prepareApplication(command);
+    const changes = new Map(
+      result.changes.map((row) => [row.id, row.categoryId]),
+    );
+    records = records.map((row) => {
+      const category = changes.get(row.id);
+      if (category === undefined) {
+        return row;
+      }
+      return { ...row, category };
+    });
+    return {
+      changed: result.changed,
+      count: result.examined,
+      ids: result.changes.map((change) => change.id),
+      matched: result.matched,
+      preserved: result.preserved,
+      truncated: result.truncated,
+    };
+  }
+  // Same contract as the Worker job: tolerant chunks, native packs and bounded
+  // application passes, executed synchronously against the synthetic ledger.
+  function importJobChunk(
+    job: RuleJob,
+    input: { categories: unknown[]; rules: unknown[]; seq: number },
+    prepareChunk: typeof import("../contracts").prepareRuleJobChunk,
+  ): RuleJobChunkResult {
+    const prepared = prepareChunk({
+      categories: input.categories,
+      offset: input.seq * RULE_JOB_CHUNK_RULES,
+      rules: input.rules,
+    });
+    const result: RuleJobChunkResult = {
+      categoriesCreated: 0,
+      rulesCreated: 0,
+      rulesExisting: 0,
+      skipped: prepared.skipped,
+    };
+    const pack = required(job.pack ?? undefined);
+    function importBatch(batch: (typeof prepared.batches)[number]) {
+      const group = required(groups.get(job.spaceId));
+      const { data: plan, error } = tryCatchSync(() =>
+        prepareImport({
+          categoryIds: ruleImportCategoryMapping(
+            group.categories.map((category) => ({
+              ...category,
+              spaceId: job.spaceId,
+            })),
+            batch.categories,
+          ),
+          pack: { ...pack, ...batch },
+          spaceId: job.spaceId,
+        }),
+      );
+      if (error) {
+        const [single] = batch.rules;
+        if (batch.rules.length === 1 && single) {
+          result.skipped.push({ key: single.key, reason: error.message });
+          return;
+        }
+        for (const rule of batch.rules) {
+          importBatch({
+            categories: batch.categories.filter(
+              (category) => category.key === rule.categoryKey,
+            ),
+            rules: [rule],
+          });
+        }
+        return;
+      }
+      groups.set(job.spaceId, plan.group);
+      result.categoriesCreated += plan.result.categoriesCreated;
+      result.rulesCreated += plan.result.rulesCreated;
+      result.rulesExisting += plan.result.rulesExisting;
+      for (const rule of plan.result.rules) {
+        if (rule.status === "blocked") {
+          result.skipped.push({
+            key: rule.key,
+            reason: "Categoria indisponível neste grupo.",
+          });
+        }
+      }
+    }
+    for (const batch of prepared.batches) {
+      importBatch(batch);
+    }
+    return result;
+  }
+  async function runJob(entry: DemoRuleJob) {
+    const { prepareRuleJobChunk } = await import("../contracts");
+    const { job } = entry;
+    const results =
+      job.kind === RuleJobKind.import
+        ? Array.from({ length: job.chunks }, (_, seq) =>
+            importJobChunk(
+              job,
+              {
+                categories: entry.categories,
+                rules: entry.chunks.get(seq) ?? [],
+                seq,
+              },
+              prepareRuleJobChunk,
+            ),
+          )
+        : [];
+    let changed = 0;
+    let passes = 0;
+    let examined = 0;
+    let truncated = true;
+    while (truncated) {
+      const applied = applyRulesInPeriod({
+        confirmed: true,
+        expected_revision: revision,
+        from: "1900-01-01",
+        idempotency_key: randomId(),
+        preserveManual: true,
+        spaceId: job.spaceId,
+        to: "9999-12-31",
+        tool: "apply_rules",
+      });
+      changed += applied.changed;
+      examined = applied.count;
+      passes += 1;
+      ({ truncated } = applied);
+    }
+    entry.job = {
+      ...job,
+      applied: { changed, examined, passes },
+      imported: importedTotals(results),
+      phase: RuleJobPhase.done,
+      status: RuleJobStatus.succeeded,
+      updatedAt: new Date().toISOString(),
+    };
+    publish();
+  }
+  function createRuleJob(
+    input: Extract<RuleJobCommand, { action: "create_import" | "reapply" }>,
+  ) {
+    const active = [...ruleJobs.values()].some(
+      (entry) =>
+        entry.job.spaceId === input.spaceId && ruleJobActive(entry.job),
+    );
+    if (active) {
+      throw new Error("JOB_ACTIVE");
+    }
+    required(groups.get(input.spaceId));
+    const at = new Date().toISOString();
+    const upload = input.action === "create_import" ? input : null;
+    const created: RuleJob = {
+      applied: { changed: 0, examined: 0, passes: 0 },
+      chunks: upload?.chunks ?? 0,
+      createdAt: at,
+      error: null,
+      id: randomId(),
+      imported: importedTotals([]),
+      kind: upload ? RuleJobKind.import : RuleJobKind.reapply,
+      pack: upload && { id: upload.pack.id, version: upload.pack.version },
+      phase: RuleJobPhase.upload,
+      received: upload?.received ?? 0,
+      spaceId: input.spaceId,
+      status: upload ? RuleJobStatus.uploading : RuleJobStatus.running,
+      updatedAt: at,
+    };
+    ruleJobs.set(created.id, {
+      categories: upload?.pack.categories ?? [],
+      chunks: new Map(),
+      job: created,
+    });
+    return created;
+  }
+  function commandRuleJob(input: RuleJobCommand) {
+    if (input.action === "create_import" || input.action === "reapply") {
+      return createRuleJob(input);
+    }
+    const entry = ruleJobs.get(input.id);
+    if (!entry) {
+      throw new Error("NOT_FOUND");
+    }
+    if (input.action === "append") {
+      if (!entry.chunks.has(input.seq)) {
+        entry.chunks.set(input.seq, input.rules);
+      }
+      return entry.job;
+    }
+    if (entry.job.status !== RuleJobStatus.uploading) {
+      return entry.job;
+    }
+    if (entry.chunks.size !== entry.job.chunks) {
+      throw new Error("INVALID_REQUEST");
+    }
+    entry.job = { ...entry.job, status: RuleJobStatus.running };
+    return entry.job;
+  }
   function mutate(command: ParsedMutation) {
     const group = required(groups.get(command.spaceId));
     if (mutateCategoryCatalog(group, command)) {
       return;
     }
     switch (command.tool) {
+      case "apply_rules":
+        return applyRulesInPeriod(command);
       case "import_rules":
         importRules(command);
         break;
@@ -565,6 +828,8 @@ export function createDemoSession({
   };
   const api: OrganizationApi = {
     catalog: (spaceId, signal) => local(signal, () => catalogFor(spaceId)),
+    // Synthetic reads are computed from memory on every call.
+    invalidate: () => undefined,
     planning: async (command, _csrf, signal) => {
       const { PortalMutationSchema: mutationSchema } = await import(
         "../contracts"
@@ -577,11 +842,17 @@ export function createDemoSession({
             throw new Error("IDEMPOTENCY_CONFLICT");
           }
           if (!previous) {
-            mutate(mutationSchema.parse({ command, csrf: _csrf }).command);
+            const outcome = mutate(
+              mutationSchema.parse({ command, csrf: _csrf }).command,
+            );
             receipts.set(command.idempotency_key, payload);
+            mutationResults.set(
+              command.idempotency_key,
+              outcome ?? { ok: true },
+            );
             publish();
           }
-          return { ok: true };
+          return mutationResults.get(command.idempotency_key);
         }),
       );
       // Failed commands release the synthetic write queue; callers receive the error.
@@ -633,11 +904,37 @@ export function createDemoSession({
         }
         return read(query);
       }),
+    ruleJob: (selection, signal) =>
+      local(signal, () => {
+        if ("id" in selection) {
+          return ruleJobs.get(selection.id)?.job ?? null;
+        }
+        return (
+          [...ruleJobs.values()]
+            .map((entry) => entry.job)
+            .filter((job) => job.spaceId === selection.spaceId)
+            .at(-1) ?? null
+        );
+      }),
+    ruleJobs: async (input, signal) => {
+      const job = await local(signal, () => commandRuleJob(input));
+      const entry = ruleJobs.get(job.id);
+      const starts =
+        input.action === "reapply" ||
+        (input.action === "start" && job.status === RuleJobStatus.running);
+      if (entry && starts) {
+        await runJob(entry);
+        return entry.job;
+      }
+      return job;
+    },
   };
   return {
     api,
     applyRules(spaceId: string) {
-      const rules = activeRules(required(groups.get(spaceId)).rules);
+      const rules = activeRules(
+        nativeRules(required(groups.get(spaceId)).rules),
+      );
       const scoped = new Set(
         view(spaceId)
           .records.filter((row) => !row.ignored)
@@ -649,9 +946,12 @@ export function createDemoSession({
         if (!scoped.has(row.id)) {
           return row;
         }
-        const rule = rules.find((candidate) =>
-          ruleMatches(row, { ...candidate, filter: candidate.filter ?? null }),
-        );
+        const { rule } = ruleApplication({
+          categoryOverride: categoryOverrides.get(row.id),
+          preserveManual: false,
+          row,
+          rules,
+        });
         if (!rule) {
           return row;
         }
@@ -666,11 +966,36 @@ export function createDemoSession({
       return { changed, matched };
     },
     catalog: catalogFor,
+    identifyInstitution(input: {
+      accountIds: string[];
+      institution: Institution | null;
+    }) {
+      const selected = new Set(input.accountIds);
+      accountRecords = accountRecords.map((account) =>
+        selected.has(account.id)
+          ? {
+              ...account,
+              identity: financialIdentity({
+                identity: {
+                  ...account.identity,
+                  cardBrand: account.identity?.cardBrand ?? null,
+                  institution: null,
+                },
+                institution: input.institution,
+              }),
+            }
+          : account,
+      );
+      publish();
+    },
     reset() {
       spaces = structuredClone(catalog.spaces);
       groups = new Map([["personal", structuredClone(catalog)]]);
       records = structuredClone(ledger);
+      accountRecords = structuredClone(demoAccounts);
       receipts.clear();
+      mutationResults.clear();
+      categoryOverrides.clear();
       importPrefixes.clear();
       publish();
     },

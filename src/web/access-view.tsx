@@ -3,7 +3,7 @@ import { Input } from "@cloudflare/kumo/components/input";
 import { LayerCard } from "@cloudflare/kumo/components/layer-card";
 
 import { PublicLayout } from "./public-layout";
-import { UiButton } from "./ui";
+import { UiButton, UiLink } from "./ui";
 
 export function accessPage({
   origin,
@@ -25,7 +25,7 @@ export function accessPage({
     ? `/account/login?${new URLSearchParams({ returnTo: target })}`
     : "/account/login";
   let heading = "Entrar nesta instalação";
-  let intro = "Entre para cuidar dos seus bancos e assistentes.";
+  let intro = "Use a senha escolhida ao instalar o Caderninho.";
   if (generated) {
     intro =
       "Use a chave da sua instalação para entrar e autorizar seus assistentes.";
@@ -36,9 +36,9 @@ export function accessPage({
       "Entre para revisar a solicitação do seu assistente. A autorização será confirmada na próxima tela.";
   }
   if (!configured) {
-    heading = "Conclua o acesso desta instalação";
+    heading = "A senha não foi configurada";
     intro =
-      "A instalação ainda não concluiu a geração do acesso. Reabra o resultado do deploy na sua Cloudflare.";
+      "O Caderninho foi publicado sem uma senha de entrada. Conclua esta configuração na conta Cloudflare que criou a instalação.";
   }
   return (
     <PublicLayout
@@ -124,11 +124,35 @@ export function accessPage({
               </details>
             </>
           ) : (
-            <p className="access-intro">
-              Na Cloudflare, confira o último deploy. O resultado entrega um
-              link privado para copiar sua chave e começar. Depois,{" "}
-              <a href={reopen}>reabra esta página</a>.
-            </p>
+            <div className="access-form">
+              <ol className="access-recovery-steps">
+                <li>
+                  Abra{" "}
+                  <a href="https://dash.cloudflare.com/">
+                    Workers &amp; Pages na Cloudflare
+                  </a>{" "}
+                  e selecione o Worker desta instalação.
+                </li>
+                <li>
+                  Em Settings → Variables and Secrets, adicione{" "}
+                  <code>ADMIN_PASSWORD</code> como Secret. Escolha uma senha de
+                  16 a 256 caracteres.
+                </li>
+                <li>
+                  Salve e publique a alteração. Depois, volte para entrar.
+                </li>
+              </ol>
+              <UiLink
+                href={reopen}
+                size="lg"
+                variant="primary"
+              >
+                Já configurei a senha
+              </UiLink>
+              <p>
+                Se você já tem dados nesta instalação, eles serão preservados.
+              </p>
+            </div>
           )}
         </LayerCard>
         <p className="access-help">

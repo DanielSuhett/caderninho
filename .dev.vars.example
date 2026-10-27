@@ -1,0 +1,4 @@
+# Senha para entrar no Caderninho. Escolha de 16 a 256 caracteres.
+# O botão Deploy to Cloudflare apresenta este campo antes de instalar.
+# Não use suas senhas bancárias. Pluggy é configurado depois, no Caderninho.
+ADMIN_PASSWORD=

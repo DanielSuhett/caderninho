@@ -43,7 +43,11 @@ datas e taxas recebidas. Não há ordens de compra, venda, aplicação ou resgat
 ## Identidade e interação
 
 A instituição explícita do ativo, quando enviada por B3, prevalece. Sem ela, a
-marca vem do conector Pluggy. Somente URLs verificadas da CDN Pluggy são usadas;
+marca vem da instituição associada à conexão em **Pessoas → Identificar banco**.
+O conector Meu Pluggy (200) é transporte, nunca uma instituição financeira.
+A associação é persistente e sobrevive a reimportações; sem associação ou
+identidade explícita, o banco permanece desconhecido. Somente URLs verificadas
+da CDN Pluggy são usadas;
 sem imagem válida, há ícone de banco. Não adivinhamos instituição pelo nome.
 Pessoa e instituição usam círculos sobrepostos quando não há pessoa selecionada.
 Os filtros ficam em um diálogo Kumo; o botão resume pessoas em um grupo compacto.

@@ -59,6 +59,7 @@ function render(
       cancel: () => undefined,
       command: () => undefined,
       connect: () => undefined,
+      institutions: async () => ({ records: [] }),
       manage: async () => ({ ok: true as const }),
       message: "",
       observedAt: null,

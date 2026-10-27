@@ -212,7 +212,11 @@ para 16 px no celular. A grade de valores permanece comparável no desktop.
 `AccountAvatar` compõe pessoa, instituição e bandeira sem trocar o banco pela
 bandeira do cartão. São círculos de 32 px com sobreposição de 10 px; partes
 ausentes não deixam espaços vazios. O SVG bancário usa a identidade normalizada
-da conta e a URL validada da CDN Pluggy. A bandeira usa o asset local existente.
+da conta e a URL validada da CDN Pluggy. O conector Meu Pluggy não representa
+o banco; **Identificar banco**, em Pessoas, associa uma instituição do catálogo
+oficial ao Item inteiro. O editor mostra as contas vinculadas antes de salvar,
+permite remover a associação e informa falha/carregamento do catálogo.
+A bandeira usa o asset local existente.
 `AvatarStack` desenha somente os arcos expostos do perímetro externo: 0,75 px
 em repouso, 1,5 px em hover/seleção e 2 px com o token de foco por teclado.
 Não há linhas nas interseções, anéis de superfície, salto de camada ou mudança

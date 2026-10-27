@@ -653,6 +653,7 @@
         "!src/worker/auth/grants/index.ts",
         "!src/worker/pluggy/**",
         "!src/worker/sync/workflow/index.ts",
+        "!src/worker/rules/workflow/index.ts",
         "!src/worker/index.ts",
         "!src/worker/composition/index.ts",
         "!src/worker/bindings/index.ts",

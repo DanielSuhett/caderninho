@@ -1,21 +1,29 @@
 import assert from "node:assert/strict";
 
-import { beforeEach, test } from "vitest";
+import { afterEach, beforeEach, test, vi } from "vitest";
 
 import {
   FinancialOverviewResponseSchema,
+  InvestmentListSchema,
   MonthlySpendingResponseSchema,
   PlanningCommandSchema,
   PortalCardsQuerySchema,
+  PortalResponseSchema,
   PortalTransactionQuerySchema,
 } from "../../src/contracts";
+import { demoInvestments } from "../../src/fixtures/investments";
+import { createHouseholdRepository } from "../../src/worker/household/repository";
+import { createInstallationRepository } from "../../src/worker/installation/repository";
 import { createPlanningService } from "../../src/worker/planning";
 import { createPlanningRepository } from "../../src/worker/planning/repository";
+import { sourceUrl } from "../support";
+import { mockNetwork, syntheticJwt } from "../support/network";
 import { command, cookies, fixture, login } from "./access-fixture";
 import { account, collect, setup, source, transaction } from "./fixture";
 import { env } from "cloudflare:workers";
 
 beforeEach(setup);
+afterEach(() => vi.unstubAllGlobals());
 const period = { from: "2026-10-01", spaceId: "personal", to: "2026-10-31" };
 function service() {
   return createPlanningService(
@@ -71,26 +79,21 @@ async function seed() {
   await importConnection("a");
   await importConnection("b");
   await importConnection("other");
-  // Filters read normalized account identity independently of provider admission.
-  await env.DB.batch(
-    accounts.map((row) =>
-      env.DB.prepare(
-        "UPDATE connections SET accounts=json_set(accounts,?,json(?)) WHERE id=?",
-      ).bind(
-        `$."${row.id}".identity.institution`,
-        JSON.stringify({
-          id: row.itemId === "b" ? "202" : "201",
-          logoUrl: null,
-          name: row.itemId === "b" ? "Beta" : "Alpha",
-        }),
-        row.itemId,
-      ),
+  const repository = createHouseholdRepository(env.DB);
+  await Promise.all(
+    ["a", "b", "other"].map((id) =>
+      repository.institution(id, {
+        id: id === "b" ? "202" : "201",
+        logoUrl: null,
+        name: id === "b" ? "Beta" : "Alpha",
+      }),
     ),
   );
   await env.DB.prepare("INSERT INTO people(id,name) VALUES('ana','Ana')").run();
   await env.DB.prepare(
     "UPDATE connection_owners SET person_id='ana' WHERE connection_id='other'",
   ).run();
+  return { accounts, rows };
 }
 
 test("portal bank scope is applied before pagination and matches overview, chart and the selected owner", async () => {
@@ -230,5 +233,186 @@ test("brand scope spans institutions, intersects the owner and follows effective
       await api.portalTransactions({ ...query, institutionId: "202" })
     ).data.records.some((row) => row.id === "b-bank"),
     false,
+  );
+});
+
+test("catalogue association survives reimport and reaches accounts, cards and investments without changing proxy authorization", async () => {
+  const { accounts, rows } = await seed();
+  const bank = {
+    id: "301",
+    logoUrl: "https://cdn.pluggy.ai/assets/connector-icons/301.svg",
+    name: "Banco sintético",
+  };
+  mockNetwork((input) => {
+    const url = sourceUrl(input);
+    if (url.pathname === "/auth") {
+      return Promise.resolve(Response.json({ apiKey: syntheticJwt() }));
+    }
+    assert.equal(url.pathname, "/connectors");
+    assert.equal(url.searchParams.get("sandbox"), "false");
+    return Promise.resolve(
+      Response.json({
+        results: [
+          {
+            id: 200,
+            imageUrl: null,
+            isSandbox: false,
+            name: "Meu Pluggy",
+            type: "PERSONAL_BANK",
+          },
+          {
+            id: 301,
+            imageUrl: bank.logoUrl,
+            isSandbox: false,
+            name: bank.name,
+            type: "PAYMENT_ACCOUNT",
+          },
+          {
+            id: 999,
+            imageUrl: null,
+            isSandbox: true,
+            name: "Sandbox",
+            type: "PERSONAL_BANK",
+          },
+        ],
+        totalPages: 1,
+      }),
+    );
+  });
+  const app = fixture();
+  assert.equal(
+    (await app.request("/api/account/institutions?profileId=default")).status,
+    401,
+  );
+  const cookie = cookies(await login(app));
+  const catalogue = await app.request(
+    "/api/account/institutions?profileId=default",
+    { headers: { Cookie: cookie } },
+  );
+  assert.deepEqual(await catalogue.json(), { records: [bank] });
+  const refused = await Promise.all(
+    ["200", "999", "unknown"].map((institutionId) =>
+      command(app, cookie, "manage", {
+        action: "set_connection_institution",
+        connectionId: "a",
+        institutionId,
+      }),
+    ),
+  );
+  assert.deepEqual(
+    refused.map((response) => response.status),
+    [404, 404, 404],
+  );
+  assert.equal(
+    (
+      await command(app, cookie, "manage", {
+        action: "set_connection_institution",
+        connectionId: "a",
+        institutionId: bank.id,
+      })
+    ).status,
+    200,
+  );
+  await collect(
+    source(rows, [...accounts, account({ id: "a-new", itemId: "a" })]),
+    "2026-10-02T00:00:00Z",
+    "a",
+  );
+  const state = await createInstallationRepository(env.DB).state();
+  const selected = state.connections.find((row) => row.id === "a");
+  assert.ok(selected);
+  assert.deepEqual(
+    Object.values(selected.accounts).map((row) => row.identity?.institution),
+    [bank, bank, bank],
+  );
+  assert.equal(
+    selected.accounts["a-card"]?.identity?.cardBrand,
+    "American Express",
+  );
+  const api = service();
+  assert.deepEqual(
+    (
+      await api.cards(
+        PortalCardsQuerySchema.parse({
+          institutionId: bank.id,
+          month: "2026-10",
+          tool: "get_portal_cards",
+        }),
+      )
+    ).data.accounts.map((row) => row.id),
+    ["a-card"],
+  );
+  const [template] = demoInvestments;
+  assert.ok(template);
+  const positions = [
+    {
+      ...template,
+      connectionId: "a",
+      id: "fallback-position",
+      identity: {
+        cardBrand: null,
+        institution: { id: "200", logoUrl: null, name: "Meu Pluggy" },
+      },
+      personId: "self",
+    },
+    {
+      ...template,
+      connectionId: "a",
+      id: "explicit-position",
+      identity: {
+        cardBrand: null,
+        institution: {
+          id: "explicit",
+          logoUrl: null,
+          name: "Origem explícita",
+        },
+      },
+      personId: "self",
+    },
+  ];
+  await env.DB.batch(
+    positions.map((row) =>
+      env.DB.prepare(
+        "INSERT INTO planning_investments(id,data) VALUES(?,?)",
+      ).bind(row.id, JSON.stringify(row)),
+    ),
+  );
+  const result = InvestmentListSchema.parse(
+    await api.execute(
+      PlanningCommandSchema.parse({
+        spaceId: "personal",
+        tool: "get_investments",
+      }),
+    ),
+  );
+  assert.deepEqual(
+    result.data.records.find((row) => row.id === "fallback-position")?.identity
+      ?.institution,
+    bank,
+  );
+  assert.equal(
+    result.data.records.find((row) => row.id === "explicit-position")?.identity
+      ?.institution?.id,
+    "explicit",
+  );
+  assert.equal(
+    (
+      await command(app, cookie, "manage", {
+        action: "set_connection_institution",
+        connectionId: "a",
+        institutionId: null,
+      })
+    ).status,
+    200,
+  );
+  const cleared = PortalResponseSchema.parse(
+    await (
+      await app.request("/api/account", { headers: { Cookie: cookie } })
+    ).json(),
+  );
+  assert.ok(
+    Object.values(
+      cleared.connections.find((row) => row.id === "a")?.accounts ?? {},
+    ).every((row) => row.identity?.institution === null),
   );
 });

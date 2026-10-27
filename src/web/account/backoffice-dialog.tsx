@@ -23,8 +23,10 @@ export function BackofficeDialog({
   busy,
   close,
   presentation = "editor",
+  showCancel = true,
 }: {
   open: boolean;
+  showCancel?: boolean;
   title: string;
   children: ReactNode;
   primaryAction: ComponentProps<typeof UiButton>;
@@ -125,14 +127,16 @@ export function BackofficeDialog({
       <WorkspaceDialog
         actions={
           <>
-            <UiButton
-              disabled={busy || discard}
-              onClick={requestClose}
-              type="button"
-              variant="secondary"
-            >
-              Cancelar
-            </UiButton>
+            {!!showCancel && (
+              <UiButton
+                disabled={busy || discard}
+                onClick={requestClose}
+                type="button"
+                variant="secondary"
+              >
+                Cancelar
+              </UiButton>
+            )}
             <UiButton
               {...primaryAction}
               disabled={busy || discard || primaryAction.disabled}

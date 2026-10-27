@@ -1,13 +1,16 @@
 import {
   AuditSelectionSchema,
   HouseholdCommandSchema,
+  InstitutionCatalogSelectionSchema,
   PortalMutationSchema,
   PortalQuerySchema,
+  RuleJobCommandSchema,
+  RuleJobSelectionSchema,
   RulePreviewSchema,
   SyncHistorySelectionSchema,
 } from "../contracts";
 import { RunStatus } from "../domain";
-import { demoReferenceDay } from "../fixtures/finance";
+import { demoAccounts, demoReferenceDay } from "../fixtures/finance";
 import { demoPortalFixture } from "../fixtures/workspace";
 import { tryCatch } from "../shared";
 import { createDemoSession } from "./demo-session";
@@ -20,12 +23,57 @@ export function createDemoFetch(
   session = createDemoSession(),
 ): typeof fetch {
   const snapshot = { ...demoPortalFixture(), origin };
+  const institutions = [
+    { id: "demo-institution", logoUrl: null, name: "Banco de exemplo" },
+    ...new Map(
+      demoAccounts.flatMap((account) =>
+        account.identity?.institution
+          ? [
+              [
+                account.identity.institution.id,
+                account.identity.institution,
+              ] as const,
+            ]
+          : [],
+      ),
+    ).values(),
+  ];
   const read = (url: URL) => {
     switch (url.pathname) {
       case "/api/account":
+        snapshot.connections = snapshot.connections.map((connection) => ({
+          ...connection,
+          accounts: Object.fromEntries(
+            Object.entries(connection.accounts).map(([id, account]) => [
+              id,
+              {
+                ...account,
+                identity:
+                  session.view().accounts.find((row) => row.id === id)
+                    ?.identity ?? null,
+              },
+            ]),
+          ),
+        }));
         return snapshot;
+      case "/api/account/institutions": {
+        const { profileId } = InstitutionCatalogSelectionSchema.parse(
+          Object.fromEntries(url.searchParams),
+        );
+        if (!snapshot.profiles.some((profile) => profile.id === profileId)) {
+          throw new Error("NOT_FOUND");
+        }
+        return { records: institutions };
+      }
       case "/api/account/catalog":
         return session.catalog(url.searchParams.get("spaceId") ?? "personal");
+      case "/api/account/rule-jobs":
+        return session.api
+          .ruleJob(
+            RuleJobSelectionSchema.parse(Object.fromEntries(url.searchParams)),
+            new AbortController().signal,
+          )
+          .then((job) => ({ job }));
       case "/api/account/history": {
         const selection = SyncHistorySelectionSchema.parse(
           Object.fromEntries(url.searchParams),
@@ -95,6 +143,13 @@ export function createDemoFetch(
         const { command, csrf } = PortalMutationSchema.parse(input);
         return await session.api.planning(command, csrf, request.signal);
       }
+      case "/api/account/rule-jobs":
+        return {
+          job: await session.api.ruleJobs(
+            RuleJobCommandSchema.parse(input),
+            request.signal,
+          ),
+        };
       case "/api/account/rule-preview":
         return await session.api.previewRule(
           RulePreviewSchema.parse(input),
@@ -102,6 +157,25 @@ export function createDemoFetch(
         );
       case "/api/account/manage": {
         const command = HouseholdCommandSchema.parse(input);
+        if (command.action === "set_connection_institution") {
+          const connection = snapshot.connections.find(
+            (row) => row.id === command.connectionId,
+          );
+          const institution =
+            institutions.find((row) => row.id === command.institutionId) ??
+            null;
+          if (
+            !connection?.personId ||
+            (command.institutionId && !institution)
+          ) {
+            throw new Error("NOT_FOUND");
+          }
+          session.identifyInstitution({
+            accountIds: Object.keys(connection.accounts),
+            institution,
+          });
+          return { ok: true };
+        }
         if (command.action !== "save_person") {
           throw new Error("UNSUPPORTED_DEMO_OPERATION");
         }
@@ -142,6 +216,7 @@ export function createDemoFetch(
     if (error) {
       const conflict =
         error.message === "RESTART_REQUIRED" ||
+        error.message === "JOB_ACTIVE" ||
         error.message === "IDEMPOTENCY_CONFLICT";
       return Response.json(
         { error: "DEMO_OPERATION_FAILED" },

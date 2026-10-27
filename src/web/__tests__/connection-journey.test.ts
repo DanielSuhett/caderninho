@@ -99,6 +99,9 @@ test("bank identity uses provider institution metadata, never a guess from the a
   const html = renderToStaticMarkup(
     createElement(SetupBanks, {
       connections: [connectionFixture({ importStatus: null })],
+      csrf: "synthetic",
+      institutions: async () => ({ records: [] }),
+      manage: async () => ({ ok: true as const }),
     }),
   );
   assert.ok(html.includes("Não importado"));

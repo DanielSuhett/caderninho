@@ -174,10 +174,17 @@ export const planningTools = {
   }),
   apply_rules: planningTool("apply_rules", {
     description:
-      "Aplicar regras sincronicamente a até 500 transações; operação atômica.",
+      "Aplicar regras sincronicamente; operação atômica. Sem preserveManual, examina até 500 transações. Com preserveManual=true, examina o período inteiro, preserva categorias manuais e ignoradas e grava até 500 alterações; repita enquanto truncated=true.",
     readOnly: false,
     schema: z
-      .object({ ...mutation, accountId: id.optional(), from: day, to: day })
+      .object({
+        ...mutation,
+        accountId: id.optional(),
+        expected_revision: z.number().int().nonnegative().optional(),
+        from: day,
+        preserveManual: z.boolean().optional(),
+        to: day,
+      })
       .strict(),
   }),
   attach_transaction_tags: planningTool("attach_transaction_tags", {

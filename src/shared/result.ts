@@ -16,3 +16,12 @@ export async function tryCatch<T>(
     return { data: null, error: normalizeError(error) };
   }
 }
+
+// Synchronous validation boundaries (parse and plan) that recover per item.
+export function tryCatchSync<T>(operation: () => T): Result<T> {
+  try {
+    return { data: operation(), error: null };
+  } catch (error: unknown) {
+    return { data: null, error: normalizeError(error) };
+  }
+}

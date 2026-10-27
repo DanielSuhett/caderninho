@@ -66,6 +66,7 @@ export interface TransactionEdit {
   accountId?: string;
   amountMinor?: string;
   category?: string | null;
+  categoryRuleId?: string | null;
   currency?: string;
   date?: string;
   deleted?: boolean;

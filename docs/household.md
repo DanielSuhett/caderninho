@@ -35,9 +35,11 @@ reiniciar uma execução terminal ou apagar o histórico. Fotos persistem no D1,
 com preparação local e os limites do contrato. Rascunhos do onboarding bloqueiam
 navegação e fechamento até salvar ou cancelar.
 
-O instalador gera a chave de acesso, sem pedir senha. Guarda somente seu hash em
-`ADMIN_ACCESS_HASH` e entrega um link privado no resultado do deploy; a primeira
-tela oferece cópia com ClipboardText. `ADMIN_PASSWORD` anterior continua válido.
+O formulário do botão Cloudflare pede a senha de entrada `ADMIN_PASSWORD`
+(16 a 256 caracteres) antes de instalar. Depois, o dono entra no endereço do
+Caderninho com essa senha. Não precisa criar secrets manualmente nem procurar
+chaves nos logs. Atualizações preservam senhas e chaves `ADMIN_ACCESS_HASH`
+existentes; a compatibilidade com links antigos continua disponível.
 Credenciais Pluggy são validadas
 no servidor e ficam no cofre privado já existente. Secrets Pluggy de ambiente
 continuam como fallback das instalações anteriores; nenhum secret real é removido.

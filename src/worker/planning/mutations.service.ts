@@ -6,18 +6,18 @@ import type {
 import {
   type AccountSettings,
   AccountType,
-  activeRules,
   CategoryKind,
   categoryCatalog,
+  categoryOverrides,
   localDay,
   monthDate,
   type PlanningAccount,
   PlanningError,
   type PlanningState,
   type PlanningTransaction,
+  planRuleApplication,
   prepareRuleImport,
   type Rule,
-  ruleMatches,
   sacSchedule,
   TransactionDirection,
   type TransactionEdit,
@@ -341,6 +341,7 @@ export async function planningMutation(
     }
     if (input.category !== undefined) {
       patch.category = input.category;
+      patch.categoryRuleId = null;
     }
     if (input.ignored !== undefined) {
       patch.ignored = input.ignored;
@@ -366,6 +367,61 @@ export async function planningMutation(
       ("status" in input && input.status !== undefined)
     );
   }
+  async function handleApplyRules(
+    input: Extract<PlanningCommand, { tool: "apply_rules" }>,
+  ) {
+    const period = {
+      from: input.from,
+      to: input.to,
+      ...(input.accountId && { accountId: input.accountId }),
+    };
+    // Preserving applications converge over the whole period in bounded writes.
+    const rows: PlanningTransaction[] = [];
+    if (input.preserveManual) {
+      for await (const row of stream({
+        ...period,
+        include_ignored: true,
+        spaceId: input.spaceId,
+      })) {
+        rows.push(row);
+      }
+    } else {
+      rows.push(...(await selected(undefined, period)));
+    }
+    const result = planRuleApplication({
+      categoryOverrides: categoryOverrides(
+        state.edits,
+        input.preserveManual ?? false,
+      ),
+      preserveManual: input.preserveManual ?? false,
+      rows,
+      rules: state.rules.filter((rule) => rule.spaceId === input.spaceId),
+    });
+    for (const change of input.preserveManual
+      ? result.changes
+      : result.assignments) {
+      const patch = edit(change.id);
+      patch.category = change.categoryId;
+      patch.categoryRuleId = change.ruleId;
+    }
+    if (input.preserveManual) {
+      return {
+        changed: result.changed,
+        count: result.examined,
+        ids: result.changes.map((change) => change.id),
+        matched: result.matched,
+        preserved: result.preserved,
+        truncated: result.truncated,
+      };
+    }
+    return {
+      changed: result.changed,
+      count: rows.length,
+      ids: rows.map((row) => row.id),
+      matched: result.matched,
+      preserved: result.preserved,
+    };
+  }
   async function handleEditTransaction(
     input: Extract<
       PlanningCommand,
@@ -379,8 +435,7 @@ export async function planningMutation(
           | "delete_transactions_by_period"
           | "attach_transaction_tags"
           | "remove_transaction_tags"
-          | "move_transactions"
-          | "apply_rules";
+          | "move_transactions";
       }
     >,
   ) {
@@ -421,9 +476,6 @@ export async function planningMutation(
     if ("targetSpaceId" in input) {
       found(state.spaces.find((s) => s.id === input.targetSpaceId));
     }
-    const rules = activeRules(
-      state.rules.filter((r) => r.spaceId === input.spaceId),
-    );
     function changeRow(row: PlanningTransaction) {
       const patch = edit(row.id, row.accountId);
       switch (input.tool) {
@@ -441,25 +493,19 @@ export async function planningMutation(
         case "move_transactions":
           patch.spaceId = input.targetSpaceId;
           patch.category = null;
+          patch.categoryRuleId = null;
           patch.tagIds = [];
           patch.goalId = null;
           state.contributions = state.contributions.filter(
             (c) => c.transactionId !== row.id,
           );
           break;
-        case "apply_rules": {
-          const rule = rules.find((r) => ruleMatches(row, r));
-          if (rule && (!rule.pack || patch.category === undefined)) {
-            patch.category = rule.categoryId;
-          }
-          break;
-        }
         default:
           applyFields(patch, input);
       }
     }
     rows.forEach(changeRow);
-    return { count: rows.length, ids: rows.map((r) => r.id) };
+    return { count: rows.length, ids: rows.map((row) => row.id) };
   }
 
   function handleCreateManualInstallment(
@@ -534,7 +580,9 @@ export async function planningMutation(
         category(input.categoryId);
         row.categoryId = input.categoryId;
         for (const id of row.transactionIds) {
-          edit(id, row.accountId).category = input.categoryId;
+          const patch = edit(id, row.accountId);
+          patch.category = input.categoryId;
+          patch.categoryRuleId = null;
         }
       }
     } else {
@@ -1470,8 +1518,9 @@ export async function planningMutation(
     case "attach_transaction_tags":
     case "remove_transaction_tags":
     case "move_transactions":
-    case "apply_rules":
       return await handleEditTransaction(command);
+    case "apply_rules":
+      return await handleApplyRules(command);
     case "create_manual_installment":
       return handleCreateManualInstallment(command);
     case "update_installment":

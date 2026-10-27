@@ -40,6 +40,8 @@ export {
   HouseholdCatalogSchema,
   HouseholdCommandSchema,
   HouseholdResultSchema,
+  InstitutionCatalogSchema,
+  InstitutionCatalogSelectionSchema,
   PersonPhotoSchema,
 } from "./household";
 export {
@@ -80,9 +82,19 @@ export type { RuleImportPackage, RuleImportResult } from "./rule-import";
 export {
   RULE_IMPORT_MAX_BYTES,
   RULE_IMPORT_MAX_RULES,
+  RuleImportKeySchema,
   RuleImportPackageSchema,
   RuleImportResultSchema,
 } from "./rule-import";
+export {
+  prepareRuleJobChunk,
+  type RuleJob,
+  type RuleJobCommand,
+  RuleJobCommandSchema,
+  RuleJobResponseSchema,
+  RuleJobSchema,
+  RuleJobSelectionSchema,
+} from "./rule-jobs";
 export type {
   RulePreviewInput,
   RulePreviewQuery,
