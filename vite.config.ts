@@ -28,6 +28,43 @@ function phosphorWeights(): Plugin {
   };
 }
 
+const rootViewBox = /<svg\b[^>]*?\sviewBox="([^"]+)"/;
+const firstRect = /<rect\b[^>]*>/;
+const rectWidthAttr = /\swidth="([\d.]+)"/;
+const rectHeightAttr = /\sheight="([\d.]+)"/;
+const solidFill = /\sfill="(?!none|white|#fff)/i;
+const viewBoxSeparator = /[\s,]+/;
+// The avatar paints the logo edge to edge inside a circle. Logos with a
+// full-bleed background are cropped to the circle as they are; transparent ones
+// get a wider viewBox so the symbol keeps its margin.
+function fitLogoToCircle(svg: string) {
+  const viewBox = rootViewBox.exec(svg)?.[1];
+  const [x = Number.NaN, y = Number.NaN, width, height] = (viewBox ?? "")
+    .split(viewBoxSeparator)
+    .map(Number);
+  if (!(width && height) || [x, y].some(Number.isNaN)) {
+    return svg;
+  }
+  const rect = firstRect.exec(svg)?.[0] ?? "";
+  const rectWidth = Number(rectWidthAttr.exec(rect)?.[1]);
+  const rectHeight = Number(rectHeightAttr.exec(rect)?.[1]);
+  const fillsCanvas =
+    Math.abs(rectWidth - width) < 1 &&
+    Math.abs(rectHeight - height) < 1 &&
+    solidFill.test(rect);
+  if (fillsCanvas) {
+    return svg;
+  }
+  const grow = 4 / 3;
+  const widened = [
+    x - (width * (grow - 1)) / 2,
+    y - (height * (grow - 1)) / 2,
+    width * grow,
+    height * grow,
+  ].join(" ");
+  return svg.replace(`viewBox="${viewBox}"`, `viewBox="${widened}"`);
+}
+
 // Bank logos ship as static assets named by COMPE; they never enter a JS bundle.
 async function copyBankLogos(destination: URL) {
   const base = new URL(
@@ -47,9 +84,11 @@ async function copyBankLogos(destination: URL) {
       if (!(bank.compe && logo)) {
         return [];
       }
-      return copyFile(
-        new URL(logo, base),
-        new URL(`bancos/${bank.compe}.svg`, destination),
+      return readFile(new URL(logo, base), "utf8").then((svg) =>
+        writeFile(
+          new URL(`bancos/${bank.compe}.svg`, destination),
+          fitLogoToCircle(svg),
+        ),
       );
     }),
   );

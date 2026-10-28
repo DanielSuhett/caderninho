@@ -1712,9 +1712,9 @@
   background: white;
 }
 .account-avatar img {
-  width: 24px;
-  height: 24px;
-  object-fit: contain;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 .account-identity > :where(span:last-child) {
   min-width: 0;
