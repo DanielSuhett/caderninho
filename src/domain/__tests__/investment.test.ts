@@ -11,14 +11,13 @@ import {
   ProviderAccountSchema,
 } from "..";
 
-test("portfolio separates currencies, reported profit and excluded or redeemed positions", () => {
+test("portfolio separates currencies and excluded or redeemed positions", () => {
   const result = investmentPortfolio(demoInvestments);
   const brl = result.totals.find((row) => row.currency === "BRL");
   assert.equal(result.records.length, 10);
   assert.equal(brl?.count, 7);
   assert.equal(brl?.gross.totalMinor, "8560000");
   assert.equal(brl?.net.totalMinor, "8441000");
-  assert.equal(brl?.profit.totalMinor, "626000");
   assert.equal(brl?.byType.length, 4);
   const cdb = result.groups.find(
     (group) => group.subtype === "CDB" && group.currency === "BRL",
@@ -46,7 +45,6 @@ test("portfolio filters precede aggregates and absence never becomes zero or inf
     type: "ETF",
   });
   assert.equal(result.records.length, 1);
-  assert.equal(result.totals[0]?.profit.totalMinor, "-60000");
   const [row] = demoInvestments;
   assert.ok(row);
   const partial = investmentPortfolio([
@@ -109,6 +107,7 @@ function syntheticCdb(
     dueDate?: string;
     institution?: { id: string; logoUrl: string | null; name: string } | null;
     issuer?: string | null;
+    personId?: string;
     rateType?: string;
     status?: string;
     subtype?: string;
@@ -132,7 +131,6 @@ function syntheticCdb(
       lastMonthRate: null,
       lastTwelveMonthsRate: null,
       originalMinor: null,
-      profitMinor: "5000",
       purchaseDate: null,
       quantity: null,
       rate: null,
@@ -152,6 +150,7 @@ function syntheticCdb(
     included: true,
     manual: false,
     name: "CDB sintético",
+    ...(overrides.personId && { personId: overrides.personId }),
     spaceId: "personal",
     type: "FIXED_INCOME",
   };
@@ -168,7 +167,6 @@ test("certificates of one bank pile up into a single sorted group", () => {
   assert.equal(group?.count, 3);
   assert.equal(group?.gross.totalMinor, "450000");
   assert.equal(group?.net.totalMinor, "270000");
-  assert.equal(group?.profit.totalMinor, "15000");
   assert.equal(group?.nearestDueDate, "2026-12-01");
   assert.equal(group?.furthestDueDate, "2028-03-01");
   assert.deepEqual(group?.rateTypes, ["CDI", "PRE"]);
@@ -256,5 +254,24 @@ test("filters and allocation totals are unchanged by grouping", () => {
     investmentPortfolio([syntheticCdb("a")], { institutionId: "none" }).groups
       .length,
     0,
+  );
+});
+test("certificates of different people never share a group", () => {
+  const result = investmentPortfolio([
+    syntheticCdb("ana-1", { personId: "ana" }),
+    syntheticCdb("ana-2", { personId: "ana" }),
+    syntheticCdb("beto-1", { personId: "beto" }),
+  ]);
+  assert.equal(result.groups.length, 2);
+  assert.deepEqual(result.groups.map((group) => group.count).sort(), [1, 2]);
+});
+test("sweep balances under R$ 10 are not investments", () => {
+  const result = investmentPortfolio([
+    syntheticCdb("dust", { amountMinor: "999" }),
+    syntheticCdb("real", { amountMinor: "1000" }),
+  ]);
+  assert.deepEqual(
+    result.records.map((row) => row.id),
+    ["real"],
   );
 });

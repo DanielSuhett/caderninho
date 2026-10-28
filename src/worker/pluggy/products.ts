@@ -3,6 +3,7 @@ import { z } from "zod/v4";
 import {
   accountingDay,
   decimal,
+  isDustPosition,
   normalizeMoney,
   ProductKind,
   type ProductPage,
@@ -14,7 +15,6 @@ const money = z.union([z.string(), z.number()]).nullish();
 const investment = z.object({
   amount: money,
   amountOriginal: money,
-  amountProfit: money,
   amountWithdrawal: money,
   annualRate: money,
   balance: money,
@@ -125,60 +125,61 @@ export async function productPage(
       return {
         kind: input.kind,
         next: nextPage(page, input.page),
-        records: page.results.map((row) => {
-          if (row.itemId !== input.id) {
-            throw new Error("SOURCE_IDENTITY_MISMATCH");
-          }
-          return {
-            amountMinor: normalizeMoney(row.amount, row.currencyCode),
-            details: {
-              annualRate: decimal(row.annualRate),
-              balanceMinor: normalizeMoney(row.balance, row.currencyCode),
-              code: row.code ?? null,
-              dueDate: accountingDay(row.dueDate),
-              financialTaxMinor: normalizeMoney(row.taxes2, row.currencyCode),
-              fixedAnnualRate: decimal(row.fixedAnnualRate),
-              incomeTaxMinor: normalizeMoney(row.taxes, row.currencyCode),
-              issuer: row.issuer ?? null,
-              lastMonthRate: decimal(row.lastMonthRate),
-              lastTwelveMonthsRate: decimal(row.lastTwelveMonthsRate),
-              originalMinor: normalizeMoney(
-                row.amountOriginal,
-                row.currencyCode,
-              ),
-              profitMinor: normalizeMoney(row.amountProfit, row.currencyCode),
-              purchaseDate: accountingDay(row.purchaseDate),
-              quantity: decimal(row.quantity),
-              rate: decimal(row.rate),
-              rateType: row.rateType ?? null,
-              status: row.status ?? null,
-              subtype: row.subtype ?? null,
-              withdrawalMinor: normalizeMoney(
-                row.amountWithdrawal,
-                row.currencyCode,
-              ),
-            },
-            ...(row.institution && {
-              identity: {
-                cardBrand: null,
-                institution: {
-                  id: row.institution.number ?? row.institution.name,
-                  logoUrl: null,
-                  name: row.institution.name,
-                },
+        records: page.results
+          .map((row) => {
+            if (row.itemId !== input.id) {
+              throw new Error("SOURCE_IDENTITY_MISMATCH");
+            }
+            return {
+              amountMinor: normalizeMoney(row.amount, row.currencyCode),
+              details: {
+                annualRate: decimal(row.annualRate),
+                balanceMinor: normalizeMoney(row.balance, row.currencyCode),
+                code: row.code ?? null,
+                dueDate: accountingDay(row.dueDate),
+                financialTaxMinor: normalizeMoney(row.taxes2, row.currencyCode),
+                fixedAnnualRate: decimal(row.fixedAnnualRate),
+                incomeTaxMinor: normalizeMoney(row.taxes, row.currencyCode),
+                issuer: row.issuer ?? null,
+                lastMonthRate: decimal(row.lastMonthRate),
+                lastTwelveMonthsRate: decimal(row.lastTwelveMonthsRate),
+                originalMinor: normalizeMoney(
+                  row.amountOriginal,
+                  row.currencyCode,
+                ),
+                purchaseDate: accountingDay(row.purchaseDate),
+                quantity: decimal(row.quantity),
+                rate: decimal(row.rate),
+                rateType: row.rateType ?? null,
+                status: row.status ?? null,
+                subtype: row.subtype ?? null,
+                withdrawalMinor: normalizeMoney(
+                  row.amountWithdrawal,
+                  row.currencyCode,
+                ),
               },
-            }),
-            connectionId: input.id,
-            currency: row.currencyCode,
-            date: accountingDay(row.date),
-            id: row.id,
-            included: true,
-            manual: false,
-            name: row.name,
-            spaceId: "personal",
-            type: row.type,
-          };
-        }),
+              ...(row.institution && {
+                identity: {
+                  cardBrand: null,
+                  institution: {
+                    id: row.institution.number ?? row.institution.name,
+                    logoUrl: null,
+                    name: row.institution.name,
+                  },
+                },
+              }),
+              connectionId: input.id,
+              currency: row.currencyCode,
+              date: accountingDay(row.date),
+              id: row.id,
+              included: true,
+              manual: false,
+              name: row.name,
+              spaceId: "personal",
+              type: row.type,
+            };
+          })
+          .filter((row) => !isDustPosition(row)),
       };
     }
     case ProductKind.loans: {

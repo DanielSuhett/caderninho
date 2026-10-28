@@ -207,7 +207,6 @@ function provider() {
       "/investments": {
         amount: "42.10",
         amountOriginal: "42.06",
-        amountProfit: "-2.05",
         amountWithdrawal: "0",
         balance: "40.01",
         currencyCode: "BRL",
@@ -322,7 +321,6 @@ test("two profiles with equal upstream IDs import separate histories and expose 
   );
   assert.equal(portfolio.data.totals[0]?.gross.totalMinor, "4210");
   assert.equal(portfolio.data.totals[0]?.net.totalMinor, "4001");
-  assert.equal(portfolio.data.totals[0]?.profit.totalMinor, "-205");
   assert.equal(portfolio.data.totals[0]?.withdrawal.totalMinor, "0");
   assert.equal(portfolio.data.groups.length, 1);
   assert.equal(portfolio.data.groups[0]?.count, 1);

@@ -887,7 +887,7 @@ test("automatic and explicit rule matching use the same literal accents and ASCI
   );
 });
 
-test("manual investor holdings retain an explicit local coverage and unknown net/profit", async () => {
+test("manual investor holdings retain an explicit local coverage and unknown net", async () => {
   const f = fixture();
   await f.write("create_manual_investment", {
     amountMinor: "900719925474099301",
@@ -905,5 +905,4 @@ test("manual investor holdings retain an explicit local coverage and unknown net
   const portfolio = InvestmentListSchema.parse(result).data;
   assert.equal(portfolio.totals[0]?.gross.totalMinor, "900719925474099301");
   assert.equal(portfolio.totals[0]?.net.totalMinor, null);
-  assert.equal(portfolio.totals[0]?.profit.totalMinor, null);
 });

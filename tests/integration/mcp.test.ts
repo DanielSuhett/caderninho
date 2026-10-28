@@ -622,7 +622,6 @@ test("OAuth exposes 104 tools and executes confirmed local writes with durable r
   ).data;
   assert.equal(investor.records[0]?.name, "Reserva MCP");
   assert.equal(investor.totals[0]?.gross.totalMinor, "900719925474099301");
-  assert.equal(investor.totals[0]?.profit.totalMinor, null);
   const groupRequest = {
     arguments: {
       color: "#123456",

@@ -196,7 +196,7 @@ de cálculo, com valores sintéticos.
 
 No MCP, `get_investments` aceita `spaceId`, `personId`, `currency`, `type`,
 `institutionId` e `status`. Retorna `records` e `totals` por moeda, com `gross`,
-`net`, `original`, `profit`, `withdrawal`, `byType` e `byInstitution`.
+`net`, `original`, `withdrawal`, `byType` e `byInstitution`.
 Cada medida informa `totalMinor`, `knownMinor` e `unknownCount`. Campos monetários
 são strings inteiras em unidades menores. Zero é conhecido; ausência não é zero.
 `amountMinor` representa a posição bruta.

@@ -84,6 +84,7 @@ export {
   type InvestmentDetails,
   type InvestorPosition,
   investmentPortfolio,
+  isDustPosition,
   normalizeIssuer,
   type PositionBank,
   positionBank,

@@ -12,7 +12,6 @@ export interface InvestmentDetails {
   lastMonthRate: string | null;
   lastTwelveMonthsRate: string | null;
   originalMinor: string | null;
-  profitMinor: string | null;
   purchaseDate: string | null;
   quantity: string | null;
   rate: string | null;
@@ -28,6 +27,24 @@ export interface PositionBank {
   name: string;
 }
 export const UNKNOWN_BANK_ID = "unknown";
+// Sweep accounts park spare change in a CDB; below R$ 10 it is not an
+// investment, so it is neither stored nor listed.
+const REDEEMED_STATUS = "TOTAL_WITHDRAWAL";
+const MIN_BRL_POSITION_MINOR = 1000n;
+export function isDustPosition(position: {
+  amountMinor: string | null;
+  currency: string;
+  details?: { status: string | null } | null | undefined;
+  manual: boolean;
+}) {
+  return (
+    !position.manual &&
+    position.details?.status !== REDEEMED_STATUS &&
+    position.currency === "BRL" &&
+    position.amountMinor !== null &&
+    BigInt(position.amountMinor) < MIN_BRL_POSITION_MINOR
+  );
+}
 const accents = /[\u0300-\u036f]/g;
 const issuerSuffix = /\s+S\.?\s?\/?A\.?$/;
 const issuerNoise = /[^A-Z0-9 ]+/g;
@@ -127,7 +144,12 @@ function dueDateOrder(left: InvestorPosition, right: InvestorPosition) {
 function positionGroups(rows: InvestorPosition[]) {
   const groups = new Map<string, InvestorPosition[]>();
   for (const row of rows) {
-    const key = [row.currency, row.type, row.details?.subtype ?? ""].join("|");
+    const key = [
+      row.personId ?? "",
+      row.currency,
+      row.type,
+      row.details?.subtype ?? "",
+    ].join("|");
     groups.set(key, [...(groups.get(key) ?? []), row]);
   }
   return [...groups.entries()]
@@ -160,7 +182,6 @@ function positionGroups(rows: InvestorPosition[]) {
         id,
         nearestDueDate: due[0] ?? null,
         net: measure(active, (row) => row.details?.balanceMinor),
-        profit: measure(active, (row) => row.details?.profitMinor),
         rateTypes: [
           ...new Set(
             active
@@ -188,6 +209,7 @@ export function investmentPortfolio(
 ) {
   const selected = records.filter(
     (row) =>
+      !isDustPosition(row) &&
       (!selection.currency || row.currency === selection.currency) &&
       (!selection.type || row.type === selection.type) &&
       (!selection.institutionId ||
@@ -235,7 +257,6 @@ export function investmentPortfolio(
         gross: measure(rows, (row) => row.amountMinor),
         net: measure(rows, (row) => row.details?.balanceMinor),
         original: measure(rows, (row) => row.details?.originalMinor),
-        profit: measure(rows, (row) => row.details?.profitMinor),
         withdrawal: measure(rows, (row) => row.details?.withdrawalMinor),
       };
     }),

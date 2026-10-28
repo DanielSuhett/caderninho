@@ -318,12 +318,25 @@ function groupAnchor(group: InvestmentGroup) {
 function positionStatus(row: InvestmentList[number]) {
   return (
     <>
-      {row.details?.status === "TOTAL_WITHDRAWAL" && <Badge>Resgatado</Badge>}
       {!row.included && <Badge>Fora do patrimônio</Badge>}
       {row.details?.status === "PENDING" && <Badge>Pendente</Badge>}
       {!!row.manual && <Badge>Manual</Badge>}
     </>
   );
+}
+function amountOf(row: InvestmentList[number]) {
+  return row.amountMinor === null ? 0n : BigInt(row.amountMinor);
+}
+function byAmountDescending(
+  left: InvestmentList[number],
+  right: InvestmentList[number],
+) {
+  const a = amountOf(left);
+  const b = amountOf(right);
+  if (a === b) {
+    return 0;
+  }
+  return a > b ? -1 : 1;
 }
 function DueDate({ date }: { date: string | null | undefined }) {
   return (
@@ -346,59 +359,72 @@ function PositionRow({
   currency,
   people,
   showOwner,
-  nested = false,
 }: {
   row: InvestmentList[number];
   currency: string;
   people: PortalResponse["people"];
   showOwner: boolean;
-  nested?: boolean;
 }) {
-  const item = (
-    <DisclosureItem
-      className={
-        nested ? "investor-position investor-nested" : "investor-position"
-      }
-      leading={
-        <AccountAvatar
-          account={row}
-          person={ownerOf(people, showOwner, row)}
-        />
-      }
-      summary={
-        <span className="investor-position-grid">
-          <span className="investor-position-identity">
-            <span className="account-identity">{row.name}</span>
-            <span className="investor-position-meta">
-              {investmentTypeNames[row.type] ?? row.type}
-              {positionStatus(row)}
+  return (
+    <LayerCard>
+      <DisclosureItem
+        className="investor-position"
+        leading={
+          <AccountAvatar
+            account={row}
+            person={ownerOf(people, showOwner, row)}
+          />
+        }
+        summary={
+          <span className="investor-position-grid">
+            <span className="investor-position-identity">
+              <span className="account-identity">{row.name}</span>
+              <span className="investor-position-meta">
+                {investmentTypeNames[row.type] ?? row.type}
+                {positionStatus(row)}
+              </span>
+            </span>
+            <span>
+              <small className="investor-mobile-label">Bruto</small>
+              <Money
+                amount={row.amountMinor}
+                currency={currency}
+              />
+            </span>
+            <span>
+              <small className="investor-mobile-label">Vencimento</small>
+              <DueDate date={row.details?.dueDate} />
             </span>
           </span>
-          <span>
-            <small className="investor-mobile-label">Bruto</small>
-            <Money
-              amount={row.amountMinor}
-              currency={currency}
-            />
-          </span>
-          <span>
-            <small className="investor-mobile-label">Resultado</small>
-            <Money
-              amount={row.details?.profitMinor}
-              currency={currency}
-            />
-          </span>
-          <span>
-            <small className="investor-mobile-label">Vencimento</small>
-            <DueDate date={row.details?.dueDate} />
-          </span>
-        </span>
-      }
-    >
-      <PositionDetails row={row} />
-    </DisclosureItem>
+        }
+      >
+        <PositionDetails row={row} />
+      </DisclosureItem>
+      );
+    </LayerCard>
   );
-  return nested ? item : <LayerCard>{item}</LayerCard>;
+}
+function CompactPosition({
+  row,
+  currency,
+}: {
+  row: InvestmentList[number];
+  currency: string;
+}) {
+  const { purchaseDate, dueDate } = row.details ?? {};
+  const dates = [
+    purchaseDate ? dayLabel(purchaseDate) : null,
+    dueDate ? dayLabel(dueDate) : "Sem vencimento",
+  ].filter(Boolean);
+  return (
+    <li className="investor-compact">
+      <span>{dates.join(" → ")}</span>
+      <Money
+        amount={row.amountMinor}
+        currency={currency}
+      />
+    </li>
+  );
 }
 function GroupRow({
   group,
@@ -423,7 +449,10 @@ function GroupRow({
     [onToggle, groupId],
   );
   const unknown = group.gross.unknownCount;
+  const [firstRow] = rows;
+  const owner = firstRow && ownerOf(people, showOwner, firstRow);
   const meta = [
+    owner?.name ?? null,
     `${group.count} ${group.count === 1 ? "posição" : "posições"}`,
     group.count === rows.length
       ? null
@@ -461,13 +490,6 @@ function GroupRow({
                 {!!unknown && <small>{unknown} sem valor</small>}
               </span>
               <span>
-                <small className="investor-mobile-label">Resultado</small>
-                <Money
-                  amount={group.profit.totalMinor}
-                  currency={currency}
-                />
-              </span>
-              <span>
                 <small className="investor-mobile-label">
                   Próximo vencimento
                 </small>
@@ -476,18 +498,15 @@ function GroupRow({
             </span>
           }
         >
-          <div className="investor-group-items">
+          <ul className="investor-group-items">
             {rows.map((row) => (
-              <PositionRow
+              <CompactPosition
                 currency={currency}
                 key={row.id}
-                nested
-                people={people}
                 row={row}
-                showOwner={showOwner}
               />
             ))}
-          </div>
+          </ul>
         </DisclosureItem>
       </LayerCard>
     </div>
@@ -505,7 +524,10 @@ export function InvestorDashboard({
   showOwner?: boolean;
 }) {
   const summary = data.totals.find((row) => row.currency === currency);
-  const rows = data.records.filter((row) => row.currency === currency);
+  const rows = data.records.filter(
+    (row) =>
+      row.currency === currency && row.details?.status !== "TOTAL_WITHDRAWAL",
+  );
   const groups = data.groups.filter((group) => group.currency === currency);
   const route = useContext(AvatarFilterRoute);
   const [openGroups, setOpenGroups] = useState<ReadonlySet<string>>(new Set());
@@ -604,12 +626,6 @@ export function InvestorDashboard({
                   metric: summary.net,
                 },
                 {
-                  hint: "Ganho ou perda acumulado informado pela instituição. Não é rentabilidade calculada pelo Caderninho.",
-                  key: "profit",
-                  label: "Resultado informado",
-                  metric: summary.profit,
-                },
-                {
                   hint: "Valor disponível para resgate informado pela instituição; não garante liquidez imediata.",
                   key: "withdrawal",
                   label: "Resgate disponível",
@@ -664,15 +680,19 @@ export function InvestorDashboard({
         >
           <span>Ativo</span>
           <span>Bruto</span>
-          <span>Resultado</span>
           <span>Vencimento</span>
         </div>
         <div className="investor-position-list">
           {groups.map((group) => {
-            const members = group.recordIds.flatMap((id) => {
-              const row = byId.get(id);
-              return row ? [row] : [];
-            });
+            const members = group.recordIds
+              .flatMap((id) => {
+                const row = byId.get(id);
+                return row ? [row] : [];
+              })
+              .sort(byAmountDescending);
+            if (!members.length) {
+              return null;
+            }
             const [only] = members;
             if (members.length === 1 && only) {
               return (

@@ -1759,7 +1759,7 @@
 
 .investor-kpis {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 24px;
   padding: 24px;
 }
@@ -1787,10 +1787,7 @@
 .investor-position-grid,
 .investor-position-head {
   display: grid;
-  grid-template-columns: minmax(0, 2fr) repeat(2, minmax(0, 1fr)) minmax(
-      100px,
-      0.7fr
-    );
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(100px, 0.7fr);
   gap: 16px;
   align-items: center;
   width: 100%;
@@ -1841,14 +1838,24 @@
 }
 .investor-group-items {
   display: grid;
-  margin-inline-start: 16px;
-  border-inline-start: 2px solid var(--line);
+  padding: 0 16px 8px;
+  margin: 0;
+  list-style: none;
 }
-.investor-group-items > .investor-nested + .investor-nested {
+.investor-compact {
+  display: flex;
+  gap: 16px;
+  align-items: baseline;
+  justify-content: space-between;
+  padding-block: 8px;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+.investor-compact > span:first-child {
+  color: var(--muted);
+}
+.investor-compact + .investor-compact {
   border-top: 1px solid var(--line);
-}
-.investor-nested > .disclosure-panel {
-  padding-inline: 16px;
 }
 .investor-details {
   display: grid;
@@ -1883,19 +1890,6 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .investor-position-identity {
-    grid-column: 1 / -1;
-  }
-  .investor-group-items {
-    margin-inline-start: 8px;
-  }
-  .investor-nested > .disclosure-summary > .disclosure-trigger,
-  .investor-nested > .disclosure-panel {
-    padding-inline: 12px;
-  }
-  .investor-nested > .disclosure-summary > .disclosure-leading {
-    left: 12px;
-  }
-  .investor-nested .investor-position-grid > span:nth-child(2) {
     grid-column: 1 / -1;
   }
   .investor-mobile-label {

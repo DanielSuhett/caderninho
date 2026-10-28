@@ -27,7 +27,6 @@ Os campos existentes de cada posição permanecem compatíveis; `details`,
 
 - `amountMinor`: posição bruta, vinda de `amount`.
 - `details.balanceMinor`: posição líquida, vinda de `balance`.
-- `details.profitMinor`: resultado informado, vindo de `amountProfit`.
 - `details.withdrawalMinor`: disponível para resgate, vindo de `amountWithdrawal`.
 
 Cada moeda tem totais próprios e alocações por classe/instituição. Dinheiro usa
@@ -41,7 +40,7 @@ partir de uma posição atual. Os gráficos são composição, não evolução t
 
 Posições do mesmo tipo e subtipo na mesma moeda viram um grupo, mesmo entre
 bancos: vários CDBs aparecem como uma linha "CDB". `groups` traz, por grupo,
-`gross`, `net`, `profit` e `withdrawal` somados com a mesma regra de ausência
+`gross`, `net` e `withdrawal` somados com a mesma regra de ausência
 dos totais, `count` de posições ativas, `nearestDueDate` e `furthestDueDate`,
 `rateTypes` presentes (sem taxa média, pois não calculamos rentabilidade),
 `banks` sem repetição por valor decrescente e `recordIds` ordenados por

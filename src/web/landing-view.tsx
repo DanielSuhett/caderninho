@@ -197,8 +197,7 @@ export function landingPage({
               </h2>
               <p>
                 Renda fixa, fundos, ações e ETFs, por pessoa e instituição.
-                Posição bruta e líquida, resultado informado e valor disponível
-                para resgate.
+                Posição bruta e líquida e valor disponível para resgate.
               </p>
               <UiLink
                 href="/demo/investments/"

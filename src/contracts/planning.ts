@@ -566,7 +566,7 @@ export const planningTools = {
   }),
   get_investments: planningTool("get_investments", {
     description:
-      "Carteira do investidor: posições brutas/líquidas, resultado informado, resgate e alocação por classe/instituição, por moeda. Excluídos e resgatados não compõem totais; campos ausentes são desconhecidos. Não infere rentabilidade nem histórico.",
+      "Carteira do investidor: posições brutas/líquidas, resgate e alocação por classe/instituição, por moeda. Excluídos e resgatados não compõem totais; campos ausentes são desconhecidos. Não infere rentabilidade nem histórico.",
     readOnly: true,
     schema: z
       .object({
