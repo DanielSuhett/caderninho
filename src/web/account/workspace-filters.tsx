@@ -9,12 +9,15 @@ export function ScopeFields({
   catalog,
   params,
   person = true,
+  space = true,
   identityFilters = true,
 }: {
   snapshot: PortalResponse;
   catalog: Pick<WorkspaceCatalog, "spaces">;
   params: URLSearchParams;
   person?: boolean;
+  // Pages that choose the group elsewhere only keep it as a hidden field.
+  space?: boolean;
   identityFilters?: boolean;
 }) {
   const identityNames = identityFilters ? ["institutionId", "cardBrand"] : [];
@@ -33,9 +36,10 @@ export function ScopeFields({
               />
             ),
         )}
-      {catalog.spaces.length < 2 &&
-      (!params.get("space") ||
-        catalog.spaces.some((s) => s.id === params.get("space"))) ? (
+      {!space ||
+      (catalog.spaces.length < 2 &&
+        (!params.get("space") ||
+          catalog.spaces.some((s) => s.id === params.get("space")))) ? (
         <input
           name="space"
           type="hidden"

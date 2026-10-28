@@ -12,6 +12,7 @@ import { AccountIdentity } from "./account-identity";
 import { workspaceHref } from "./account-navigation";
 import { CursorPagination } from "./cursor-pagination";
 import { DisclosureItem } from "./disclosure-item";
+import { ScopePicker } from "./scope-picker";
 import { bankAppearance } from "./setup-banks";
 import { EmptyView } from "./workspace-filters";
 import {
@@ -87,14 +88,10 @@ export function SyncHistoryView({
           value={params.get("connectionId") ?? ""}
         />
       )}
-      <Select
-        defaultValue={params.get("person") ?? ""}
-        items={[
-          { label: "Todas as pessoas", value: "" },
-          ...snapshot.people.map((p) => ({ label: p.name, value: p.id })),
-        ]}
-        label="Pessoa"
+      <input
         name="person"
+        type="hidden"
+        value={params.get("person") ?? ""}
       />
       <input
         name="space"
@@ -115,12 +112,35 @@ export function SyncHistoryView({
       />
     </WorkspaceFilters>
   );
+  const personHref = (id: string) => {
+    const query = new URLSearchParams(params);
+    query.delete("cursor");
+    query.delete("person");
+    if (id) {
+      query.set("person", id);
+    }
+    return workspaceHref(`/account/sync?${query}`);
+  };
   return (
     <>
       <WorkspaceHeading
         filters={filters}
         title="Sincronizações"
       />
+      {snapshot.people.length > 1 && (
+        <ScopePicker
+          currentId={params.get("person") ?? ""}
+          items={[
+            { href: personHref(""), id: "", name: "Todas as pessoas" },
+            ...snapshot.people.map((person) => ({
+              href: personHref(person.id),
+              id: person.id,
+              name: person.name,
+            })),
+          ]}
+          label="Pessoas"
+        />
+      )}
 
       <ResourceFeedback {...resource} />
       {!!data && (

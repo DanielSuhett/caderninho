@@ -21,6 +21,7 @@ import {
   type ReactNode,
   Suspense,
   useCallback,
+  useEffect,
 } from "react";
 
 import type { PortalResponse } from "../../contracts";
@@ -32,6 +33,8 @@ import type { DesignSystemView as DesignSystemComponent } from "./design-system-
 import type { OrganizationView as OrganizationComponent } from "./organization-view";
 import type { OverviewView as OverviewComponent } from "./overview-view";
 import { PersonDirectory } from "./person-identity";
+import { warmPage } from "./route-preload";
+import { focusPageSearch, isSearchShortcut } from "./search-shortcut";
 import type { SyncHistoryView as SyncHistoryComponent } from "./sync-history-view";
 import { TransactionReaderProvider } from "./transaction-reader";
 import type { TransactionsView as TransactionsComponent } from "./transactions-view";
@@ -106,35 +109,6 @@ const SyncHistoryView = memo(
 const TransactionsView = memo(
   lazy<typeof TransactionsComponent>(loadTransactions),
 );
-const pageLoaders: Record<string, (() => Promise<unknown>) | undefined> = {
-  "/account": loadOverview,
-  "/account/audit": loadAudit,
-  "/account/cards": loadCards,
-  "/account/connections": () => import("./dashboard-view"),
-  "/account/design-system": loadDesignSystem,
-  "/account/groups": loadOrganization,
-  "/account/investments": loadInvestments,
-  "/account/rules": loadOrganization,
-  "/account/sync": loadSyncHistory,
-  "/account/transactions": loadTransactions,
-};
-
-// Warm code only; queries still belong to the mounted page.
-function warmPage(pathname: string) {
-  const load = pageLoaders[accountPath(pathname)];
-  if (load) {
-    tryCatch(load).then(
-      ({ data: _data, error: _error }) => undefined,
-      () => undefined,
-    );
-  }
-}
-
-// The current page's code downloads while the installation is being read.
-export function preloadCurrentPage() {
-  warmPage(location.pathname);
-}
-
 function preloadPage(event: FocusEvent<HTMLElement> | MouseEvent<HTMLElement>) {
   const href = event.currentTarget.getAttribute("href");
   if (href) {
@@ -202,6 +176,15 @@ export function WorkspaceView({
   busy: boolean;
   demo?: boolean;
 }) {
+  useEffect(() => {
+    const listen = (event: KeyboardEvent) => {
+      if (isSearchShortcut(event) && focusPageSearch()) {
+        event.preventDefault();
+      }
+    };
+    document.addEventListener("keydown", listen);
+    return () => document.removeEventListener("keydown", listen);
+  }, []);
   const path = accountPath(location.pathname);
   const logout = useCallback(() => command("logout"), [command]);
   let content = children;

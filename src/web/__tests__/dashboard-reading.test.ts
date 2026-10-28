@@ -127,8 +127,8 @@ test("a partial or unrelated unconfigured profile does not block the saved accou
 });
 test("an installation without imported data still exposes the first connection action", () => {
   const html = render({ ...snapshot, connections: [] });
-  assert.ok(html.includes("Nome e foto"));
-  assert.ok(html.includes("Salvar pessoa"));
+  assert.ok(html.includes("Bancos de Pessoa exemplo"));
+  assert.ok(html.includes("Adicionar banco"));
 });
 
 test("connections show active import state without claiming completion", () => {
@@ -144,6 +144,5 @@ test("connections show active import state without claiming completion", () => {
     "connections",
   );
   assert.ok(html.includes("Importando"));
-  assert.ok(html.includes('href="/account/transactions"'));
   assert.equal(html.includes("Conectado · histórico importado"), false);
 });

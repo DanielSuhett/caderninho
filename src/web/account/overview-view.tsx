@@ -13,6 +13,7 @@ import { displayCurrency } from "./financial-presentation";
 import { identityParameters } from "./identity-filters";
 import { PeriodPicker } from "./period-picker";
 import { PersonStack } from "./person-identity";
+import { SetupProgress } from "./setup-progress";
 import { TransactionEditing } from "./transaction-editing";
 import { ScopeFields } from "./workspace-filters";
 import { ResourceFeedback, useResource } from "./workspace-resource";
@@ -172,6 +173,7 @@ export function OverviewView({
           />
         </div>
       </WorkspaceHeading>
+      <SetupProgress snapshot={snapshot} />
       <ResourceFeedback {...resource} />
       {!!data && (
         <>

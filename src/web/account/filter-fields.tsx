@@ -82,6 +82,7 @@ export function QuerySearch({
       {compact ? (
         <InputGroup>
           <InputGroup.Input
+            aria-keyshortcuts="/"
             aria-label={label}
             defaultValue={params.get(name) ?? ""}
             enterKeyHint="search"

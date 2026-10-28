@@ -1,7 +1,6 @@
 import { Badge } from "@cloudflare/kumo/components/badge";
 import { Banner } from "@cloudflare/kumo/components/banner";
 import { LayerCard } from "@cloudflare/kumo/components/layer-card";
-import { Link } from "@cloudflare/kumo/components/link";
 import { Meter } from "@cloudflare/kumo/components/meter";
 import { Select } from "@cloudflare/kumo/components/select";
 import { Table } from "@cloudflare/kumo/components/table";
@@ -15,7 +14,7 @@ import {
 
 import type { AuditReport, PortalResponse } from "../../contracts";
 import { tryCatch } from "../../shared";
-import { UiButton } from "../ui";
+import { UiButton, UiLink } from "../ui";
 import type { createAccountApi } from "./account-api";
 import { workspaceHref } from "./account-navigation";
 import { BackofficeDialog } from "./backoffice-dialog";
@@ -229,12 +228,15 @@ export function AuditView({
             aria-labelledby="audit-access"
             className="workspace-section"
           >
-            <h2
-              className={data.grants.length ? undefined : "sr-only"}
-              id="audit-access"
-            >
-              Assistentes autorizados
-            </h2>
+            <div className="entity-panel-header">
+              <h2 id="audit-access">Assistentes autorizados</h2>
+              <UiLink
+                href={workspaceHref("/account/connections?assistant=1")}
+                variant={data.grants.length ? "secondary" : "primary"}
+              >
+                Conectar assistente
+              </UiLink>
+            </div>
             {data.grants.length ? (
               <LayerCard
                 aria-label="Assistentes autorizados"
@@ -325,9 +327,7 @@ export function AuditView({
               </LayerCard>
             ) : (
               <EmptyView title="Nenhum assistente autorizado">
-                <Link href={workspaceHref("/account/connections")}>
-                  Conectar assistente
-                </Link>
+                Conecte o ChatGPT ou o Claude para consultar seus dados.
               </EmptyView>
             )}
             <CursorPagination

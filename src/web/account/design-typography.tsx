@@ -6,7 +6,7 @@ export function DesignTypography() {
   return (
     <LayerCard className="typography-specimens">
       <section>
-        <h3>Interface · Inter</h3>
+        <h2>Interface · Inter</h2>
         <p className="typography-caption">
           Títulos 28/20 px · corpo 16 px · metadados 14 px
         </p>
@@ -19,7 +19,7 @@ export function DesignTypography() {
         </p>
       </section>
       <section>
-        <h3>Landing · Source Serif 4</h3>
+        <h2>Landing · Source Serif 4</h2>
         <p className="typography-caption">
           Títulos editoriais · 40–64 px no hero · 30–40 px nas seções
         </p>
@@ -30,7 +30,7 @@ export function DesignTypography() {
         </p>
       </section>
       <section>
-        <h3>Valores · Inter tabular</h3>
+        <h2>Valores · Inter tabular</h2>
         <p className="typography-caption">
           Algarismos alinhados · moeda explícita · sinal preservado
         </p>
@@ -60,7 +60,7 @@ export function DesignTypography() {
         </dl>
       </section>
       <section>
-        <h3>Código · monoespaçada do sistema</h3>
+        <h2>Código · monoespaçada do sistema</h2>
         <p className="typography-caption">
           URLs, chaves, comandos e prompts · nunca descrições ou valores
           financeiros

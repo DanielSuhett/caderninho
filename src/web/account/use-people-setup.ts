@@ -13,13 +13,10 @@ import {
   navigateWorkspace,
   workspaceHref,
 } from "./account-navigation";
-import { AddBankAction, addBankAction } from "./connection-journey";
 import type { DashboardProps } from "./dashboard-view";
 
 export const SetupStep = {
-  assistant: "assistant",
   credentials: "credentials",
-  importing: "import",
   people: "people",
   person: "person",
 } as const;
@@ -29,19 +26,9 @@ export function usePeopleSetup(props: DashboardProps) {
   const { snapshot, manage, connect } = props;
   const params = new URLSearchParams(location.search);
   const requested = params.get("setup");
-  const selectedStep =
-    Object.values(SetupStep).find((value) => value === requested) ??
-    (snapshot.connections.length ? SetupStep.people : SetupStep.person);
-  const pending = snapshot.connections.some(
-    (connection) =>
-      !connection.importStatus ||
-      connection.importStatus === "pending" ||
-      connection.importStatus === "running",
-  );
   const step =
-    selectedStep === SetupStep.assistant && pending
-      ? SetupStep.importing
-      : selectedStep;
+    Object.values(SetupStep).find((value) => value === requested) ??
+    SetupStep.people;
   const space = params.get("space") ?? "personal";
   const selectedId = params.get("person") ?? snapshot.people[0]?.id ?? "new";
   const person = snapshot.people.find((value) => value.id === selectedId);
@@ -177,44 +164,17 @@ export function usePeopleSetup(props: DashboardProps) {
     },
     [connect, go, manage, person, profile, snapshot.csrf],
   );
-  const addBank = useCallback(() => {
-    const action = addBankAction({ person, profile });
-    if (action === AddBankAction.Person) {
-      go(SetupStep.person);
-      return;
-    }
-    if (action === AddBankAction.Credentials) {
-      go(SetupStep.credentials);
-      return;
-    }
-    if (action === AddBankAction.Paused) {
-      setIssue(
-        "Este acesso Pluggy está pausado. Reative-o em Ajustes para conectar outro banco.",
-      );
-      return;
-    }
-    if (profile) {
-      connect(profile.id);
-    }
-  }, [connect, go, person, profile]);
   const selectPerson = useCallback(
     (event: MouseEvent<HTMLButtonElement>) => {
       go(SetupStep.people, event.currentTarget.value);
     },
     [go],
   );
-  const addPerson = useCallback(() => go(SetupStep.person, "new"), [go]);
   const editPerson = useCallback(() => go(SetupStep.person), [go]);
-  const finishPeople = useCallback(() => {
-    go(pending ? SetupStep.importing : SetupStep.assistant);
-  }, [go, pending]);
   return {
-    addBank,
-    addPerson,
     cancelForm,
     connections,
     editPerson,
-    finishPeople,
     go,
     issue,
     markDirty,

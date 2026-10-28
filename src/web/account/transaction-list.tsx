@@ -422,7 +422,7 @@ function TransactionIdentity({
           <span className="table-secondary">
             {editing ? (
               <UiButton
-                aria-label={`Categorizar ${row.description || "transação"}`}
+                aria-label={`${category}, categorizar ${row.description || "transação"}`}
                 className="transaction-category-button"
                 onClick={categorize}
                 type="button"

@@ -83,8 +83,17 @@ export function useRuleJob({
     return () => controller.abort();
   }, [api, spaceId]);
   const active = ruleJobActive(job);
+  // A hidden tab stops following the job and reconciles when it returns.
+  const [visible, setVisible] = useState(
+    () => document.visibilityState === "visible",
+  );
   useEffect(() => {
-    if (!(job && ruleJobActive(job))) {
+    const change = () => setVisible(document.visibilityState === "visible");
+    document.addEventListener("visibilitychange", change);
+    return () => document.removeEventListener("visibilitychange", change);
+  }, []);
+  useEffect(() => {
+    if (!(visible && job && ruleJobActive(job))) {
       return;
     }
     const { id } = job;
@@ -110,7 +119,7 @@ export function useRuleJob({
       clearTimeout(timer);
       controller.abort();
     };
-  }, [api, job]);
+  }, [api, job, visible]);
   const started = useCallback((next: RuleJob) => {
     setMessage("");
     setJob(next);

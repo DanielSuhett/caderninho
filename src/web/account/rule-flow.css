@@ -21,7 +21,7 @@
   padding: 12px 16px;
   overflow-wrap: anywhere;
 }
-.rule-composition h4 {
+.rule-composition h3 {
   margin: 0 0 12px;
   font-size: var(--type-body);
   font-weight: 600;

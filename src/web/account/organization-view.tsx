@@ -1,4 +1,5 @@
 import { Badge } from "@cloudflare/kumo/components/badge";
+import { Banner } from "@cloudflare/kumo/components/banner";
 import { DropdownMenu } from "@cloudflare/kumo/components/dropdown";
 import { LayerCard } from "@cloudflare/kumo/components/layer-card";
 import { Select } from "@cloudflare/kumo/components/select";
@@ -10,7 +11,15 @@ import {
   PlusIcon,
   UploadSimpleIcon,
 } from "@phosphor-icons/react";
-import { type MouseEvent, type ReactNode, useCallback, useState } from "react";
+import {
+  lazy,
+  type MouseEvent,
+  type ReactNode,
+  Suspense,
+  useCallback,
+  useEffect,
+  useState,
+} from "react";
 
 import type {
   PortalResponse,
@@ -18,6 +27,7 @@ import type {
   WorkspaceCatalog,
 } from "../../contracts";
 import { RuleJobStatus } from "../../domain";
+import { tryCatch } from "../../shared";
 import { UiButton, UiIconButton } from "../ui";
 import type { OrganizationApi } from "./account-api";
 import { navigateWorkspace, workspaceBasePath } from "./account-navigation";
@@ -25,12 +35,10 @@ import { CategoryLabel } from "./category-appearance";
 import { CategoryOrganization } from "./category-editor";
 import { DisclosureItem } from "./disclosure-item";
 import { QuerySearch } from "./filter-fields";
-import { DeleteOrganizationItem, GroupEditor } from "./group-editor";
 import { RuleComposition } from "./rule-composition";
-import { RuleEditor } from "./rule-editor";
-import { RuleImporter } from "./rule-importer";
 import { RuleJobNotice, ruleJobSummary, useRuleJob } from "./rule-jobs";
 import { type RuleSource, ruleSummary } from "./rule-presentation";
+import { ScopePicker } from "./scope-picker";
 import { EmptyView, ScopeFields } from "./workspace-filters";
 import {
   ResourceFeedback,
@@ -42,6 +50,29 @@ import {
   WorkspaceFilters,
   WorkspaceHeading,
 } from "./workspace-ui";
+
+// Editors and the importer load when first needed (or when the browser is idle).
+function ChunkFailure() {
+  return (
+    <Banner
+      description="Não foi possível abrir este editor. Recarregue a página e tente de novo."
+      role="alert"
+      variant="error"
+    />
+  );
+}
+const loadEditors = async () => {
+  const { data, error } = await tryCatch(
+    () => import("./organization-editors"),
+  );
+  return { default: error ? ChunkFailure : data.OrganizationEditors };
+};
+const loadImporter = async () => {
+  const { data, error } = await tryCatch(() => import("./rule-importer"));
+  return { default: error ? ChunkFailure : data.RuleImporter };
+};
+const OrganizationEditors = lazy(loadEditors);
+const RuleImporter = lazy(loadImporter);
 
 const groupTypes = {
   business: "Profissional",
@@ -110,11 +141,9 @@ export function OrganizationView({
   const { add: notify } = useKumoToastManager();
   const [params] = useState(() => new URLSearchParams(location.search));
   const spaceId = params.get("space") || "personal";
-  const activeCount =
-    {
-      groups: 0,
-      rules: [params.get("q"), params.get("enabled")].filter(Boolean).length,
-    }[page] + Number(spaceId !== "personal");
+  const activeCount = [params.get("q"), params.get("enabled")].filter(
+    Boolean,
+  ).length;
   const load = useCallback(
     async (signal: AbortSignal, fresh = false) => {
       const [catalog, accountList] = await Promise.all([
@@ -143,6 +172,25 @@ export function OrganizationView({
           .includes((params.get("q") ?? "").toLocaleLowerCase("pt-BR"))) &&
       (!params.get("enabled") || String(r.enabled) === params.get("enabled")),
   );
+  const ready = !!data;
+  useEffect(() => {
+    if (!ready) {
+      return;
+    }
+    // Warming is best effort; a failed chunk surfaces when the editor opens.
+    const warm = () => {
+      Promise.all([loadEditors(), loadImporter()]).then(
+        () => undefined,
+        () => undefined,
+      );
+    };
+    if (typeof requestIdleCallback === "function") {
+      const handle = requestIdleCallback(warm);
+      return () => cancelIdleCallback(handle);
+    }
+    const timer = setTimeout(warm, 1500);
+    return () => clearTimeout(timer);
+  }, [ready]);
   const current = data?.spaces.find((s) => s.id === spaceId);
   const closeEditor = useCallback(() => setEditorOpen(false), []);
   const saved = useCallback(() => {
@@ -210,30 +258,8 @@ export function OrganizationView({
   ) : null;
   return (
     <>
-      <WorkspaceHeading
-        filters={page === "groups" ? filters : null}
-        title={page === "rules" ? "Regras" : "Grupos"}
-      >
-        <div className="page-actions">
-          {actions}
-          {page === "rules" && (
-            <RuleActions
-              busy={ruleJob.active || ruleJob.starting}
-              data={data}
-              openImport={openImport}
-              reapply={ruleJob.reapply}
-            />
-          )}
-          <UiButton
-            disabled={!data}
-            icon={PlusIcon}
-            onClick={newItem}
-            type="button"
-            variant="primary"
-          >
-            {page === "rules" ? "Nova regra" : "Novo grupo"}
-          </UiButton>
-        </div>
+      <WorkspaceHeading title={page === "rules" ? "Regras" : "Grupos"}>
+        {!!actions && <div className="page-actions">{actions}</div>}
       </WorkspaceHeading>
       {notice}
       {page === "rules" && (
@@ -242,37 +268,73 @@ export function OrganizationView({
           message={ruleJob.message}
         />
       )}
-      {!!data && (
-        <RuleImporter
-          api={api}
-          catalog={data}
-          close={closeImport}
-          csrf={snapshot.csrf}
-          key={importSession}
-          open={importing}
-          spaceId={spaceId}
-          started={importStarted}
-        />
+      {!!data && importSession > 0 && (
+        <Suspense fallback={null}>
+          <RuleImporter
+            api={api}
+            catalog={data}
+            close={closeImport}
+            csrf={snapshot.csrf}
+            key={importSession}
+            open={importing}
+            spaceId={spaceId}
+            started={importStarted}
+          />
+        </Suspense>
       )}
-      {!!data && (
-        <OrganizationEditors
-          api={api}
-          close={closeEditor}
-          data={data}
-          editor={editor}
-          open={editorOpen}
-          saved={saved}
-          session={editorSession}
-          snapshot={snapshot}
-          spaceId={spaceId}
-        />
+      {!!data && editorSession > 0 && (
+        <Suspense fallback={null}>
+          <OrganizationEditors
+            api={api}
+            close={closeEditor}
+            data={data}
+            editor={editor}
+            open={editorOpen}
+            saved={saved}
+            session={editorSession}
+            snapshot={snapshot}
+            spaceId={spaceId}
+          />
+        </Suspense>
       )}
       <ResourceFeedback {...resource} />
       {!!data && (
         <>
-          {page === "rules" && filters}
+          {(page === "groups" || data.spaces.length > 1) && (
+            <GroupScope
+              basePath={basePath}
+              newGroup={page === "groups" ? newItem : undefined}
+              page={page}
+              params={params}
+              spaceId={spaceId}
+              spaces={data.spaces}
+            />
+          )}
           {page === "rules" ? (
-            <>
+            <section
+              aria-labelledby="rules-heading"
+              className="entity-panel"
+            >
+              <header className="entity-panel-header">
+                <h2 id="rules-heading">Regras de {current?.name ?? spaceId}</h2>
+                <div className="entity-panel-actions">
+                  <RuleActions
+                    busy={ruleJob.active || ruleJob.starting}
+                    data={data}
+                    openImport={openImport}
+                    reapply={ruleJob.reapply}
+                  />
+                  <UiButton
+                    icon={PlusIcon}
+                    onClick={newItem}
+                    type="button"
+                    variant="primary"
+                  >
+                    Nova regra
+                  </UiButton>
+                </div>
+              </header>
+              {filters}
               {rules?.length ? (
                 <LayerCard
                   aria-label="Regras de classificação"
@@ -356,91 +418,159 @@ export function OrganizationView({
                   importações e não reclassifica o histórico.
                 </p>
               </WorkspaceDetails>
-            </>
+            </section>
           ) : (
-            <>
-              <LayerCard
-                aria-label="Grupos"
-                className="record-list"
-                render={<ul />}
-              >
-                {data.spaces.map((s) => (
-                  <li key={s.id}>
-                    <DisclosureItem
-                      className="record-item"
-                      summary={
-                        <>
-                          <span className="record-title">{s.name}</span>
-                          <span className="record-value">{s.currency}</span>
-                        </>
-                      }
-                    >
-                      <div className="record-detail">
-                        <dl className="detail-list">
-                          <div>
-                            <dt>Tipo</dt>
-                            <dd>{groupTypes[s.type]}</dd>
-                          </div>
-                          <div>
-                            <dt>Início do mês</dt>
-                            <dd>Dia {s.monthStartDay}</dd>
-                          </div>
-                        </dl>
-                        <OrganizationActions
-                          href={scopedHref(
-                            `${basePath}/transactions`,
-                            new URLSearchParams({
-                              space: s.id,
-                              ...(params.get("month") && {
-                                month: params.get("month") ?? "",
-                              }),
-                            }),
-                          )}
-                          item={s}
-                          kind="space"
-                          linkLabel={"Ver transações"}
-                          onOpen={openItem}
-                        />
-                      </div>
-                    </DisclosureItem>
-                  </li>
-                ))}
-              </LayerCard>
-              <WorkspaceDetails
-                hint={String(
-                  data.categories.filter((category) => !category.hidden).length,
-                )}
-                title={`Categorias de ${current?.name ?? spaceId}`}
-              >
-                <CategoryOrganization
-                  api={api}
-                  catalog={data}
-                  saved={saved}
-                  snapshot={snapshot}
-                  spaceId={spaceId}
-                />
-              </WorkspaceDetails>
-              <WorkspaceDetails
-                hint={String(data.tags.length)}
-                title="Etiquetas"
-              >
-                {data.tags.length ? (
-                  <ul className="tag-list">
-                    {data.tags.map((t) => (
-                      <li key={t.id}>{t.name}</li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="muted">
-                    Nenhuma etiqueta cadastrada neste grupo.
-                  </p>
-                )}
-              </WorkspaceDetails>
-            </>
+            <GroupPanel
+              api={api}
+              basePath={basePath}
+              current={current}
+              data={data}
+              onOpen={openItem}
+              params={params}
+              saved={saved}
+              snapshot={snapshot}
+              spaceId={spaceId}
+            />
           )}
         </>
       )}
     </>
+  );
+}
+
+function GroupPanel({
+  api,
+  basePath,
+  current,
+  data,
+  onOpen,
+  params,
+  saved,
+  snapshot,
+  spaceId,
+}: {
+  api: OrganizationApi;
+  basePath: string;
+  current: WorkspaceCatalog["spaces"][number] | undefined;
+  data: WorkspaceCatalog;
+  onOpen: (event: MouseEvent<HTMLElement>) => void;
+  params: URLSearchParams;
+  saved: () => void;
+  snapshot: PortalResponse;
+  spaceId: string;
+}) {
+  if (!current) {
+    return (
+      <EmptyView title="Grupo não encontrado">
+        Escolha um dos grupos acima para ver categorias e etiquetas.
+      </EmptyView>
+    );
+  }
+  return (
+    <section
+      aria-labelledby="group-heading"
+      className="entity-panel"
+    >
+      <header className="entity-panel-header">
+        <h2 id="group-heading">{current.name}</h2>
+        <OrganizationActions
+          href={scopedHref(
+            `${basePath}/transactions`,
+            new URLSearchParams({
+              space: current.id,
+              ...(params.get("month") && {
+                month: params.get("month") ?? "",
+              }),
+            }),
+          )}
+          item={current}
+          kind="space"
+          linkLabel={"Ver transações"}
+          onOpen={onOpen}
+        />
+      </header>
+      <dl className="detail-list">
+        <div>
+          <dt>Tipo</dt>
+          <dd>{groupTypes[current.type]}</dd>
+        </div>
+        <div>
+          <dt>Moeda</dt>
+          <dd>{current.currency}</dd>
+        </div>
+        <div>
+          <dt>Início do mês</dt>
+          <dd>Dia {current.monthStartDay}</dd>
+        </div>
+      </dl>
+      <WorkspaceDetails
+        defaultOpen
+        hint={String(
+          data.categories.filter((category) => !category.hidden).length,
+        )}
+        title="Categorias"
+      >
+        <CategoryOrganization
+          api={api}
+          catalog={data}
+          saved={saved}
+          snapshot={snapshot}
+          spaceId={spaceId}
+        />
+      </WorkspaceDetails>
+      <WorkspaceDetails
+        hint={String(data.tags.length)}
+        title="Etiquetas"
+      >
+        {data.tags.length ? (
+          <ul className="tag-list">
+            {data.tags.map((t) => (
+              <li key={t.id}>{t.name}</li>
+            ))}
+          </ul>
+        ) : (
+          <p className="muted">Nenhuma etiqueta cadastrada neste grupo.</p>
+        )}
+      </WorkspaceDetails>
+    </section>
+  );
+}
+
+function GroupScope({
+  basePath,
+  newGroup,
+  page,
+  params,
+  spaceId,
+  spaces,
+}: {
+  basePath: string;
+  newGroup?: (() => void) | undefined;
+  page: "rules" | "groups";
+  params: URLSearchParams;
+  spaceId: string;
+  spaces: WorkspaceCatalog["spaces"];
+}) {
+  const hrefFor = (id: string) => {
+    const next = new URLSearchParams(params);
+    next.delete("space");
+    if (id !== "personal") {
+      next.set("space", id);
+    }
+    const query = next.toString();
+    return `${basePath}/${page}${query && `?${query}`}`;
+  };
+  return (
+    <ScopePicker
+      create={newGroup && { label: "Outro grupo", onClick: newGroup }}
+      currentId={spaceId}
+      items={spaces.map((space) => ({
+        href: hrefFor(space.id),
+        id: space.id,
+        name: space.name,
+      }))}
+      label="Grupos"
+    />
   );
 }
 
@@ -461,13 +591,6 @@ function OrganizationFilters({
   snapshot: PortalResponse;
   spaceId: string;
 }) {
-  if (
-    page === "groups" &&
-    catalog.spaces.length < 2 &&
-    spaceId === "personal"
-  ) {
-    return null;
-  }
   const current = catalog.spaces.find((space) => space.id === spaceId);
   return (
     <WorkspaceFilters
@@ -503,6 +626,7 @@ function OrganizationFilters({
         params={params}
         person={false}
         snapshot={snapshot}
+        space={false}
       />
       {page === "rules" && (
         <>
@@ -524,74 +648,6 @@ function OrganizationFilters({
         </>
       )}
     </WorkspaceFilters>
-  );
-}
-
-function OrganizationEditors({
-  api,
-  close,
-  data,
-  editor,
-  open,
-  saved,
-  session,
-  snapshot,
-  spaceId,
-}: {
-  api: OrganizationApi;
-  close: () => void;
-  data: WorkspaceCatalog & {
-    accounts: {
-      id: string;
-      name: string;
-      personId: string;
-      personName: string;
-    }[];
-  };
-  editor: { kind: "rule" | "space"; id?: string; remove?: boolean } | null;
-  open: boolean;
-  saved: () => void;
-  session: number;
-  snapshot: PortalResponse;
-  spaceId: string;
-}) {
-  const rule = data.rules.find((row) => row.id === editor?.id);
-  const space = data.spaces.find((row) => row.id === editor?.id);
-  return (
-    <>
-      <RuleEditor
-        accounts={data.accounts}
-        api={api}
-        catalog={data}
-        close={close}
-        key={`rule-${session}`}
-        open={open && editor?.kind === "rule" && !editor.remove}
-        {...(rule && { rule })}
-        saved={saved}
-        snapshot={snapshot}
-        spaceId={spaceId}
-      />
-      <GroupEditor
-        api={api}
-        close={close}
-        key={`group-${session}`}
-        open={open && editor?.kind === "space" && !editor.remove}
-        saved={saved}
-        snapshot={snapshot}
-        {...(space && { space })}
-      />
-      <DeleteOrganizationItem
-        api={api}
-        close={close}
-        deleted={saved}
-        item={(editor?.kind === "rule" ? rule : space) ?? { id: "", name: "" }}
-        key={`delete-${session}`}
-        kind={editor?.kind ?? "rule"}
-        open={open && !!editor?.remove}
-        snapshot={snapshot}
-        spaceId={editor?.kind === "space" ? (editor.id ?? spaceId) : spaceId}
-      />
-    </>
   );
 }
 

@@ -712,7 +712,7 @@ summary {
   padding: 20px;
   overflow-wrap: anywhere;
 }
-.rule-lab h4 {
+.rule-lab h3 {
   margin: 0 0 16px;
   font-size: var(--landing-caption);
   font-weight: 500;

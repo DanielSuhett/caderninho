@@ -115,6 +115,7 @@ function PerformanceFork({
           <h3>Paginar tudo na Pluggy</h3>
           <p>{count.format(transactions)} transações para a IA calcular.</p>
           <Meter
+            aria-label="Chamadas ao paginar tudo na Pluggy"
             customValue={`${count.format(pages)} chamadas`}
             label="Uma tool call por página"
             max={pages}
@@ -130,6 +131,7 @@ function PerformanceFork({
           <h3>Consultar pelo Caderninho</h3>
           <p>Filtro e agregação no D1. Totais prontos para a IA.</p>
           <Meter
+            aria-label="Chamadas ao consultar pelo Caderninho"
             customValue="1 chamada"
             label="Uma tool call agregada"
             max={pages}
@@ -212,6 +214,7 @@ export function LandingPerformance({
               wide={wide}
             />
             <Meter
+              aria-label="Chamadas ao paginar tudo na Pluggy"
               customValue={`${count.format(pages)} chamadas`}
               label="Uma tool call por página"
               max={pages}
@@ -228,6 +231,7 @@ export function LandingPerformance({
               wide={wide}
             />
             <Meter
+              aria-label="Chamadas ao consultar pelo Caderninho"
               customValue="1 chamada"
               label="Uma tool call agregada"
               max={pages}

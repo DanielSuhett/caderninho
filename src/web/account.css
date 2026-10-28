@@ -815,6 +815,13 @@
   display: block;
   color: var(--muted);
 }
+.financial-metric .metric-note {
+  display: block;
+  margin: 0;
+  font-size: var(--type-meta);
+  font-weight: 400;
+  line-height: 1.5;
+}
 .financial-summary-note {
   margin: 16px 0 0;
   font-size: var(--type-meta);
@@ -1593,7 +1600,7 @@
     justify-content: flex-end;
     margin: 0;
   }
-  .financial-metrics-three .financial-metric > small {
+  .financial-metrics-three .financial-metric > .metric-note {
     grid-column: 1 / -1;
   }
   .financial-summary,
@@ -1957,7 +1964,7 @@
     justify-content: flex-end;
     margin: 0;
   }
-  .investor-kpis .financial-metric > small {
+  .investor-kpis .financial-metric > .metric-note {
     grid-column: 1 / -1;
   }
 }
@@ -2013,6 +2020,7 @@
 }
 .setup-navigation,
 .setup-actions,
+.scope-picker,
 .setup-person-picker,
 .setup-person-bar {
   display: flex;
@@ -2043,6 +2051,90 @@
   display: grid;
   gap: 16px;
   max-width: 480px;
+}
+.entity-panel {
+  display: grid;
+  gap: 16px;
+  padding-block-start: 16px;
+  margin-block-start: 16px;
+  border-top: 1px solid var(--line);
+}
+.entity-panel-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+}
+.entity-panel-header h2 {
+  min-width: 0;
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.entity-panel-actions,
+.entity-panel-notice {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.entity-panel-notice > :first-child {
+  flex: 1 1 240px;
+}
+.setup-progress {
+  display: grid;
+  gap: 12px;
+  padding-block: 16px;
+  margin-block-end: 16px;
+  border-block: 1px solid var(--line);
+}
+.setup-progress-list {
+  display: grid;
+  gap: 12px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+.setup-progress-item {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  color: var(--muted);
+}
+.setup-progress-item[aria-current="step"] {
+  color: var(--text);
+}
+.setup-progress-item small {
+  display: block;
+  font-size: var(--type-meta);
+}
+.wizard {
+  display: grid;
+  gap: 16px;
+}
+.wizard-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  padding: 0;
+  margin: 0;
+  font-size: 14px;
+  color: var(--muted);
+  list-style: none;
+}
+.wizard-steps [aria-current="step"] {
+  font-weight: 600;
+  color: var(--text);
+}
+.wizard > button {
+  justify-self: start;
+}
+.wizard-banks {
+  display: grid;
+  gap: 12px;
 }
 .setup-page .draft-actions > button {
   flex: 0 1 auto;
@@ -2446,7 +2538,7 @@
   gap: 8px;
   min-width: 0;
 }
-.typography-specimens :where(h3, p, dl, dd) {
+.typography-specimens :where(h2, h3, p, dl, dd) {
   margin: 0;
 }
 .typography-specimens > section + section {
@@ -2497,4 +2589,7 @@
   .typography-specimens {
     padding: 16px;
   }
+}
+.record-context.rule-context {
+  font-size: var(--type-body);
 }

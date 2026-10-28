@@ -4,13 +4,47 @@
 
 - **Navegador/computer use é proibido para Claude.** Não use Chrome, browser
   embutido, computer use, `run`, ferramentas `preview_*` (t3-code), snapshots de
-  acessibilidade, screenshots nem scripts Playwright/Puppeteer para validar UI. QA visual no navegador é feita pelo **Codex**, somente quando o
-  dono autorizar explicitamente e no ciclo final, depois que os PRs estiverem
-  abertos. Ao entregar mudança de frontend, liste as rotas/estados que o Codex
-  deve conferir em vez de validá-los. Para economizar tokens, o QA visual usa
-  somente o tema escuro em dois viewports: mobile (390 px) e desktop (1440 px).
-  Tema claro, outros tamanhos e zoom só entram quando o dono pedir ou quando a
-  mudança for específica deles.
+  acessibilidade, screenshots nem scripts Playwright/Puppeteer para validar UI.
+  A conferência no navegador é **delegada ao Codex** (procedimento abaixo).
+  **Autorização permanente do dono:** Claude pode disparar essa delegação
+  sempre que quiser validar algo com navegador/computer use, em qualquer
+  momento do trabalho, sem pedir licença e sem esperar PRs abertos. Ao entregar
+  mudança de frontend, delegue ou liste as rotas/estados a conferir. Para
+  economizar tokens, o QA visual usa somente o tema escuro em dois viewports:
+  mobile (390 px) e desktop (1440 px). Tema claro, outros tamanhos e zoom só
+  entram quando o dono pedir ou quando a mudança for específica deles.
+- **Delegar QA ao Codex (procedimento recomendado).** O sandbox Linux do Codex
+  (`workspace-write`) nega `setsockopt` por seccomp; o Crashpad do Chromium
+  trata o `EPERM` como fatal e o navegador morre ao abrir (`setsockopt:
+  Operation not permitted`). O mesmo sandbox impede Wrangler/Vite de subir
+  servidores, e a ferramenta de navegador interativa do Codex exige aprovação
+  humana de origem. Não há correção oficial (openai/codex#47452 e #8011);
+  `--no-sandbox`, `--disable-crashpad` e rede liberada não resolvem. Por isso:
+  1. **Rode o Codex com `-s danger-full-access`** (recomendado e autorizado pelo
+     dono para este QA). Compense a perda do sandbox no prompt: só leitura do
+     repositório, scripts fora dele, sem editar, commitar nem subir servidores.
+  2. Claude prepara o ambiente antes: `mise exec -- npm run build:portal`, e
+     serve `dist/web` com `python3 -m http.server 4173 --bind 127.0.0.1` em
+     background (rodando a partir de `dist/web`). A demo fica em
+     `http://127.0.0.1:4173/demo/connections/`. Use sempre a porta 4173.
+  3. O Codex roda scripts Playwright em janela anônima (`browser.newContext()`
+     novo, `colorScheme: 'dark'`, um contexto por viewport) com o Chromium do
+     sistema (`/usr/bin/chromium`), escritos fora do repositório. Claude
+     instala `playwright-core` num diretório do scratchpad (`npm i
+     playwright-core`, nunca no repositório) para o Codex importar de lá.
+  4. Escreva o prompt em arquivo no scratchpad e rode em background:
+     `codex exec -C <repo> -s danger-full-access -o <relatório.md> - < <prompt.md>`.
+     O prompt cita AGENTS.md, aponta as issues/critérios, informa a URL pronta,
+     proíbe subir/encerrar servidores e editar arquivos ou commitar, fixa tema
+     escuro em 390 px e 1440 px e pede relatório curto (tabela item × resultado,
+     bugs com passos, limitações). Autorização real do Pluggy não existe na
+     demo: é limitação do ambiente, não bug.
+  5. Se o Claude Code negar o comando com `danger-full-access` (classificador de
+     permissões), não contorne: peça ao dono para rodar o mesmo comando com `!`
+     no prompt, ou para liberar a regra de Bash correspondente em
+     `.claude/settings.json`.
+  6. Ao terminar, Claude encerra o servidor estático (`fuser -k 4173/tcp`),
+     lê o relatório e resume bugs e limitações.
 - Leia sob demanda: use `grep`/`rg` e leituras parciais antes de abrir arquivos
   inteiros. Não leia DESIGN.md, `docs/` ou guias por completo para mudanças
   locais; abra só a seção da área tocada.
@@ -107,6 +141,15 @@
 - Ao mexer em UI, consulte em [DESIGN.md](DESIGN.md) apenas as seções da área
   (tipografia, minimalismo, “Regras de área do painel”) e preserve Kumo,
   semântica financeira e acessibilidade.
+- Padrão de gestão (Conexões, Grupos, Regras, Sincronização, Auditoria MCP,
+  primeiro uso): escolha o dono no topo (`ScopePicker`: pessoa ou grupo, com a
+  ação de criar ao lado) e mostre tudo dele em **um painel** (`entity-panel`),
+  com as ações no cabeçalho do próprio painel, sem seções soltas nem trilhas de
+  etapas. Criações em várias etapas viram wizard em um Dialog único (indicador
+  de etapas, uma ação principal, voltar que preserva o rascunho). Progresso e
+  pendências vêm do D1 (`SetupProgress`, faixa "Importar"); links de checklist
+  abrem o wizard por `?wizard=` uma vez. Novas telas de gestão seguem este
+  padrão.
 - Tipografia: Inter no sistema/controles, Source Serif 4 só nos títulos editoriais
   da landing, Inter tabular em valores, monoespaçada só em código/URLs/chaves/
   prompts. Conteúdo/controles 16 px, metadados 14 px, peso até 600.

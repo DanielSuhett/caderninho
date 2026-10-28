@@ -4,29 +4,37 @@ import { Input } from "@cloudflare/kumo/components/input";
 import { Loader } from "@cloudflare/kumo/components/loader";
 import { Select } from "@cloudflare/kumo/components/select";
 import {
-  ArrowRightIcon,
   GearIcon,
   PencilSimpleIcon,
   PlusIcon,
   QuestionIcon,
   UserPlusIcon,
 } from "@phosphor-icons/react";
-import { type FormEvent, type MouseEvent, useCallback, useState } from "react";
+import {
+  type FormEvent,
+  lazy,
+  type MouseEvent,
+  Suspense,
+  useCallback,
+  useEffect,
+  useState,
+} from "react";
 
 import type { HouseholdCommand, PortalResponse } from "../../contracts";
-import { UiButton, UiIconButton, UiLink } from "../ui";
+import { tryCatch } from "../../shared";
+import { UiButton, UiIconButton } from "../ui";
 import type { createAccountApi } from "./account-api";
 import type { ManagementOutcome } from "./account-feedback";
 import { AccountIdentity } from "./account-identity";
-import { workspaceHref } from "./account-navigation";
 import { BackofficeDialog } from "./backoffice-dialog";
+import { pendingImports } from "./bank-wizard";
 import type { ConnectionActivity } from "./connection-journey";
 import { DisclosureItem } from "./disclosure-item";
 import { HouseholdPanel } from "./household-view";
 import { PersonEditor } from "./person-editor";
 import { PersonIdentity } from "./person-identity";
 import { bankAppearance, SetupBanks } from "./setup-banks";
-import { SetupImport } from "./setup-import";
+import type { WizardStart } from "./use-bank-wizard";
 import { SetupStep, usePeopleSetup } from "./use-people-setup";
 import { WorkspaceHeading } from "./workspace-ui";
 
@@ -47,12 +55,68 @@ export interface DashboardProps {
   snapshot: PortalResponse;
 }
 
+// The wizard downloads when it opens; a failed chunk says so instead of failing silently.
+function WizardChunkFailure() {
+  return (
+    <Banner
+      description="Não foi possível abrir o assistente. Recarregue a página e tente de novo."
+      role="alert"
+      variant="error"
+    />
+  );
+}
+const AddBankWizard = lazy(async () => {
+  const { data, error } = await tryCatch(() => import("./add-bank-wizard"));
+  return { default: error ? WizardChunkFailure : data.AddBankWizard };
+});
+
+// Deep links from the setup checklist open the matching wizard once.
+function requestedWizard(snapshot: PortalResponse): WizardStart | null {
+  const requested = new URLSearchParams(location.search).get("wizard");
+  if (requested === "bank") {
+    return { kind: "bank" };
+  }
+  if (requested === "import") {
+    const pending = snapshot.people.find(
+      (person) => pendingImports(snapshot, person.id) > 0,
+    );
+    return pending ? { kind: "resume", personId: pending.id } : null;
+  }
+  return null;
+}
+
 export function DashboardView(props: DashboardProps) {
   const { snapshot, busy, activity } = props;
   const model = usePeopleSetup(props);
   const [help, setHelp] = useState(false);
   const [settings, setSettings] = useState(false);
   const [revoke, setRevoke] = useState(false);
+  const [wizard, setWizard] = useState<WizardStart | null>(() =>
+    requestedWizard(snapshot),
+  );
+  // The request is consumed so a reload does not reopen the dialog.
+  useEffect(() => {
+    const url = new URL(location.href);
+    if (url.searchParams.has("wizard")) {
+      url.searchParams.delete("wizard");
+      history.replaceState(history.state, "", url);
+    }
+  }, []);
+  const openBank = useCallback(
+    () =>
+      setWizard({
+        kind: "bank",
+        ...(model.person && { personId: model.person.id }),
+      }),
+    [model.person],
+  );
+  const openPerson = useCallback(() => setWizard({ kind: "person" }), []);
+  const closeWizard = useCallback(() => setWizard(null), []);
+  const resumeWizard = useCallback(
+    () =>
+      model.person && setWizard({ kind: "resume", personId: model.person.id }),
+    [model.person],
+  );
   const toggleHelp = useCallback(() => setHelp((value) => !value), []);
   const toggleSettings = useCallback(() => setSettings((value) => !value), []);
   const showRevoke = useCallback(() => setRevoke(true), []);
@@ -61,29 +125,6 @@ export function DashboardView(props: DashboardProps) {
     props.command("disconnect-assistants");
     setRevoke(false);
   }, [props.command]);
-  const people = useCallback(() => model.go(SetupStep.people), [model.go]);
-  const importing = useCallback(
-    () => model.go(SetupStep.importing),
-    [model.go],
-  );
-  const assistant = useCallback(() => {
-    if (
-      snapshot.connections.some(
-        (connection) =>
-          !connection.importStatus ||
-          connection.importStatus === "pending" ||
-          connection.importStatus === "running",
-      )
-    ) {
-      model.go(SetupStep.importing);
-      return;
-    }
-    model.go(SetupStep.assistant);
-  }, [model.go, snapshot.connections]);
-  const finishImport = useCallback(
-    () => model.go(SetupStep.assistant),
-    [model.go],
-  );
   const assign = useCallback(
     async (event: FormEvent<HTMLFormElement>) => {
       event.preventDefault();
@@ -101,11 +142,9 @@ export function DashboardView(props: DashboardProps) {
     [props.manage, snapshot.csrf],
   );
   const labels = {
-    assistant: "Consultar",
     credentials: "Seu acesso Pluggy",
-    import: "Importar",
-    people: "Pessoas",
-    person: model.person ? "Nome e foto" : "Outra pessoa",
+    people: "Conexões",
+    person: "Nome e foto",
   };
   return (
     <div className="finance-dashboard setup-page">
@@ -128,48 +167,19 @@ export function DashboardView(props: DashboardProps) {
           desta instalação serão preservados.
         </p>
       </BackofficeDialog>
-      <nav
-        aria-label="Primeiros passos"
-        className="setup-navigation"
-      >
-        <UiButton
-          aria-current={
-            model.step !== SetupStep.importing &&
-            model.step !== SetupStep.assistant
-              ? "step"
-              : undefined
-          }
-          onClick={people}
-          type="button"
-          variant="outline"
-        >
-          Pessoas
-        </UiButton>
-        <UiButton
-          aria-current={model.step === SetupStep.importing ? "step" : undefined}
-          disabled={!snapshot.connections.length || busy}
-          onClick={importing}
-          type="button"
-          variant="outline"
-        >
-          Importar
-        </UiButton>
-        <UiButton
-          aria-current={model.step === SetupStep.assistant ? "step" : undefined}
-          disabled={!snapshot.connections.length || busy}
-          onClick={assistant}
-          type="button"
-          variant="outline"
-        >
-          Consultar
-        </UiButton>
-      </nav>
+      {!!wizard && (
+        <Suspense fallback={null}>
+          <AddBankWizard
+            close={closeWizard}
+            props={props}
+            start={wizard}
+          />
+        </Suspense>
+      )}
       <WorkspaceHeading title={labels[model.step]}>
         {model.step === SetupStep.people && (
-          <SetupActions
+          <PageTools
             help={help}
-            model={model}
-            props={props}
             settings={settings}
             toggleHelp={toggleHelp}
             toggleSettings={toggleSettings}
@@ -186,9 +196,6 @@ export function DashboardView(props: DashboardProps) {
       />
       {model.step === SetupStep.person && (
         <section className="setup-form">
-          {model.selectedId === "new" && (
-            <p>Cada pessoa conecta a própria conta Meu Pluggy.</p>
-          )}
           <PersonEditor
             busy={busy}
             changed={model.markDirty}
@@ -254,32 +261,13 @@ export function DashboardView(props: DashboardProps) {
           assign={assign}
           help={help}
           model={model}
+          openBank={openBank}
+          openPerson={openPerson}
           props={props}
+          resume={resumeWizard}
           settings={settings}
           showRevoke={showRevoke}
         />
-      )}
-      {model.step === SetupStep.importing && (
-        <SetupImport
-          busy={busy}
-          command={props.command}
-          complete={finishImport}
-          readError={props.readError}
-          refresh={props.refresh}
-          snapshot={snapshot}
-        />
-      )}
-      {model.step === SetupStep.assistant && (
-        <AssistantSetup snapshot={snapshot} />
-      )}
-      {model.step === SetupStep.people && (
-        <UiLink
-          className="setup-defer"
-          href={workspaceHref("/account/transactions")}
-          variant="ghost"
-        >
-          Continuar depois
-        </UiLink>
       )}
     </div>
   );
@@ -293,10 +281,7 @@ function AssistantSetup({ snapshot }: { snapshot: PortalResponse }) {
     [],
   );
   return (
-    <section
-      aria-label="Conectar assistente"
-      className="setup-form"
-    >
+    <div className="setup-form">
       <div className="draft-actions">
         <UiButton
           aria-pressed={assistant === "ChatGPT"}
@@ -331,13 +316,7 @@ function AssistantSetup({ snapshot }: { snapshot: PortalResponse }) {
         Autorize no seu Caderninho. O assistente terá acesso aos dados de toda
         esta instalação.
       </p>
-      <UiLink
-        href={workspaceHref("/account")}
-        variant="primary"
-      >
-        Abrir meu painel
-      </UiLink>
-    </section>
+    </div>
   );
 }
 
@@ -348,6 +327,9 @@ function PeopleBanks({
   settings,
   assign,
   showRevoke,
+  openBank,
+  openPerson,
+  resume,
 }: {
   props: DashboardProps;
   model: ReturnType<typeof usePeopleSetup>;
@@ -355,6 +337,9 @@ function PeopleBanks({
   settings: boolean;
   assign: (event: FormEvent<HTMLFormElement>) => Promise<void>;
   showRevoke: () => void;
+  openBank: () => void;
+  openPerson: () => void;
+  resume: () => void;
 }) {
   const { snapshot, busy } = props;
   const reconnect = useCallback(
@@ -365,44 +350,39 @@ function PeopleBanks({
       ),
     [props.connect],
   );
-
+  const holder = model.person;
+  const pending = holder ? pendingImports(snapshot, holder.id) : 0;
   return (
     <>
-      <div className="setup-person-bar">
-        <fieldset
-          aria-label="Pessoas"
-          className="setup-person-picker"
+      <fieldset
+        aria-label="Pessoas"
+        className="setup-person-picker"
+      >
+        {snapshot.people.map((value) => (
+          <UiButton
+            aria-pressed={model.selectedId === value.id}
+            key={value.id}
+            onClick={model.selectPerson}
+            type="button"
+            value={value.id}
+            variant={model.selectedId === value.id ? "secondary" : "outline"}
+          >
+            <PersonIdentity
+              compact
+              person={value}
+            />
+          </UiButton>
+        ))}
+        <UiButton
+          disabled={busy}
+          onClick={openPerson}
+          type="button"
+          variant="ghost"
         >
-          {snapshot.people.length === 1 && model.person ? (
-            <PersonIdentity person={model.person} />
-          ) : (
-            snapshot.people.map((person) => (
-              <UiButton
-                aria-pressed={model.selectedId === person.id}
-                key={person.id}
-                onClick={model.selectPerson}
-                type="button"
-                value={person.id}
-                variant={
-                  model.selectedId === person.id ? "secondary" : "outline"
-                }
-              >
-                <PersonIdentity
-                  compact
-                  person={person}
-                />
-              </UiButton>
-            ))
-          )}
-        </fieldset>
-        <UiIconButton
-          disabled={busy || !model.person}
-          label="Editar nome e foto"
-          onClick={model.editPerson}
-        >
-          <PencilSimpleIcon size={20} />
-        </UiIconButton>
-      </div>
+          <UserPlusIcon size={20} />
+          Outra pessoa
+        </UiButton>
+      </fieldset>
       {help === true && (
         <p>
           Conecte seus bancos no{" "}
@@ -417,12 +397,71 @@ function PeopleBanks({
           precisa da própria conta Meu Pluggy.
         </p>
       )}
-      <SetupBanks
-        connections={model.connections}
-        csrf={snapshot.csrf}
-        institutions={props.institutions}
-        manage={props.manage}
-      />
+      {holder ? (
+        <section
+          aria-labelledby="person-banks-heading"
+          className="entity-panel"
+        >
+          <header className="entity-panel-header">
+            <h2 id="person-banks-heading">Bancos de {holder.name}</h2>
+            <div className="entity-panel-actions">
+              <UiIconButton
+                disabled={busy}
+                label="Editar nome e foto"
+                onClick={model.editPerson}
+              >
+                <PencilSimpleIcon size={20} />
+              </UiIconButton>
+              <UiButton
+                disabled={busy}
+                onClick={openBank}
+                type="button"
+                variant={model.connections.length ? "secondary" : "primary"}
+              >
+                <PlusIcon size={20} />
+                Adicionar banco
+              </UiButton>
+            </div>
+          </header>
+          {pending > 0 && (
+            <div className="entity-panel-notice">
+              <Banner
+                description={
+                  pending === 1
+                    ? "1 banco precisa ser importado."
+                    : `${pending} bancos precisam ser importados.`
+                }
+                variant="secondary"
+              />
+              <UiButton
+                disabled={busy}
+                onClick={resume}
+                type="button"
+              >
+                Importar
+              </UiButton>
+            </div>
+          )}
+          <SetupBanks
+            connections={model.connections}
+            csrf={snapshot.csrf}
+            institutions={props.institutions}
+            manage={props.manage}
+          />
+        </section>
+      ) : (
+        <p className="muted">
+          Adicione uma pessoa para conectar o primeiro banco.
+        </p>
+      )}
+      {!!snapshot.connections.length && (
+        <DisclosureItem
+          defaultOpen={new URLSearchParams(location.search).has("assistant")}
+          summary="Conectar ChatGPT ou Claude"
+        >
+          <AssistantSetup snapshot={snapshot} />
+        </DisclosureItem>
+      )}
       {settings === true && (
         <section
           aria-label="Ajustes avançados"
@@ -487,43 +526,22 @@ function PeopleBanks({
   );
 }
 
-function SetupActions({
-  props,
-  model,
+function PageTools({
   help,
   settings,
   toggleHelp,
   toggleSettings,
 }: {
-  props: DashboardProps;
-  model: ReturnType<typeof usePeopleSetup>;
   help: boolean;
   settings: boolean;
   toggleHelp: () => void;
   toggleSettings: () => void;
 }) {
-  const { snapshot, busy } = props;
   return (
     <fieldset
-      aria-label="Ações de pessoas e bancos"
+      aria-label="Ajuda e ajustes"
       className="setup-actions"
     >
-      <UiIconButton
-        disabled={busy}
-        label="Adicionar banco"
-        onClick={model.addBank}
-      >
-        <PlusIcon size={20} />
-      </UiIconButton>
-      {!!snapshot.connections.length && (
-        <UiIconButton
-          disabled={busy}
-          label="Adicionar outra pessoa"
-          onClick={model.addPerson}
-        >
-          <UserPlusIcon size={20} />
-        </UiIconButton>
-      )}
       <UiIconButton
         aria-expanded={help}
         label="Como conectar bancos"
@@ -538,16 +556,6 @@ function SetupActions({
       >
         <GearIcon size={20} />
       </UiIconButton>
-      {!!snapshot.connections.length && (
-        <UiIconButton
-          disabled={busy}
-          label="Concluir pessoas e importar"
-          onClick={model.finishPeople}
-          variant="primary"
-        >
-          <ArrowRightIcon size={20} />
-        </UiIconButton>
-      )}
     </fieldset>
   );
 }

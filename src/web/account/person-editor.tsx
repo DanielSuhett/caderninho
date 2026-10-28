@@ -15,12 +15,15 @@ import { UiButton } from "../ui";
 import { PersonAvatar } from "./person-identity";
 import { preparePersonPhoto } from "./person-photo";
 
+export const personFormId = "wizard-person";
+
 export function PersonEditor({
   person,
   busy,
   onSubmit,
   changed,
   onCancel,
+  formId,
   children,
 }: {
   person: Person;
@@ -28,6 +31,8 @@ export function PersonEditor({
   onSubmit: (event: FormEvent<HTMLFormElement>) => Promise<void>;
   changed?: () => void;
   onCancel?: () => void;
+  // A hosting dialog owns the actions and submits this form by id.
+  formId?: string;
   children?: ReactNode;
 }) {
   const [photo, setPhoto] = useState(person.photo ?? null);
@@ -64,6 +69,7 @@ export function PersonEditor({
   return (
     <form
       data-id={person.id}
+      id={formId}
       onChangeCapture={changed}
       onSubmit={onSubmit}
     >
@@ -119,24 +125,26 @@ export function PersonEditor({
             required
           />
         </div>
-        <div className="draft-actions">
-          {!!onCancel && (
+        {!formId && (
+          <div className="draft-actions">
+            {!!onCancel && (
+              <UiButton
+                onClick={onCancel}
+                type="button"
+                variant="outline"
+              >
+                Cancelar
+              </UiButton>
+            )}
             <UiButton
-              onClick={onCancel}
-              type="button"
-              variant="outline"
+              disabled={busy || processing}
+              type="submit"
+              variant="primary"
             >
-              Cancelar
+              {processing ? "Preparando foto…" : "Salvar pessoa"}
             </UiButton>
-          )}
-          <UiButton
-            disabled={busy || processing}
-            type="submit"
-            variant="primary"
-          >
-            {processing ? "Preparando foto…" : "Salvar pessoa"}
-          </UiButton>
-        </div>
+          </div>
+        )}
       </fieldset>
       {!!errorMessage && (
         <Banner

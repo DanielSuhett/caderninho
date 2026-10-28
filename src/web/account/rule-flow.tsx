@@ -44,7 +44,7 @@ export function RuleFlow({
                 key={alternative.id}
                 render={<li className={`${ruleNodeClass} rule-flow-branch`} />}
               >
-                <h4>Alternativa {index + 1}</h4>
+                <h3>Alternativa {index + 1}</h3>
                 <RuleConditions alternatives={[alternative]} />
               </Flow.Node>
             ))}
@@ -54,11 +54,11 @@ export function RuleFlow({
             id={`${id}-conditions`}
             render={<li className={`${ruleNodeClass} rule-flow-branch`} />}
           >
-            <h4>
+            <h3>
               {model.alternatives.length > 1
                 ? "Alternativas (OU)"
                 : "Condições (E)"}
-            </h4>
+            </h3>
             <RuleConditions alternatives={model.alternatives} />
           </Flow.Node>
         )}

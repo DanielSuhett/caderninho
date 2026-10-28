@@ -41,7 +41,7 @@ export function FinancialMetric({
         </span>
         <span className="metric-currency"> {currency}</span>
       </dd>
-      {children}
+      {!!children && <dd className="metric-note">{children}</dd>}
     </div>
   );
 }

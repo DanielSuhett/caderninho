@@ -2,7 +2,7 @@ import { Dialog } from "@cloudflare/kumo/components/dialog";
 import { XIcon } from "@phosphor-icons/react";
 import type { ComponentProps, CSSProperties, ReactNode } from "react";
 
-import { UiIconButton } from "../ui";
+import { UiButton } from "../ui";
 
 // Kumo 2.14 sets a fixed inline shadow. Keep its ring and use the shared theme.
 const dialogElevation: CSSProperties & { "--tw-shadow": string } = {
@@ -37,14 +37,19 @@ export function WorkspaceDialog({
         <Dialog.Title>{title}</Dialog.Title>
         {!!showClose && (
           <Dialog.Close
+            // No tooltip here: the dialog focuses this button, and an open tooltip
+            // would take the first Escape before the dialog could close.
             render={
-              <UiIconButton
+              <UiButton
+                aria-label={closeLabel}
+                className="compact-icon-action"
                 disabled={busy}
-                label={closeLabel}
+                shape="square"
+                type="button"
                 variant="ghost"
               >
                 <XIcon size={20} />
-              </UiIconButton>
+              </UiButton>
             }
           />
         )}

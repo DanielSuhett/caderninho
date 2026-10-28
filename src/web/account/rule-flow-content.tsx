@@ -62,9 +62,9 @@ export function RuleConditions({
 export function RuleOutcome({ model }: { model: RuleCompositionModel }) {
   return (
     <>
-      <h4>
+      <h3>
         {model.enabled ? "Classificar como" : "Ao ativar, classificar como"}
-      </h4>
+      </h3>
       <p className="rule-flow-category">
         <CategoryLabel
           category={model.categoryAppearance}
@@ -81,7 +81,7 @@ export const ruleNodeClass =
 export function RuleScope({ model }: { model: RuleCompositionModel }) {
   return (
     <>
-      <h4>Escopo obrigatório</h4>
+      <h3>Escopo obrigatório</h3>
       <ul className="rule-flow-scope">
         {model.scope.map((condition) => (
           <li key={condition.field}>
@@ -105,11 +105,11 @@ export function StaticRuleComposition({
           <RuleScope model={model} />
         </section>
         <section className={ruleNodeClass}>
-          <h4>
+          <h3>
             {model.alternatives.length > 1
               ? "Alternativas (OU)"
               : "Condições (E)"}
-          </h4>
+          </h3>
           <RuleConditions alternatives={model.alternatives} />
         </section>
         <section className={ruleNodeClass}>
@@ -126,11 +126,11 @@ export function StaticRuleComposition({
               className={`${ruleNodeClass} rule-flow-branch`}
               key={alternative.id}
             >
-              <h4>
+              <h3>
                 {model.alternatives.length > 1
                   ? `Alternativa ${index + 1}`
                   : "Condições (E)"}
-              </h4>
+              </h3>
               <RuleConditions alternatives={[alternative]} />
             </section>
           ))}
