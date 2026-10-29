@@ -135,7 +135,7 @@ test("demo saves a rule without changing history, explicitly reapplies it and up
   });
   assert.equal(
     demoOverview("2026-10", session.view()).totals[0]?.expenseMinor,
-    "439381",
+    "680221",
   );
   assert.deepEqual(session.applyRules("personal"), {
     changed: 12,
@@ -143,9 +143,9 @@ test("demo saves a rule without changing history, explicitly reapplies it and up
   });
   const data = session.view();
   const overview = demoOverview("2026-10", data);
-  assert.equal(overview.totals[0]?.expenseMinor, "333720");
-  assert.equal(overview.totals[0]?.incomeMinor, "980000");
-  assert.equal(overview.totals[0]?.cashFlowMinor, "605789");
+  assert.equal(overview.totals[0]?.expenseMinor, "574560");
+  assert.equal(overview.totals[0]?.incomeMinor, "1700000");
+  assert.equal(overview.totals[0]?.cashFlowMinor, "1286889");
   assert.equal(overview.totals[1]?.expenseMinor, "2400");
   assert.equal(
     overview.groups.find(
@@ -157,7 +157,7 @@ test("demo saves a rule without changing history, explicitly reapplies it and up
     demoMonthly("2026-10", data).groups.find(
       (group) => group.group === "2026-10" && group.currency === "BRL",
     )?.amountMinor,
-    "333720",
+    "574560",
   );
   assert.equal(
     demoTransactions({ data, month: "2026-10", text: "Mercado da semana" })[0]
@@ -180,17 +180,17 @@ test("demo saves a rule without changing history, explicitly reapplies it and up
   assert.deepEqual(session.applyRules("personal"), { changed: 0, matched: 0 });
   assert.equal(
     demoOverview("2026-10", session.view()).totals[0]?.expenseMinor,
-    "333720",
+    "574560",
   );
   assert.deepEqual(demoLedger, original);
   assert.equal(
     demoOverview("2026-10", createDemoSession().view()).totals[0]?.expenseMinor,
-    "439381",
+    "680221",
   );
   session.reset();
   assert.equal(
     demoOverview("2026-10", session.view()).totals[0]?.expenseMinor,
-    "439381",
+    "680221",
   );
 });
 
@@ -469,7 +469,7 @@ test("investment demo accumulates certificates of several banks through the MCP 
   assert.equal(cdb?.gross.totalMinor, "5354000");
   assert.deepEqual(
     cdb?.banks.map((bank) => bank.name),
-    ["Itaú", "Corretora Horizonte"],
+    ["Nubank", "Itaú", "Corretora Horizonte"],
   );
   assert.equal(cdb?.nearestDueDate, "2027-03-01");
   assert.equal(cdb?.furthestDueDate, "2029-08-10");
@@ -528,7 +528,7 @@ test("an additional demo card keeps its own spend, sublimit and transactions", a
     ?.cards.find((card) => card.number === "5151");
   assert.ok(extra);
   assert.equal(extra.primary, false);
-  assert.equal(extra.confirmed.totalMinor, "12890");
+  assert.equal(extra.confirmed.totalMinor, "76180");
   assert.equal(extra.creditLimitMinor, null);
   await save(session, {
     confirmed: true,
@@ -559,6 +559,9 @@ test("an additional demo card keeps its own spend, sublimit and transactions", a
         signal,
       ),
     ).data.records.map((row) => row.description);
-  assert.deepEqual(await transactions(extra.id), ["Farmácia"]);
+  assert.deepEqual(await transactions(extra.id), [
+    "Farmácia",
+    "Clube do livro",
+  ]);
   assert.ok(!(await transactions("demo-card:4242")).includes("Farmácia"));
 });

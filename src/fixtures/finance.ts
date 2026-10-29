@@ -13,6 +13,14 @@ import {
   TransactionStatus,
 } from "../domain";
 export const demoReferenceDay = "2026-10-24";
+// Bank logos ship with the deploy (one SVG per COMPE), so the static demo
+// shows them without the Worker's logo proxy.
+export const itau = { id: "341", logoUrl: "/bancos/341.svg", name: "Itaú" };
+export const nubank = {
+  id: "260",
+  logoUrl: "/bancos/260.svg",
+  name: "Nubank",
+};
 export const demoPeople = [
   { id: "demo-person", name: "Ana Silva", photo: "/demo-people/ana.jpg" },
   { id: "demo-person-2", name: "Bruno Costa", photo: "/demo-people/bruno.jpg" },
@@ -48,16 +56,9 @@ export const demoAccounts: FinancialOverview["accounts"] = [
     currency: "BRL",
     hidden: false,
     id: "demo-bank",
-    identity: {
-      cardBrand: null,
-      institution: {
-        id: "201",
-        logoUrl: "https://cdn.pluggy.ai/assets/connector-icons/201.svg",
-        name: "Instituição de exemplo",
-      },
-    },
+    identity: { cardBrand: null, institution: itau },
     manual: false,
-    name: "Conta principal",
+    name: "Conta corrente",
     personId: "demo-person",
     type: AccountType.BANK,
   },
@@ -67,16 +68,9 @@ export const demoAccounts: FinancialOverview["accounts"] = [
     currency: "BRL",
     hidden: false,
     id: "demo-reserve",
-    identity: {
-      cardBrand: null,
-      institution: {
-        id: "201",
-        logoUrl: "https://cdn.pluggy.ai/assets/connector-icons/201.svg",
-        name: "Instituição de exemplo",
-      },
-    },
+    identity: { cardBrand: null, institution: nubank },
     manual: false,
-    name: "Reserva",
+    name: "Caixinha reserva",
     personId: "demo-person",
     type: AccountType.BANK,
   },
@@ -86,16 +80,9 @@ export const demoAccounts: FinancialOverview["accounts"] = [
     currency: "BRL",
     hidden: false,
     id: "demo-card",
-    identity: {
-      cardBrand: "MASTERCARD",
-      institution: {
-        id: "201",
-        logoUrl: "https://cdn.pluggy.ai/assets/connector-icons/201.svg",
-        name: "Instituição de exemplo",
-      },
-    },
+    identity: { cardBrand: "MASTERCARD", institution: nubank },
     manual: false,
-    name: "Cartão pessoal",
+    name: "Nubank Mastercard",
     personId: "demo-person",
     type: AccountType.CREDIT,
   },
@@ -111,16 +98,28 @@ export const demoAccounts: FinancialOverview["accounts"] = [
     type: AccountType.BANK,
   },
   {
-    balanceMinor: "0",
+    balanceMinor: "-186430",
     balanceObservedAt: demoReferenceDay,
     currency: "BRL",
     hidden: false,
     id: "demo-card-extra",
-    identity: { cardBrand: "VISA", institution: null },
+    identity: { cardBrand: "VISA", institution: itau },
     manual: false,
-    name: "Cartão adicional",
+    name: "Itaú Visa Platinum",
     personId: "demo-person-2",
     type: AccountType.CREDIT,
+  },
+  {
+    balanceMinor: "652310",
+    balanceObservedAt: demoReferenceDay,
+    currency: "BRL",
+    hidden: false,
+    id: "demo-bank-2",
+    identity: { cardBrand: null, institution: nubank },
+    manual: false,
+    name: "Conta Nubank",
+    personId: "demo-person-2",
+    type: AccountType.BANK,
   },
 ];
 export type DemoRecord = z.infer<
@@ -168,6 +167,37 @@ function transaction({
     id: `${date}-${input.description}`,
   });
 }
+// A purchase split on a card: one row per month from the first charge, posted
+// up to the reference day and pending after it.
+function installmentPlan({
+  start,
+  total,
+  ...input
+}: Partial<DemoRecord> & {
+  start: string;
+  total: number;
+  day: number;
+  description: string;
+}) {
+  return Array.from({ length: total }, (_, index) => {
+    const month = monthDate(`${start}-01`, index).slice(0, 7);
+    const row = transaction({
+      ...input,
+      installmentNumber: index + 1,
+      month,
+      purchaseDate: `${start}-${String(input.day).padStart(2, "0")}`,
+      totalInstallments: total,
+    });
+    return {
+      ...row,
+      status:
+        row.date > demoReferenceDay
+          ? TransactionStatus.PENDING
+          : TransactionStatus.POSTED,
+    };
+  });
+}
+const bruno = { personId: "demo-person-2", personName: "Bruno Costa" };
 // Synthetic ledger only. Each aggregate is derived from this entire ledger, independently of the visible list.
 export const demoLedger = [0, 1, 2, 3, 4, 5]
   .flatMap((index) => {
@@ -300,6 +330,70 @@ export const demoLedger = [0, 1, 2, 3, 4, 5]
         description: "Registro ignorado de exemplo",
         ignored: true,
       },
+      {
+        accountId: "demo-card",
+        amountMinor: "-4990",
+        cardNumber: "5151",
+        category: "tools",
+        day: 6,
+        description: "Clube do livro",
+      },
+      {
+        accountId: "demo-card",
+        amountMinor: "-2190",
+        category: "tools",
+        day: 11,
+        description: "Música por assinatura",
+      },
+      {
+        ...bruno,
+        accountId: "demo-bank-2",
+        amountMinor: "720000",
+        category: "salary",
+        day: 5,
+        description: "Salário",
+        direction: "CREDIT",
+      },
+      {
+        ...bruno,
+        accountId: "demo-bank-2",
+        amountMinor: "-38900",
+        category: "home",
+        day: 10,
+        description: "Condomínio",
+      },
+      {
+        ...bruno,
+        accountId: "demo-card-extra",
+        amountMinor: "-11990",
+        category: "tools",
+        day: 4,
+        description: "Clube do vinho",
+      },
+      {
+        ...bruno,
+        accountId: "demo-card-extra",
+        amountMinor: "-5590",
+        category: "tools",
+        day: 8,
+        description: "Streaming de filmes",
+      },
+      {
+        ...bruno,
+        accountId: "demo-card-extra",
+        amountMinor: `-${(19800n + BigInt(index) * 730n).toString()}`,
+        category: "transport",
+        day: 14,
+        description: "Posto de combustível",
+      },
+      {
+        ...bruno,
+        accountId: "demo-card-extra",
+        amountMinor: "-16450",
+        category: "food",
+        day: 17,
+        description: "Jantar com amigos",
+      },
     ];
     return rows
       .map((row) => transaction({ ...row, month }))
@@ -360,4 +454,37 @@ export const demoLedger = [0, 1, 2, 3, 4, 5]
         }),
       ];
     }).flat(),
+  )
+  .concat(
+    installmentPlan({
+      accountId: "demo-card",
+      amountMinor: "-32990",
+      cardNumber: "4242",
+      category: "home",
+      day: 18,
+      description: "Geladeira",
+      start: "2026-08",
+      total: 10,
+    }),
+    installmentPlan({
+      accountId: "demo-card",
+      amountMinor: "-58300",
+      cardNumber: "5151",
+      category: "transport",
+      day: 3,
+      description: "Passagem aérea",
+      start: "2026-09",
+      total: 6,
+    }),
+    installmentPlan({
+      ...bruno,
+      accountId: "demo-card-extra",
+      amountMinor: "-45990",
+      cardNumber: "8080",
+      category: "tools",
+      day: 15,
+      description: "Notebook",
+      start: "2026-07",
+      total: 10,
+    }),
   );

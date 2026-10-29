@@ -68,7 +68,7 @@ test("the real account client reads the demo snapshot and every workspace page t
   assert.equal(overview.data.referenceDay, demoReferenceDay);
   assert.equal(
     overview.data.totals.find((row) => row.currency === "BRL")?.expenseMinor,
-    "439381",
+    "680221",
   );
   assert.equal(monthly.data.groupBy, "month");
   assert.ok(monthly.data.groups.length >= 6);

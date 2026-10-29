@@ -24,9 +24,9 @@ test("the card demo uses the shared ledger, reports only received months and sho
     data: demoCards(query, initialDemoData),
     partial: false,
   });
-  assert.equal(data.confirmed.totalMinor, "47170");
-  assert.equal(data.months[1]?.future.totalMinor, "30800");
-  assert.equal(data.months[7]?.future.count, 0);
+  assert.equal(data.confirmed.totalMinor, "249110");
+  assert.equal(data.months[1]?.future.totalMinor, "168080");
+  assert.equal(data.months[8]?.future.count, 0);
   const html = renderToStaticMarkup(
     createElement(CardsDashboard, {
       accountId: "",

@@ -1,6 +1,6 @@
 import type { CardCommitments } from "../contracts";
 import { monthDate } from "../domain";
-import { demoCategories, demoReferenceDay } from "./finance";
+import { demoCategories, demoReferenceDay, itau, nubank } from "./finance";
 
 type Installment = CardCommitments["installments"][number];
 
@@ -215,17 +215,10 @@ export function cardCommitmentsFixture(
           currency: "BRL",
           hidden: false,
           id: "demo-card",
-          identity: {
-            cardBrand: "MASTERCARD",
-            institution: {
-              id: "201",
-              logoUrl: "https://cdn.pluggy.ai/assets/connector-icons/201.svg",
-              name: "Instituição de exemplo",
-            },
-          },
+          identity: { cardBrand: "MASTERCARD", institution: nubank },
           limitSource: "provider",
           manual: false,
-          name: "Cartão pessoal",
+          name: "Nubank Mastercard",
           personId: "demo-person",
           personName: "Ana Silva",
         },
@@ -238,10 +231,10 @@ export function cardCommitmentsFixture(
           currency: "BRL",
           hidden: false,
           id: "demo-card-extra",
-          identity: { cardBrand: "VISA", institution: null },
+          identity: { cardBrand: "VISA", institution: itau },
           limitSource: "unavailable",
           manual: false,
-          name: "Cartão adicional",
+          name: "Itaú Visa Platinum",
           personId: "demo-person-2",
           personName: "Bruno Costa",
         },

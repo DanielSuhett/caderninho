@@ -31,8 +31,8 @@ test("month selection keeps civil month boundaries and rejects out-of-range URLs
 test("dashboard keeps currencies and bank balances separate from card debt and hidden accounts", () => {
   const overview = demoOverview("2026-10");
   const bank = summaryCurrency(overview, "BRL");
-  assert.equal(bank.bankBalance, "3542586");
-  assert.equal(bank.accounts.length, 4);
+  assert.equal(bank.bankBalance, "4194896");
+  assert.equal(bank.accounts.length, 5);
   assert.equal(summaryCurrency(overview, "USD").bankBalance, "184050");
   const unknown = {
     ...overview,
@@ -49,14 +49,14 @@ test("dashboard keeps currencies and bank balances separate from card debt and h
       hidden: account.id === "demo-bank",
     })),
   };
-  assert.equal(summaryCurrency(hidden, "BRL").bankBalance, "2500000");
+  assert.equal(summaryCurrency(hidden, "BRL").bankBalance, "3152310");
 });
 test("demo aggregates the full posted ledger with refunds, transfers, pending and ignored semantics", () => {
   const overview = FinancialOverviewSchema.parse(demoOverview("2026-10"));
   const total = overview.totals.find((row) => row.currency === "BRL");
-  assert.equal(total?.incomeMinor, "980000");
-  assert.equal(total?.expenseMinor, "439381");
-  assert.equal(total?.cashFlowMinor, "605789");
+  assert.equal(total?.incomeMinor, "1700000");
+  assert.equal(total?.expenseMinor, "680221");
+  assert.equal(total?.cashFlowMinor, "1286889");
   assert.equal(total?.unclassifiedCount, 1);
   assert.equal(
     overview.groups.find((row) => row.group === "market")?.amountMinor,

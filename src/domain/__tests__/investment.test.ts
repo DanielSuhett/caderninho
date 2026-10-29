@@ -27,7 +27,7 @@ test("portfolio separates currencies and excluded or redeemed positions", () => 
   assert.equal(cdb?.gross.totalMinor, "5354000");
   assert.deepEqual(
     cdb?.banks.map((bank) => bank.name),
-    ["Itaú", "Corretora Horizonte"],
+    ["Nubank", "Itaú", "Corretora Horizonte"],
   );
   assert.equal(
     result.totals.find((row) => row.currency === "USD")?.net.totalMinor,

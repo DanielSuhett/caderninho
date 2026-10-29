@@ -1,4 +1,5 @@
 import type { InvestmentDetails, InvestorPosition } from "../domain";
+import { itau, nubank } from "./finance";
 
 const details: InvestmentDetails = {
   annualRate: null,
@@ -20,14 +21,20 @@ const details: InvestmentDetails = {
   subtype: null,
   withdrawalMinor: null,
 };
-const institutions = [
-  {
-    id: "201",
-    logoUrl: "https://cdn.pluggy.ai/assets/connector-icons/201.svg",
-    name: "Itaú",
-  },
-  { id: "demo-broker", logoUrl: null, name: "Corretora Horizonte" },
-];
+const broker = {
+  id: "demo-broker",
+  logoUrl: null,
+  name: "Corretora Horizonte",
+};
+function institutionOf(input: { broker?: boolean; nubank?: boolean }) {
+  if (input.broker) {
+    return broker;
+  }
+  if (input.nubank) {
+    return nubank;
+  }
+  return itau;
+}
 function position(input: {
   id: string;
   name: string;
@@ -37,6 +44,7 @@ function position(input: {
   currency?: string;
   details?: Partial<InvestmentDetails>;
   broker?: boolean;
+  nubank?: boolean;
   included?: boolean;
 }): InvestorPosition {
   return {
@@ -48,7 +56,7 @@ function position(input: {
     id: input.id,
     identity: {
       cardBrand: null,
-      institution: institutions[input.broker ? 1 : 0] ?? null,
+      institution: institutionOf(input),
     },
     included: input.included ?? true,
     manual: false,
@@ -75,6 +83,7 @@ export const demoInvestments: InvestorPosition[] = [
     },
     id: "cdb",
     name: "CDB liquidez diária",
+    nubank: true,
     type: "FIXED_INCOME",
   }),
   position({
@@ -196,6 +205,7 @@ export const demoInvestments: InvestorPosition[] = [
     id: "excluded",
     included: false,
     name: "Previdência separada",
+    nubank: true,
     type: "SECURITY",
   }),
 ];

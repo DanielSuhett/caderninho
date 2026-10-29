@@ -399,7 +399,6 @@ function PositionRow({
       >
         <PositionDetails row={row} />
       </DisclosureItem>
-      );
     </LayerCard>
   );
 }

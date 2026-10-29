@@ -65,6 +65,11 @@ function demoCardsOf(
   });
 }
 
+// The open bill (the negative balance) is what the limit has allocated.
+function demoCardLimit(accountId: string) {
+  return accountId === "demo-card-extra" ? "800000" : "1000000";
+}
+
 export function demoPrimaryCard(accountId: string) {
   return accountId === "demo-card-extra" ? "8080" : "4242";
 }
@@ -146,25 +151,29 @@ export function demoCards(
           (number) => ownerOf(account.id, number) === query.personId,
         ),
     )
-    .map((account) => ({
-      ...cardCredit({
-        available: account.id === "demo-card-extra" ? "1000000" : "761240",
-        limit: "1000000",
-        localLimit: limits.get(account.id),
-      }),
-      allocatedMinor: account.id === "demo-card-extra" ? "0" : "238760",
-      balanceObservedAt: account.balanceObservedAt ?? null,
-      cardNumber: demoPrimaryCard(account.id),
-      closeDate: "2026-10-25",
-      currency: account.currency,
-      dueDate: "2026-11-02",
-      id: account.id,
-      identity: account.identity,
-      manual: false,
-      name: account.name,
-      personId: account.personId,
-      personName: demoPersonName(account.personId),
-    }));
+    .map((account) => {
+      const limit = demoCardLimit(account.id);
+      const allocated = (account.balanceMinor ?? "0").replace("-", "");
+      return {
+        ...cardCredit({
+          available: (BigInt(limit) - BigInt(allocated)).toString(),
+          limit,
+          localLimit: limits.get(account.id),
+        }),
+        allocatedMinor: allocated,
+        balanceObservedAt: account.balanceObservedAt ?? null,
+        cardNumber: demoPrimaryCard(account.id),
+        closeDate: "2026-10-25",
+        currency: account.currency,
+        dueDate: "2026-11-02",
+        id: account.id,
+        identity: account.identity,
+        manual: false,
+        name: account.name,
+        personId: account.personId,
+        personName: demoPersonName(account.personId),
+      };
+    });
   // An unknown, hidden or foreign card in the query falls back to every card.
   const focus = accounts
     .flatMap((account) =>

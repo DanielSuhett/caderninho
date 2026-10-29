@@ -36,10 +36,10 @@ test("avatar links replace account scope, reset pagination and retain independen
 
 test("demo bank filters include all bank accounts and cards while the same scope feeds summary and monthly totals", async () => {
   const session = createDemoSession();
-  const bank = scopedDemoData(session.view(), { institutionId: "201" });
+  const bank = scopedDemoData(session.view(), { institutionId: "260" });
   assert.deepEqual(
     bank.accounts.map((row) => row.id),
-    ["demo-bank", "demo-reserve", "demo-card"],
+    ["demo-reserve", "demo-card", "demo-bank-2"],
   );
   assert.ok(bank.records.length);
   assert.ok(
@@ -69,11 +69,10 @@ test("demo bank filters include all bank accounts and cards while the same scope
     cards.data.accounts.map((row) => row.id),
     ["demo-card-extra"],
   );
-  assert.deepEqual(
-    scopedDemoData(session.view(), {
-      institutionId: "201",
-      personId: "demo-person-2",
-    }).records,
-    [],
-  );
+  const shared = scopedDemoData(session.view(), {
+    institutionId: "260",
+    personId: "demo-person-2",
+  });
+  assert.ok(shared.records.length);
+  assert.ok(shared.records.every((row) => row.accountId === "demo-bank-2"));
 });
