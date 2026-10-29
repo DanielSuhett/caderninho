@@ -59,6 +59,7 @@ export function TransactionEditors({
       currency: row.currency,
       description: row.description,
       direction: row.direction,
+      identification: "identification" in row ? row.identification : null,
     }),
     [row],
   );

@@ -1,5 +1,9 @@
 import type { RulePreviewQuery, RulePreviewResult } from "../../contracts";
-import { PlanningError, ruleMatches } from "../../domain";
+import {
+  PlanningError,
+  ruleMatches,
+  transactionCounterparty,
+} from "../../domain";
 import type { PlanningRepository } from "./entity";
 import { found, transactionStream } from "./projection";
 
@@ -54,6 +58,7 @@ export async function previewRule(
       result.samples.push({
         accountId: row.accountId,
         amountMinor: row.amountMinor,
+        counterparty: transactionCounterparty(row.identification).name,
         currency: row.currency,
         date: row.date,
         description: row.description,

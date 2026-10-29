@@ -88,3 +88,63 @@ test("rule text is literal, IDs retain case and amount comparisons preserve exac
     false,
   );
 });
+test("beneficiary conditions read the payment receiver, then the card merchant", () => {
+  const paid = {
+    identification: {
+      merchant: { cnpj: "11.111.111/0001-11", name: "Loja" },
+      paymentData: {
+        receiver: {
+          documentNumber: { type: "CNPJ", value: "22.222.222/0001-22" },
+          name: "Imobiliária Exemplo S.A.",
+        },
+      },
+    },
+  };
+  assert.equal(
+    matches(
+      [
+        {
+          field: "receiverDocument",
+          operator: "equals",
+          value: "22222222000122",
+        },
+      ],
+      paid,
+    ),
+    true,
+  );
+  assert.equal(
+    matches(
+      [{ field: "receiverName", operator: "contains", value: "IMOBILIÁRIA" }],
+      paid,
+    ),
+    false,
+  );
+  assert.equal(
+    matches(
+      [{ field: "receiverName", operator: "contains", value: "IMOBILIária" }],
+      paid,
+    ),
+    true,
+  );
+  assert.equal(
+    matches(
+      [
+        {
+          field: "receiverDocument",
+          operator: "equals",
+          value: "11111111000111",
+        },
+      ],
+      { identification: { merchant: { cnpj: "11.111.111/0001-11" } } },
+    ),
+    true,
+  );
+  // Without a counterparty no beneficiary condition matches, not even negations.
+  assert.equal(
+    matches([
+      { field: "receiverName", operator: "not_contains", value: "loja" },
+    ]),
+    false,
+  );
+});

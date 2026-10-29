@@ -1,4 +1,5 @@
 import type { PlanningTransaction, Rule } from "./planning.entity";
+import { transactionCounterparty } from "./transaction.entity";
 
 export const RuleOperator = {
   contains: "contains",
@@ -28,6 +29,7 @@ type RuleTransaction = Pick<
   | "date"
   | "description"
   | "direction"
+  | "identification"
   | "personId"
   | "status"
 >;
@@ -48,8 +50,14 @@ export function activeRules<T extends OrderedRule & Pick<Rule, "enabled">>(
 
 export type RuleCondition =
   | {
-      field: "description";
+      field: "description" | "receiverName";
       operator: TextOperator;
+      value: string;
+    }
+  | {
+      // CPF or CNPJ digits; punctuation is ignored on both sides.
+      field: "receiverDocument";
+      operator: typeof RuleOperator.equals;
       value: string;
     }
   | {
@@ -70,6 +78,25 @@ const capitals = /[A-Z]/g;
 // SQLite lower() is ASCII-only. Keep preview, explicit application and import identical.
 export const ruleText = (value: string) =>
   value.replace(capitals, (letter) => letter.toLowerCase());
+const textFields = new Set<RuleCondition["field"]>([
+  "description",
+  "receiverName",
+]);
+function conditionActual(
+  row: RuleTransaction,
+  field: Exclude<RuleCondition["field"], "amount">,
+) {
+  if (field === "description") {
+    return ruleText(row.description);
+  }
+  if (field === "receiverName" || field === "receiverDocument") {
+    const counterparty = transactionCounterparty(row.identification);
+    const value =
+      field === "receiverName" ? counterparty.name : counterparty.document;
+    return value === null ? null : ruleText(value);
+  }
+  return row[field];
+}
 function conditionMatches(row: RuleTransaction, condition: RuleCondition) {
   if (condition.field === "amount") {
     if (row.amountMinor === null) {
@@ -86,14 +113,14 @@ function conditionMatches(row: RuleTransaction, condition: RuleCondition) {
     }
     return amount === expected;
   }
-  const actual =
-    condition.field === "description"
-      ? ruleText(row.description)
-      : row[condition.field];
-  const expected =
-    condition.field === "description"
-      ? ruleText(condition.value)
-      : condition.value;
+  const actual = conditionActual(row, condition.field);
+  // Transactions without a counterparty match no beneficiary condition.
+  if (actual === null) {
+    return false;
+  }
+  const expected = textFields.has(condition.field)
+    ? ruleText(condition.value)
+    : condition.value;
   switch (condition.operator) {
     case RuleOperator.contains:
       return actual.includes(expected);

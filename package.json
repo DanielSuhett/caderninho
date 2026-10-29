@@ -11,6 +11,7 @@
     "deploy:onboarding": "npm run build:portal && wrangler deploy --config wrangler.onboarding.jsonc --keep-vars",
     "deploy:site": "npm run build:portal && wrangler pages deploy --cwd site --branch main",
     "dev": "npm run build:portal && wrangler dev",
+    "dev:remote": "node --import tsx scripts/dev-remote.ts",
     "docs:mcp": "node --import tsx scripts/mcp-catalog.ts",
     "format": "biome format --write .",
     "format:check": "biome format .",

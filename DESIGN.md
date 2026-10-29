@@ -284,8 +284,8 @@ fornecem dados e estado em memória aos mesmos componentes; não recriam telas o
 regras de negócio. A importação usa `RuleImporter` e `prepareRuleImport` também
 no produto; somente os vínculos com armazenamento e a persistência diferem.
 Edições de regras e
-grupos duram até recarregar a aba. Salvar uma regra não reclassifica o histórico;
-reaplicar exige uma ação explícita, com escopo e resultado visíveis. Não consulta nem altera
+grupos duram até recarregar a aba. O wizard de regra termina em
+“Salvar e reclassificar”, ação explícita com escopo e resultado visíveis. Não consulta nem altera
 contas, credenciais ou autorizações reais. Charts exigem agregação completa e política
 explícita de período, moeda, escopo, transferências, ignorados e parcelas.
 

@@ -235,6 +235,7 @@ export async function planningQuery(
   }
   const billRows = [
     "get_bills",
+    "get_overview",
     "get_upcoming_payments",
     "get_projection",
   ].includes(command.tool)
@@ -1019,10 +1020,33 @@ export async function planningQuery(
     const period = found(
       (await accumulate([input], SpendingGroupBy.category))[0],
     );
+    // The period's bill is the one due within a month after it ends. Provider
+    // bills exist only once closed; derived manual bills count as closed after
+    // their due date. Without one, the bill is still closing.
+    const dueUntil = monthDate(input.to, 1);
+    const periodBills = new Map<
+      string,
+      { amountMinor: string | null; dueDate: string }
+    >();
+    for (const bill of bills()) {
+      const closed = !bill.id.startsWith("manual-bill:") || bill.dueDate <= day;
+      if (!closed || bill.dueDate <= input.to || bill.dueDate > dueUntil) {
+        continue;
+      }
+      const chosen = periodBills.get(bill.accountId);
+      if (!chosen || bill.dueDate > chosen.dueDate) {
+        periodBills.set(bill.accountId, {
+          amountMinor: bill.amountMinor,
+          dueDate: bill.dueDate,
+        });
+      }
+    }
     return {
       ...presentSummary(period, SpendingGroupBy.category),
       accounts: (await balances()).map((account) => ({
         ...account,
+        billClosing: dueUntil > day,
+        lastBill: periodBills.get(account.id) ?? null,
         periodExpenseMinor: (period.accounts.get(account.id) ?? 0n).toString(),
       })),
       investments: owned(state.investments).filter((i) => i.included),

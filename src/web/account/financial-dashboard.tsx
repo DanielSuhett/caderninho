@@ -304,10 +304,14 @@ export function AccountHoldings({
       <HoldingPanel
         currency={currency}
         empty="Nenhum cartão conectado"
-        hint="Despesas classificadas no período lançadas em cada cartão. A barra mostra a fatura atual sobre o limite, quando conhecido."
+        hint="Valor da última fatura fechada de cada cartão. A fatura atual aparece como em fechamento. A barra mostra o uso do limite, quando conhecido."
         title="Cartões"
-        total={sumMinor(cards.map((card) => card.periodExpenseMinor))}
-        totalLabel="Gasto no mês"
+        total={sumMinor(
+          cards.flatMap((card) =>
+            card.lastBill?.amountMinor ? [card.lastBill.amountMinor] : [],
+          ),
+        )}
+        totalLabel="Faturas fechadas"
       >
         {cards.map((account) => (
           <CardRow
@@ -410,6 +414,12 @@ function BankRow({
     </li>
   );
 }
+function closingLabel(closing: boolean | undefined) {
+  if (closing === false) {
+    return "Sem fatura no período";
+  }
+  return "Em fechamento";
+}
 function CardRow({
   account,
   href,
@@ -441,10 +451,9 @@ function CardRow({
         <span className="holding-name">
           <span className="bank-heading">{account.name}</span>
           <span className="holding-meta">
-            {account.balanceMinor === null
-              ? "Fatura indisponível"
-              : `Fatura ${formatBalance(account.balanceMinor, account.currency)}`}
-            {used !== null && ` · ${used}% do limite`}
+            {account.lastBill
+              ? `Vence ${dayLabel(account.lastBill.dueDate)}`
+              : closingLabel(account.billClosing)}
             {partial ? <Badge variant="secondary">Dados parciais</Badge> : null}
           </span>
           {used !== null && (
@@ -462,17 +471,19 @@ function CardRow({
         </span>
         <span
           className="holding-value"
-          data-money-tone={account.periodExpenseMinor ? "expense" : "neutral"}
+          data-money-tone={
+            account.lastBill?.amountMinor ? "expense" : "neutral"
+          }
         >
-          {account.periodExpenseMinor === undefined ? (
-            "—"
-          ) : (
+          {account.lastBill?.amountMinor ? (
             <MoneyValue
               value={formatBalance(
-                account.periodExpenseMinor,
+                account.lastBill.amountMinor,
                 account.currency,
               )}
             />
+          ) : (
+            "—"
           )}
         </span>
       </a>

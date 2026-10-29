@@ -1,5 +1,6 @@
 import { RulePreviewSchema, type WorkspaceCatalog } from "../../contracts";
 import {
+  documentDigits,
   minor,
   type RuleCondition,
   RuleOperator,
@@ -23,6 +24,7 @@ export function conditionDraft(field = "description"): DraftCondition {
     amount: RuleOperator.gte,
     date: RuleOperator.gte,
     description: RuleOperator.contains,
+    receiverName: RuleOperator.contains,
   };
   const values: Record<string, string> = {
     direction: TransactionDirection.DEBIT,
@@ -79,6 +81,15 @@ export function initialAlternatives(
     id: randomId(),
   }));
 }
+function draftValue(condition: DraftCondition, currency: string) {
+  if (condition.field === "amount") {
+    return minor(condition.value.replace(",", "."), currency);
+  }
+  if (condition.field === "receiverDocument") {
+    return documentDigits(condition.value);
+  }
+  return condition.value;
+}
 export function parseRuleDraft(input: {
   csrf: string;
   spaceId: string;
@@ -98,10 +109,7 @@ export function parseRuleDraft(input: {
           conditions: alternative.conditions.map((condition) => ({
             field: condition.field,
             operator: condition.operator,
-            value:
-              condition.field === "amount"
-                ? minor(condition.value.replace(",", "."), input.currency)
-                : condition.value,
+            value: draftValue(condition, input.currency),
           })),
         })),
         currency: input.currency || null,

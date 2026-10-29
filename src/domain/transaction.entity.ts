@@ -125,3 +125,21 @@ export function transactionMatchesText(
     documents.some((value) => value?.replace(/\D/g, "").includes(digits))
   );
 }
+
+const nonDigits = /\D/g;
+export const documentDigits = (value: string) => value.replace(nonDigits, "");
+
+// Who received the money: the payment receiver, or the card merchant when the
+// provider reports no payment data. The import trigger reads the same fields
+// in the same order (migrations/0004_rule_counterparty.sql).
+export function transactionCounterparty(
+  identification: TransactionIdentification | null | undefined,
+) {
+  const receiver = identification?.paymentData?.receiver;
+  const merchant = identification?.merchant;
+  const document = receiver?.documentNumber?.value || merchant?.cnpj || null;
+  return {
+    document: document ? documentDigits(document) || null : null,
+    name: receiver?.name || merchant?.name || merchant?.businessName || null,
+  };
+}

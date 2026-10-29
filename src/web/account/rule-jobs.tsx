@@ -53,7 +53,57 @@ function progress(job: RuleJob) {
 }
 
 // Jobs run in the Worker; the page only follows the stored state while one is
-// active and stops polling as soon as it settles.
+// active and stops polling as soon as it settles. A hidden tab stops following
+// the job and reconciles when it returns.
+export function useRuleJobPolling({
+  api,
+  job,
+  update,
+  settled,
+}: {
+  api: OrganizationApi;
+  job: RuleJob | null;
+  update: (next: (previous: RuleJob | null) => RuleJob | null) => void;
+  settled: { current: (job: RuleJob) => void };
+}) {
+  const [visible, setVisible] = useState(
+    () => document.visibilityState === "visible",
+  );
+  useEffect(() => {
+    const change = () => setVisible(document.visibilityState === "visible");
+    document.addEventListener("visibilitychange", change);
+    return () => document.removeEventListener("visibilitychange", change);
+  }, []);
+  useEffect(() => {
+    if (!(visible && job && ruleJobActive(job))) {
+      return;
+    }
+    const { id } = job;
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      const { data, error } = await tryCatch(() =>
+        api.ruleJob({ id }, controller.signal),
+      );
+      if (controller.signal.aborted) {
+        return;
+      }
+      if (error || !data) {
+        // Transient read failures keep following the same job.
+        update((previous) => previous && { ...previous });
+        return;
+      }
+      update(() => data);
+      if (!ruleJobActive(data)) {
+        settled.current(data);
+      }
+    }, POLL_MS);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [api, job, settled, update, visible]);
+}
+
 export function useRuleJob({
   api,
   csrf,
@@ -83,43 +133,7 @@ export function useRuleJob({
     return () => controller.abort();
   }, [api, spaceId]);
   const active = ruleJobActive(job);
-  // A hidden tab stops following the job and reconciles when it returns.
-  const [visible, setVisible] = useState(
-    () => document.visibilityState === "visible",
-  );
-  useEffect(() => {
-    const change = () => setVisible(document.visibilityState === "visible");
-    document.addEventListener("visibilitychange", change);
-    return () => document.removeEventListener("visibilitychange", change);
-  }, []);
-  useEffect(() => {
-    if (!(visible && job && ruleJobActive(job))) {
-      return;
-    }
-    const { id } = job;
-    const controller = new AbortController();
-    const timer = setTimeout(async () => {
-      const { data, error } = await tryCatch(() =>
-        api.ruleJob({ id }, controller.signal),
-      );
-      if (controller.signal.aborted) {
-        return;
-      }
-      if (error || !data) {
-        // Transient read failures keep following the same job.
-        setJob((previous) => previous && { ...previous });
-        return;
-      }
-      setJob(data);
-      if (!ruleJobActive(data)) {
-        notify.current(data);
-      }
-    }, POLL_MS);
-    return () => {
-      clearTimeout(timer);
-      controller.abort();
-    };
-  }, [api, job, visible]);
+  useRuleJobPolling({ api, job, settled: notify, update: setJob });
   const started = useCallback((next: RuleJob) => {
     setMessage("");
     setJob(next);

@@ -216,6 +216,83 @@ test("preview, automatic import and explicit application agree on AND/OR, litera
   );
 });
 
+test("beneficiary rules agree between import, preview and explicit application", async () => {
+  const f = planning();
+  await collect(source([]));
+  await f.write("create_rule", {
+    categoryId: "personal:expense",
+    filter: {
+      alternatives: [
+        {
+          conditions: [
+            {
+              field: "receiverDocument",
+              operator: "equals",
+              value: "22222222000122",
+            },
+          ],
+        },
+        {
+          conditions: [
+            { field: "receiverName", operator: "contains", value: "loja" },
+          ],
+        },
+      ],
+      currency: null,
+    },
+    name: "Beneficiário",
+  });
+  const paid = (id: string, receiver: Record<string, unknown>) =>
+    transaction({ description: "Bankslip", id, paymentData: { receiver } });
+  await collect(
+    source([
+      paid("by-document", {
+        documentNumber: { type: "CNPJ", value: "22.222.222/0001-22" },
+        name: "Outra",
+      }),
+      paid("other-document", {
+        documentNumber: { type: "CNPJ", value: "33.333.333/0001-33" },
+      }),
+      transaction({
+        description: "Compra",
+        id: "by-merchant",
+        merchant: { businessName: "X", cnpj: "1", name: "LOJA Exemplo" },
+      }),
+      transaction({ description: "Loja sem beneficiário", id: "no-party" }),
+    ]),
+    "2026-10-02T00:00:00Z",
+  );
+  const expected = ["by-document", "by-merchant"];
+  const automatic = (await f.repository.read()).state.edits
+    .filter((row) => row.category === "personal:expense")
+    .map((row) => row.id)
+    .sort();
+  assert.deepEqual(automatic, expected);
+  const preview = RulePreviewResultSchema.parse(
+    await previewRule(
+      f.repository,
+      RulePreviewSchema.parse({
+        csrf: "x",
+        filter: (await f.repository.read()).state.rules[0]?.filter,
+        spaceId: "personal",
+      }),
+    ),
+  );
+  assert.deepEqual(preview.samples.map((row) => row.id).sort(), expected);
+  assert.equal(
+    preview.samples.find((row) => row.id === "by-document")?.counterparty,
+    "Outra",
+  );
+  await f.write("apply_rules", { from: "2026-10-01", to: "2026-10-31" });
+  assert.deepEqual(
+    (await f.repository.read()).state.edits
+      .filter((row) => row.category === "personal:expense")
+      .map((row) => row.id)
+      .sort(),
+    expected,
+  );
+});
+
 test("browser preview is read-only and group deletion protects ownership and existing financial records", async () => {
   const app = fixture();
   const cookie = cookies(await login(app));

@@ -34,6 +34,7 @@ import {
   ruleImportCategoryMapping,
   ruleJobActive,
   ruleMatches,
+  transactionCounterparty,
   transactionMatchesText,
 } from "../domain";
 import { cardCommitmentsFixture } from "../fixtures/card-commitments";
@@ -969,10 +970,12 @@ export function createDemoSession({
                 currency,
                 date,
                 description,
+                identification,
                 personName,
               }) => ({
                 accountId,
                 amountMinor,
+                counterparty: transactionCounterparty(identification).name,
                 currency,
                 date,
                 description,

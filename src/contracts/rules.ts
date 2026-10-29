@@ -27,6 +27,26 @@ export const RuleConditionSchema = z.discriminatedUnion("field", [
     .strict(),
   z
     .object({
+      field: z.literal("receiverName"),
+      operator: z.enum([
+        RuleOperator.contains,
+        RuleOperator.not_contains,
+        RuleOperator.equals,
+        RuleOperator.starts_with,
+      ]),
+      value,
+    })
+    .strict(),
+  z
+    .object({
+      field: z.literal("receiverDocument"),
+      operator: z.literal(RuleOperator.equals),
+      // Digits only; clients strip the punctuation before sending.
+      value: z.string().regex(/^(\d{11}|\d{14})$/),
+    })
+    .strict(),
+  z
+    .object({
       field: z.literal("direction"),
       operator: z.literal(RuleOperator.equals),
       value: z.enum([TransactionDirection.DEBIT, TransactionDirection.CREDIT]),
@@ -143,6 +163,7 @@ export const RulePreviewResultSchema = z.object({
     z.object({
       accountId: z.string(),
       amountMinor: z.string().nullable(),
+      counterparty: z.string().nullable(),
       currency: z.string(),
       date: z.string(),
       description: z.string(),

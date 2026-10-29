@@ -39,11 +39,16 @@ export const FinancialOverviewSchema = FinancialSummarySchema.extend({
       availableCreditMinor: nullableMinor.optional(),
       balanceMinor: nullableMinor,
       balanceObservedAt: z.string().nullable().optional(),
+      billClosing: z.boolean().optional(),
       creditLimitMinor: nullableMinor.optional(),
       currency: z.string(),
       hidden: z.boolean(),
       id: z.string(),
       identity: FinancialIdentitySchema.nullish(),
+      lastBill: z
+        .object({ amountMinor: nullableMinor, dueDate: z.string() })
+        .nullable()
+        .optional(),
       manual: z.boolean(),
       name: z.string(),
       periodExpenseMinor: minor.optional(),

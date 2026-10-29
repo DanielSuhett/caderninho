@@ -9,6 +9,8 @@ import type { CategoryAppearance } from "./category-appearance";
 
 export const conditionFields = [
   { label: "Descrição", value: "description" },
+  { label: "Beneficiário (CPF/CNPJ)", value: "receiverDocument" },
+  { label: "Beneficiário (nome)", value: "receiverName" },
   { label: "Movimento", value: "direction" },
   { label: "Estado", value: "status" },
   { label: "Conta", value: "accountId" },
@@ -70,8 +72,11 @@ function presentCondition(
   if (condition.field === "direction" || condition.field === "status") {
     value = values[condition.value] ?? condition.value;
   }
-  if (condition.field === "description") {
+  if (condition.field === "description" || condition.field === "receiverName") {
     value = `“${condition.value}”`;
+  }
+  if (condition.field === "receiverDocument") {
+    value = formatDocument(condition.value);
   }
   if (condition.field === "accountId") {
     const account = context.accounts.find((row) => row.id === condition.value);
@@ -101,6 +106,18 @@ function presentCondition(
     operator: operators[condition.operator] ?? condition.operator,
     value,
   };
+}
+
+const cnpjDigits = /^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/;
+const cpfDigits = /^(\d{3})(\d{3})(\d{3})(\d{2})$/;
+export function formatDocument(digits: string) {
+  if (digits.length === 14) {
+    return digits.replace(cnpjDigits, "$1.$2.$3/$4-$5");
+  }
+  if (digits.length === 11) {
+    return digits.replace(cpfDigits, "$1.$2.$3-$4");
+  }
+  return digits;
 }
 
 export function buildRuleComposition({
@@ -195,6 +212,20 @@ export function ruleSummary({ rule }: { rule: RuleSource }) {
   const direction = conditions.find(
     (c) => c.field === "direction" && c.operator === RuleOperator.equals,
   );
+  const receiver = conditions.find(
+    (c) => c.field === "receiverDocument" || c.field === "receiverName",
+  );
+  if (
+    alternatives.length === 1 &&
+    receiver &&
+    conditions.every((c) => c === receiver || c === direction)
+  ) {
+    const who =
+      receiver.field === "receiverDocument"
+        ? formatDocument(receiver.value)
+        : `“${receiver.value}”`;
+    return `Pagamentos para ${who}`;
+  }
   if (
     alternatives.length === 1 &&
     description &&

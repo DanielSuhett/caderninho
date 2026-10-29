@@ -219,5 +219,9 @@ export type {
   TransactionParticipant,
   TransactionPayment,
 } from "./transaction.entity";
-export { transactionMatchesText } from "./transaction.entity";
+export {
+  documentDigits,
+  transactionCounterparty,
+  transactionMatchesText,
+} from "./transaction.entity";
 export { TransactionIdentificationSchema } from "./transaction.schema";

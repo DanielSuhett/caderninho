@@ -1,13 +1,13 @@
 import { Banner } from "@cloudflare/kumo/components/banner";
 import { Input } from "@cloudflare/kumo/components/input";
+import { Loader } from "@cloudflare/kumo/components/loader";
+import { Radio } from "@cloudflare/kumo/components/radio";
 import { Select } from "@cloudflare/kumo/components/select";
 import { Switch } from "@cloudflare/kumo/components/switch";
-import { PlusIcon, TrashIcon } from "@phosphor-icons/react";
+import { ArrowLeftIcon } from "@phosphor-icons/react";
 import {
   type ChangeEvent,
   type FormEvent,
-  type MouseEvent,
-  memo,
   useCallback,
   useEffect,
   useId,
@@ -19,15 +19,13 @@ import {
 import {
   PortalMutationSchema,
   type PortalResponse,
+  type RuleJob,
+  type RulePreviewInput,
+  type RulePreviewResult,
   type WorkspaceCatalog,
 } from "../../contracts";
-import {
-  CategoryKind,
-  RuleOperator,
-  TransactionDirection,
-  TransactionStatus,
-} from "../../domain";
-import { tryCatch } from "../../shared";
+import { RuleJobStatus, RuleOperator, ruleJobActive } from "../../domain";
+import { HttpRequestError, tryCatch } from "../../shared";
 import { randomId } from "../random-id";
 import { UiButton } from "../ui";
 import type { OrganizationApi } from "./account-api";
@@ -35,53 +33,202 @@ import { BackofficeDialog } from "./backoffice-dialog";
 import { CategoryLabel } from "./category-appearance";
 import { DisclosureItem } from "./disclosure-item";
 import { RuleComposition } from "./rule-composition";
+import { RuleConditionsBuilder } from "./rule-conditions";
 import {
-  conditionDraft,
-  type DraftCondition,
-  initialAlternatives,
+  type DraftAlternative,
   parseRuleDraft,
   rulePresets,
 } from "./rule-draft";
-import { conditionFields } from "./rule-presentation";
+import { useRuleJobPolling } from "./rule-jobs";
+import { ruleSummary } from "./rule-presentation";
 import { RulePreview } from "./rule-preview";
+import {
+  CounterpartyKey,
+  initialJourney,
+  type JourneyDraft,
+  journeyAlternatives,
+  journeySubject,
+  RuleJourney,
+  type RuleSeed,
+  RuleStep,
+  ruleStepLabels,
+  ruleSteps,
+} from "./rule-wizard";
 
 type Rule = WorkspaceCatalog["rules"][number];
-type FieldEvent = ChangeEvent<HTMLInputElement>;
-interface TransactionRuleSeed {
-  accountId: string;
-  category: string | null;
-  currency: string;
-  description: string;
-  direction: string;
+type Accounts = { id: string; name: string; personName: string }[];
+
+const Phase = {
+  done: "done",
+  editing: "editing",
+  reapplying: "reapplying",
+  saving: "saving",
+} as const;
+type Phase = (typeof Phase)[keyof typeof Phase];
+
+const journeys = [
+  {
+    description: "Quem recebeu o pagamento, pelo CNPJ/CPF ou pelo nome.",
+    label: "Pelo beneficiário",
+    value: RuleJourney.counterparty,
+  },
+  {
+    description: "Um texto que aparece no extrato.",
+    label: "Pela descrição",
+    value: RuleJourney.description,
+  },
+  {
+    description: "Supermercados, assinaturas, salário e PIX enviados.",
+    label: "Modelo pronto",
+    value: RuleJourney.preset,
+  },
+  {
+    description: "Combine descrição, valor, data, conta e pessoa com E/OU.",
+    label: "Regra avançada",
+    value: RuleJourney.advanced,
+  },
+];
+const descriptionOperators: { label: string; value: string }[] = [
+  { label: "Contém", value: RuleOperator.contains },
+  { label: "É igual a", value: RuleOperator.equals },
+  { label: "Começa com", value: RuleOperator.starts_with },
+];
+const count = new Intl.NumberFormat("pt-BR");
+
+interface RuleSettings {
+  category: string;
+  enabled: boolean;
+  name: string;
+  priority: string;
 }
-function initialLegacyText(rule?: Rule) {
-  return rule?.filter ? rule.text : "";
+type ChangeSettings = (patch: Partial<RuleSettings>) => void;
+type EditJourney = (next: (previous: JourneyDraft) => JourneyDraft) => void;
+interface SaveValues {
+  accountId: null;
+  categoryId: string;
+  direction: null;
+  enabled: boolean;
+  filter: NonNullable<RulePreviewInput["filter"]>;
+  name: string;
+  priority: number;
+  spaceId: string;
+  text: "";
 }
-function initialCategory(rule: Rule | undefined, catalog: WorkspaceCatalog) {
-  return (
-    rule?.categoryId ??
-    catalog.categories.find((c) => !c.hidden && c.kind === CategoryKind.expense)
-      ?.id ??
-    ""
+
+const reapplyFailures = {
+  busy: "A regra foi salva. Já há uma atualização de regras em andamento; reaplique quando ela terminar.",
+  failed:
+    "A regra foi salva, mas a reclassificação não terminou. Reaplique as regras pela página de regras.",
+  start:
+    "A regra foi salva, mas a reclassificação não começou. Reaplique as regras pela página de regras.",
+};
+
+// Saving and reclassifying are one action: the rule is written first, then the
+// space's history is reapplied as a background job the dialog follows.
+function useRuleSave({
+  api,
+  csrf,
+  rule,
+  spaceId,
+}: {
+  api: OrganizationApi;
+  csrf: string;
+  rule: Rule | undefined;
+  spaceId: string;
+}) {
+  const [phase, setPhase] = useState<Phase>(Phase.editing);
+  const [job, setJob] = useState<RuleJob | null>(null);
+  const [message, setMessage] = useState("");
+  const inFlight = useRef<AbortController | null>(null);
+  const receipt = useRef({ key: "", payload: "" });
+  useEffect(() => () => inFlight.current?.abort(), []);
+  const settled = useRef((next: RuleJob) => {
+    setPhase(Phase.done);
+    if (next.status === RuleJobStatus.failed) {
+      setMessage(reapplyFailures.failed);
+    }
+  });
+  useRuleJobPolling({ api, job, settled, update: setJob });
+
+  const reapply = useCallback(
+    async (signal: AbortSignal) => {
+      setPhase(Phase.reapplying);
+      const { data, error } = await tryCatch(() =>
+        api.ruleJobs({ action: "reapply", csrf, spaceId }, signal),
+      );
+      if (signal.aborted) {
+        return;
+      }
+      if (error) {
+        setPhase(Phase.done);
+        const busy =
+          error instanceof HttpRequestError && error.failure.status === 409;
+        setMessage(busy ? reapplyFailures.busy : reapplyFailures.start);
+        return;
+      }
+      setJob(data);
+      if (!ruleJobActive(data)) {
+        settled.current(data);
+      }
+    },
+    [api, csrf, spaceId],
   );
+
+  const save = useCallback(
+    async (values: SaveValues, reclassify: boolean) => {
+      if (inFlight.current) {
+        return false;
+      }
+      const payload = JSON.stringify(values);
+      if (receipt.current.payload !== payload) {
+        receipt.current = { key: randomId(), payload };
+      }
+      const parsed = PortalMutationSchema.safeParse({
+        command: {
+          ...values,
+          confirmed: true,
+          idempotency_key: receipt.current.key,
+          ...(rule
+            ? { id: rule.id, tool: "update_rule" }
+            : { tool: "create_rule" }),
+        },
+        csrf,
+      });
+      if (!parsed.success) {
+        setMessage("Confira nome, categoria e prioridade antes de salvar.");
+        return false;
+      }
+      const controller = new AbortController();
+      inFlight.current = controller;
+      setPhase(Phase.saving);
+      setMessage("");
+      const { error } = await tryCatch(() =>
+        api.planning(parsed.data.command, csrf, controller.signal),
+      );
+      if (controller.signal.aborted) {
+        return false;
+      }
+      if (error) {
+        inFlight.current = null;
+        setPhase(Phase.editing);
+        setMessage(
+          "Não foi possível salvar. O rascunho foi mantido; tente novamente.",
+        );
+        return false;
+      }
+      if (reclassify) {
+        await reapply(controller.signal);
+      } else {
+        setPhase(Phase.done);
+      }
+      inFlight.current = null;
+      return true;
+    },
+    [api, csrf, reapply, rule],
+  );
+  return { job, message, phase, save };
 }
-function initialRuleFields(
-  rule: Rule | undefined,
-  catalog: WorkspaceCatalog,
-  seed: TransactionRuleSeed | undefined,
-) {
-  return {
-    category: seed ? (seed.category ?? "") : initialCategory(rule, catalog),
-    currency: rule?.filter?.currency ?? seed?.currency ?? "",
-    legacyAccount: rule?.accountId ?? seed?.accountId ?? "",
-    legacyDirection: rule?.direction ?? seed?.direction ?? "",
-    legacyText: initialLegacyText(rule),
-    name:
-      rule?.name ??
-      (seed ? `Classificar ${seed.description}`.slice(0, 240) : ""),
-    priority: String(rule?.priority ?? 100),
-  };
-}
+
 export function RuleEditor({
   open,
   api,
@@ -98,757 +245,849 @@ export function RuleEditor({
   api: OrganizationApi;
   snapshot: PortalResponse;
   catalog: WorkspaceCatalog;
-  accounts: { id: string; name: string; personName: string }[];
+  accounts: Accounts;
   spaceId: string;
   rule?: Rule;
-  seed?: TransactionRuleSeed | undefined;
+  seed?: RuleSeed | undefined;
   close: () => void;
   saved: () => void;
 }) {
-  const [fields, setFields] = useState(() =>
-    initialRuleFields(rule, catalog, seed),
-  );
-  const [enabled, setEnabled] = useState(rule?.enabled ?? true);
-  const [alternatives, setAlternatives] = useState(() =>
-    initialAlternatives(rule, seed?.description),
-  );
+  const steps = useMemo(() => ruleSteps(!!rule), [rule]);
+  const [step, setStep] = useState<RuleStep>(steps[0] ?? RuleStep.conditions);
+  const [journey, setJourney] = useState(() => initialJourney(rule, seed));
+  const [currency, setCurrency] = useState(rule?.filter?.currency ?? "");
+  const [settings, setSettings] = useState<RuleSettings>(() => ({
+    category: rule?.categoryId ?? seed?.category ?? "",
+    enabled: rule?.enabled ?? true,
+    name: rule?.name ?? "",
+    priority: String(rule?.priority ?? 100),
+  }));
+  const [reclassify, setReclassify] = useState(true);
+  const [sample, setSample] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState("");
-  const inFlight = useRef<AbortController | null>(null);
-  const receipt = useRef({ key: "", payload: "" });
+  const saving = useRuleSave({ api, csrf: snapshot.csrf, rule, spaceId });
+  const { phase, job } = saving;
   const formId = useId();
-  useEffect(() => () => inFlight.current?.abort(), []);
+
+  const alternatives = useMemo(() => journeyAlternatives(journey), [journey]);
   const draft = useMemo(
     () =>
       parseRuleDraft({
-        accountId: fields.legacyAccount || null,
+        accountId: null,
         alternatives,
         csrf: snapshot.csrf,
-        currency: fields.currency,
-        direction: fields.legacyDirection || null,
+        currency,
+        direction: null,
         spaceId,
-        text: fields.legacyText,
+        text: "",
       }),
-    [
-      alternatives,
-      fields.currency,
-      fields.legacyAccount,
-      fields.legacyDirection,
-      fields.legacyText,
-      snapshot.csrf,
-      spaceId,
-    ],
+    [alternatives, currency, snapshot.csrf, spaceId],
   );
-  const onField = useCallback((event: FieldEvent) => {
-    const { name, value } = event.currentTarget;
+  const categoryRow = catalog.categories.find(
+    (c) => c.id === settings.category,
+  );
+  const suggestedName = [categoryRow?.name, journeySubject(journey, sample)]
+    .filter(Boolean)
+    .join(": ")
+    .slice(0, 240);
+  const ruleName = settings.name || suggestedName;
+  const applies = reclassify && settings.enabled;
+
+  const edit = useCallback<EditJourney>((next) => {
     setDirty(true);
-    setFields((previous) => ({ ...previous, [name]: value }));
+    setJourney(next);
   }, []);
-  const selectField = useCallback((name: string, value: string | null) => {
+  const changeSettings = useCallback<ChangeSettings>((patch) => {
     setDirty(true);
-    setFields((previous) => ({ ...previous, [name]: value ?? "" }));
+    setSettings((previous) => ({ ...previous, ...patch }));
   }, []);
-  const onCategory = useCallback(
-    (value: string | null) => selectField("category", value),
-    [selectField],
-  );
-  const onCurrency = useCallback(
-    (value: string | null) => selectField("currency", value),
-    [selectField],
-  );
-  const onLegacyAccount = useCallback(
-    (value: string | null) => selectField("legacyAccount", value),
-    [selectField],
-  );
-  const onLegacyDirection = useCallback(
-    (value: string | null) => selectField("legacyDirection", value),
-    [selectField],
-  );
-  const onEnabled = useCallback((checked: boolean) => {
+  const changeCurrency = useCallback((value: string) => {
     setDirty(true);
-    setEnabled(checked);
+    setCurrency(value);
   }, []);
-  const onCondition = useCallback(
-    (alternative: string, condition: string, part: string, value: string) => {
-      setDirty(true);
-      setAlternatives((previous) =>
-        previous.map((a) =>
-          a.id === alternative
-            ? {
-                ...a,
-                conditions: a.conditions.map((c) => {
-                  if (c.id !== condition) {
-                    return c;
-                  }
-                  if (part === "field") {
-                    return { ...conditionDraft(value), id: c.id };
-                  }
-                  if (part === "operator") {
-                    return { ...c, operator: value };
-                  }
-                  return { ...c, value };
-                }),
-              }
-            : a,
-        ),
-      );
-    },
+  const onPreview = useCallback(
+    (result: RulePreviewResult) =>
+      setSample(
+        result.samples.find((row) => row.counterparty)?.counterparty ?? null,
+      ),
     [],
   );
-  const onPreset = useCallback((event: MouseEvent<HTMLButtonElement>) => {
-    const preset = rulePresets.find(
-      (p) => p.name === event.currentTarget.dataset.preset,
-    );
-    if (!preset) {
+
+  const finish = useCallback(() => {
+    if (job) {
+      api.invalidate();
+    }
+    saved();
+  }, [api, job, saved]);
+  const dismiss = useCallback(() => {
+    if (phase === Phase.editing) {
+      close();
       return;
     }
-    setDirty(true);
-    setFields((previous) => ({
-      ...previous,
-      currency: "BRL",
-      legacyAccount: "",
-      legacyDirection: "",
-      legacyText: "",
-    }));
-    setAlternatives(
-      preset.terms.map((term) => ({
-        conditions: [
-          {
-            field: "description",
-            id: randomId(),
-            operator: RuleOperator.contains,
-            value: term,
-          },
-          { ...preset.direction, id: randomId() },
-        ],
-        id: randomId(),
-      })),
+    finish();
+  }, [close, finish, phase]);
+
+  const index = steps.indexOf(step);
+  const back = useCallback(() => {
+    const previous = steps[index - 1];
+    if (previous) {
+      setStep(previous);
+    }
+  }, [index, steps]);
+  const save = useCallback(async () => {
+    if (!draft.data?.filter) {
+      return;
+    }
+    const done = await saving.save(
+      {
+        accountId: null,
+        categoryId: settings.category,
+        direction: null,
+        enabled: settings.enabled,
+        filter: draft.data.filter,
+        name: ruleName,
+        priority: Number(settings.priority),
+        spaceId,
+        text: "",
+      },
+      applies,
     );
-  }, []);
-  const addAlternative = useCallback(() => {
-    setDirty(true);
-    setAlternatives((previous) => [
-      ...previous,
-      { conditions: [conditionDraft()], id: randomId() },
-    ]);
-  }, []);
-  const removeAlternative = useCallback(
-    (event: MouseEvent<HTMLButtonElement>) => {
-      const id = event.currentTarget.dataset.alternative;
-      setDirty(true);
-      setAlternatives((previous) => previous.filter((a) => a.id !== id));
-    },
-    [],
-  );
-  const addCondition = useCallback((event: MouseEvent<HTMLButtonElement>) => {
-    const id = event.currentTarget.dataset.alternative;
-    setDirty(true);
-    setAlternatives((previous) =>
-      previous.map((a) =>
-        a.id === id
-          ? { ...a, conditions: [...a.conditions, conditionDraft()] }
-          : a,
-      ),
-    );
-  }, []);
-  const removeCondition = useCallback(
-    (event: MouseEvent<HTMLButtonElement>) => {
-      const { alternative, condition } = event.currentTarget.dataset;
-      setDirty(true);
-      setAlternatives((previous) =>
-        previous.map((a) =>
-          a.id === alternative
-            ? {
-                ...a,
-                conditions: a.conditions.filter((c) => c.id !== condition),
-              }
-            : a,
-        ),
-      );
-    },
-    [],
-  );
+    if (done) {
+      setDirty(false);
+    }
+  }, [applies, draft, ruleName, saving, settings, spaceId]);
   const submit = useCallback(
-    async (event: FormEvent<HTMLFormElement>) => {
+    (event: FormEvent<HTMLFormElement>) => {
       event.preventDefault();
-      if (inFlight.current) {
+      if (phase !== Phase.editing) {
+        finish();
         return;
       }
-      const parsedDraft = parseRuleDraft({
-        accountId: fields.legacyAccount || null,
-        alternatives,
-        csrf: snapshot.csrf,
-        currency: fields.currency,
-        direction: fields.legacyDirection || null,
-        spaceId,
-        text: fields.legacyText,
-      });
-      if (!parsedDraft.success) {
-        setMessage(
-          "Complete todas as condições e escolha uma moeda ao comparar valores.",
-        );
+      const next = steps[index + 1];
+      if (next) {
+        setStep(next);
         return;
       }
-      const values = {
-        accountId: parsedDraft.data.accountId,
-        categoryId: fields.category,
-        direction: parsedDraft.data.direction,
-        enabled,
-        filter: parsedDraft.data.filter,
-        name: fields.name,
-        priority: Number(fields.priority),
-        spaceId,
-        text: parsedDraft.data.text,
-      };
-      const payload = JSON.stringify(values);
-      if (receipt.current.payload !== payload) {
-        receipt.current = { key: randomId(), payload };
-      }
-      const parsed = PortalMutationSchema.safeParse({
-        command: {
-          ...values,
-          confirmed: true,
-          idempotency_key: receipt.current.key,
-          ...(rule
-            ? { id: rule.id, tool: "update_rule" }
-            : { tool: "create_rule" }),
-        },
-        csrf: snapshot.csrf,
-      });
-      if (!parsed.success) {
-        setMessage("Confira nome, categoria e prioridade antes de salvar.");
-        return;
-      }
-      const controller = new AbortController();
-      inFlight.current = controller;
-      setBusy(true);
-      setMessage("");
-      const { data: _data, error } = await tryCatch(() =>
-        api.planning(parsed.data.command, snapshot.csrf, controller.signal),
-      );
-      if (controller.signal.aborted) {
-        return;
-      }
-      inFlight.current = null;
-      setBusy(false);
-      if (error) {
-        setMessage(
-          "Não foi possível salvar. O rascunho foi mantido; confira o grupo e tente novamente.",
-        );
-        return;
-      }
-      saved();
+      save().catch(() => undefined);
     },
-    [alternatives, api, enabled, fields, rule, saved, snapshot.csrf, spaceId],
+    [finish, index, phase, save, steps],
   );
-  let submitLabel = rule ? "Salvar alterações" : "Criar regra";
-  if (busy) {
-    submitLabel = "Salvando…";
-  }
+
+  const named = !!settings.category && !!ruleName.trim();
+  const ready: Record<RuleStep, boolean> = {
+    apply: draft.success && named,
+    category: named,
+    conditions: draft.success,
+    start: true,
+  };
+  const blocked =
+    phase === Phase.saving || (phase === Phase.editing && !ready[step]);
   return (
     <BackofficeDialog
-      actionHint={
-        <p className="muted">
-          Salvar vale para as próximas importações e não reclassifica o
-          histórico.
-        </p>
-      }
-      busy={busy}
-      close={close}
+      busy={phase === Phase.saving}
+      close={dismiss}
       dirty={dirty}
       open={open}
       primaryAction={{
-        children: submitLabel,
-        disabled: !(draft.success && fields.category),
+        children: primaryLabel({
+          editing: !!rule,
+          phase,
+          reclassify: applies,
+          step,
+        }),
+        disabled: blocked,
         form: formId,
         type: "submit",
       }}
+      showCancel={phase === Phase.editing}
       title={rule ? "Editar regra" : "Nova regra"}
     >
       <form
-        className="backoffice-form"
+        className="backoffice-form rule-wizard"
         id={formId}
         onSubmit={submit}
       >
-        <p className="muted">
-          Grupo: {catalog.spaces.find((s) => s.id === spaceId)?.name}
-        </p>
-        <fieldset disabled={busy}>
-          <legend className="sr-only">Identificação e classificação</legend>
-          <Input
-            label="Nome da regra"
-            maxLength={240}
-            name="name"
-            onChange={onField}
-            required
-            value={fields.name}
+        {phase === Phase.editing ? (
+          <>
+            <WizardHead
+              back={back}
+              step={step}
+              steps={steps}
+            />
+            <StepBody
+              accounts={accounts}
+              api={api}
+              catalog={catalog}
+              changeCurrency={changeCurrency}
+              changeSettings={changeSettings}
+              currency={currency}
+              draft={draft}
+              edit={edit}
+              journey={journey}
+              onPreview={onPreview}
+              open={open}
+              reclassify={reclassify}
+              ruleName={ruleName}
+              setReclassify={setReclassify}
+              settings={settings}
+              snapshot={snapshot}
+              spaceName={
+                catalog.spaces.find((s) => s.id === spaceId)?.name ?? ""
+              }
+              step={step}
+              suggestedName={suggestedName}
+            />
+          </>
+        ) : (
+          <SaveProgress
+            job={job}
+            phase={phase}
+            ruleName={ruleName}
           />
-          <div className="editor-grid">
-            <Select
-              className="w-full"
-              items={[
-                ...catalog.categories
-                  .filter((c) => !c.hidden || c.id === fields.category)
-                  .map((c) => ({
-                    label: <CategoryLabel category={c} />,
-                    value: c.id,
-                  })),
-              ]}
-              label="Categoria"
-              name="category"
-              onValueChange={onCategory}
-              placeholder="Escolha uma categoria"
-              required
-              value={fields.category}
-            />
-            <Input
-              description={<small>Menor número vence.</small>}
-              label="Prioridade"
-              max={1000}
-              min={0}
-              name="priority"
-              onChange={onField}
-              required
-              type="number"
-              value={fields.priority}
-            />
-          </div>
-          <div className="check-field">
-            <Switch
-              checked={enabled}
-              label="Regra ativa nas próximas importações"
-              onCheckedChange={onEnabled}
-            />
-          </div>
-        </fieldset>
-        <fieldset disabled={busy}>
-          <legend>Condições: todas por alternativa</legend>
-          <div className="preset-actions">
-            {rulePresets.map((preset) => (
-              <UiButton
-                data-preset={preset.name}
-                key={preset.name}
-                onClick={onPreset}
-                type="button"
-                variant="secondary"
-              >
-                {preset.name}
-              </UiButton>
-            ))}
-          </div>
-          <p className="muted">Presets substituem as condições e usam BRL.</p>
-          <Select
-            className="w-full"
-            description={
-              <small>
-                Obrigatória ao comparar valores. Valor absoluto não distingue
-                entrada de saída.
-              </small>
-            }
-            items={[
-              { label: "Todas as moedas", value: "" },
-              ...[
-                "BRL",
-                "USD",
-                "EUR",
-                "GBP",
-                "ARS",
-                "AUD",
-                "BHD",
-                "CAD",
-                "CHF",
-                "CLP",
-                "JPY",
-                "KWD",
-              ].map((value) => ({ label: value, value })),
-            ]}
-            label="Moeda das condições"
-            name="currency"
-            onValueChange={onCurrency}
-            value={fields.currency}
-          />
-          {!!(
-            seed ||
-            rule?.accountId ||
-            rule?.direction ||
-            (rule?.filter && rule.text)
-          ) && (
-            <div className="editor-grid">
-              <Select
-                className="w-full"
-                items={[
-                  { label: "Todas", value: "" },
-                  ...accounts.map((account) => ({
-                    label: (
-                      <>
-                        {account.name} · {account.personName}
-                      </>
-                    ),
-                    value: account.id,
-                  })),
-                ]}
-                label="Conta obrigatória"
-                name="legacyAccount"
-                onValueChange={onLegacyAccount}
-                value={fields.legacyAccount}
-              />
-              <Select
-                className="w-full"
-                items={[
-                  { label: "Todos", value: "" },
-                  { label: "Saída", value: TransactionDirection.DEBIT },
-                  { label: "Entrada", value: TransactionDirection.CREDIT },
-                ]}
-                label="Movimento obrigatório"
-                name="legacyDirection"
-                onValueChange={onLegacyDirection}
-                value={fields.legacyDirection}
-              />
-              {!!(rule?.filter && rule.text) && (
-                <Input
-                  label="Descrição obrigatória"
-                  name="legacyText"
-                  onChange={onField}
-                  value={fields.legacyText}
-                />
-              )}
-            </div>
-          )}
-          {alternatives.map((alternative, index) => (
-            <div
-              className="condition-alternative"
-              key={alternative.id}
-            >
-              {index > 0 && <p className="condition-or">OU</p>}
-              <div className="condition-heading">
-                <h3>Alternativa {index + 1}</h3>
-                {alternatives.length > 1 && (
-                  <UiButton
-                    data-alternative={alternative.id}
-                    onClick={removeAlternative}
-                    type="button"
-                    variant="secondary"
-                  >
-                    Remover alternativa
-                  </UiButton>
-                )}
-              </div>
-              {alternative.conditions.map((condition) => (
-                <div
-                  className="condition-row"
-                  key={condition.id}
-                >
-                  <ConditionSelect
-                    alternative={alternative.id}
-                    change={onCondition}
-                    condition={condition.id}
-                    items={[
-                      ...conditionFields.map((field) => ({
-                        label: field.label,
-                        value: field.value,
-                      })),
-                    ]}
-                    label="Campo"
-                    part="field"
-                    value={condition.field}
-                  />
-                  <ConditionSelect
-                    alternative={alternative.id}
-                    change={onCondition}
-                    condition={condition.id}
-                    items={[
-                      ...(condition.field === "description"
-                        ? [
-                            { label: "contém", value: RuleOperator.contains },
-                            {
-                              label: "não contém",
-                              value: RuleOperator.not_contains,
-                            },
-                            { label: "é igual a", value: RuleOperator.equals },
-                            {
-                              label: "começa com",
-                              value: RuleOperator.starts_with,
-                            },
-                          ]
-                        : [
-                            { label: "é igual a", value: RuleOperator.equals },
-                            ...(["date", "amount"].includes(condition.field)
-                              ? [
-                                  {
-                                    label: "maior ou igual",
-                                    value: RuleOperator.gte,
-                                  },
-                                  {
-                                    label: "menor ou igual",
-                                    value: RuleOperator.lte,
-                                  },
-                                ]
-                              : []),
-                          ]),
-                    ]}
-                    label="Operador"
-                    part="operator"
-                    value={condition.operator}
-                  />
-                  <ConditionValue
-                    accounts={accounts}
-                    alternative={alternative.id}
-                    change={onCondition}
-                    condition={condition}
-                    label={
-                      condition.field === "amount"
-                        ? `Valor em ${fields.currency || "moeda a escolher"}`
-                        : "Valor"
-                    }
-                    snapshot={snapshot}
-                  />
-                  <UiButton
-                    aria-label="Remover condição"
-                    className="icon-button"
-                    data-alternative={alternative.id}
-                    data-condition={condition.id}
-                    disabled={alternative.conditions.length === 1}
-                    onClick={removeCondition}
-                    type="button"
-                    variant="secondary"
-                  >
-                    <TrashIcon size={18} />
-                  </UiButton>
-                </div>
-              ))}
-              <UiButton
-                data-alternative={alternative.id}
-                disabled={alternative.conditions.length >= 8}
-                onClick={addCondition}
-                type="button"
-                variant="secondary"
-              >
-                <PlusIcon size={18} />
-                Adicionar condição
-              </UiButton>
-            </div>
-          ))}
-          <UiButton
-            disabled={alternatives.length >= 4}
-            onClick={addAlternative}
-            type="button"
-            variant="secondary"
-          >
-            <PlusIcon size={18} />
-            Adicionar alternativa
-          </UiButton>
-        </fieldset>
-        <RuleDraftComposition
-          accounts={accounts}
-          catalog={catalog}
-          category={fields.category}
-          draft={draft}
-          enabled={enabled}
-          people={snapshot.people}
-        />
-        {!!message && (
+        )}
+        {!!saving.message && (
           <Banner
             className="feedback"
-            description={message}
+            description={saving.message}
             role="alert"
-            variant="error"
+            variant={phase === Phase.editing ? "error" : "alert"}
           />
         )}
       </form>
-      <DraftFeedback
-        dirty={dirty}
-        draft={draft}
-      />
-      <RulePreview
-        accounts={accounts}
-        api={api}
-        input={open && draft.success ? draft.data : null}
-      />
     </BackofficeDialog>
   );
 }
-function ConditionSelect({
-  alternative,
-  condition,
-  part,
-  change,
-  ...props
+
+function WizardHead({
+  back,
+  step,
+  steps,
 }: {
-  alternative: string;
-  condition: string;
-  part: string;
-  change: (
-    alternative: string,
-    condition: string,
-    part: string,
-    value: string,
-  ) => void;
-  items: { label: string; value: string }[];
-  label: string;
-  value: string;
+  back: () => void;
+  step: RuleStep;
+  steps: RuleStep[];
 }) {
-  const select = useCallback(
-    (value: string | null) => change(alternative, condition, part, value ?? ""),
-    [alternative, condition, part, change],
-  );
   return (
-    <Select
-      className="w-full"
-      {...props}
-      onValueChange={select}
-    />
+    <header className="rule-wizard-head">
+      {steps.indexOf(step) > 0 && (
+        <UiButton
+          icon={ArrowLeftIcon}
+          onClick={back}
+          type="button"
+          variant="ghost"
+        >
+          Voltar
+        </UiButton>
+      )}
+      <ol
+        aria-label="Etapas"
+        className="wizard-steps rule-wizard-steps"
+      >
+        {steps.map((item) => (
+          <li
+            aria-current={item === step ? "step" : undefined}
+            key={item}
+          >
+            {ruleStepLabels[item]}
+          </li>
+        ))}
+      </ol>
+    </header>
   );
 }
 
-function ConditionValue({
-  label,
-  alternative,
-  condition,
-  accounts,
-  snapshot,
-  change,
-}: {
-  alternative: string;
-  condition: DraftCondition;
-  accounts: { id: string; name: string; personName: string }[];
+function StepBody(props: {
+  accounts: Accounts;
+  api: OrganizationApi;
+  catalog: WorkspaceCatalog;
+  changeCurrency: (value: string) => void;
+  changeSettings: ChangeSettings;
+  currency: string;
+  draft: ReturnType<typeof parseRuleDraft>;
+  edit: EditJourney;
+  journey: JourneyDraft;
+  onPreview: (result: RulePreviewResult) => void;
+  open: boolean;
+  reclassify: boolean;
+  ruleName: string;
+  setReclassify: (value: boolean) => void;
+  settings: RuleSettings;
   snapshot: PortalResponse;
-  label: React.ReactNode;
-  change: (
-    alternative: string,
-    condition: string,
-    part: string,
-    value: string,
-  ) => void;
+  spaceName: string;
+  step: RuleStep;
+  suggestedName: string;
 }) {
-  const onInput = useCallback(
-    (event: FieldEvent) =>
-      change(alternative, condition.id, "value", event.currentTarget.value),
-    [alternative, condition.id, change],
+  const { draft, settings } = props;
+  switch (props.step) {
+    case RuleStep.start:
+      return (
+        <StartStep
+          edit={props.edit}
+          journey={props.journey}
+        />
+      );
+    case RuleStep.conditions:
+      return (
+        <>
+          <ConditionsStep
+            accounts={props.accounts}
+            currency={props.currency}
+            edit={props.edit}
+            journey={props.journey}
+            setCurrency={props.changeCurrency}
+            snapshot={props.snapshot}
+          />
+          <RulePreview
+            accounts={props.accounts}
+            api={props.api}
+            input={props.open && draft.success ? draft.data : null}
+            loaded={props.onPreview}
+          />
+        </>
+      );
+    case RuleStep.category:
+      return (
+        <CategoryStep
+          catalog={props.catalog}
+          change={props.changeSettings}
+          settings={settings}
+          suggestedName={props.suggestedName}
+        />
+      );
+    default:
+      return draft.success && draft.data.filter ? (
+        <ApplyStep
+          accounts={props.accounts}
+          catalog={props.catalog}
+          filter={draft.data.filter}
+          people={props.snapshot.people}
+          reclassify={props.reclassify}
+          ruleName={props.ruleName}
+          setReclassify={props.setReclassify}
+          settings={settings}
+          spaceName={props.spaceName}
+        />
+      ) : null;
+  }
+}
+
+function primaryLabel({
+  editing,
+  phase,
+  reclassify,
+  step,
+}: {
+  editing: boolean;
+  phase: Phase;
+  reclassify: boolean;
+  step: RuleStep;
+}) {
+  if (phase === Phase.saving) {
+    return "Salvando…";
+  }
+  if (phase === Phase.reapplying) {
+    return "Continuar em segundo plano";
+  }
+  if (phase === Phase.done) {
+    return "Concluir";
+  }
+  if (step !== RuleStep.apply) {
+    return "Continuar";
+  }
+  if (reclassify) {
+    return "Salvar e reclassificar";
+  }
+  return editing ? "Salvar alterações" : "Criar regra";
+}
+
+function StartStep({
+  journey,
+  edit,
+}: {
+  journey: JourneyDraft;
+  edit: (next: (previous: JourneyDraft) => JourneyDraft) => void;
+}) {
+  const choose = useCallback(
+    (value: unknown) => {
+      const next = journeys.find((row) => row.value === value)?.value;
+      if (next) {
+        edit((previous) => ({ ...previous, journey: next }));
+      }
+    },
+    [edit],
   );
-  const onSelect = useCallback(
-    (value: string | null) =>
-      change(alternative, condition.id, "value", value ?? ""),
-    [alternative, condition.id, change],
+  return (
+    <Radio.Group
+      appearance="card"
+      className="rule-journeys"
+      legend="Como reconhecer as transações?"
+      onValueChange={choose}
+      value={journey.journey}
+    >
+      {journeys.map((row) => (
+        <Radio.Item
+          description={row.description}
+          key={row.value}
+          label={row.label}
+          value={row.value}
+        />
+      ))}
+    </Radio.Group>
   );
-  const options: Record<string, { id: string; name: string }[]> = {
-    accountId: accounts.map((account) => ({
-      id: account.id,
-      name: `${account.name} · ${account.personName}`,
-    })),
-    direction: [
-      { id: TransactionDirection.DEBIT, name: "Saída" },
-      { id: TransactionDirection.CREDIT, name: "Entrada" },
-    ],
-    personId: snapshot.people,
-    status: [
-      { id: TransactionStatus.POSTED, name: "Confirmada" },
-      { id: TransactionStatus.PENDING, name: "Pendente" },
-    ],
-  };
-  const choices = options[condition.field];
-  if (choices) {
+}
+
+function ConditionsStep({
+  accounts,
+  currency,
+  edit,
+  journey,
+  setCurrency,
+  snapshot,
+}: {
+  accounts: Accounts;
+  currency: string;
+  edit: EditJourney;
+  journey: JourneyDraft;
+  setCurrency: (value: string) => void;
+  snapshot: PortalResponse;
+}) {
+  const editAlternatives = useCallback(
+    (next: (previous: DraftAlternative[]) => DraftAlternative[]) =>
+      edit((previous) => ({
+        ...previous,
+        alternatives: next(previous.alternatives),
+      })),
+    [edit],
+  );
+  const toAdvanced = useCallback(
+    () =>
+      edit((previous) => ({
+        ...previous,
+        alternatives: journeyAlternatives(previous),
+        journey: RuleJourney.advanced,
+      })),
+    [edit],
+  );
+  const onDebit = useCallback(
+    (checked: boolean) =>
+      edit((previous) => ({ ...previous, debitOnly: checked })),
+    [edit],
+  );
+  if (journey.journey === RuleJourney.advanced) {
     return (
-      <Select
-        className="w-full"
-        data-alternative={alternative}
-        data-condition={condition.id}
-        data-part="value"
-        id={`condition-${condition.id}`}
-        items={[
-          { label: "Selecione", value: "" },
-          ...choices.map((choice) => ({
-            label: choice.name,
-            value: choice.id,
-          })),
-        ]}
-        label={label}
-        onValueChange={onSelect}
-        required
-        value={condition.value}
+      <RuleConditionsBuilder
+        accounts={accounts}
+        alternatives={journey.alternatives}
+        change={editAlternatives}
+        currency={currency}
+        setCurrency={setCurrency}
+        snapshot={snapshot}
       />
     );
   }
-  return (
-    <Input
-      data-alternative={alternative}
-      data-condition={condition.id}
-      data-part="value"
-      id={`condition-${condition.id}`}
-      inputMode={condition.field === "amount" ? "decimal" : "text"}
-      label={label}
-      maxLength={160}
-      onChange={onInput}
-      placeholder={
-        condition.field === "amount" ? "Ex.: 150,00" : "Texto literal"
-      }
-      required
-      type={condition.field === "date" ? "date" : "text"}
-      value={condition.value}
-    />
+  const debit = (
+    <div className="check-field">
+      <Switch
+        checked={journey.debitOnly}
+        label="Só saídas de dinheiro"
+        onCheckedChange={onDebit}
+      />
+    </div>
   );
-}
-
-function DraftFeedback({
-  draft,
-  dirty,
-}: {
-  draft: ReturnType<typeof parseRuleDraft>;
-  dirty: boolean;
-}) {
-  if (draft.success || !dirty) {
-    return null;
+  const refine = (
+    <UiButton
+      className="rule-refine"
+      onClick={toAdvanced}
+      type="button"
+      variant="ghost"
+    >
+      Refinar com mais condições
+    </UiButton>
+  );
+  if (journey.journey === RuleJourney.preset) {
+    return (
+      <>
+        <PresetChoice
+          edit={edit}
+          journey={journey}
+        />
+        {!!journey.preset && refine}
+      </>
+    );
   }
-  const message = draft.error.issues.some((issue) =>
-    issue.message.includes("moeda"),
-  )
-    ? "Escolha uma moeda para comparar valores."
-    : "Complete todas as condições com valores válidos para consultar e salvar.";
+  if (journey.journey === RuleJourney.description) {
+    return (
+      <>
+        <DescriptionFields
+          edit={edit}
+          journey={journey}
+        />
+        {debit}
+        {refine}
+      </>
+    );
+  }
   return (
-    <Banner
-      className="feedback"
-      description={message}
-      role="status"
-      variant="alert"
-    />
+    <>
+      <CounterpartyFields
+        edit={edit}
+        journey={journey}
+      />
+      {debit}
+      {refine}
+    </>
   );
 }
 
-const RuleDraftComposition = memo(function RuleDraftDiagram({
-  accounts,
-  category,
-  catalog,
-  draft,
-  enabled,
-  people,
+function CounterpartyFields({
+  journey,
+  edit,
 }: {
-  accounts: { id: string; name: string; personName: string }[];
-  category: string;
-  catalog: WorkspaceCatalog;
-  draft: ReturnType<typeof parseRuleDraft>;
-  enabled: boolean;
-  people: PortalResponse["people"];
+  journey: JourneyDraft;
+  edit: (next: (previous: JourneyDraft) => JourneyDraft) => void;
 }) {
+  const { counterparty } = journey;
+  const onKey = useCallback(
+    (value: unknown) => {
+      const key =
+        value === CounterpartyKey.name
+          ? CounterpartyKey.name
+          : CounterpartyKey.document;
+      edit((previous) => ({
+        ...previous,
+        counterparty: { ...previous.counterparty, key },
+      }));
+    },
+    [edit],
+  );
+  const onValue = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      const { value } = event.currentTarget;
+      edit((previous) => ({
+        ...previous,
+        counterparty: {
+          ...previous.counterparty,
+          [previous.counterparty.key]: value,
+        },
+      }));
+    },
+    [edit],
+  );
+  const byDocument = counterparty.key === CounterpartyKey.document;
   return (
-    <DisclosureItem summary="Visualizar composição">
-      {draft.success ? (
+    <>
+      <Radio.Group
+        legend="Identificar por"
+        onValueChange={onKey}
+        orientation="horizontal"
+        value={counterparty.key}
+      >
+        <Radio.Item
+          label="CNPJ ou CPF"
+          value={CounterpartyKey.document}
+        />
+        <Radio.Item
+          label="Nome"
+          value={CounterpartyKey.name}
+        />
+      </Radio.Group>
+      <Input
+        autoFocus
+        inputMode={byDocument ? "numeric" : "text"}
+        label={byDocument ? "CNPJ ou CPF do beneficiário" : "Nome contém"}
+        maxLength={160}
+        onChange={onValue}
+        placeholder={byDocument ? "00.000.000/0000-00" : "Ex.: PJBANK"}
+        required
+        value={byDocument ? counterparty.document : counterparty.name}
+      />
+    </>
+  );
+}
+
+function DescriptionFields({
+  journey,
+  edit,
+}: {
+  journey: JourneyDraft;
+  edit: (next: (previous: JourneyDraft) => JourneyDraft) => void;
+}) {
+  const onOperator = useCallback(
+    (value: string | null) =>
+      edit((previous) => ({
+        ...previous,
+        description: {
+          ...previous.description,
+          operator: value ?? RuleOperator.contains,
+        },
+      })),
+    [edit],
+  );
+  const onText = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      const { value } = event.currentTarget;
+      edit((previous) => ({
+        ...previous,
+        description: { ...previous.description, text: value },
+      }));
+    },
+    [edit],
+  );
+  return (
+    <div className="rule-description-fields">
+      <Select
+        className="w-full"
+        items={descriptionOperators}
+        label="A descrição"
+        onValueChange={onOperator}
+        value={journey.description.operator}
+      />
+      <Input
+        autoFocus
+        label="Texto"
+        maxLength={160}
+        onChange={onText}
+        placeholder="Ex.: netflix"
+        required
+        value={journey.description.text}
+      />
+    </div>
+  );
+}
+
+function PresetChoice({
+  journey,
+  edit,
+}: {
+  journey: JourneyDraft;
+  edit: (next: (previous: JourneyDraft) => JourneyDraft) => void;
+}) {
+  const choose = useCallback(
+    (value: unknown) => {
+      const preset = rulePresets.find((row) => row.name === value);
+      if (preset) {
+        edit((previous) => ({ ...previous, preset: preset.name }));
+      }
+    },
+    [edit],
+  );
+  return (
+    <Radio.Group
+      appearance="card"
+      className="rule-journeys"
+      legend="Modelo"
+      onValueChange={choose}
+      value={journey.preset}
+    >
+      {rulePresets.map((preset) => (
+        <Radio.Item
+          description={`Descrição com ${preset.terms.map((term) => `“${term}”`).join(" ou ")}`}
+          key={preset.name}
+          label={preset.name}
+          value={preset.name}
+        />
+      ))}
+    </Radio.Group>
+  );
+}
+
+function CategoryStep({
+  catalog,
+  change,
+  settings,
+  suggestedName,
+}: {
+  catalog: WorkspaceCatalog;
+  change: ChangeSettings;
+  settings: RuleSettings;
+  suggestedName: string;
+}) {
+  const onCategory = useCallback(
+    (value: string | null) => change({ category: value ?? "" }),
+    [change],
+  );
+  const onName = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) =>
+      change({ name: event.currentTarget.value }),
+    [change],
+  );
+  const onPriority = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) =>
+      change({ priority: event.currentTarget.value }),
+    [change],
+  );
+  const onEnabled = useCallback(
+    (checked: boolean) => change({ enabled: checked }),
+    [change],
+  );
+  return (
+    <>
+      <Select
+        className="w-full"
+        items={catalog.categories
+          .filter((c) => !c.hidden || c.id === settings.category)
+          .map((c) => ({
+            label: <CategoryLabel category={c} />,
+            value: c.id,
+          }))}
+        label="Classificar como"
+        onValueChange={onCategory}
+        placeholder="Escolha uma categoria"
+        required
+        value={settings.category}
+      />
+      <Input
+        label="Nome da regra"
+        maxLength={240}
+        onChange={onName}
+        placeholder={suggestedName || "Ex.: Aluguel"}
+        value={settings.name}
+      />
+      <DisclosureItem summary="Mais opções">
+        <div className="editor-grid">
+          <Input
+            description={
+              <small>Quando duas regras servem, o menor número vence.</small>
+            }
+            label="Prioridade"
+            max={1000}
+            min={0}
+            onChange={onPriority}
+            required
+            type="number"
+            value={settings.priority}
+          />
+          <div className="check-field">
+            <Switch
+              checked={settings.enabled}
+              label="Regra ativa"
+              onCheckedChange={onEnabled}
+            />
+          </div>
+        </div>
+      </DisclosureItem>
+    </>
+  );
+}
+
+function ApplyStep({
+  accounts,
+  catalog,
+  filter,
+  people,
+  reclassify,
+  ruleName,
+  setReclassify,
+  settings,
+  spaceName,
+}: {
+  accounts: Accounts;
+  catalog: WorkspaceCatalog;
+  filter: NonNullable<RulePreviewInput["filter"]>;
+  people: PortalResponse["people"];
+  reclassify: boolean;
+  ruleName: string;
+  setReclassify: (value: boolean) => void;
+  settings: RuleSettings;
+  spaceName: string;
+}) {
+  const { enabled } = settings;
+  const row = catalog.categories.find((c) => c.id === settings.category);
+  const rule = useMemo(
+    () => ({ accountId: null, direction: null, filter, text: "" }),
+    [filter],
+  );
+  return (
+    <>
+      <section className="rule-review">
+        <h3>{ruleName}</h3>
+        <p>{ruleSummary({ rule })}</p>
+        <p className="rule-review-outcome">
+          <CategoryLabel
+            category={row}
+            label={row?.name ?? ""}
+          />
+        </p>
+      </section>
+      {enabled ? (
+        <div className="check-field">
+          <Switch
+            checked={reclassify}
+            label={`Reclassificar o histórico de ${spaceName}`}
+            onCheckedChange={setReclassify}
+          />
+        </div>
+      ) : null}
+      {enabled && reclassify ? (
+        <p className="muted">Categorias escolhidas à mão são mantidas.</p>
+      ) : null}
+      <DisclosureItem summary="Ver composição">
         <RuleComposition
           accounts={accounts}
-          category={
-            catalog.categories.find((item) => item.id === category)?.name ?? ""
-          }
-          categoryAppearance={catalog.categories.find(
-            (item) => item.id === category,
-          )}
+          category={row?.name ?? ""}
+          categoryAppearance={row}
           enabled={enabled}
           people={people}
-          rule={draft.data}
+          rule={rule}
         />
-      ) : (
-        <p className="muted">
-          Complete as condições para visualizar a composição.
+      </DisclosureItem>
+    </>
+  );
+}
+
+function SaveProgress({
+  job,
+  phase,
+  ruleName,
+}: {
+  job: RuleJob | null;
+  phase: Phase;
+  ruleName: string;
+}) {
+  const changed = job?.applied.changed ?? 0;
+  const label =
+    changed === 1 ? "transação reclassificada" : "transações reclassificadas";
+  if (phase === Phase.saving) {
+    return (
+      <div
+        className="rule-progress"
+        role="status"
+      >
+        <Loader />
+        <p>Salvando a regra…</p>
+      </div>
+    );
+  }
+  if (phase === Phase.reapplying) {
+    return (
+      <div
+        className="rule-progress"
+        role="status"
+      >
+        <Loader />
+        <p>Reclassificando o histórico…</p>
+        {!!changed && (
+          <p className="muted">
+            {count.format(changed)} {label} até agora
+          </p>
+        )}
+      </div>
+    );
+  }
+  return (
+    <div
+      className="rule-progress rule-progress-done"
+      role="status"
+    >
+      <p className="rule-progress-title">{ruleName} salva</p>
+      {job?.status === RuleJobStatus.succeeded && (
+        <p>
+          <strong className="rule-progress-count">
+            {count.format(changed)}
+          </strong>{" "}
+          {label}
         </p>
       )}
-    </DisclosureItem>
+    </div>
   );
-});
+}

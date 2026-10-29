@@ -32,6 +32,7 @@ type ApplicationRow = Pick<
   | "date"
   | "description"
   | "direction"
+  | "identification"
   | "personId"
   | "status"
   | "ignored"
