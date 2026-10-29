@@ -1,7 +1,10 @@
 export function DesignHead({
   themeSwitching = true,
+  stylesheets = ["/kumo.css", "/design.css"],
 }: {
   themeSwitching?: boolean;
+  // Build-generated pages pass content-hashed copies that never revalidate.
+  stylesheets?: string[];
 }) {
   return (
     <>
@@ -34,14 +37,13 @@ export function DesignHead({
         rel="preload"
         type="font/woff2"
       />
-      <link
-        href="/kumo.css"
-        rel="stylesheet"
-      />
-      <link
-        href="/design.css"
-        rel="stylesheet"
-      />
+      {stylesheets.map((href) => (
+        <link
+          href={href}
+          key={href}
+          rel="stylesheet"
+        />
+      ))}
     </>
   );
 }

@@ -10,18 +10,16 @@ import {
 
 const hexColorPattern = /^#[a-f\d]{6}$/i;
 
-test("the classifier catalog has exactly the 33 requested categories and valid group references in every space", () => {
+test("the classifier catalog has exactly the 33 requested categories with the fixed cost preselected in every space", () => {
   assert.equal(fixedCategories.length, 33);
   assert.equal(
     new Set(fixedCategories.map((category) => category.name)).size,
     33,
   );
   for (const spaceId of ["personal", "family"]) {
-    const { categories, categoryGroups } = categoryCatalog(spaceId);
-    const groups = new Set(categoryGroups.map((group) => group.id));
+    const { categories } = categoryCatalog(spaceId);
     for (const category of categories) {
       assert.ok(category.system);
-      assert.ok(category.groupId && groups.has(category.groupId));
       assert.match(category.color ?? "", hexColorPattern);
       assert.equal(category.spaceId, spaceId);
     }
@@ -32,6 +30,15 @@ test("the classifier catalog has exactly the 33 requested categories and valid g
     assert.equal(
       fixedCategoryId(spaceId, "mercado"),
       `${spaceId}:fixed:mercado`,
+    );
+    assert.equal(
+      categories.find((category) => category.name === "Aluguel")?.fixedCost,
+      true,
+    );
+    assert.equal(
+      categories.find((category) => category.name === "Restaurantes")
+        ?.fixedCost,
+      false,
     );
   }
 });

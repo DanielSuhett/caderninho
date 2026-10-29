@@ -3,18 +3,24 @@ import {
   AccountType,
   CategoryKind,
   cardCredit,
+  closedMonths,
   compareRules,
   detectSubscriptions,
+  emergencyReservePlan,
   type FinancialIdentityFilter,
   financialCharts,
   financialIdentity,
+  fixedCostBreakdown,
   investmentPortfolio,
   localDay,
+  type MonthlyRollupData,
   matchesFinancialIdentity,
   minorPresentation,
   monthDate,
   PlanningError,
   type PlanningTransaction,
+  reserveDefaults,
+  reserveId,
   SpendingGroupBy,
   TransactionDirection,
   TransactionOrder,
@@ -26,6 +32,7 @@ import { effectiveBills } from "./bills.service";
 import { cardCommitments } from "./card-commitments.service";
 import { planningCursor } from "./cursor";
 import type {
+  MonthlyRollup,
   PlanningRepository,
   PlanningResult,
   PlanningSnapshot,
@@ -52,6 +59,15 @@ interface Totals {
   unclassifiedUnknown: number;
   unknown: number;
 }
+interface SummaryBucket {
+  /** Classified expense per account, collected only when requested. */
+  accounts?: Map<string, bigint>;
+  groups: Map<
+    string,
+    { currency: string; group: string; amount: bigint; unknown: number }
+  >;
+  totals: Map<string, Totals>;
+}
 const emptyTotals = (): Totals => ({
   cashFlow: 0n,
   count: 0,
@@ -66,6 +82,87 @@ const absolute = (value: string) => {
   const amount = BigInt(value);
   return amount < 0n ? -amount : amount;
 };
+function monthSegments(from: string, to: string) {
+  const segments: {
+    from: string;
+    month: string;
+    to: string;
+    whole: boolean;
+  }[] = [];
+  let month = from.slice(0, 7);
+  while (month <= to.slice(0, 7)) {
+    const first = `${month}-01`;
+    const last = new Date(
+      Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0),
+    )
+      .toISOString()
+      .slice(0, 10);
+    segments.push({
+      from: first < from ? from : first,
+      month,
+      to: last > to ? to : last,
+      whole: first >= from && last <= to,
+    });
+    const next = new Date(`${last}T00:00:00Z`);
+    next.setUTCDate(next.getUTCDate() + 1);
+    month = next.toISOString().slice(0, 7);
+  }
+  return segments;
+}
+function rollupData(
+  totals: Map<string, Totals> = new Map(),
+  groups: Map<string, { amount: bigint; currency: string }> = new Map(),
+): MonthlyRollupData {
+  return {
+    expenses: Object.fromEntries(
+      [...groups.values()].map((g) => [g.currency, g.amount.toString()]),
+    ),
+    totals: Object.fromEntries(
+      [...totals].map(([currency, t]) => [
+        currency,
+        {
+          ...t,
+          cashFlow: t.cashFlow.toString(),
+          expense: t.expense.toString(),
+          income: t.income.toString(),
+          unclassifiedAmount: t.unclassifiedAmount.toString(),
+        },
+      ]),
+    ),
+  };
+}
+function mergeRollup(
+  period: {
+    groups: Map<
+      string,
+      { currency: string; group: string; amount: bigint; unknown: number }
+    >;
+    totals: Map<string, Totals>;
+  },
+  month: string,
+  data: MonthlyRollupData,
+) {
+  for (const [currency, t] of Object.entries(data.totals)) {
+    const total = period.totals.get(currency) ?? emptyTotals();
+    period.totals.set(currency, total);
+    total.cashFlow += BigInt(t.cashFlow);
+    total.count += t.count;
+    total.expense += BigInt(t.expense);
+    total.income += BigInt(t.income);
+    total.unclassified += t.unclassified;
+    total.unclassifiedAmount += BigInt(t.unclassifiedAmount);
+    total.unclassifiedUnknown += t.unclassifiedUnknown;
+    total.unknown += t.unknown;
+  }
+  for (const [currency, amount] of Object.entries(data.expenses)) {
+    period.groups.set(JSON.stringify([currency, month]), {
+      amount: BigInt(amount),
+      currency,
+      group: month,
+      unknown: 0,
+    });
+  }
+}
 function transactionOrder(order: TransactionOrder, after: string) {
   const descending = order === TransactionOrder.date_desc;
   const key = (row: PlanningTransaction) =>
@@ -229,16 +326,14 @@ export async function planningQuery(
   function addExpense(
     row: PlanningTransaction,
     total: Totals,
-    groups: Map<
-      string,
-      { currency: string; group: string; amount: bigint; unknown: number }
-    >,
+    { groups, accounts }: SummaryBucket,
     groupBy: SpendingGroupBy,
   ) {
     const magnitude = absolute(row.amountMinor ?? "0");
     const expense =
       row.direction === TransactionDirection.DEBIT ? magnitude : -magnitude;
     total.expense += expense;
+    accounts?.set(row.accountId, (accounts.get(row.accountId) ?? 0n) + expense);
     const group =
       groupBy === SpendingGroupBy.month
         ? row.date.slice(0, 7)
@@ -255,13 +350,10 @@ export async function planningQuery(
   }
   function addSummaryRow(
     row: PlanningTransaction,
-    totals: Map<string, Totals>,
-    groups: Map<
-      string,
-      { currency: string; group: string; amount: bigint; unknown: number }
-    >,
+    bucket: SummaryBucket,
     groupBy: SpendingGroupBy,
   ) {
+    const { totals } = bucket;
     const total = totals.get(row.currency) ?? emptyTotals();
     totals.set(row.currency, total);
     total.count += 1;
@@ -288,10 +380,18 @@ export async function planningQuery(
         row.direction === TransactionDirection.CREDIT ? amount : -amount;
     }
     if (kind === CategoryKind.expense) {
-      addExpense(row, total, groups, groupBy);
+      addExpense(row, total, bucket, groupBy);
     }
   }
   async function summaries(
+    intervals: { from: string; to: string }[],
+    groupBy: SpendingGroupBy = SpendingGroupBy.category,
+  ) {
+    return (await accumulate(intervals, groupBy)).map((period) =>
+      presentSummary(period, groupBy),
+    );
+  }
+  async function accumulate(
     intervals: { from: string; to: string }[],
     groupBy: SpendingGroupBy = SpendingGroupBy.category,
   ) {
@@ -300,6 +400,7 @@ export async function planningQuery(
     }
     const periods = intervals.map((interval) => ({
       ...interval,
+      accounts: new Map<string, bigint>(),
       groups: new Map<
         string,
         { currency: string; group: string; amount: bigint; unknown: number }
@@ -321,11 +422,30 @@ export async function planningQuery(
       }
       for (const interval of periods) {
         if (row.date >= interval.from && row.date <= interval.to) {
-          addSummaryRow(row, interval.totals, interval.groups, groupBy);
+          addSummaryRow(row, interval, groupBy);
         }
       }
     }
-    return periods.map(({ from, to, totals, groups }) => ({
+    return periods;
+  }
+  function presentSummary(
+    {
+      from,
+      to,
+      totals,
+      groups,
+    }: {
+      from: string;
+      to: string;
+      totals: Map<string, Totals>;
+      groups: Map<
+        string,
+        { currency: string; group: string; amount: bigint; unknown: number }
+      >;
+    },
+    groupBy: SpendingGroupBy,
+  ) {
+    return {
       classification:
         "Only explicit local income/expense categories; unclassified bank movements are reported separately.",
       dateBasis: "transaction",
@@ -371,14 +491,97 @@ export async function planningQuery(
         unknownAmountCount: t.unknown,
       })),
       unit: "minor",
-    }));
+    };
   }
   async function summary(
     from: string,
     to: string,
     groupBy: SpendingGroupBy = SpendingGroupBy.category,
   ) {
+    if (groupBy === SpendingGroupBy.month) {
+      return monthlySummary(from, to);
+    }
     return found((await summaries([{ from, to }], groupBy))[0]);
+  }
+  /**
+   * Month series backed by planning_monthly_rollups. Closed months are cached
+   * per selection and reused while the planning revision and every
+   * connection's import sequence stay the same; the current month and partial
+   * edge months are always computed from transactions.
+   */
+  async function monthlySummary(from: string, to: string) {
+    validatePeriod({ from, to });
+    const scope = JSON.stringify(querySelection);
+    const version = [
+      snapshot.revision,
+      ...snapshot.connections
+        .map((row) => `${row.id}:${row.importSequence}:${row.lastSuccessAt}`)
+        .toSorted(),
+    ].join("|");
+    const openMonth = day.slice(0, 7);
+    const segments = monthSegments(from, to);
+    const closed = segments
+      .filter((segment) => segment.whole && segment.month < openMonth)
+      .map((segment) => segment.month);
+    const cached = new Map(
+      (await repository.monthlyRollups(scope, closed))
+        .filter((row) => row.version === version)
+        .map((row) => [row.month, row.data]),
+    );
+    const period = {
+      from,
+      groups: new Map<
+        string,
+        { currency: string; group: string; amount: bigint; unknown: number }
+      >(),
+      to,
+      totals: new Map<string, Totals>(),
+    };
+    const missing = segments.filter((segment) => !cached.has(segment.month));
+    const buckets = new Map(
+      missing.map((segment) => [
+        segment.month,
+        {
+          groups: new Map<
+            string,
+            { currency: string; group: string; amount: bigint; unknown: number }
+          >(),
+          totals: new Map<string, Totals>(),
+        },
+      ]),
+    );
+    const first = missing.at(0);
+    const last = missing.at(-1);
+    if (first && last) {
+      for await (const row of stream({
+        ...querySelection,
+        from: first.from,
+        to: last.to,
+      })) {
+        const bucket = buckets.get(row.date.slice(0, 7));
+        if (
+          !bucket ||
+          row.status !== TransactionStatus.POSTED ||
+          row.date > day
+        ) {
+          continue;
+        }
+        addSummaryRow(row, bucket, SpendingGroupBy.month);
+      }
+    }
+    const fresh: MonthlyRollup[] = [];
+    for (const [month, bucket] of buckets) {
+      const data = rollupData(bucket.totals, bucket.groups);
+      mergeRollup(period, month, data);
+      if (closed.includes(month)) {
+        fresh.push({ data, month, version });
+      }
+    }
+    for (const [month, data] of cached) {
+      mergeRollup(period, month, data);
+    }
+    await repository.saveMonthlyRollups(scope, fresh);
+    return presentSummary(period, SpendingGroupBy.month);
   }
   async function upcoming(from: string, to: string) {
     validatePeriod({ from, to });
@@ -539,8 +742,7 @@ export async function planningQuery(
       records: scoped(state.categories).filter(
         (c) =>
           (input.include_hidden || !c.hidden) &&
-          (input.groupId === undefined ||
-            (c.groupId ?? null) === input.groupId),
+          (input.fixedCost === undefined || c.fixedCost === input.fixedCost),
       ),
     };
   }
@@ -632,6 +834,85 @@ export async function planningQuery(
     return {
       deliveryConfigured: false,
       records: scoped(state.notifications),
+    };
+  }
+
+  async function handleGetEmergencyReserve(
+    input: Extract<PlanningCommand, { tool: "get_emergency_reserve" }>,
+  ) {
+    const config = state.reserves.find(
+      (row) => row.id === reserveId(input.spaceId, input.personId),
+    );
+    const months = config?.months ?? reserveDefaults.months;
+    const fixed = new Set(
+      scoped(state.categories)
+        .filter((c) => c.fixedCost)
+        .map((c) => c.id),
+    );
+    const closed = closedMonths(day, reserveDefaults.window);
+    const periods = await summaries(closed);
+    const perMonth = periods.map(
+      (period) =>
+        new Map(
+          period.groups
+            .filter((g) => g.currency === space.currency && fixed.has(g.group))
+            .map((g) => [g.group, BigInt(g.amountMinor)]),
+        ),
+    );
+    const monthTotal = (month: Map<string, bigint> | undefined) =>
+      [...(month?.values() ?? [])].reduce((sum, value) => sum + value, 0n);
+    const linked = new Set([
+      ...(config?.accountIds ?? []),
+      ...(config?.investmentIds ?? []),
+    ]);
+    const sources = [
+      ...(await balances())
+        .filter((a) => a.type !== AccountType.CREDIT && !a.hidden)
+        .map((a) => ({
+          balanceMinor: a.balanceMinor,
+          id: a.id,
+          identity: a.identity,
+          kind: "account" as const,
+          name: a.name,
+        })),
+      ...owned(state.investments).map((i) => ({
+        balanceMinor: i.amountMinor,
+        id: i.id,
+        identity: i.identity,
+        kind: "investment" as const,
+        name: i.name,
+      })),
+    ].map((source) => ({ ...source, linked: linked.has(source.id) }));
+    const breakdown = fixedCostBreakdown(perMonth);
+    const plan = emergencyReservePlan({
+      balancesMinor: sources
+        .filter((source) => source.linked)
+        .map((source) =>
+          source.balanceMinor === null ? null : BigInt(source.balanceMinor),
+        ),
+      monthlyMinor: perMonth.map(monthTotal),
+      months,
+    });
+    return {
+      ...plan,
+      categories: breakdown.categories.map((row) => {
+        const category = state.categories.find((c) => c.id === row.id);
+        return {
+          ...row,
+          ...(category?.color && { color: category.color }),
+          ...(category?.icon && { icon: category.icon }),
+          name: category?.name ?? row.id,
+        };
+      }),
+      currency: space.currency,
+      monthly: closed.map((period, index) => ({
+        amountMinor: monthTotal(perMonth[index]).toString(),
+        month: period.month,
+      })),
+      months,
+      personId: input.personId,
+      reductionMinor: breakdown.reductionMinor,
+      sources,
     };
   }
 
@@ -735,9 +1016,15 @@ export async function planningQuery(
   async function handleGetOverview(
     input: Extract<PlanningCommand, { tool: "get_overview" }>,
   ) {
+    const period = found(
+      (await accumulate([input], SpendingGroupBy.category))[0],
+    );
     return {
-      ...(await summary(input.from, input.to)),
-      accounts: await balances(),
+      ...presentSummary(period, SpendingGroupBy.category),
+      accounts: (await balances()).map((account) => ({
+        ...account,
+        periodExpenseMinor: (period.accounts.get(account.id) ?? 0n).toString(),
+      })),
       investments: owned(state.investments).filter((i) => i.included),
       loans: owned(state.loans).filter((l) => !l.hidden),
     };
@@ -959,8 +1246,6 @@ export async function planningQuery(
       return handleGetBills(command);
     case "get_categories":
       return handleGetCategories(command);
-    case "get_category_groups":
-      return { records: scoped(state.categoryGroups) };
     case "get_tags":
       return handleGetTags(command);
     case "get_rules":
@@ -977,6 +1262,8 @@ export async function planningQuery(
       return handleGetLoanSchedule(command);
     case "get_notification_preferences":
       return handleGetNotificationPreferences(command);
+    case "get_emergency_reserve":
+      return await handleGetEmergencyReserve(command);
     case "get_goal_plan":
       return await handleGetGoalPlan(command);
     case "get_installments":

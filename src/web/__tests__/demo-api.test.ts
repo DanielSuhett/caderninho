@@ -79,7 +79,9 @@ test("the real account client reads the demo snapshot and every workspace page t
   assert.ok(investments.data.records.length > 0);
   assert.ok(catalog.rules.length > 0);
   assert.equal(history.records.length, 2);
-  assert.equal(audit.grants.length, 0);
+  assert.equal(audit.grants.length, 2);
+  assert.equal(audit.daily.length, 7);
+  assert.ok(audit.totals.requests > 0);
 });
 
 test("demo transactions paginate with the real client, preserve complete installments and isolate filters", async () => {

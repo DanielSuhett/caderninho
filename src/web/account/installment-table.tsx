@@ -6,7 +6,6 @@ import type { PortalTransactionListSchema } from "../../contracts";
 import { TransactionStatus } from "../../domain";
 import { formatBalance, transactionTone } from "../money";
 import { MoneyValue } from "../money-value";
-import { type AccountAppearance, AccountAvatar } from "./account-identity";
 import { InfoTip } from "./info-tip";
 import { dayLabel } from "./workspace-resource";
 
@@ -18,12 +17,10 @@ export function InstallmentTable({
   installments,
   total,
   referenceDay,
-  account,
 }: {
   installments: Installment[];
   total: number | null;
   referenceDay?: string | undefined;
-  account: AccountAppearance;
 }) {
   const missing = total === null ? 0 : Math.max(0, total - installments.length);
   return (
@@ -62,10 +59,6 @@ export function InstallmentTable({
           {installments.map((item) => (
             <Table.Row key={item.id}>
               <Table.Cell className="installment-identity">
-                <AccountAvatar
-                  account={account}
-                  person={{ id: item.personId, name: item.personName }}
-                />
                 <span>
                   {item.installmentNumber}/{item.totalInstallments}
                 </span>

@@ -1,7 +1,11 @@
+import { Badge } from "@cloudflare/kumo/components/badge";
 import { Banner } from "@cloudflare/kumo/components/banner";
 import { Input } from "@cloudflare/kumo/components/input";
+import { LayerCard } from "@cloudflare/kumo/components/layer-card";
 import { Select } from "@cloudflare/kumo/components/select";
-import { PencilSimpleIcon, PlusIcon } from "@phosphor-icons/react";
+import { Switch } from "@cloudflare/kumo/components/switch";
+import { Table } from "@cloudflare/kumo/components/table";
+import { PencilSimpleIcon } from "@phosphor-icons/react";
 import {
   type ChangeEvent,
   type FormEvent,
@@ -18,70 +22,38 @@ import {
   type PortalResponse,
   type WorkspaceCatalog,
 } from "../../contracts";
+import { CategoryKind } from "../../domain";
 import { tryCatch } from "../../shared";
 import { randomId } from "../random-id";
-import { UiButton, UiIconButton } from "../ui";
 import type { OrganizationApi } from "./account-api";
 import { BackofficeDialog } from "./backoffice-dialog";
 import { CategorySymbol, categoryIconOptions } from "./category-appearance";
 import { InfoTip } from "./info-tip";
+import { RowMenu } from "./row-menu";
 
 type Category = WorkspaceCatalog["categories"][number];
-type Group = WorkspaceCatalog["categoryGroups"][number];
-type Selection =
-  | { kind: "category"; row: Category }
-  | { kind: "group"; row?: Group };
 
 function categoryCommand({
-  selection,
-  removing,
+  row,
   name,
   color,
   icon,
-  groupId,
 }: {
-  selection: Selection;
-  removing: boolean;
+  row: Category;
   name: string;
   color: string;
   icon: Category["icon"];
-  groupId: string;
-}): Record<string, unknown> {
-  if (selection.kind === "category") {
-    return {
-      color,
-      groupId: groupId || null,
-      icon,
-      id: selection.row.id,
-      tool: "update_category",
-      ...(!selection.row.system && { name }),
-    };
-  }
-  if (removing && selection.row) {
-    return { id: selection.row.id, tool: "delete_category_group" };
-  }
+}) {
   return {
-    tool: selection.row ? "update_category_group" : "create_category_group",
-    ...(selection.row && { id: selection.row.id }),
     color,
     icon,
-    name,
+    id: row.id,
+    tool: "update_category" as const,
+    ...(!row.system && { name }),
   };
 }
-function editorTitle(selection: Selection, removing: boolean) {
-  if (removing) {
-    return "Remover grupo de categorias";
-  }
-  if (selection.kind === "category") {
-    return "Editar categoria";
-  }
-  return selection.row
-    ? "Editar grupo de categorias"
-    : "Novo grupo de categorias";
-}
 function CategoryEditor({
-  selection,
-  catalog,
+  row,
   api,
   snapshot,
   spaceId,
@@ -89,8 +61,7 @@ function CategoryEditor({
   saved,
   open,
 }: {
-  selection: Selection;
-  catalog: WorkspaceCatalog;
+  row: Category;
   api: OrganizationApi;
   snapshot: PortalResponse;
   spaceId: string;
@@ -98,19 +69,12 @@ function CategoryEditor({
   saved: () => void;
   open: boolean;
 }) {
-  const { row } = selection;
-  const [name, setName] = useState(row?.name ?? "");
-  const [color, setColor] = useState(row?.color ?? "#64748b");
-  const [icon, setIcon] = useState<
-    WorkspaceCatalog["categories"][number]["icon"]
-  >(row?.icon ?? "shopping");
-  const [groupId, setGroupId] = useState(
-    selection.kind === "category" ? (selection.row.groupId ?? "") : "",
-  );
+  const [name, setName] = useState(row.name);
+  const [color, setColor] = useState(row.color ?? "#64748b");
+  const [icon, setIcon] = useState<Category["icon"]>(row.icon ?? "shopping");
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
-  const [removing, setRemoving] = useState(false);
   const controller = useRef<AbortController | null>(null);
   const receipt = useRef({ key: "", payload: "" });
   const id = useId();
@@ -121,14 +85,7 @@ function CategoryEditor({
       if (controller.current) {
         return;
       }
-      const fields = categoryCommand({
-        color,
-        groupId,
-        icon,
-        name,
-        removing,
-        selection,
-      });
+      const fields = categoryCommand({ color, icon, name, row });
       const payload = JSON.stringify(fields);
       if (receipt.current.payload !== payload) {
         receipt.current = { key: randomId(), payload };
@@ -164,18 +121,7 @@ function CategoryEditor({
       }
       saved();
     },
-    [
-      api,
-      color,
-      groupId,
-      icon,
-      name,
-      removing,
-      saved,
-      selection,
-      snapshot.csrf,
-      spaceId,
-    ],
+    [api, color, icon, name, row, saved, snapshot.csrf, spaceId],
   );
   const markDirty = useCallback(() => {
     setDirty(true);
@@ -191,31 +137,20 @@ function CategoryEditor({
     setIcon(value ?? "shopping");
     setDirty(true);
   }, []);
-  const onGroup = useCallback((value: string | null) => {
-    setGroupId(value ?? "");
-    setDirty(true);
-  }, []);
-  const remove = useCallback(() => {
-    setRemoving(true);
-  }, []);
-  let actionLabel = removing ? "Remover grupo" : "Salvar";
-  if (busy) {
-    actionLabel = "Salvando…";
-  }
-  const fixed = selection.kind === "category" && selection.row.system;
+  const fixed = row.system;
   return (
     <BackofficeDialog
       busy={busy}
       close={close}
       dirty={dirty}
       open={open}
-      presentation={removing ? "confirmation" : "compact-editor"}
+      presentation="compact-editor"
       primaryAction={{
-        children: actionLabel,
+        children: busy ? "Salvando…" : "Salvar",
         form: id,
         type: "submit",
       }}
-      title={editorTitle(selection, removing)}
+      title="Editar categoria"
     >
       <form
         className="backoffice-form"
@@ -225,76 +160,38 @@ function CategoryEditor({
       >
         <fieldset disabled={busy}>
           <legend className="sr-only">Organização das categorias</legend>
-          {removing ? (
-            <p>
-              Remover “{row?.name}”? As categorias ficam sem grupo. Suas
-              transações e classificações são preservadas.
-            </p>
-          ) : (
-            <>
-              <Input
-                label="Nome"
-                maxLength={240}
-                onChange={onName}
-                readOnly={fixed}
-                required
-                value={name}
-              />
-              {!!fixed && (
-                <p className="muted">
-                  Categoria fixa de classificação. Configure sua aparência e
-                  agrupamento.
-                </p>
-              )}
-              <Select
-                items={categoryIconOptions}
-                label="Ícone"
-                onValueChange={onIcon}
-                value={icon}
-              />
-              <div className="category-color-fields">
-                <Input
-                  label="Escolher cor"
-                  onChange={onColor}
-                  onInput={onColor}
-                  type="color"
-                  value={color}
-                />
-                <Input
-                  label="Cor hexadecimal"
-                  maxLength={7}
-                  onChange={onColor}
-                  pattern="#[0-9a-fA-F]{6}"
-                  placeholder="#64748b"
-                  required
-                  value={color}
-                />
-              </div>
-              {selection.kind === "category" && (
-                <Select
-                  items={[
-                    { label: "Sem grupo", value: "" },
-                    ...catalog.categoryGroups.map((group) => ({
-                      label: group.name,
-                      value: group.id,
-                    })),
-                  ]}
-                  label="Grupo de categorias"
-                  onValueChange={onGroup}
-                  value={groupId}
-                />
-              )}
-              {selection.kind === "group" && row && (
-                <UiButton
-                  onClick={remove}
-                  type="button"
-                  variant="secondary"
-                >
-                  Remover grupo
-                </UiButton>
-              )}
-            </>
-          )}
+          <Input
+            label="Nome"
+            maxLength={240}
+            onChange={onName}
+            readOnly={fixed}
+            required
+            value={name}
+          />
+          <Select
+            items={categoryIconOptions}
+            label="Ícone"
+            onValueChange={onIcon}
+            value={icon}
+          />
+          <div className="category-color-fields">
+            <Input
+              label="Escolher cor"
+              onChange={onColor}
+              onInput={onColor}
+              type="color"
+              value={color}
+            />
+            <Input
+              label="Cor hexadecimal"
+              maxLength={7}
+              onChange={onColor}
+              pattern="#[0-9a-fA-F]{6}"
+              placeholder="#64748b"
+              required
+              value={color}
+            />
+          </div>
           {!!message && <Banner variant="error">{message}</Banner>}
         </fieldset>
       </form>
@@ -315,7 +212,12 @@ export function CategoryOrganization({
   spaceId: string;
   saved: () => void;
 }) {
-  const [selection, setSelection] = useState<Selection>({ kind: "group" });
+  // Toggles apply at once; the override holds the choice until the catalog reloads.
+  const [overrides, setOverrides] = useState<ReadonlyMap<string, boolean>>(
+    new Map(),
+  );
+  const [failed, setFailed] = useState(false);
+  const [editing, setEditing] = useState<Category | null>(null);
   const [open, setOpen] = useState(false);
   const [session, setSession] = useState(0);
   const close = useCallback(() => {
@@ -325,132 +227,196 @@ export function CategoryOrganization({
     close();
     saved();
   }, [close, saved]);
-  const newGroup = useCallback(() => {
-    setSelection({ kind: "group" });
-    setSession((value) => value + 1);
-    setOpen(true);
-  }, []);
   const edit = useCallback(
-    (event: MouseEvent<HTMLButtonElement>) => {
-      const { kind, id } = event.currentTarget.dataset;
-      setSession((value) => value + 1);
-      setOpen(true);
-      if (kind === "category") {
-        const row = catalog.categories.find((category) => category.id === id);
-        if (row) {
-          setSelection({ kind: "category", row });
-        }
-        return;
-      }
-      const row = catalog.categoryGroups.find((group) => group.id === id);
+    (event: MouseEvent<HTMLElement>) => {
+      const row = catalog.categories.find(
+        (category) => category.id === event.currentTarget.dataset.id,
+      );
       if (row) {
-        setSelection({ kind: "group", row });
+        setEditing(row);
+        setSession((value) => value + 1);
+        setOpen(true);
       }
     },
-    [catalog.categories, catalog.categoryGroups],
+    [catalog.categories],
   );
-  const sections = [
-    ...catalog.categoryGroups,
-    { color: "#64748b", icon: "shopping" as const, id: "", name: "Sem grupo" },
-  ];
+  const isFixed = (category: Category) =>
+    overrides.get(category.id) ?? category.fixedCost;
+  const setFixed = useCallback(
+    async (category: Category, fixed: boolean) => {
+      setFailed(false);
+      setOverrides((current) => new Map(current).set(category.id, fixed));
+      const input = PortalMutationSchema.safeParse({
+        command: {
+          confirmed: true,
+          fixedCost: fixed,
+          id: category.id,
+          idempotency_key: randomId(),
+          spaceId,
+          tool: "update_category",
+        },
+        csrf: snapshot.csrf,
+      });
+      if (!input.success) {
+        return;
+      }
+      const { error } = await tryCatch(() =>
+        api.planning(
+          input.data.command,
+          snapshot.csrf,
+          new AbortController().signal,
+        ),
+      );
+      if (error) {
+        setFailed(true);
+        setOverrides((current) => {
+          const next = new Map(current);
+          next.delete(category.id);
+          return next;
+        });
+        return;
+      }
+      api.invalidate();
+    },
+    [api, snapshot.csrf, spaceId],
+  );
+  const visible = catalog.categories
+    .filter((category) => !category.hidden)
+    .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+  const expenses = visible.filter(
+    (category) => category.kind === CategoryKind.expense,
+  );
+  const others = visible.filter(
+    (category) => category.kind !== CategoryKind.expense,
+  );
+  const fixedCount = expenses.filter(isFixed).length;
   return (
     <section
-      aria-label="Categorias e agrupadores"
+      aria-labelledby="category-map-heading"
       className="category-organization"
     >
-      <div className="category-group-heading">
-        <InfoTip label="grupos de categorias">
-          Reúna categorias neste espaço financeiro sem alterar os lançamentos.
-        </InfoTip>
-        <UiIconButton
-          label="Novo grupo de categorias"
-          onClick={newGroup}
+      <header className="category-map-header">
+        <h3 id="category-map-heading">
+          Categorias <Badge variant="secondary">{visible.length}</Badge>
+        </h3>
+        <span className="category-fixed-count">
+          {fixedCount} em custo fixo
+          <InfoTip label="Custo fixo">
+            O custo fixo soma o que se repete todo mês e é a base da reserva de
+            emergência.
+          </InfoTip>
+        </span>
+      </header>
+      {!!failed && (
+        <Banner variant="error">
+          Não foi possível salvar a mudança. Tente de novo.
+        </Banner>
+      )}
+      <LayerCard className="ledger-surface">
+        <Table
+          aria-labelledby="category-map-heading"
+          className="ledger-table category-table"
+          layout="fixed"
         >
-          <PlusIcon
-            aria-hidden
-            size={20}
-          />
-        </UiIconButton>
-      </div>
-      {sections.map((group) => {
-        const categories = catalog.categories.filter(
-          (category) =>
-            (category.groupId ?? "") === group.id && !category.hidden,
-        );
-        if (!(group.id || categories.length)) {
-          return null;
-        }
-        return (
-          <section
-            aria-label={group.name}
-            key={group.id}
-          >
-            <div className="category-group-heading">
-              <h3>
-                <CategorySymbol
-                  color={group.color}
-                  icon={group.icon}
-                />
-                {group.name} <small>({categories.length})</small>
-              </h3>
-              {!!group.id && (
-                <UiIconButton
-                  data-id={group.id}
-                  data-kind="group"
-                  label={`Editar grupo ${group.name}`}
-                  onClick={edit}
-                >
-                  <PencilSimpleIcon
-                    aria-hidden
-                    size={20}
+          <colgroup>
+            <col />
+            <col className="category-fixed-column" />
+            <col className="ledger-actions" />
+          </colgroup>
+          <Table.Header>
+            <Table.Row>
+              <Table.Head>Categoria</Table.Head>
+              <Table.Head>Custo fixo</Table.Head>
+              <Table.Head>
+                <span className="sr-only">Ações</span>
+              </Table.Head>
+            </Table.Row>
+          </Table.Header>
+          <Table.Body>
+            {[...expenses, ...others].map((category) => (
+              <Table.Row key={category.id}>
+                <Table.Cell>
+                  <span className="ledger-primary category-row">
+                    <CategorySymbol
+                      color={category.color}
+                      icon={category.icon}
+                    />
+                    {category.name}
+                  </span>
+                </Table.Cell>
+                <Table.Cell>
+                  {category.kind === CategoryKind.expense ? (
+                    <FixedCostSwitch
+                      category={category}
+                      checked={isFixed(category)}
+                      onChange={setFixed}
+                    />
+                  ) : (
+                    <span className="ledger-muted">
+                      {category.kind === CategoryKind.income
+                        ? "Receita"
+                        : "Transferência"}
+                    </span>
+                  )}
+                </Table.Cell>
+                <Table.Cell className="ledger-actions">
+                  <RowMenu
+                    items={[
+                      {
+                        "data-id": category.id,
+                        icon: <PencilSimpleIcon size={16} />,
+                        key: "edit",
+                        label: "Editar categoria",
+                        onClick: edit,
+                      },
+                    ]}
+                    label={`Ações de ${category.name}`}
                   />
-                </UiIconButton>
-              )}
-            </div>
-            {categories.length ? (
-              <ul className="category-list">
-                {categories.map((category) => (
-                  <li key={category.id}>
-                    <div className="category-label">
-                      <CategorySymbol
-                        color={category.color}
-                        icon={category.icon}
-                      />
-                      <span>
-                        <strong>{category.name}</strong>
-                      </span>
-                    </div>
-                    <UiIconButton
-                      data-id={category.id}
-                      data-kind="category"
-                      label={`Editar categoria ${category.name}`}
-                      onClick={edit}
-                    >
-                      <PencilSimpleIcon
-                        aria-hidden
-                        size={20}
-                      />
-                    </UiIconButton>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="muted">Nenhuma categoria neste grupo.</p>
-            )}
-          </section>
-        );
-      })}
-      <CategoryEditor
-        api={api}
-        catalog={catalog}
-        close={close}
-        key={session}
-        open={open}
-        saved={savedEditor}
-        selection={selection}
-        snapshot={snapshot}
-        spaceId={spaceId}
-      />
+                </Table.Cell>
+              </Table.Row>
+            ))}
+          </Table.Body>
+        </Table>
+      </LayerCard>
+      {!!editing && (
+        <CategoryEditor
+          api={api}
+          close={close}
+          key={session}
+          open={open}
+          row={editing}
+          saved={savedEditor}
+          snapshot={snapshot}
+          spaceId={spaceId}
+        />
+      )}
     </section>
+  );
+}
+
+function FixedCostSwitch({
+  category,
+  checked,
+  onChange,
+}: {
+  category: Category;
+  checked: boolean;
+  onChange: (category: Category, fixed: boolean) => Promise<void>;
+}) {
+  const change = useCallback(
+    (value: boolean) => {
+      onChange(category, value).then(
+        () => undefined,
+        () => undefined,
+      );
+    },
+    [category, onChange],
+  );
+  return (
+    <Switch
+      aria-label={`${category.name} no custo fixo`}
+      checked={checked}
+      onCheckedChange={change}
+    />
   );
 }

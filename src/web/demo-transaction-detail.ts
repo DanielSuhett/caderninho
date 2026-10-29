@@ -3,9 +3,14 @@ import {
   type PortalQuery,
   type PortalQueryResults,
 } from "../contracts";
-import { matchesFinancialIdentity, transactionMatchesText } from "../domain";
+import {
+  AccountType,
+  matchesFinancialIdentity,
+  transactionMatchesText,
+} from "../domain";
 import { installmentGroupKey } from "../domain/card-installments";
 import { demoReferenceDay } from "../fixtures/finance";
+import { demoPrimaryCard } from "./demo-cards";
 import type { DemoData } from "./demo-data";
 
 export function demoTransactionDetail(
@@ -67,14 +72,16 @@ function demoTransactionPage(
 ): PortalQueryResults["get_portal_transactions"] {
   const groups = new Map<string, DemoData["records"]>();
   for (const row of data.records) {
+    const account = data.accounts.find((item) => item.id === row.accountId);
     if (
+      (query.cardsOnly && account?.type !== AccountType.CREDIT) ||
       (!query.include_ignored && row.ignored) ||
       (query.accountId && row.accountId !== query.accountId) ||
+      (query.cardId &&
+        `${row.accountId}:${row.cardNumber ?? demoPrimaryCard(row.accountId)}` !==
+          query.cardId) ||
       (query.personId && row.personId !== query.personId) ||
-      !matchesFinancialIdentity(
-        data.accounts.find((account) => account.id === row.accountId)?.identity,
-        query,
-      )
+      !matchesFinancialIdentity(account?.identity, query)
     ) {
       continue;
     }

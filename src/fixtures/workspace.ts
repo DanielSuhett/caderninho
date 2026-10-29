@@ -13,7 +13,6 @@ import {
 import {
   demoAccounts,
   demoCategories,
-  demoCategoryGroups,
   demoPeople,
   demoReferenceDay,
 } from "./finance";
@@ -69,7 +68,6 @@ export function portalFixture(
 export function workspaceFixture(): WorkspaceCatalog {
   return {
     categories: structuredClone(demoCategories),
-    categoryGroups: structuredClone(demoCategoryGroups),
     rules: [
       {
         accountId: null,

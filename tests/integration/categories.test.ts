@@ -8,7 +8,7 @@ import {
   TransactionListSchema,
   WorkspaceCatalogSchema,
 } from "../../src/contracts";
-import { fixedCategoryId } from "../../src/domain";
+import { closedMonths, fixedCategoryId } from "../../src/domain";
 import { createPlanningService } from "../../src/worker/planning";
 import { createPlanningRepository } from "../../src/worker/planning/repository";
 import { createCatalogRepository } from "../../src/worker/planning/repository/catalog.repository";
@@ -35,7 +35,7 @@ function planning() {
 }
 const identify = (value: unknown) =>
   z.object({ id: z.string() }).parse(value).id;
-test("fixed catalog, group CRUD, protected names and scoped assignments round-trip through planning and portal", async () => {
+test("fixed catalog, fixed-cost toggle, protected names and scoped assignments round-trip through planning and portal", async () => {
   const f = planning();
   const catalog = WorkspaceCatalogSchema.parse(
     await createCatalogRepository(env.DB).read("personal"),
@@ -44,39 +44,41 @@ test("fixed catalog, group CRUD, protected names and scoped assignments round-tr
     catalog.categories.filter((category) => !category.hidden).length,
     33,
   );
-  assert.equal(catalog.categoryGroups.length, 9);
-  const key = { confirmed: true, idempotency_key: "create-group" };
-  const created = await f.call("create_category_group", {
-    ...key,
-    color: "#123abc",
-    icon: "gift",
-    name: "Projeto",
-  });
-  assert.deepEqual(
-    await f.call("create_category_group", {
-      ...key,
-      color: "#123abc",
-      icon: "gift",
-      name: "Projeto",
-    }),
-    created,
+  assert.equal(
+    catalog.categories.find(
+      (category) => category.id === fixedCategoryId("personal", "aluguel"),
+    )?.fixedCost,
+    true,
   );
-  const groupId = identify(created);
   const categoryId = fixedCategoryId("personal", "casamento");
-  await f.write("update_category", {
+  const key = { confirmed: true, idempotency_key: "mark-fixed" };
+  const updated = await f.call("update_category", {
+    ...key,
     color: "#abcdef",
-    groupId,
+    fixedCost: true,
     icon: "heart",
     id: categoryId,
   });
-  const grouped = z
+  assert.deepEqual(
+    await f.call("update_category", {
+      ...key,
+      color: "#abcdef",
+      fixedCost: true,
+      icon: "heart",
+      id: categoryId,
+    }),
+    updated,
+  );
+  const fixed = z
     .object({
       data: z.object({ records: z.array(z.object({ id: z.string() })) }),
     })
-    .parse(await f.call("get_categories", { groupId }));
-  assert.deepEqual(
-    grouped.data.records.map((row) => row.id),
-    [categoryId],
+    .parse(await f.call("get_categories", { fixedCost: true }));
+  assert.ok(fixed.data.records.some((row) => row.id === categoryId));
+  assert.ok(
+    !fixed.data.records.some(
+      (row) => row.id === fixedCategoryId("personal", "restaurantes"),
+    ),
   );
   await assert.rejects(
     () => f.write("update_category", { id: categoryId, name: "Changed" }),
@@ -99,20 +101,21 @@ test("fixed catalog, group CRUD, protected names and scoped assignments round-tr
     other.categories.filter((category) => !category.hidden).length,
     33,
   );
+  assert.equal(
+    other.categories.find(
+      (category) => category.id === fixedCategoryId(otherSpace, "casamento"),
+    )?.fixedCost,
+    false,
+  );
   await assert.rejects(
     () =>
       f.write("update_category", {
-        groupId: other.categoryGroups[0]?.id,
+        fixedCost: false,
         id: categoryId,
+        spaceId: otherSpace,
       }),
     { message: "SPACE_MISMATCH" },
   );
-  await f.write("update_category_group", {
-    color: "#112233",
-    icon: "star",
-    id: groupId,
-    name: "Celebração",
-  });
   const app = fixture();
   const cookie = cookies(await login(app));
   const response = await app.request("/api/account/catalog?spaceId=personal", {
@@ -120,22 +123,18 @@ test("fixed catalog, group CRUD, protected names and scoped assignments round-tr
   });
   assert.equal(response.status, 200);
   const front = WorkspaceCatalogSchema.parse(await response.json());
-  assert.equal(
-    front.categoryGroups.find((group) => group.id === groupId)?.name,
-    "Celebração",
+  const marked = front.categories.find(
+    (category) => category.id === categoryId,
   );
-  assert.equal(
-    front.categories.find((category) => category.id === categoryId)?.color,
-    "#abcdef",
-  );
-  await f.write("delete_category_group", { id: groupId });
+  assert.equal(marked?.color, "#abcdef");
+  assert.equal(marked?.fixedCost, true);
+  await f.write("update_category", { fixedCost: false, id: categoryId });
   const final = await createCatalogRepository(env.DB).read("personal");
   assert.equal(
-    final.categories.find((category) => category.id === categoryId)?.groupId,
-    null,
+    final.categories.find((category) => category.id === categoryId)?.fixedCost,
+    false,
   );
   assert.equal(final.categories.length, catalog.categories.length);
-  assert.equal(final.categoryGroups.length, 9);
   const invalid = PlanningCommandSchema.safeParse({
     color: "url(javascript:bad)",
     confirmed: true,
@@ -229,4 +228,57 @@ test("loan proceeds and investment movements do not inflate income or reduce rep
     );
   assert.equal(result.data.totals[0]?.incomeMinor, "200000");
   assert.equal(result.data.totals[0]?.expenseMinor, "10000");
+});
+
+test("the emergency reserve averages fixed costs and counts only linked balances", async () => {
+  const months = closedMonths(new Date().toISOString().slice(0, 10), 3);
+  await collect(
+    source([
+      ...months.map((period, index) =>
+        transaction({
+          amount: "-300.00",
+          category: "Rent",
+          date: `${period.month}-05`,
+          id: `rent-${index}`,
+        }),
+      ),
+      transaction({
+        amount: "-90.00",
+        category: "Restaurants",
+        date: `${months[0]?.month}-06`,
+        id: "dinner",
+      }),
+    ]),
+  );
+  const f = planning();
+  const read = async () =>
+    z
+      .object({
+        data: z.object({
+          averageMinor: z.string(),
+          savedMinor: z.string().nullable(),
+          sources: z.array(z.object({ id: z.string(), linked: z.boolean() })),
+          targetMinor: z.string(),
+        }),
+      })
+      .parse(await f.call("get_emergency_reserve", { personId: "self" })).data;
+  const before = await read();
+  assert.equal(before.averageMinor, "30000");
+  assert.equal(before.targetMinor, "180000");
+  assert.equal(before.savedMinor, "0");
+  const [account] = before.sources;
+  assert.ok(account);
+  await f.write("set_emergency_reserve", {
+    accountIds: [account.id],
+    investmentIds: [],
+    months: 3,
+    personId: "self",
+  });
+  const after = await read();
+  assert.equal(after.targetMinor, "90000");
+  assert.equal(
+    after.sources.find((row) => row.id === account.id)?.linked,
+    true,
+  );
+  assert.notEqual(after.savedMinor, "0");
 });

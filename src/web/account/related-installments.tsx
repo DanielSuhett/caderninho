@@ -2,7 +2,6 @@ import { Banner } from "@cloudflare/kumo/components/banner";
 import { useCallback } from "react";
 
 import { UiButton } from "../ui";
-import type { AccountAppearance } from "./account-identity";
 import { InstallmentTable } from "./installment-table";
 import { useTransactionReader } from "./transaction-reader";
 import { useResource } from "./workspace-resource";
@@ -10,16 +9,13 @@ import { useResource } from "./workspace-resource";
 export function RelatedInstallments({
   id,
   accountId,
-  account,
 }: {
   id: string;
   accountId: string;
-  account: AccountAppearance;
 }) {
   const read = useTransactionReader();
   return read ? (
     <LoadedInstallments
-      account={account}
       accountId={accountId}
       id={id}
       read={read}
@@ -29,12 +25,10 @@ export function RelatedInstallments({
 function LoadedInstallments({
   id,
   accountId,
-  account,
   read,
 }: {
   id: string;
   accountId: string;
-  account: AccountAppearance;
   read: NonNullable<ReturnType<typeof useTransactionReader>>;
 }) {
   const load = useCallback(
@@ -88,7 +82,6 @@ function LoadedInstallments({
         />
       )}
       <InstallmentTable
-        account={account}
         installments={purchase.installments}
         referenceDay={data.data.referenceDay}
         total={purchase.totalInstallments}

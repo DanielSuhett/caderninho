@@ -18,16 +18,17 @@ import {
   planningBills,
   planningCards,
   planningCategories,
-  planningCategoryGroups,
   planningContributions,
   planningEdits,
   planningGoals,
   planningInstallments,
   planningInvestments,
   planningLoans,
+  planningMonthlyRollups,
   planningNotifications,
   planningReceipts,
   planningRecurrences,
+  planningReserves,
   planningRevision,
   planningRules,
   planningSchedules,
@@ -37,6 +38,7 @@ import {
   transactions,
 } from "../../schema";
 import type {
+  MonthlyRollup,
   PlanningRepository,
   PlanningSnapshot,
   TransactionRead,
@@ -249,28 +251,6 @@ export function createPlanningRepository(
         );
       }
       {
-        const changes = changedRows(
-          input.before.state.categoryGroups,
-          input.state.categoryGroups,
-        );
-        writes.push(
-          ...changes.upserts.map((row) =>
-            db
-              .insert(planningCategoryGroups)
-              .values({ data: row, id: row.id })
-              .onConflictDoUpdate({
-                set: { data: row },
-                target: planningCategoryGroups.id,
-              }),
-          ),
-          ...changes.deleted.map((id) =>
-            db
-              .delete(planningCategoryGroups)
-              .where(eq(planningCategoryGroups.id, id)),
-          ),
-        );
-      }
-      {
         const changes = changedRows(input.before.state.tags, input.state.tags);
         writes.push(
           ...changes.upserts.map((row) =>
@@ -348,6 +328,26 @@ export function createPlanningRepository(
             db
               .delete(planningInstallments)
               .where(eq(planningInstallments.id, id)),
+          ),
+        );
+      }
+      {
+        const changes = changedRows(
+          input.before.state.reserves,
+          input.state.reserves,
+        );
+        writes.push(
+          ...changes.upserts.map((row) =>
+            db
+              .insert(planningReserves)
+              .values({ data: row, id: row.id })
+              .onConflictDoUpdate({
+                set: { data: row },
+                target: planningReserves.id,
+              }),
+          ),
+          ...changes.deleted.map((id) =>
+            db.delete(planningReserves).where(eq(planningReserves.id, id)),
           ),
         );
       }
@@ -501,6 +501,24 @@ export function createPlanningRepository(
       }
       await db.batch([required(writes[0]), ...writes.slice(1)]);
     },
+    async monthlyRollups(scope, months) {
+      if (!months.length) {
+        return [];
+      }
+      return await db
+        .select({
+          data: planningMonthlyRollups.data,
+          month: planningMonthlyRollups.month,
+          version: planningMonthlyRollups.version,
+        })
+        .from(planningMonthlyRollups)
+        .where(
+          and(
+            eq(planningMonthlyRollups.scope, scope),
+            sql`${planningMonthlyRollups.month} IN (SELECT value FROM json_each(${JSON.stringify(months)}))`,
+          ),
+        );
+    },
     async read(resource) {
       if (resource) {
         const [version, origins, spaces, settings, persons, owners] =
@@ -517,7 +535,6 @@ export function createPlanningRepository(
           billPayments: [],
           cards: [],
           categories: [],
-          categoryGroups: [],
           contributions: [],
           edits: [],
           goals: [],
@@ -526,6 +543,7 @@ export function createPlanningRepository(
           loans: [],
           notifications: [],
           recurrences: [],
+          reserves: [],
           rules: [],
           schedules: [],
           spaces: spaces.map((row) => row.data),
@@ -546,11 +564,6 @@ export function createPlanningRepository(
             state.categories = (await db.select().from(planningCategories)).map(
               (row) => row.data,
             );
-            break;
-          case "categoryGroups":
-            state.categoryGroups = (
-              await db.select().from(planningCategoryGroups)
-            ).map((row) => row.data);
             break;
           case "notifications":
             state.notifications = (
@@ -581,10 +594,10 @@ export function createPlanningRepository(
         cards,
         edits,
         categories,
-        categoryGroups,
         tags,
         rules,
         recurrences,
+        reserves,
         installments,
         goals,
         contributions,
@@ -606,10 +619,10 @@ export function createPlanningRepository(
         db.select().from(planningCards),
         db.select().from(planningEdits),
         db.select().from(planningCategories),
-        db.select().from(planningCategoryGroups),
         db.select().from(planningTags),
         db.select().from(planningRules),
         db.select().from(planningRecurrences),
+        db.select().from(planningReserves),
         db.select().from(planningInstallments),
         db.select().from(planningGoals),
         db.select().from(planningContributions),
@@ -638,7 +651,6 @@ export function createPlanningRepository(
           billPayments: billPayments.map((r) => r.data),
           cards: cards.map((r) => r.data),
           categories: categories.map((r) => r.data),
-          categoryGroups: categoryGroups.map((r) => r.data),
           contributions: contributions.map((r) => r.data),
           edits: edits.map((r) => r.data),
           goals: goals.map((r) => r.data),
@@ -647,6 +659,7 @@ export function createPlanningRepository(
           loans: loans.map((r) => r.data),
           notifications: notifications.map((r) => r.data),
           recurrences: recurrences.map((r) => r.data),
+          reserves: reserves.map((r) => r.data),
           rules: rules.map((r) => r.data),
           schedules: schedules.map((r) => r.data),
           spaces: spaces.map((r) => r.data),
@@ -663,6 +676,34 @@ export function createPlanningRepository(
         .get();
     },
     revision,
+    async saveMonthlyRollups(scope, rows: MonthlyRollup[]) {
+      if (!rows.length) {
+        return;
+      }
+      // D1 caps bound parameters per statement; 4 columns × 20 rows stays below it.
+      const writes = Array.from(
+        { length: Math.ceil(rows.length / 20) },
+        (_, chunk) =>
+          db
+            .insert(planningMonthlyRollups)
+            .values(
+              rows
+                .slice(chunk * 20, chunk * 20 + 20)
+                .map((row) => ({ ...row, scope })),
+            )
+            .onConflictDoUpdate({
+              set: {
+                data: sql`excluded.data`,
+                version: sql`excluded.version`,
+              },
+              target: [
+                planningMonthlyRollups.scope,
+                planningMonthlyRollups.month,
+              ],
+            }),
+      );
+      await db.batch([required(writes[0]), ...writes.slice(1)]);
+    },
     async *transactions(ids, selection) {
       if (ids) {
         if (ids.length) {

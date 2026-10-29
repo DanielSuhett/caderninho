@@ -24,6 +24,7 @@ type DemoCardLines = Map<
 >;
 
 export interface DemoCardEdit {
+  creditLimitMinor?: string | null;
   hidden?: boolean;
   name?: string;
   personId?: string | null;
@@ -48,6 +49,7 @@ function demoCardsOf(
     const personId = edit?.personId ?? holder.personId;
     return {
       confirmed,
+      creditLimitMinor: index === 0 ? null : (edit?.creditLimitMinor ?? null),
       future,
       hidden: edit?.hidden ?? false,
       id: `${accountId}:${number}`,
@@ -61,6 +63,10 @@ function demoCardsOf(
       primary: index === 0,
     };
   });
+}
+
+export function demoPrimaryCard(accountId: string) {
+  return accountId === "demo-card-extra" ? "8080" : "4242";
 }
 
 function demoInstallment(
@@ -117,7 +123,7 @@ export function demoCards(
       matchesFinancialIdentity(account.identity, query),
   );
   for (const account of creditAccounts) {
-    const primary = account.id === "demo-card-extra" ? "8080" : "4242";
+    const primary = demoPrimaryCard(account.id);
     lines.set(
       account.id,
       new Map([
@@ -148,7 +154,7 @@ export function demoCards(
       }),
       allocatedMinor: account.id === "demo-card-extra" ? "0" : "238760",
       balanceObservedAt: account.balanceObservedAt ?? null,
-      cardNumber: account.id === "demo-card-extra" ? "8080" : "4242",
+      cardNumber: demoPrimaryCard(account.id),
       closeDate: "2026-10-25",
       currency: account.currency,
       dueDate: "2026-11-02",

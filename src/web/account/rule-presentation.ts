@@ -6,8 +6,16 @@ import {
 } from "../../domain";
 import { formatBalance } from "../money";
 import type { CategoryAppearance } from "./category-appearance";
-import { conditionFields } from "./rule-draft";
 
+export const conditionFields = [
+  { label: "Descrição", value: "description" },
+  { label: "Movimento", value: "direction" },
+  { label: "Estado", value: "status" },
+  { label: "Conta", value: "accountId" },
+  { label: "Pessoa", value: "personId" },
+  { label: "Valor absoluto", value: "amount" },
+  { label: "Data", value: "date" },
+];
 export type RuleSource = Pick<
   WorkspaceCatalog["rules"][number],
   "accountId" | "direction" | "filter" | "text"

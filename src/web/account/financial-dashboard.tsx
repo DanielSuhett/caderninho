@@ -5,8 +5,7 @@ import { Link } from "@cloudflare/kumo/components/link";
 import { SkeletonLine } from "@cloudflare/kumo/components/loader";
 import { Meter } from "@cloudflare/kumo/components/meter";
 import { Table } from "@cloudflare/kumo/components/table";
-import { ArrowRightIcon } from "@phosphor-icons/react";
-import { lazy, Suspense, useMemo } from "react";
+import { lazy, type ReactNode, Suspense, useMemo } from "react";
 import type { z } from "zod/v4";
 
 import type {
@@ -14,9 +13,10 @@ import type {
   FinancialSummary,
   PortalTransactionListSchema,
 } from "../../contracts";
+import { AccountType } from "../../domain";
 import { tryCatch } from "../../shared";
-import { formatBalance } from "../money";
-import { UiLink } from "../ui";
+import { formatBalance, transactionTone } from "../money";
+import { MoneyValue } from "../money-value";
 import { AccountAvatar } from "./account-identity";
 import { AnalysisSection } from "./analysis-section";
 import type { CategoryAppearance } from "./category-appearance";
@@ -26,8 +26,7 @@ import { FinancialMetric } from "./financial-metric";
 import { categoryVolumes, summaryCurrency } from "./financial-presentation";
 import { InfoTip } from "./info-tip";
 import type { MonthlySpendingChart } from "./monthly-spending-chart";
-import { PersonIdentity } from "./person-identity";
-import { TransactionList } from "./transaction-list";
+import { amountLabel, TransactionAmount } from "./transaction-list";
 import { dayLabel } from "./workspace-resource";
 
 function ChartUnavailable({
@@ -40,24 +39,10 @@ function ChartUnavailable({
   return (
     <div>
       <p className="chart-unavailable">Gráfico indisponível. Valores exatos:</p>
-      <Table aria-label="Despesas mensais, alternativa ao gráfico">
-        <Table.Header>
-          <Table.Row>
-            <Table.Head>Mês</Table.Head>
-            <Table.Head>Despesa e moeda</Table.Head>
-          </Table.Row>
-        </Table.Header>
-        <Table.Body>
-          {groups.map((group) => (
-            <Table.Row key={group.group}>
-              <Table.Cell>{group.group}</Table.Cell>
-              <Table.Cell>
-                {formatBalance(group.amountMinor, currency)}
-              </Table.Cell>
-            </Table.Row>
-          ))}
-        </Table.Body>
-      </Table>
+      <MonthlyTable
+        currency={currency}
+        groups={groups}
+      />
     </div>
   );
 }
@@ -73,16 +58,30 @@ const MonthlyChart = lazy<typeof MonthlySpendingChart>(async () => {
 type RecentRecords = z.infer<
   typeof PortalTransactionListSchema
 >["data"]["records"];
+type OverviewAccount = FinancialOverview["accounts"][number];
+type People = Array<{ id: string; name: string }>;
 export interface FinancialDashboardProps {
   categories: CategoryAppearance[];
   currency: string;
   monthly: FinancialSummary | null;
   overview: FinancialOverview;
-  people: Array<{ id: string; name: string }>;
+  people: People;
   recentScope?: string;
   records: RecentRecords;
   showOwner?: boolean;
   transactionsHref: string;
+}
+function accountHref(transactionsHref: string, accountId: string) {
+  const separator = transactionsHref.includes("?") ? "&" : "?";
+  return `${transactionsHref}${separator}${new URLSearchParams({ accountId })}`;
+}
+function sumMinor(values: Array<string | null | undefined>) {
+  if (values.some((value) => value === null || value === undefined)) {
+    return null;
+  }
+  return values
+    .reduce((sum, value) => sum + BigInt(value ?? "0"), 0n)
+    .toString();
 }
 export function FinancialDashboard({
   overview,
@@ -95,62 +94,66 @@ export function FinancialDashboard({
   transactionsHref,
   recentScope = "Todas as moedas · últimos registros recebidos no período",
 }: FinancialDashboardProps) {
-  const { accounts, bankBalance, total } = summaryCurrency(overview, currency);
+  const { accounts, total } = summaryCurrency(overview, currency);
   const groups = categoryVolumes(overview, currency);
   const unknown = total?.unknownAmountCount ?? 0;
   const emptyAmount = overview.partial ? null : "0";
   const income = total ? total.incomeMinor : emptyAmount;
   const expense = total ? total.expenseMinor : emptyAmount;
   const flow = total ? total.cashFlowMinor : emptyAmount;
+  const owners = showOwner && people.length > 1 ? people : [];
   return (
     <div className="financial-dashboard">
+      <AccountHoldings
+        accounts={accounts}
+        currency={currency}
+        partial={overview.partial}
+        people={owners}
+        referenceDay={overview.referenceDay}
+        transactionsHref={transactionsHref}
+      />
       <section aria-labelledby="financial-summary-heading">
         <h2
           className="sr-only"
           id="financial-summary-heading"
         >
-          Resumo financeiro
+          Movimento do período
         </h2>
         <LayerCard className="financial-summary">
-          <dl className="financial-metrics">
-            <FinancialMetric
-              amount={bankBalance}
-              currency={currency}
-              hint={`Última observação importada. Registros até ${dayLabel(overview.referenceDay)}; sem conversão de moedas.`}
-              label="Saldo bancário importado"
-            />
+          <dl className="financial-metrics financial-metrics-three">
             <FinancialMetric
               amount={income}
               currency={currency}
               hint="Categorias explícitas no período. Ignorados, pendentes, futuros, transferências e pagamentos de fatura ficam fora."
-              label="Receitas classificadas"
+              label="Receitas"
               tone="income"
             />
             <FinancialMetric
               amount={expense}
               currency={currency}
               hint="Categorias explícitas no período, com estornos descontados. Ignorados, pendentes, futuros, transferências e pagamentos de fatura ficam fora. Cada parcela conta na data do lançamento recebido."
-              label="Despesas classificadas"
+              label="Despesas"
               tone="expense"
             />
             <FinancialMetric
               amount={flow}
               currency={currency}
-              hint="Entradas − saídas, só bancos"
+              hint={
+                unknown
+                  ? `Entradas − saídas, só bancos. ${unknown} registros sem valor conhecido deixam os totais indisponíveis.`
+                  : "Entradas − saídas, só bancos"
+              }
               label="Fluxo bancário"
             />
           </dl>
-          {!!unknown && (
-            <p className="financial-summary-note">
-              Registros sem valor conhecido: {unknown}. Totais do período
-              indisponíveis; os dados recebidos continuam consultáveis.
-            </p>
-          )}
         </LayerCard>
       </section>
+      <MonthlyAnalysis
+        currency={currency}
+        monthly={monthly}
+      />
       <div className="financial-analysis-grid">
         <AnalysisSection
-          currency={currency}
           hint={
             <>
               Categorias explícitas, com estornos descontados. Barras comparam o
@@ -194,52 +197,314 @@ export function FinancialDashboard({
             )}
           </div>
         </AnalysisSection>
-        <MonthlyAnalysis
-          currency={currency}
-          monthly={monthly}
-        />
+        <section
+          aria-labelledby="recent-transactions-heading"
+          className="analysis-section"
+        >
+          <header className="section-heading analysis-heading">
+            <h2 id="recent-transactions-heading">
+              Recentes
+              <InfoTip label="transações recentes">{recentScope}</InfoTip>
+            </h2>
+            <Link href={transactionsHref}>Ver todas</Link>
+          </header>
+          <LayerCard className="analysis-card recent-card">
+            {records.length ? (
+              <ul className="recent-list">
+                {records.slice(0, 6).map((row) => (
+                  <li
+                    className="recent-row"
+                    key={row.id}
+                  >
+                    <time
+                      className="recent-date"
+                      dateTime={row.date}
+                    >
+                      {dayLabel(row.date).slice(0, 5)}
+                    </time>
+                    <span className="recent-description">
+                      {row.description}
+                    </span>
+                    <span className="recent-amount">
+                      <TransactionAmount
+                        amount={amountLabel(row)}
+                        available={row.amountMinor !== null}
+                        tone={transactionTone(row)}
+                      />
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <Empty
+                className="border-0 bg-transparent shadow-none"
+                description="Escolha outro mês ou confira suas conexões."
+                size="sm"
+                title="Nenhuma transação neste período"
+              />
+            )}
+          </LayerCard>
+        </section>
       </div>
-      <section aria-labelledby="recent-transactions-heading">
-        <header className="section-heading">
-          <h2 id="recent-transactions-heading">
-            Transações recentes
-            <InfoTip label="transações recentes">{recentScope}</InfoTip>
-          </h2>
-          <Link href={transactionsHref}>Ver todas</Link>
-        </header>
-        {records.length ? (
-          <TransactionList
-            accounts={overview.accounts}
-            categories={categories}
-            records={records}
-            referenceDay={overview.referenceDay}
-            showOwner={showOwner && people.length > 1}
-          />
-        ) : (
-          <Empty
-            className="border-0 bg-transparent shadow-none"
-            description="Escolha outro mês ou confira suas conexões."
-            size="sm"
-            title="Nenhuma transação neste período"
-          />
-        )}
-      </section>
-      <section aria-labelledby="financial-accounts-heading">
-        <header className="section-heading">
-          <h2 id="financial-accounts-heading">Contas e cartões</h2>
-          <InfoTip label="estes valores">
-            Saldos separados dos movimentos do período
-          </InfoTip>
-        </header>
-        <AccountBalances
-          accounts={accounts}
-          partial={overview.partial}
-          people={people}
-          showOwner={showOwner}
-          transactionsHref={transactionsHref}
-        />
-      </section>
     </div>
+  );
+}
+export function AccountHoldings({
+  accounts,
+  currency,
+  partial,
+  people,
+  referenceDay,
+  transactionsHref,
+}: {
+  accounts: OverviewAccount[];
+  currency: string;
+  partial: boolean;
+  /** People shown on avatars; empty when ownership is not ambiguous. */
+  people: People;
+  referenceDay: string;
+  transactionsHref: string;
+}) {
+  const banks = accounts.filter((account) => account.type === AccountType.BANK);
+  const cards = accounts.filter(
+    (account) => account.type === AccountType.CREDIT,
+  );
+  const bankBalance = banks.length
+    ? sumMinor(banks.map((account) => account.balanceMinor))
+    : null;
+  return (
+    <section
+      aria-labelledby="financial-accounts-heading"
+      className="holdings"
+    >
+      <h2
+        className="sr-only"
+        id="financial-accounts-heading"
+      >
+        Contas e cartões
+      </h2>
+      <HoldingPanel
+        currency={currency}
+        empty="Nenhuma conta conectada"
+        hint={`Saldo da última observação importada, até ${dayLabel(referenceDay)}. Sem conversão de moedas.`}
+        title="Contas"
+        total={bankBalance}
+        totalLabel="Saldo"
+      >
+        {banks.map((account) => (
+          <BankRow
+            account={account}
+            href={accountHref(transactionsHref, account.id)}
+            key={account.id}
+            owners={people}
+            partial={partial}
+          />
+        ))}
+      </HoldingPanel>
+      <HoldingPanel
+        currency={currency}
+        empty="Nenhum cartão conectado"
+        hint="Despesas classificadas no período lançadas em cada cartão. A barra mostra a fatura atual sobre o limite, quando conhecido."
+        title="Cartões"
+        total={sumMinor(cards.map((card) => card.periodExpenseMinor))}
+        totalLabel="Gasto no mês"
+      >
+        {cards.map((account) => (
+          <CardRow
+            account={account}
+            href={accountHref(transactionsHref, account.id)}
+            key={account.id}
+            owners={people}
+            partial={partial}
+          />
+        ))}
+      </HoldingPanel>
+    </section>
+  );
+}
+function HoldingPanel({
+  title,
+  totalLabel,
+  total,
+  currency,
+  hint,
+  empty,
+  children,
+}: {
+  title: string;
+  totalLabel: string;
+  total: string | null;
+  currency: string;
+  hint: string;
+  empty: string;
+  children: ReactNode[];
+}) {
+  return (
+    <LayerCard className="holding-panel">
+      <header className="holding-header">
+        <h3>
+          {title}
+          <InfoTip label={title}>{hint}</InfoTip>
+        </h3>
+        <p className="holding-total">
+          <span className="holding-total-label">{totalLabel}</span>
+          <strong className="holding-total-value">
+            {total === null ? (
+              "Indisponível"
+            ) : (
+              <MoneyValue value={formatBalance(total, currency)} />
+            )}
+          </strong>
+        </p>
+      </header>
+      {children.length ? (
+        <ul className="holding-list">{children}</ul>
+      ) : (
+        <p className="holding-empty">{empty}</p>
+      )}
+    </LayerCard>
+  );
+}
+function BankRow({
+  account,
+  href,
+  owners,
+  partial,
+}: {
+  account: OverviewAccount;
+  href: string;
+  owners: People;
+  partial: boolean;
+}) {
+  return (
+    <li className="holding-item">
+      <a
+        className="holding-row"
+        href={href}
+      >
+        <AccountAvatar
+          account={account}
+          filterable={false}
+          person={owners.find((person) => person.id === account.personId)}
+        />
+        <span className="holding-name">
+          <span className="bank-heading">{account.name}</span>
+          <span className="holding-meta">
+            {account.balanceObservedAt
+              ? `Saldo em ${dayLabel(account.balanceObservedAt.slice(0, 10))}`
+              : "Saldo sem data"}
+            {!!account.manual && <Badge variant="secondary">Manual</Badge>}
+            {partial ? <Badge variant="secondary">Dados parciais</Badge> : null}
+          </span>
+        </span>
+        <span className="holding-value">
+          {account.balanceMinor === null ? (
+            "Indisponível"
+          ) : (
+            <MoneyValue
+              value={formatBalance(account.balanceMinor, account.currency)}
+            />
+          )}
+        </span>
+      </a>
+    </li>
+  );
+}
+function CardRow({
+  account,
+  href,
+  owners,
+  partial,
+}: {
+  account: OverviewAccount;
+  href: string;
+  owners: People;
+  partial: boolean;
+}) {
+  const limit = account.creditLimitMinor
+    ? BigInt(account.creditLimitMinor)
+    : 0n;
+  const owed = account.balanceMinor ? BigInt(account.balanceMinor) : 0n;
+  const ratio: bigint = limit > 0n ? (owed * 100n) / limit : -1n;
+  const used = ratio < 0n ? null : Math.min(100, Number(ratio));
+  return (
+    <li className="holding-item">
+      <a
+        className="holding-row"
+        href={href}
+      >
+        <AccountAvatar
+          account={account}
+          filterable={false}
+          person={owners.find((person) => person.id === account.personId)}
+        />
+        <span className="holding-name">
+          <span className="bank-heading">{account.name}</span>
+          <span className="holding-meta">
+            {account.balanceMinor === null
+              ? "Fatura indisponível"
+              : `Fatura ${formatBalance(account.balanceMinor, account.currency)}`}
+            {used !== null && ` · ${used}% do limite`}
+            {partial ? <Badge variant="secondary">Dados parciais</Badge> : null}
+          </span>
+          {used !== null && (
+            <span
+              aria-hidden="true"
+              className="holding-usage"
+              data-high={used >= 80}
+            >
+              <span
+                className="holding-usage-fill"
+                style={{ inlineSize: `${used}%` }}
+              />
+            </span>
+          )}
+        </span>
+        <span
+          className="holding-value"
+          data-money-tone={account.periodExpenseMinor ? "expense" : "neutral"}
+        >
+          {account.periodExpenseMinor === undefined ? (
+            "—"
+          ) : (
+            <MoneyValue
+              value={formatBalance(
+                account.periodExpenseMinor,
+                account.currency,
+              )}
+            />
+          )}
+        </span>
+      </a>
+    </li>
+  );
+}
+function MonthlyTable({
+  groups,
+  currency,
+}: {
+  groups: FinancialSummary["groups"];
+  currency: string;
+}) {
+  return (
+    <Table aria-label="Despesas mensais exatas">
+      <Table.Header>
+        <Table.Row>
+          <Table.Head>Mês</Table.Head>
+          <Table.Head>Despesa e moeda</Table.Head>
+        </Table.Row>
+      </Table.Header>
+      <Table.Body>
+        {groups.map((group) => (
+          <Table.Row key={group.group}>
+            <Table.Cell>{group.group}</Table.Cell>
+            <Table.Cell>
+              {formatBalance(group.amountMinor, currency)}
+            </Table.Cell>
+          </Table.Row>
+        ))}
+      </Table.Body>
+    </Table>
   );
 }
 function MonthlyAnalysis({
@@ -260,27 +525,14 @@ function MonthlyAnalysis({
   const monthlyUnknown =
     monthly?.totals.find((item) => item.currency === currency)
       ?.unknownAmountCount ?? 0;
+  const hint = monthly
+    ? `${dayLabel(monthly.from)} a ${dayLabel(monthly.to)}. Despesas classificadas, sem projeção; o mês atual ainda está em andamento.${monthly.partial ? " Histórico parcial." : ""}${monthlyUnknown ? ` ${monthlyUnknown} registros sem valor ficam de fora.` : ""}`
+    : "Série temporariamente indisponível";
   return (
     <AnalysisSection
-      currency={currency}
-      hint={
-        monthly
-          ? `${dayLabel(monthly.from)} a ${dayLabel(monthly.to)} · sem projeção`
-          : "Série temporariamente indisponível"
-      }
-      title="Despesas por mês"
+      hint={hint}
+      title="Despesas mês a mês"
     >
-      {!!monthly?.partial && (
-        <p className="analysis-caption">
-          Histórico parcial também nesta série.
-        </p>
-      )}
-      {monthlyUnknown > 0 && (
-        <p className="analysis-caption">
-          {monthlyUnknown} registros sem valor. Gráfico e tabela mostram somente
-          as despesas conhecidas.
-        </p>
-      )}
       <div
         className={
           monthlyGroups.length
@@ -289,7 +541,7 @@ function MonthlyAnalysis({
         }
       >
         {monthlyGroups.length ? (
-          <ChartViewport height={320}>
+          <ChartViewport height={280}>
             <Suspense
               fallback={
                 <div className="chart-loading">
@@ -306,8 +558,10 @@ function MonthlyAnalysis({
             >
               <MonthlyChart
                 currency={currency}
+                endMonth={(monthly?.to ?? "").slice(0, 7)}
                 groups={monthlyGroups}
                 key={`${currency}:${monthly?.to}`}
+                {...(monthly && { referenceDay: monthly.referenceDay })}
               />
             </Suspense>
           </ChartViewport>
@@ -326,24 +580,10 @@ function MonthlyAnalysis({
       </div>
       {!!monthlyGroups.length && (
         <DisclosureItem summary="Ver valores exatos">
-          <Table aria-label="Despesas mensais exatas">
-            <Table.Header>
-              <Table.Row>
-                <Table.Head>Mês</Table.Head>
-                <Table.Head>Despesa e moeda</Table.Head>
-              </Table.Row>
-            </Table.Header>
-            <Table.Body>
-              {monthlyGroups.map((group) => (
-                <Table.Row key={group.group}>
-                  <Table.Cell>{group.group}</Table.Cell>
-                  <Table.Cell>
-                    {formatBalance(group.amountMinor, currency)}
-                  </Table.Cell>
-                </Table.Row>
-              ))}
-            </Table.Body>
-          </Table>
+          <MonthlyTable
+            currency={currency}
+            groups={monthlyGroups}
+          />
         </DisclosureItem>
       )}
     </AnalysisSection>
@@ -378,91 +618,5 @@ function CategoryRows({
         );
       })}
     </ul>
-  );
-}
-export function AccountBalances({
-  accounts,
-  people,
-  showOwner = true,
-  partial,
-  transactionsHref,
-}: {
-  accounts: FinancialOverview["accounts"];
-  people: Array<{ id: string; name: string }>;
-  partial: boolean;
-  showOwner?: boolean;
-  transactionsHref: string;
-}) {
-  return (
-    <LayerCard
-      aria-label="Contas e cartões"
-      className="record-list"
-      render={<ul />}
-    >
-      {accounts.map((account) => (
-        <li key={account.id}>
-          <DisclosureItem
-            className="record-item"
-            leading={
-              <AccountAvatar
-                account={account}
-                person={
-                  showOwner && people.length > 1
-                    ? people.find((person) => person.id === account.personId)
-                    : undefined
-                }
-              />
-            }
-            summary={
-              <>
-                <span className="record-title bank-heading">
-                  {account.name}
-                </span>
-                <span className="record-value">
-                  {formatBalance(account.balanceMinor, account.currency)}
-                </span>
-                <span className="record-meta">
-                  {!!account.manual && (
-                    <Badge variant="secondary">Manual</Badge>
-                  )}
-                  <span>
-                    {account.balanceObservedAt
-                      ? `Saldo em ${dayLabel(account.balanceObservedAt.slice(0, 10))}`
-                      : "Saldo sem data informada"}
-                  </span>
-                  {partial === true && (
-                    <Badge variant="secondary">Dados parciais</Badge>
-                  )}
-                </span>
-              </>
-            }
-          >
-            <div className="record-detail account-balance-detail">
-              <div className="record-owner">
-                <span className="sr-only">Titular</span>
-                <PersonIdentity
-                  person={
-                    people.find((person) => person.id === account.personId) ?? {
-                      id: account.personId,
-                      name: "Titular não identificado",
-                    }
-                  }
-                />
-              </div>
-              <UiLink
-                href={`${transactionsHref}${transactionsHref.includes("?") ? "&" : "?"}${new URLSearchParams({ accountId: account.id })}`}
-                variant="outline"
-              >
-                Ver transações{" "}
-                <ArrowRightIcon
-                  aria-hidden
-                  size={16}
-                />
-              </UiLink>
-            </div>
-          </DisclosureItem>
-        </li>
-      ))}
-    </LayerCard>
   );
 }

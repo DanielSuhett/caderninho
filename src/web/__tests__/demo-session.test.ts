@@ -508,3 +508,57 @@ test("demo keeps both card views available through the typed query API with defa
   assert.equal(commitments.scope.spaceId, "personal");
   assert.ok(commitments.data.totals.length);
 });
+test("an additional demo card keeps its own spend, sublimit and transactions", async () => {
+  const session = createDemoSession();
+  const readCards = async () =>
+    PortalCardsSchema.parse(
+      await session.api.query(
+        {
+          currency: "BRL",
+          month: "2026-10",
+          spaceId: "personal",
+          tool: "get_portal_cards",
+        },
+        "synthetic",
+        signal,
+      ),
+    ).data;
+  const extra = (await readCards()).accounts
+    .find((account) => account.id === "demo-card")
+    ?.cards.find((card) => card.number === "5151");
+  assert.ok(extra);
+  assert.equal(extra.primary, false);
+  assert.equal(extra.confirmed.totalMinor, "12890");
+  assert.equal(extra.creditLimitMinor, null);
+  await save(session, {
+    confirmed: true,
+    creditLimitMinor: "50000",
+    expected_revision: session.revision(),
+    id: extra.id,
+    idempotency_key: "sublimit-demo",
+    spaceId: "personal",
+    tool: "update_card",
+  });
+  const saved = (await readCards()).accounts
+    .find((account) => account.id === "demo-card")
+    ?.cards.find((card) => card.id === extra.id);
+  assert.equal(saved?.creditLimitMinor, "50000");
+  const transactions = async (cardId: string) =>
+    PortalTransactionListSchema.parse(
+      await session.api.query(
+        {
+          accountId: "demo-card",
+          cardId,
+          from: "2026-10-01",
+          limit: 50,
+          spaceId: "personal",
+          to: "2026-10-31",
+          tool: "get_portal_transactions",
+        },
+        "synthetic",
+        signal,
+      ),
+    ).data.records.map((row) => row.description);
+  assert.deepEqual(await transactions(extra.id), ["Farmácia"]);
+  assert.ok(!(await transactions("demo-card:4242")).includes("Farmácia"));
+});

@@ -1,11 +1,26 @@
 import { Button } from "@cloudflare/kumo/components/button";
 import { Loader } from "@cloudflare/kumo/components/loader";
-import { Popover } from "@cloudflare/kumo/components/popover";
 import { ClockIcon, WarningCircleIcon } from "@phosphor-icons/react";
 import { createContext, useContext, useEffect, useState } from "react";
 
+import { deferred, useIntent } from "./deferred";
 import { synchronizationStatus, syncRecentDuration } from "./sync-status";
-import { dayLabel, momentLabel } from "./workspace-resource";
+
+const loadPopover = async () =>
+  (await import("./sync-status-popover")).SyncStatusPopover;
+const SyncStatusPopover = deferred(loadPopover, ({ icon, label, trigger }) => (
+  <Button
+    {...trigger}
+    aria-haspopup="dialog"
+    aria-label={label}
+    shape="square"
+    size="base"
+    type="button"
+    variant="ghost"
+  >
+    {icon}
+  </Button>
+));
 
 export const SyncStatusContext = createContext<{
   updatedAt?: string | null | undefined;
@@ -19,6 +34,7 @@ export function SyncStatusIndicator() {
   const source = useContext(SyncStatusContext);
   const [now, setNow] = useState(Date.now);
   const status = synchronizationStatus({ ...source, now });
+  const { hover, intent, open, warm } = useIntent(loadPopover);
   useEffect(() => {
     const remaining =
       (source.updatedAt ? Date.parse(source.updatedAt) : 0) +
@@ -48,46 +64,37 @@ export function SyncStatusIndicator() {
   if (source.syncing && !source.demo) {
     icon = <Loader aria-label="Sincronizando" />;
   }
-  return (
-    <Popover>
-      <Popover.Trigger
-        openOnHover
-        render={
-          <Button
-            aria-busy={status.state === "syncing"}
-            aria-label={status.label}
-            className="sync-status-trigger"
-            data-state={status.state}
-            shape="square"
-            size="base"
-            type="button"
-            variant="ghost"
-          />
-        }
+  const trigger = {
+    "aria-busy": status.state === "syncing",
+    "aria-label": status.label,
+    className: "sync-status-trigger",
+    "data-state": status.state,
+  };
+  // Past idle the popover mounts under the pointer or click that asked for it.
+  if (intent === "idle") {
+    return (
+      <Button
+        {...trigger}
+        aria-haspopup="dialog"
+        onClick={open}
+        onFocus={warm}
+        onPointerEnter={hover}
+        shape="square"
+        size="base"
+        type="button"
+        variant="ghost"
       >
         {icon}
-      </Popover.Trigger>
-      <Popover.Content
-        align="end"
-        className="sync-status-panel"
-      >
-        <Popover.Title>{status.label}</Popover.Title>
-        <Popover.Description>
-          {source.demo
-            ? "Dados fictícios de "
-            : "Última importação concluída: "}
-          {source.updatedAt ? (
-            <time dateTime={source.updatedAt}>
-              {source.updatedAt.length > 10
-                ? momentLabel(source.updatedAt)
-                : dayLabel(source.updatedAt)}
-            </time>
-          ) : (
-            "ainda não registrada"
-          )}
-          .
-        </Popover.Description>
-      </Popover.Content>
-    </Popover>
+      </Button>
+    );
+  }
+  return (
+    <SyncStatusPopover
+      demo={!!source.demo}
+      icon={icon}
+      label={status.label}
+      trigger={trigger}
+      updatedAt={source.updatedAt ?? null}
+    />
   );
 }

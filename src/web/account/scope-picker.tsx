@@ -1,10 +1,12 @@
 import { PlusIcon } from "@phosphor-icons/react";
+import type { ReactNode } from "react";
 
 import { UiButton, UiLink } from "../ui";
 
 export interface ScopeItem {
   href: string;
   id: string;
+  leading?: ReactNode;
   name: string;
 }
 
@@ -32,6 +34,7 @@ export function ScopePicker({
           key={item.id}
           variant={item.id === currentId ? "secondary" : "outline"}
         >
+          {item.leading}
           {item.name}
         </UiLink>
       ))}

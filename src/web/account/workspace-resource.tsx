@@ -16,22 +16,31 @@ import {
   workspaceHref,
 } from "./account-navigation";
 import { DisclosureItem } from "./disclosure-item";
+import type { ViewCache } from "./read-cache";
 import { WorkspaceSkeleton } from "./workspace-ui";
 
 export const ResourceVersion = createContext(0);
 
+// With a view cache, a page the user returns to renders its last result at
+// once and refreshes quietly; errors still surface over the stale data.
 export function useResource<T>(
   load: (signal: AbortSignal, fresh: boolean) => Promise<T>,
+  view?: ViewCache<T>,
 ) {
   const [version, setVersion] = useState(0);
   const sourceVersion = useContext(ResourceVersion);
   const previousVersion = useRef(sourceVersion);
   const previousLoad = useRef(load);
+  const [key] = useState(() => location.pathname + location.search);
   const [state, setState] = useState<{
     data: T | undefined;
     error: boolean;
     loading: boolean;
-  }>({ data: undefined, error: false, loading: true });
+  }>(() => {
+    const data = view?.get(key);
+    return { data, error: false, loading: data === undefined };
+  });
+  const quiet = useRef(state.data !== undefined);
   const retry = useCallback(() => setVersion((value) => value + 1), []);
   useEffect(() => {
     const controller = new AbortController();
@@ -39,11 +48,15 @@ export function useResource<T>(
     previousLoad.current = load;
     const sourceChanged = previousVersion.current !== sourceVersion;
     previousVersion.current = sourceVersion;
-    setState((previous) => ({
-      data: sameQuery ? previous.data : undefined,
-      error: false,
-      loading: true,
-    }));
+    const revalidating = quiet.current;
+    quiet.current = false;
+    if (!revalidating) {
+      setState((previous) => ({
+        data: sameQuery ? previous.data : undefined,
+        error: false,
+        loading: true,
+      }));
+    }
     tryCatch(() => load(controller.signal, version > 0 || sourceChanged)).then(
       ({ data, error }) => {
         if (controller.signal.aborted) {
@@ -57,12 +70,13 @@ export function useResource<T>(
           }));
           return;
         }
+        view?.set(key, data);
         setState({ data, error: false, loading: false });
       },
       () => undefined,
     );
     return () => controller.abort();
-  }, [load, version, sourceVersion]);
+  }, [load, version, sourceVersion, view, key]);
   return { ...state, retry };
 }
 export function ResourceFeedback({

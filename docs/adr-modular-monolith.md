@@ -13,7 +13,7 @@ empréstimos disponibilizados pela Pluggy. As consultas e a importação estão 
 | `src/domain` | Conexões, dinheiro exato, consultas e importação |
 | `src/contracts` | Entradas externas Zod e contratos do painel/MCP |
 | `src/worker` | Casos de uso, D1, OAuth, SDKs e transporte Cloudflare |
-| `src/web` | Painel React e páginas públicas |
+| `src/web` | Painel React (Preact compat no navegador) e páginas públicas |
 | `src/shared` | HTTP, resultados, hashing e logger |
 
 | Módulo Worker | Responsabilidade |
@@ -258,3 +258,11 @@ privado é recusado. Comandos validam origem exata e CSRF. LOGIN_LIMITER admite
 dez tentativas/minuto por IP da Cloudflare e localização, sem contador global
 exato nem persistência de IP. Metadados/registro OAuth públicos não dão acesso;
 bearer MCP não autentica painel/widget.
+
+O painel no navegador roda React via `preact/compat` (alias do Vite); o Worker
+renderiza HTML e os testes exercitam componentes com React. O build grava, por
+rota, um shell com `modulepreload` dos chunks e nomes com hash em `/chunks/`
+(imutáveis); o Worker serve esse shell de `ASSETS` e embute o mesmo estado de
+`GET /api/account`, e a entrada inicia as consultas da página atual enquanto o
+código baixa (`page-requests.ts`). Diálogos, menus de linha e toasts baixam no
+primeiro uso; páginas revisitadas mostram o último resultado e revalidam.

@@ -1,21 +1,14 @@
-import {
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useSyncExternalStore,
-} from "react";
-
 const paths = new Set([
   "/account",
   "/account/cards",
   "/account/audit",
   "/account/transactions",
   "/account/investments",
+  "/account/reserve",
   "/account/rules",
-  "/account/groups",
+  "/account/categories",
   "/account/sync",
   "/account/connections",
-  "/account/design-system",
 ]);
 const trailingSlash = /\/$/;
 
@@ -67,10 +60,10 @@ export function isWorkspaceUrl(destination: URL, current: URL) {
   );
 }
 
-function currentRoute() {
+export function currentRoute() {
   return location.pathname + location.search;
 }
-function subscribe(notify: () => void) {
+export function subscribeNavigation(notify: () => void) {
   let route = currentRoute();
   const changed = () => {
     route = currentRoute();
@@ -157,28 +150,12 @@ function submit(event: SubmitEvent) {
   navigateWorkspace(url);
 }
 
-export function useWorkspaceNavigation() {
-  const route = useSyncExternalStore(subscribe, currentRoute, () => "/account");
-  const previous = useRef(route);
-  useEffect(() => {
-    document.addEventListener("click", click);
-    document.addEventListener("submit", submit);
-    return () => {
-      document.removeEventListener("click", click);
-      document.removeEventListener("submit", submit);
-    };
-  }, []);
-  useLayoutEffect(() => {
-    if (previous.current === route) {
-      return;
-    }
-    previous.current = route;
-    document
-      .querySelector<HTMLElement>("#workspace-content")
-      ?.focus({ preventScroll: true });
-    document
-      .querySelector<HTMLElement>(".workspace-main")
-      ?.scrollTo({ behavior: "instant", top: 0 });
-  }, [route]);
-  return route;
+// Same-origin workspace links and GET forms navigate without a reload.
+export function interceptNavigation() {
+  document.addEventListener("click", click);
+  document.addEventListener("submit", submit);
+  return () => {
+    document.removeEventListener("click", click);
+    document.removeEventListener("submit", submit);
+  };
 }

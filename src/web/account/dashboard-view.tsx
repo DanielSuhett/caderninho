@@ -1,5 +1,6 @@
 import { Banner } from "@cloudflare/kumo/components/banner";
 import { ClipboardText } from "@cloudflare/kumo/components/clipboard-text";
+import { Dialog } from "@cloudflare/kumo/components/dialog";
 import { Input } from "@cloudflare/kumo/components/input";
 import { Loader } from "@cloudflare/kumo/components/loader";
 import { Select } from "@cloudflare/kumo/components/select";
@@ -36,6 +37,7 @@ import { PersonIdentity } from "./person-identity";
 import { bankAppearance, SetupBanks } from "./setup-banks";
 import type { WizardStart } from "./use-bank-wizard";
 import { SetupStep, usePeopleSetup } from "./use-people-setup";
+import { WorkspaceDialog } from "./workspace-dialog";
 import { WorkspaceHeading } from "./workspace-ui";
 
 export interface DashboardProps {
@@ -44,6 +46,7 @@ export interface DashboardProps {
   cancel: () => void;
   command: (action: string, ids?: string[]) => void;
   connect: (profileId: string, id?: string) => void;
+  history: ReturnType<typeof createAccountApi>["history"];
   institutions: ReturnType<typeof createAccountApi>["institutions"];
   manage: (input: HouseholdCommand) => Promise<ManagementOutcome>;
   message: string;
@@ -117,8 +120,8 @@ export function DashboardView(props: DashboardProps) {
       model.person && setWizard({ kind: "resume", personId: model.person.id }),
     [model.person],
   );
-  const toggleHelp = useCallback(() => setHelp((value) => !value), []);
-  const toggleSettings = useCallback(() => setSettings((value) => !value), []);
+  const openHelp = useCallback(() => setHelp(true), []);
+  const openSettings = useCallback(() => setSettings(true), []);
   const showRevoke = useCallback(() => setRevoke(true), []);
   const closeRevoke = useCallback(() => setRevoke(false), []);
   const confirmRevoke = useCallback(() => {
@@ -177,14 +180,7 @@ export function DashboardView(props: DashboardProps) {
         </Suspense>
       )}
       <WorkspaceHeading title={labels[model.step]}>
-        {model.step === SetupStep.people && (
-          <PageTools
-            help={help}
-            settings={settings}
-            toggleHelp={toggleHelp}
-            toggleSettings={toggleSettings}
-          />
-        )}
+        {model.step === SetupStep.people && <PageTools openHelp={openHelp} />}
       </WorkspaceHeading>
       <SetupNotice
         model={model}
@@ -261,8 +257,11 @@ export function DashboardView(props: DashboardProps) {
           assign={assign}
           help={help}
           model={model}
+          onHelpChange={setHelp}
+          onSettingsChange={setSettings}
           openBank={openBank}
           openPerson={openPerson}
+          openSettings={openSettings}
           props={props}
           resume={resumeWizard}
           settings={settings}
@@ -325,6 +324,9 @@ function PeopleBanks({
   model,
   help,
   settings,
+  onHelpChange,
+  onSettingsChange,
+  openSettings,
   assign,
   showRevoke,
   openBank,
@@ -335,6 +337,9 @@ function PeopleBanks({
   model: ReturnType<typeof usePeopleSetup>;
   help: boolean;
   settings: boolean;
+  onHelpChange: (open: boolean) => void;
+  onSettingsChange: (open: boolean) => void;
+  openSettings: () => void;
   assign: (event: FormEvent<HTMLFormElement>) => Promise<void>;
   showRevoke: () => void;
   openBank: () => void;
@@ -343,10 +348,10 @@ function PeopleBanks({
 }) {
   const { snapshot, busy } = props;
   const reconnect = useCallback(
-    (event: MouseEvent<HTMLButtonElement>) =>
+    (event: MouseEvent<HTMLElement>) =>
       props.connect(
         event.currentTarget.dataset.profile ?? "default",
-        event.currentTarget.value,
+        event.currentTarget.dataset.connection,
       ),
     [props.connect],
   );
@@ -383,20 +388,29 @@ function PeopleBanks({
           Outra pessoa
         </UiButton>
       </fieldset>
-      {help === true && (
-        <p>
-          Conecte seus bancos no{" "}
-          <a
-            href="https://meu.pluggy.ai/"
-            rel="noreferrer"
-            target="_blank"
-          >
-            Meu Pluggy
-          </a>
-          . Autorize um banco por vez usando o mesmo acesso. Outra pessoa
-          precisa da própria conta Meu Pluggy.
-        </p>
-      )}
+      <Dialog.Root
+        onOpenChange={onHelpChange}
+        open={help}
+      >
+        <WorkspaceDialog title="Como conectar bancos">
+          <ol className="connection-help">
+            <li>
+              Crie ou acesse sua conta no{" "}
+              <a
+                href="https://meu.pluggy.ai/"
+                rel="noreferrer"
+                target="_blank"
+              >
+                Meu Pluggy
+              </a>
+              .
+            </li>
+            <li>Use Adicionar banco e autorize um banco por vez.</li>
+            <li>Outra pessoa precisa da própria conta Meu Pluggy.</li>
+            <li>Abra um banco na lista para ver as sincronizações dele.</li>
+          </ol>
+        </WorkspaceDialog>
+      </Dialog.Root>
       {holder ? (
         <section
           aria-labelledby="person-banks-heading"
@@ -411,6 +425,13 @@ function PeopleBanks({
                 onClick={model.editPerson}
               >
                 <PencilSimpleIcon size={20} />
+              </UiIconButton>
+              <UiIconButton
+                aria-haspopup="dialog"
+                label={`Ajustes de ${holder.name}`}
+                onClick={openSettings}
+              >
+                <GearIcon size={20} />
               </UiIconButton>
               <UiButton
                 disabled={busy}
@@ -445,8 +466,10 @@ function PeopleBanks({
           <SetupBanks
             connections={model.connections}
             csrf={snapshot.csrf}
+            history={props.history}
             institutions={props.institutions}
             manage={props.manage}
+            reconnect={reconnect}
           />
         </section>
       ) : (
@@ -462,99 +485,103 @@ function PeopleBanks({
           <AssistantSetup snapshot={snapshot} />
         </DisclosureItem>
       )}
-      {settings === true && (
-        <section
-          aria-label="Ajustes avançados"
-          className="setup-settings"
+      <Dialog.Root
+        onOpenChange={onSettingsChange}
+        open={settings}
+      >
+        <WorkspaceDialog
+          size="xl"
+          title={holder ? `Ajustes de ${holder.name}` : "Ajustes avançados"}
         >
-          <HouseholdPanel
-            busy={busy}
-            manage={props.manage}
-            snapshot={snapshot}
-          />
-          {snapshot.connections.map((connection) => (
-            <DisclosureItem
-              key={connection.id}
-              summary={<AccountIdentity account={bankAppearance(connection)} />}
+          <div className="setup-settings">
+            <section
+              aria-labelledby="settings-access"
+              className="settings-section"
             >
-              <UiButton
-                data-profile={connection.profileId ?? "default"}
-                disabled={busy}
-                onClick={reconnect}
-                type="button"
-                value={connection.id}
-              >
-                Reautorizar banco
-              </UiButton>
-              <form
-                data-id={connection.id}
-                onSubmit={assign}
-              >
-                <Select
-                  defaultValue={connection.personId ?? "self"}
-                  items={snapshot.people.map((person) => ({
-                    label: person.name,
-                    value: person.id,
-                  }))}
-                  label="Pessoa desta conexão"
-                  name="personId"
-                />
-                <p>
-                  Altera a organização do histórico; não muda o titular no banco
-                  ou as credenciais.
-                </p>
+              <h3 id="settings-access">Acesso Meu Pluggy</h3>
+              <HouseholdPanel
+                busy={busy}
+                manage={props.manage}
+                personId={holder?.id ?? ""}
+                snapshot={snapshot}
+              />
+            </section>
+            <section
+              aria-labelledby="settings-holders"
+              className="settings-section"
+            >
+              <h3 id="settings-holders">Bancos</h3>
+              {!model.connections.length && (
+                <p className="ledger-muted">Nenhum banco conectado.</p>
+              )}
+              {model.connections.map((connection) => (
+                <DisclosureItem
+                  key={connection.id}
+                  summary={
+                    <AccountIdentity account={bankAppearance(connection)} />
+                  }
+                >
+                  <form
+                    data-id={connection.id}
+                    onSubmit={assign}
+                  >
+                    <Select
+                      defaultValue={connection.personId ?? "self"}
+                      items={snapshot.people.map((person) => ({
+                        label: person.name,
+                        value: person.id,
+                      }))}
+                      label="Pessoa desta conexão"
+                      name="personId"
+                    />
+                    <UiButton
+                      disabled={busy}
+                      type="submit"
+                    >
+                      Salvar titular
+                    </UiButton>
+                  </form>
+                </DisclosureItem>
+              ))}
+            </section>
+            <section
+              aria-labelledby="settings-assistants"
+              className="settings-section"
+            >
+              <h3 id="settings-assistants">Assistentes</h3>
+              <div className="settings-row">
+                <span className="ledger-muted">
+                  Remove o acesso do ChatGPT, do Claude e de outros clientes.
+                </span>
                 <UiButton
                   disabled={busy}
-                  type="submit"
+                  onClick={showRevoke}
+                  tone="danger"
+                  type="button"
                 >
-                  Salvar titular
+                  Revogar todos
                 </UiButton>
-              </form>
-            </DisclosureItem>
-          ))}
-          <UiButton
-            disabled={busy}
-            onClick={showRevoke}
-            tone="danger"
-            type="button"
-          >
-            Revogar todos os assistentes
-          </UiButton>
-        </section>
-      )}
+              </div>
+            </section>
+          </div>
+        </WorkspaceDialog>
+      </Dialog.Root>
     </>
   );
 }
 
-function PageTools({
-  help,
-  settings,
-  toggleHelp,
-  toggleSettings,
-}: {
-  help: boolean;
-  settings: boolean;
-  toggleHelp: () => void;
-  toggleSettings: () => void;
-}) {
+function PageTools({ openHelp }: { openHelp: () => void }) {
   return (
     <fieldset
-      aria-label="Ajuda e ajustes"
+      aria-label="Ajuda"
       className="setup-actions"
     >
       <UiIconButton
-        aria-expanded={help}
+        aria-haspopup="dialog"
         label="Como conectar bancos"
-        onClick={toggleHelp}
+        onClick={openHelp}
       >
         <QuestionIcon size={20} />
-      </UiIconButton>
-      <UiIconButton
-        aria-expanded={settings}
-        label="Ajustes de pessoas e credenciais"
-        onClick={toggleSettings}
-      >
-        <GearIcon size={20} />
       </UiIconButton>
     </fieldset>
   );

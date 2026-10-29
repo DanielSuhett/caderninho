@@ -17,6 +17,31 @@ export function cardPercentage(amount: string | null, total: string | null) {
   };
 }
 
+// Month spend of one card: confirmed net of refunds plus charges still pending.
+export function cardMonthSpend(
+  card: Pick<PortalCard, "confirmed" | "pending">,
+) {
+  if (card.confirmed.totalMinor === null || card.pending.totalMinor === null) {
+    return null;
+  }
+  return (
+    BigInt(card.confirmed.totalMinor) + BigInt(card.pending.totalMinor)
+  ).toString();
+}
+
+// Inside Cartões the avatar already shows bank and brand, so only the digits
+// (and a name the owner chose) remain.
+export function cardDigitsLabel(
+  card: Pick<PortalCard, "identified" | "name" | "number">,
+) {
+  if (!card.number) {
+    return card.identified ? card.name : "Principal";
+  }
+  return card.identified
+    ? `${card.name} · ${card.number}`
+    : `•••• ${card.number}`;
+}
+
 // The last digits are an observed identifier, so they stay visible even when the
 // owner named the card; an unnamed card shows only the digits.
 export function cardLabel(

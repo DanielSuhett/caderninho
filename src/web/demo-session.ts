@@ -9,9 +9,14 @@ import type {
   WorkspaceCatalog,
 } from "../contracts";
 import {
+  AccountType,
   activeRules,
   categoryCatalog,
+  closedMonths,
+  type EmergencyReserve,
+  emergencyReservePlan,
   financialIdentity,
+  fixedCostBreakdown,
   type Institution,
   importedTotals,
   investmentPortfolio,
@@ -23,6 +28,8 @@ import {
   RuleJobKind,
   RuleJobPhase,
   RuleJobStatus,
+  reserveDefaults,
+  reserveId,
   ruleApplication,
   ruleImportCategoryMapping,
   ruleJobActive,
@@ -42,7 +49,12 @@ import { workspaceFixture } from "../fixtures/workspace";
 import { tryCatch, tryCatchSync } from "../shared";
 import type { OrganizationApi } from "./account/account-api";
 import { type DemoCardEdit, demoCards } from "./demo-cards";
-import { type DemoData, demoSummary, scopedDemoData } from "./demo-data";
+import {
+  type DemoData,
+  demoAccountExpenses,
+  demoSummary,
+  scopedDemoData,
+} from "./demo-data";
 import { demoTransactionDetail } from "./demo-transaction-detail";
 import { randomId } from "./random-id";
 
@@ -156,9 +168,6 @@ function updateDemoCategory(
   ) {
     throw new Error("SYSTEM_CATEGORY");
   }
-  if (command.groupId) {
-    required(group.categoryGroups.find((item) => item.id === command.groupId));
-  }
   if (command.name !== undefined) {
     row.name = command.name;
   }
@@ -171,55 +180,8 @@ function updateDemoCategory(
   if (command.color !== undefined) {
     row.color = command.color;
   }
-  if (command.groupId !== undefined) {
-    row.groupId = command.groupId;
-  }
-}
-
-function mutateCategoryCatalog(group: Group, command: ParsedMutation) {
-  switch (command.tool) {
-    case "create_category_group": {
-      group.categoryGroups.push({
-        color: command.color,
-        icon: command.icon,
-        id: `demo:${randomId()}`,
-        name: command.name,
-      });
-      return true;
-    }
-    case "update_category_group": {
-      const row = required(
-        group.categoryGroups.find((item) => item.id === command.id),
-      );
-      if (command.name !== undefined) {
-        row.name = command.name;
-      }
-      if (command.icon !== undefined) {
-        row.icon = command.icon;
-      }
-      if (command.color !== undefined) {
-        row.color = command.color;
-      }
-      return true;
-    }
-    case "delete_category_group": {
-      required(group.categoryGroups.find((item) => item.id === command.id));
-      for (const row of group.categories) {
-        if (row.groupId === command.id) {
-          row.groupId = null;
-        }
-      }
-      group.categoryGroups = group.categoryGroups.filter(
-        (item) => item.id !== command.id,
-      );
-      return true;
-    }
-    case "update_category": {
-      updateDemoCategory(group, command);
-      return true;
-    }
-    default:
-      return false;
+  if (command.fixedCost !== undefined) {
+    row.fixedCost = command.fixedCost;
   }
 }
 
@@ -262,6 +224,10 @@ export function createDemoSession({
   const cardEdits = new Map<string, DemoCardEdit>();
   const importPrefixes = new Map<string, string>();
   const ruleJobs = new Map<string, DemoRuleJob>();
+  const reserves = new Map<
+    string,
+    Pick<EmergencyReserve, "accountIds" | "investmentIds" | "months">
+  >();
   let writing = Promise.resolve();
   function publish() {
     revision += 1;
@@ -333,6 +299,9 @@ export function createDemoSession({
       ...(command.name !== undefined && { name: command.name }),
       ...(command.hidden !== undefined && { hidden: command.hidden }),
       ...(command.personId !== undefined && { personId: command.personId }),
+      ...(command.creditLimitMinor !== undefined && {
+        creditLimitMinor: command.creditLimitMinor,
+      }),
     });
   }
   function categorizeTransactions(
@@ -603,10 +572,10 @@ export function createDemoSession({
   }
   function mutate(command: ParsedMutation) {
     const group = required(groups.get(command.spaceId));
-    if (mutateCategoryCatalog(group, command)) {
-      return;
-    }
     switch (command.tool) {
+      case "update_category":
+        updateDemoCategory(group, command);
+        break;
       case "apply_rules":
         return applyRulesInPeriod(command);
       case "import_rules":
@@ -717,9 +686,101 @@ export function createDemoSession({
         spaces = spaces.filter((space) => space.id !== command.id);
         break;
       }
+      case "set_emergency_reserve":
+        reserves.set(reserveId(command.spaceId, command.personId), {
+          accountIds: [...new Set(command.accountIds)],
+          investmentIds: [...new Set(command.investmentIds)],
+          months: command.months,
+        });
+        break;
       default:
         throw new Error("UNSUPPORTED_DEMO_OPERATION");
     }
+    return { ok: true };
+  }
+  function reserveReport(
+    query: Extract<PortalQuery, { tool: "get_emergency_reserve" }>,
+  ): PortalQueryResults["get_emergency_reserve"] {
+    const spaceId = query.spaceId ?? "personal";
+    const config = reserves.get(reserveId(spaceId, query.personId));
+    const months = config?.months ?? reserveDefaults.months;
+    const data = scopedDemoData(view(spaceId), { personId: query.personId });
+    const fixed = new Map(
+      data.categories
+        .filter((category) => category.fixedCost)
+        .map((category) => [category.id, category]),
+    );
+    const closed = closedMonths(demoReferenceDay, reserveDefaults.window);
+    const monthly = closed.map(
+      (period) =>
+        new Map(
+          demoSummary(period.from, period.to, "category", data)
+            .groups.filter(
+              (group) => group.currency === "BRL" && fixed.has(group.group),
+            )
+            .map((group) => [group.group, BigInt(group.amountMinor)]),
+        ),
+    );
+    const linked = new Set([
+      ...(config?.accountIds ?? []),
+      ...(config?.investmentIds ?? []),
+    ]);
+    const sources = [
+      ...data.accounts
+        .filter((account) => account.type !== AccountType.CREDIT)
+        .map((account) => ({
+          balanceMinor: account.balanceMinor,
+          id: account.id,
+          identity: account.identity,
+          kind: "account" as const,
+          name: account.name,
+        })),
+      ...demoInvestments
+        .filter(
+          (row) => row.spaceId === spaceId && row.personId === query.personId,
+        )
+        .map((row) => ({
+          balanceMinor: row.amountMinor,
+          id: row.id,
+          identity: row.identity,
+          kind: "investment" as const,
+          name: row.name,
+        })),
+    ].map((source) => ({ ...source, linked: linked.has(source.id) }));
+    const sum = (month: Map<string, bigint> | undefined) =>
+      [...(month?.values() ?? [])].reduce((total, value) => total + value, 0n);
+    const breakdown = fixedCostBreakdown(monthly);
+    return {
+      data: {
+        ...emergencyReservePlan({
+          balancesMinor: sources
+            .filter((source) => source.linked)
+            .map((source) =>
+              source.balanceMinor === null ? null : BigInt(source.balanceMinor),
+            ),
+          monthlyMinor: monthly.map(sum),
+          months,
+        }),
+        categories: breakdown.categories.map((row) => {
+          const category = fixed.get(row.id);
+          return {
+            ...row,
+            ...(category?.color && { color: category.color }),
+            ...(category?.icon && { icon: category.icon }),
+            name: category?.name ?? row.id,
+          };
+        }),
+        currency: "BRL",
+        monthly: closed.map((period, index) => ({
+          amountMinor: sum(monthly[index]).toString(),
+          month: period.month,
+        })),
+        months,
+        personId: query.personId,
+        reductionMinor: breakdown.reductionMinor,
+        sources,
+      },
+    };
   }
   function prepareImport(
     input: Pick<
@@ -802,6 +863,7 @@ export function createDemoSession({
         view(query.spaceId ?? "personal").categories,
         revision,
       ),
+    get_emergency_reserve: reserveReport,
     get_investments: (query) => ({
       data: investmentPortfolio(
         demoInvestments.filter(
@@ -816,10 +878,14 @@ export function createDemoSession({
     }),
     get_overview: (query) => {
       const data = financialData(query);
+      const expenses = demoAccountExpenses(query.from, query.to, data);
       return {
         data: {
           ...demoSummary(query.from, query.to, "category", data),
-          accounts: data.accounts,
+          accounts: data.accounts.map((account) => ({
+            ...account,
+            periodExpenseMinor: (expenses.get(account.id) ?? 0n).toString(),
+          })),
         },
       };
     },
@@ -870,10 +936,7 @@ export function createDemoSession({
               mutationSchema.parse({ command, csrf: _csrf }).command,
             );
             receipts.set(command.idempotency_key, payload);
-            mutationResults.set(
-              command.idempotency_key,
-              outcome ?? { ok: true },
-            );
+            mutationResults.set(command.idempotency_key, outcome);
             publish();
           }
           return mutationResults.get(command.idempotency_key);

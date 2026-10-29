@@ -17,14 +17,6 @@ const financialPaths = new Set([
   "/demo/investments",
 ]);
 
-export function identityParameters(params: URLSearchParams) {
-  const institutionId = params.get("institutionId");
-  const cardBrand = params.get("cardBrand");
-  return {
-    ...(institutionId && { institutionId }),
-    ...(cardBrand && { cardBrand }),
-  };
-}
 const trailingSlash = /\/$/;
 
 export function avatarFilterHref(route: string, key: FilterKey, value: string) {

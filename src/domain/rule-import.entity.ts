@@ -149,7 +149,7 @@ export function prepareRuleImport<
     if (!category) {
       const created: Required<Category> = {
         color: "#64748b",
-        groupId: null,
+        fixedCost: false,
         hidden: false,
         icon: "shopping",
         id: stableId,

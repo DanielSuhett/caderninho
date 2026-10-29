@@ -131,7 +131,6 @@ function CardPurchase({
       >
         {open === true && (
           <RelatedInstallments
-            account={appearance}
             accountId={row.accountId}
             id={row.id}
           />

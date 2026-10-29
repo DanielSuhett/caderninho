@@ -19,6 +19,7 @@ import {
   planRuleApplication,
   prepareRuleImport,
   type Rule,
+  reserveId,
   sacSchedule,
   TransactionDirection,
   type TransactionEdit,
@@ -270,6 +271,9 @@ export async function planningMutation(
     }
     if (input.personId !== undefined) {
       row.personId = input.personId;
+    }
+    if (input.creditLimitMinor !== undefined) {
+      row.creditLimitMinor = input.creditLimitMinor;
     }
   }
 
@@ -703,7 +707,7 @@ export async function planningMutation(
     const { icon = "shopping" } = input;
     const row = {
       color: input.color ?? "#64748b",
-      groupId: input.groupId ?? null,
+      fixedCost: input.fixedCost ?? false,
       hidden: false,
       icon,
       id,
@@ -713,9 +717,6 @@ export async function planningMutation(
       spaceId: input.spaceId,
       system: false,
     };
-    if (row.groupId) {
-      inSpace(state.categoryGroups, row.groupId, input.spaceId);
-    }
     state.categories.push(row);
     return row;
   }
@@ -730,11 +731,8 @@ export async function planningMutation(
     ) {
       throw new Error(PlanningError.SYSTEM_CATEGORY);
     }
-    if (input.groupId) {
-      inSpace(state.categoryGroups, input.groupId, input.spaceId);
-    }
-    if (input.groupId !== undefined) {
-      row.groupId = input.groupId;
+    if (input.fixedCost !== undefined) {
+      row.fixedCost = input.fixedCost;
     }
     if (input.icon !== undefined) {
       row.icon = input.icon;
@@ -991,6 +989,28 @@ export async function planningMutation(
   ) {
     const row = inSpace(state.goals, input.id, input.spaceId);
     row.completed = true;
+    return row;
+  }
+
+  function handleSetEmergencyReserve(
+    input: Extract<PlanningCommand, { tool: "set_emergency_reserve" }>,
+  ) {
+    for (const id of input.accountIds) {
+      account(id);
+    }
+    for (const id of input.investmentIds) {
+      inSpace(state.investments, id, input.spaceId);
+    }
+    const row = {
+      accountIds: [...new Set(input.accountIds)],
+      id: reserveId(input.spaceId, input.personId),
+      investmentIds: [...new Set(input.investmentIds)],
+      months: input.months,
+      personId: input.personId,
+      spaceId: input.spaceId,
+    };
+    state.reserves = state.reserves.filter((r) => r.id !== row.id);
+    state.reserves.push(row);
     return row;
   }
 
@@ -1356,11 +1376,10 @@ export async function planningMutation(
     state.spaces.push(row);
     const catalog = categoryCatalog(id);
     state.categories.push(...catalog.categories);
-    state.categoryGroups.push(...catalog.categoryGroups);
     for (const kind of [CategoryKind.income, CategoryKind.expense] as const) {
       state.categories.push({
         color: "#64748b",
-        groupId: null,
+        fixedCost: false,
         hidden: true,
         icon: "shopping",
         id: `${id}:${kind}`,
@@ -1430,9 +1449,7 @@ export async function planningMutation(
     state.categories = state.categories.filter(
       (row) => row.spaceId !== input.id,
     );
-    state.categoryGroups = state.categoryGroups.filter(
-      (row) => row.spaceId !== input.id,
-    );
+    state.reserves = state.reserves.filter((row) => row.spaceId !== input.id);
     return { deleted: true, id: input.id };
   }
 
@@ -1563,42 +1580,6 @@ export async function planningMutation(
     case "set_category_limit":
     case "remove_category_limit":
       return handleSetCategoryLimit(command);
-    case "create_category_group": {
-      const row = {
-        color: command.color,
-        icon: command.icon,
-        id: uuid(),
-        name: command.name,
-        spaceId: command.spaceId,
-      };
-      state.categoryGroups.push(row);
-      return row;
-    }
-    case "update_category_group": {
-      const row = inSpace(state.categoryGroups, command.id, command.spaceId);
-      if (command.name !== undefined) {
-        row.name = command.name;
-      }
-      if (command.icon !== undefined) {
-        row.icon = command.icon;
-      }
-      if (command.color !== undefined) {
-        row.color = command.color;
-      }
-      return row;
-    }
-    case "delete_category_group": {
-      const row = inSpace(state.categoryGroups, command.id, command.spaceId);
-      for (const item of state.categories) {
-        if (item.groupId === row.id) {
-          item.groupId = null;
-        }
-      }
-      state.categoryGroups = state.categoryGroups.filter(
-        (group) => group.id !== row.id,
-      );
-      return { deleted: true, id: row.id };
-    }
     case "create_category":
       return handleCreateCategory(command);
     case "update_category":
@@ -1625,6 +1606,8 @@ export async function planningMutation(
       return handleCompleteGoal(command);
     case "link_goal_asset":
       return handleLinkGoalAsset(command);
+    case "set_emergency_reserve":
+      return handleSetEmergencyReserve(command);
     case "unlink_goal_asset":
       return handleUnlinkGoalAsset(command);
     case "delete_goal":

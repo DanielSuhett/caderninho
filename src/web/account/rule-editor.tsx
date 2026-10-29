@@ -37,12 +37,12 @@ import { DisclosureItem } from "./disclosure-item";
 import { RuleComposition } from "./rule-composition";
 import {
   conditionDraft,
-  conditionFields,
   type DraftCondition,
   initialAlternatives,
   parseRuleDraft,
   rulePresets,
 } from "./rule-draft";
+import { conditionFields } from "./rule-presentation";
 import { RulePreview } from "./rule-preview";
 
 type Rule = WorkspaceCatalog["rules"][number];

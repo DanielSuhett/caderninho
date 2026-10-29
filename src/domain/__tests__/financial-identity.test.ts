@@ -6,6 +6,7 @@ import {
   connectorInstitution,
   detectInstitution,
   financialIdentity,
+  institutionLogoSrc,
   matchesFinancialIdentity,
 } from "../financial-identity.entity";
 
@@ -125,4 +126,14 @@ test("bank detection stays unknown without distinctive or consistent evidence", 
     null,
   );
   assert.equal(detectInstitution({ catalog: [], evidence: ["BTG"] }), null);
+});
+
+test("Pluggy icons render through the cached proxy while bundled and invalid logos keep their rules", () => {
+  assert.equal(
+    institutionLogoSrc("https://cdn.pluggy.ai/assets/connector-icons/201.svg"),
+    "/logos/201.svg",
+  );
+  assert.equal(institutionLogoSrc("/bancos/001.svg"), "/bancos/001.svg");
+  assert.equal(institutionLogoSrc("https://example.com/201.svg"), null);
+  assert.equal(institutionLogoSrc(null), null);
 });

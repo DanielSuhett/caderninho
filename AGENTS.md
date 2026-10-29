@@ -155,6 +155,11 @@
   prompts. Conteúdo/controles 16 px, metadados 14 px, peso até 600.
 - Minimalismo é global: simplifique hierarquia, cópia e ações; remova repetições
   e pilhas de botões largos.
+- Sem textos de rodapé, notas de observação ou parágrafos explicativos sob
+  cards e seções. Resolva pela navegação e pela estrutura: linhas curtas
+  colapsáveis (resumo no topo, detalhes ao expandir), badges curtos, `InfoTip`
+  ou estados vazios. Listas aninhadas não repetem avatar/identidade que o item
+  pai já mostra.
 - Repetição real vai para componentes compartilhados; confira os consumidores.
   Produto e demo compartilham telas; regras de negócio ficam no domínio.
 - Fluidez: carregue código por rota/intenção e gráficos perto da área visível

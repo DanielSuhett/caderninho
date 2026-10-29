@@ -7,14 +7,17 @@ const pageModules: Record<string, (() => Promise<unknown>) | undefined> = {
   "/account": () => import("./overview-view"),
   "/account/audit": () => import("./audit-view"),
   "/account/cards": () => import("./cards-view"),
+  "/account/categories": () => import("./organization-view"),
   "/account/connections": () => import("./dashboard-view"),
-  "/account/design-system": () => import("./design-system-view"),
-  "/account/groups": () => import("./organization-view"),
   "/account/investments": () => import("./investments-view"),
+  "/account/reserve": () => import("./reserve-view"),
   "/account/rules": () => import("./organization-view"),
-  "/account/sync": () => import("./sync-history-view"),
   "/account/transactions": () => import("./transactions-view"),
 };
+
+export const pageLoaders = Object.values(pageModules).filter(
+  (load) => load !== undefined,
+);
 
 // Warm code only; queries still belong to the mounted page.
 export function warmPage(pathname: string) {

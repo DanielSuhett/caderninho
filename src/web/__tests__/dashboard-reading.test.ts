@@ -7,7 +7,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import type { PortalResponse } from "../../contracts";
 import { connectionFixture, portalFixture } from "../../fixtures/workspace";
 import { DashboardView } from "../account/dashboard-view";
-import { AccountBalances } from "../account/financial-dashboard";
+import { AccountHoldings } from "../account/financial-dashboard";
 
 const previousLocation = Object.getOwnPropertyDescriptor(
   globalThis,
@@ -59,6 +59,7 @@ function render(
       cancel: () => undefined,
       command: () => undefined,
       connect: () => undefined,
+      history: async () => ({ cursor: null, records: [] }),
       institutions: async () => ({ records: [] }),
       manage: async () => ({ ok: true as const }),
       message: "",
@@ -73,7 +74,7 @@ function render(
 }
 function renderBalances(state: PortalResponse) {
   return renderToStaticMarkup(
-    createElement(AccountBalances, {
+    createElement(AccountHoldings, {
       accounts: state.connections.flatMap((connection) =>
         Object.entries(connection.accounts).map(([id, account]) => ({
           ...account,
@@ -83,8 +84,10 @@ function renderBalances(state: PortalResponse) {
           personId: connection.personId ?? "self",
         })),
       ),
+      currency: "BRL",
       partial: state.connections.some((connection) => connection.partial),
       people: state.people,
+      referenceDay: "2026-10-23",
       transactionsHref: "/account/transactions",
     }),
   );
@@ -92,13 +95,11 @@ function renderBalances(state: PortalResponse) {
 test("the overview preserves zero card balances and their meaning without repeating a finished import", () => {
   const html = renderBalances(snapshot);
   assert.ok(html.includes("Cartão exemplo"));
-  assert.ok(html.includes("0,00 BRL"));
+  assert.ok(html.includes("R$ 0,00"));
   assert.equal(html.includes("não é dinheiro disponível"), false);
   assert.equal(html.includes("22/10/2026"), false);
   assert.equal(html.includes("Importação concluída"), false);
-  assert.ok(
-    render(snapshot, "connections").includes("Conectado · histórico importado"),
-  );
+  assert.ok(render(snapshot, "connections").includes("Conectado</span>"));
 });
 test("a partial or unrelated unconfigured profile does not block the saved accounts", () => {
   const html = renderBalances({
@@ -144,5 +145,5 @@ test("connections show active import state without claiming completion", () => {
     "connections",
   );
   assert.ok(html.includes("Importando"));
-  assert.equal(html.includes("Conectado · histórico importado"), false);
+  assert.equal(html.includes("Conectado</span>"), false);
 });

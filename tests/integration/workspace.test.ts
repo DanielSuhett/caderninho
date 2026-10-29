@@ -20,6 +20,9 @@ import { command, cookies, fixture, login } from "./access-fixture";
 import { account, collect, setup, source, transaction } from "./fixture";
 import { env } from "cloudflare:workers";
 
+const bootState =
+  /<script id="account-boot" type="application\/json">([^<]*)<\/script>/;
+
 beforeEach(setup);
 
 test("an exact portal transaction expands all received installments across months and only confirms linked invoice payments", async () => {
@@ -470,7 +473,28 @@ test("workspace routes require session, query CSRF and an explicit read-only too
     headers: { Cookie: cookie },
   });
   assert.equal(page.status, 200);
-  assert.ok((await page.text()).includes("account-root"));
+  assert.equal(page.headers.get("Cache-Control"), "no-store");
+  const html = await page.text();
+  assert.ok(html.includes("account-root"));
+  // The page carries the same state as GET /api/account, escaped for HTML.
+  const boot = bootState.exec(html)?.[1];
+  assert.ok(boot);
+  const state = JSON.parse(boot);
+  assert.equal(typeof state.csrf, "string");
+  assert.ok(Array.isArray(state.connections));
+  assert.equal(state.page, undefined);
+  // Transactions arrive with their first answers, keyed as the page asks.
+  const transactions = await app.request("/account/transactions", {
+    headers: { Cookie: cookie },
+  });
+  const inline = JSON.parse(
+    bootState.exec(await transactions.text())?.[1] ?? "{}",
+  );
+  assert.deepEqual(
+    inline.page.results.map((result: { tool: string }) => result.tool),
+    ["get_accounts", "get_portal_transactions"],
+  );
+  assert.equal(inline.page.catalog.spaceId, "personal");
   const catalog = await app.request("/api/account/catalog", {
     headers: { Cookie: cookie },
   });

@@ -110,7 +110,6 @@ test("audit is private and revocation affects only the selected grant", async ()
   const app = fixture();
   assert.equal((await app.request("/api/account/audit")).status, 401);
   assert.equal((await app.request("/account/audit")).status, 302);
-  assert.equal((await app.request("/account/design-system")).status, 302);
   const cookie = cookies(await login(app));
   const first = await grant(app, cookie, "First");
   const second = await grant(app, cookie, "Second");

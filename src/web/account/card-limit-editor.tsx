@@ -6,22 +6,19 @@ import {
   useState,
 } from "react";
 
-import type { PortalCard, PortalCards, PortalResponse } from "../../contracts";
+import type { PortalCards, PortalResponse } from "../../contracts";
+import { TransactionOrder } from "../../domain";
 import { tryCatch } from "../../shared";
 import type { OrganizationApi } from "./account-api";
-import type { CardEditor as CardEditorComponent } from "./card-edit-dialog";
 import type { CardLimitEditor as EditorComponent } from "./card-limit-dialog";
+import type { ReadCardTransactions } from "./card-transactions";
 import { CardsDashboard } from "./cards-dashboard";
+import { monthPeriod } from "./dashboard-period";
 import { WorkspacePageError } from "./workspace-page";
 
 const CardLimitEditor = lazy<typeof EditorComponent>(async () => {
   const { data, error } = await tryCatch(() => import("./card-limit-dialog"));
   return { default: error ? WorkspacePageError : data.CardLimitEditor };
-});
-
-const CardEditor = lazy<typeof CardEditorComponent>(async () => {
-  const { data, error } = await tryCatch(() => import("./card-edit-dialog"));
-  return { default: error ? WorkspacePageError : data.CardEditor };
 });
 
 export function CardsWithLimitEditor({
@@ -31,8 +28,11 @@ export function CardsWithLimitEditor({
   revision,
   saved,
   ...props
-}: Omit<ComponentProps<typeof CardsDashboard>, "onEditCard" | "onEditLimit"> & {
-  api: Pick<OrganizationApi, "planning">;
+}: Omit<
+  ComponentProps<typeof CardsDashboard>,
+  "onEditLimit" | "readTransactions"
+> & {
+  api: Pick<OrganizationApi, "planning" | "query">;
   snapshot: PortalResponse;
   spaceId: string;
   revision: number | undefined;
@@ -42,33 +42,31 @@ export function CardsWithLimitEditor({
     account: PortalCards["accounts"][number];
     revision: number;
   } | null>(null);
-  const [editingCard, setEditingCard] = useState<{
-    card: PortalCard;
-    revision: number;
-  } | null>(null);
   const [open, setOpen] = useState(false);
-  const [cardOpen, setCardOpen] = useState(false);
   const [session, setSession] = useState(0);
   const close = useCallback(() => setOpen(false), []);
-  const closeCard = useCallback(() => setCardOpen(false), []);
   const onSaved = useCallback(() => {
     setOpen(false);
     saved();
   }, [saved]);
-  const onCardSaved = useCallback(() => {
-    setCardOpen(false);
-    saved();
-  }, [saved]);
-  const editCard = useCallback(
-    (card: PortalCard) => {
-      if (revision === undefined) {
-        return;
-      }
-      setEditingCard({ card, revision });
-      setSession((value) => value + 1);
-      setCardOpen(true);
-    },
-    [revision],
+  const { month } = props.data;
+  const readTransactions = useCallback<ReadCardTransactions>(
+    ({ accountId, cardId }, signal, fresh) =>
+      api.query(
+        {
+          ...monthPeriod(month),
+          accountId,
+          cardId,
+          limit: 50,
+          order: TransactionOrder.date_desc,
+          spaceId,
+          tool: "get_portal_transactions",
+        },
+        snapshot.csrf,
+        signal,
+        fresh,
+      ),
+    [api, month, snapshot.csrf, spaceId],
   );
   const edit = useCallback(
     (account: PortalCards["accounts"][number]) => {
@@ -85,24 +83,9 @@ export function CardsWithLimitEditor({
     <>
       <CardsDashboard
         {...props}
-        onEditCard={revision === undefined ? undefined : editCard}
         onEditLimit={revision === undefined ? undefined : edit}
+        readTransactions={readTransactions}
       />
-      {!!editingCard && (
-        <Suspense fallback={null}>
-          <CardEditor
-            api={api}
-            card={editingCard.card}
-            close={closeCard}
-            key={`card-${session}`}
-            open={cardOpen}
-            revision={editingCard.revision}
-            saved={onCardSaved}
-            snapshot={snapshot}
-            spaceId={spaceId}
-          />
-        </Suspense>
-      )}
       {!!editing && (
         <Suspense fallback={null}>
           <CardLimitEditor

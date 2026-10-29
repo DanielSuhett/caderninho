@@ -34,9 +34,8 @@ function limit(allocated: string | null, available: string | null) {
 
 test("financial metric preserves exact digits, currency and missing values", () => {
   const large = metric("9007199254740993").replace(markup, "");
-  assert.ok(large.includes("90.071.992.547.409,93 BRL"));
+  assert.ok(large.includes("R$ 90.071.992.547.409,93"));
   assert.ok(metric(null).includes("Indisponível"));
-  assert.ok(metric(null).includes("BRL"));
   assert.ok(!metric(null).includes("0,00"));
   assert.ok(metric("0").includes('data-money-tone="neutral"'));
   assert.ok(metric("123").includes('data-money-tone="expense"'));
@@ -48,7 +47,7 @@ test("credit limit distinguishes zero, unavailable, excess credit and over-limit
   assert.ok(!limit(null, null).includes('role="meter"'));
   const excess = limit("-20000", "120000");
   assert.ok(excess.includes("Crédito excedente"));
-  assert.ok(excess.includes("200,00 BRL"));
+  assert.ok(excess.includes("R$ 200,00"));
   assert.ok(!excess.includes('role="meter"'));
   assert.ok(limit("120000", "-20000").includes("120,0%"));
 });

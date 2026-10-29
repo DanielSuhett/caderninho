@@ -1,9 +1,12 @@
-import { Dialog } from "@cloudflare/kumo/components/dialog";
 import { Toolbar } from "@cloudflare/kumo/components/toolbar";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useCallback, useState } from "react";
 
-import { UiButton } from "../ui";
-import { WorkspaceDialog } from "./workspace-dialog";
+import { deferred, prefetch, useShown } from "./deferred";
+
+const loadPanel = async () =>
+  (await import("./filter-dialog-panel")).FilterDialogPanel;
+const Panel = deferred(loadPanel);
+const warm = () => prefetch(loadPanel);
 
 export function FilterDialog({
   title,
@@ -17,41 +20,29 @@ export function FilterDialog({
   formId: string;
 }) {
   const [open, setOpen] = useState(false);
+  const shown = useShown(open);
+  const show = useCallback(() => setOpen(true), []);
   return (
-    <Dialog.Root
-      onOpenChange={setOpen}
-      open={open}
-    >
-      <Dialog.Trigger render={<Toolbar.Button type="button" />}>
-        {trigger}
-      </Dialog.Trigger>
-      <WorkspaceDialog
-        actions={
-          <>
-            <Dialog.Close
-              render={
-                <UiButton
-                  type="button"
-                  variant="secondary"
-                />
-              }
-            >
-              Cancelar
-            </Dialog.Close>
-            <UiButton
-              form={formId}
-              type="submit"
-              variant="primary"
-            >
-              Aplicar filtros
-            </UiButton>
-          </>
-        }
-        closeLabel="Fechar filtros"
-        title={title}
+    <>
+      <Toolbar.Button
+        aria-haspopup="dialog"
+        onClick={show}
+        onFocus={warm}
+        onPointerEnter={warm}
+        type="button"
       >
-        {children}
-      </WorkspaceDialog>
-    </Dialog.Root>
+        {trigger}
+      </Toolbar.Button>
+      {shown === true && (
+        <Panel
+          formId={formId}
+          open={open}
+          setOpen={setOpen}
+          title={title}
+        >
+          {children}
+        </Panel>
+      )}
+    </>
   );
 }

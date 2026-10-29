@@ -41,7 +41,6 @@ export const demoCategories: WorkspaceCatalog["categories"] =
     spaces: [],
     tags: [],
   }).categories;
-export const demoCategoryGroups = fixedCatalog.categoryGroups;
 export const demoAccounts: FinancialOverview["accounts"] = [
   {
     balanceMinor: "1042586",
@@ -274,6 +273,7 @@ export const demoLedger = [0, 1, 2, 3, 4, 5]
       {
         accountId: "demo-card",
         amountMinor: "-12890",
+        cardNumber: "5151",
         category: "health",
         day: 21,
         description: "Farmácia",

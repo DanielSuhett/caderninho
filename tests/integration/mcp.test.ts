@@ -540,7 +540,7 @@ test("MCP accumulates imported history and updates only matching source IDs", as
   assert.equal(partialTotal.partial, true);
 });
 
-test("OAuth exposes 104 tools and executes confirmed local writes with durable replay", async () => {
+test("OAuth exposes 102 tools and executes confirmed local writes with durable replay", async () => {
   const app = fixture();
   const token = await grant(app, cookies(await login(app)));
   async function rpc(method: string, params: Record<string, unknown>) {
@@ -567,7 +567,7 @@ test("OAuth exposes 104 tools and executes confirmed local writes with durable r
     );
   }
   const listed = await rpc("tools/list", {});
-  assert.equal(listed.result?.tools?.length, 104);
+  assert.equal(listed.result?.tools?.length, 102);
   await Promise.all(
     [...planningOutputSchemas].map(async ([name, schema]) => {
       assert.ok(
@@ -622,42 +622,31 @@ test("OAuth exposes 104 tools and executes confirmed local writes with durable r
   ).data;
   assert.equal(investor.records[0]?.name, "Reserva MCP");
   assert.equal(investor.totals[0]?.gross.totalMinor, "900719925474099301");
-  const groupRequest = {
-    arguments: {
-      color: "#123456",
-      confirmed: true,
-      icon: "gift",
-      idempotency_key: "mcp-group",
-      name: "Eventos",
-      spaceId: "personal",
-    },
-    name: "create_category_group",
-  };
-  const group = await rpc("tools/call", groupRequest);
-  assert.equal(group.result?.isError, false);
-  assert.deepEqual(await rpc("tools/call", groupRequest), group);
-  const groupId = z
-    .object({ id: z.string() })
-    .parse(JSON.parse(group.result?.content?.[0]?.text ?? "{}")).id;
-  const updatedCategory = await rpc("tools/call", {
+  const categoryRequest = {
     arguments: {
       color: "#abcdef",
       confirmed: true,
-      groupId,
+      fixedCost: true,
       icon: "heart",
       id: "personal:fixed:casamento",
       idempotency_key: "mcp-category",
       spaceId: "personal",
     },
     name: "update_category",
-  });
+  };
+  const updatedCategory = await rpc("tools/call", categoryRequest);
   assert.equal(updatedCategory.result?.isError, false);
-  const groups = await rpc("tools/call", {
-    arguments: { spaceId: "personal" },
-    name: "get_category_groups",
+  assert.deepEqual(await rpc("tools/call", categoryRequest), updatedCategory);
+  const fixed = await rpc("tools/call", {
+    arguments: { fixedCost: true, spaceId: "personal" },
+    name: "get_categories",
   });
-  assert.equal(groups.result?.isError, false);
-  assert.ok((groups.result?.content?.[0]?.text ?? "").includes(groupId));
+  assert.equal(fixed.result?.isError, false);
+  assert.ok(
+    (fixed.result?.content?.[0]?.text ?? "").includes(
+      "personal:fixed:casamento",
+    ),
+  );
   const args = {
     currency: "BRL",
     idempotency_key: "mcp-write",

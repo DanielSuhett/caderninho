@@ -1,7 +1,7 @@
 import { Empty } from "@cloudflare/kumo/components/empty";
-import { Select } from "@cloudflare/kumo/components/select";
 
 import type { PortalResponse, WorkspaceCatalog } from "../../contracts";
+import { FieldSelect } from "./field-select";
 import { PersonIdentity } from "./person-identity";
 
 export function ScopeFields({
@@ -46,7 +46,7 @@ export function ScopeFields({
           value={params.get("space") ?? "personal"}
         />
       ) : (
-        <Select
+        <FieldSelect
           className="w-full"
           defaultValue={params.get("space") ?? "personal"}
           items={[
@@ -66,7 +66,7 @@ export function ScopeFields({
         />
       )}
       {person && (snapshot.people.length > 1 || !!params.get("person")) ? (
-        <Select
+        <FieldSelect
           className="w-full"
           defaultValue={params.get("person") ?? ""}
           items={[

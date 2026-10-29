@@ -3,7 +3,7 @@ import { Banner } from "@cloudflare/kumo/components/banner";
 import { DropdownMenu } from "@cloudflare/kumo/components/dropdown";
 import { LayerCard } from "@cloudflare/kumo/components/layer-card";
 import { Select } from "@cloudflare/kumo/components/select";
-import { useKumoToastManager } from "@cloudflare/kumo/components/toast";
+import { Table } from "@cloudflare/kumo/components/table";
 import { Tooltip } from "@cloudflare/kumo/components/tooltip";
 import {
   DotsThreeIcon,
@@ -22,6 +22,7 @@ import {
 } from "react";
 
 import type {
+  PortalQueryResults,
   PortalResponse,
   RuleJob,
   WorkspaceCatalog,
@@ -33,9 +34,10 @@ import type { OrganizationApi } from "./account-api";
 import { navigateWorkspace, workspaceBasePath } from "./account-navigation";
 import { CategoryLabel } from "./category-appearance";
 import { CategoryOrganization } from "./category-editor";
-import { DisclosureItem } from "./disclosure-item";
-import { QuerySearch } from "./filter-fields";
-import { RuleComposition } from "./rule-composition";
+import { notify } from "./notify";
+import { QuerySearch } from "./query-search";
+import { createViewCache } from "./read-cache";
+import { RowMenu } from "./row-menu";
 import { RuleJobNotice, ruleJobSummary, useRuleJob } from "./rule-jobs";
 import { type RuleSource, ruleSummary } from "./rule-presentation";
 import { ScopePicker } from "./scope-picker";
@@ -114,6 +116,12 @@ function RuleActions({
     </>
   );
 }
+const views = createViewCache<
+  WorkspaceCatalog & {
+    accounts: PortalQueryResults["get_accounts"]["data"]["records"];
+  }
+>();
+
 export function OrganizationView({
   api,
   snapshot,
@@ -124,7 +132,7 @@ export function OrganizationView({
 }: {
   api: OrganizationApi;
   snapshot: PortalResponse;
-  page: "rules" | "groups";
+  page: "rules" | "categories";
   basePath?: "/account" | "/demo";
   actions?: ReactNode;
   notice?: ReactNode;
@@ -138,7 +146,6 @@ export function OrganizationView({
   const [importSession, setImportSession] = useState(0);
   const [editorOpen, setEditorOpen] = useState(false);
   const [editorSession, setEditorSession] = useState(0);
-  const { add: notify } = useKumoToastManager();
   const [params] = useState(() => new URLSearchParams(location.search));
   const spaceId = params.get("space") || "personal";
   const activeCount = [params.get("q"), params.get("enabled")].filter(
@@ -162,7 +169,7 @@ export function OrganizationView({
     },
     [api, spaceId, snapshot.csrf],
   );
-  const resource = useResource(load);
+  const resource = useResource(load, views);
   const { data } = resource;
   const rules = data?.rules.filter(
     (r) =>
@@ -197,11 +204,11 @@ export function OrganizationView({
     setEditorOpen(false);
     notify({ title: "Alteração salva.", variant: "success" });
     if (editor?.remove && editor.kind === "space" && editor.id === spaceId) {
-      navigateWorkspace(new URL(`${basePath}/groups`, location.origin));
+      navigateWorkspace(new URL(`${basePath}/categories`, location.origin));
       return;
     }
     resource.retry();
-  }, [resource.retry, editor, spaceId, notify, basePath]);
+  }, [resource.retry, editor, spaceId, basePath]);
   const openImport = useCallback(() => {
     setImportSession((value) => value + 1);
     setImporting(true);
@@ -215,7 +222,7 @@ export function OrganizationView({
         notify({ title: ruleJobSummary(job), variant: "success" });
       }
     },
-    [api, notify, resource.retry],
+    [api, resource.retry],
   );
   const ruleJob = useRuleJob({
     api,
@@ -258,7 +265,7 @@ export function OrganizationView({
   ) : null;
   return (
     <>
-      <WorkspaceHeading title={page === "rules" ? "Regras" : "Grupos"}>
+      <WorkspaceHeading title={page === "rules" ? "Regras" : "Categorias"}>
         {!!actions && <div className="page-actions">{actions}</div>}
       </WorkspaceHeading>
       {notice}
@@ -300,10 +307,10 @@ export function OrganizationView({
       <ResourceFeedback {...resource} />
       {!!data && (
         <>
-          {(page === "groups" || data.spaces.length > 1) && (
+          {(page === "categories" || data.spaces.length > 1) && (
             <GroupScope
               basePath={basePath}
-              newGroup={page === "groups" ? newItem : undefined}
+              newGroup={page === "categories" ? newItem : undefined}
               page={page}
               params={params}
               spaceId={spaceId}
@@ -336,73 +343,80 @@ export function OrganizationView({
               </header>
               {filters}
               {rules?.length ? (
-                <LayerCard
-                  aria-label="Regras de classificação"
-                  className="record-list"
-                  render={<ul />}
-                >
-                  {rules.map((r) => {
-                    const categoryAppearance = data.categories.find(
-                      (c) => c.id === r.categoryId,
-                    );
-                    const category =
-                      categoryAppearance?.name ?? "Categoria não identificada";
-                    const context = ruleSummary({
-                      rule: r,
-                    });
-                    const href = ruleTransactionsHref(r, params, basePath);
-                    const linkLabel = ruleLinkLabel(r);
-                    return (
-                      <li key={r.id}>
-                        <DisclosureItem
-                          className="record-item"
-                          summary={
-                            <>
-                              <span className="record-title">{r.name}</span>
-                              <span className="record-value">
-                                <Badge variant="secondary">
-                                  {r.enabled ? "Ativa" : "Pausada"}
-                                </Badge>
-                              </span>
-                              <span className="record-context rule-context">
-                                {context} →{" "}
-                                <CategoryLabel
-                                  category={categoryAppearance}
-                                  label={category}
-                                />
-                              </span>
-                              <span className="record-meta">
-                                <span>
-                                  {r.pack
-                                    ? `Importada (${r.pack.id}) · `
-                                    : "Pessoal · "}
-                                  Prioridade {r.priority}
-                                </span>
-                              </span>
-                            </>
-                          }
-                        >
-                          <div className="record-detail">
-                            <OrganizationActions
-                              href={href}
-                              item={r}
-                              kind="rule"
-                              linkLabel={linkLabel}
-                              onOpen={openItem}
-                            />
-                            <RuleComposition
-                              accounts={data.accounts}
-                              category={category}
-                              categoryAppearance={categoryAppearance}
-                              enabled={r.enabled}
-                              people={snapshot.people}
-                              rule={r}
-                            />
-                          </div>
-                        </DisclosureItem>
-                      </li>
-                    );
-                  })}
+                <LayerCard className="ledger-surface">
+                  <Table
+                    aria-label="Regras de classificação"
+                    className="ledger-table"
+                    layout="fixed"
+                  >
+                    <colgroup>
+                      <col className="rule-priority-column" />
+                      <col />
+                      <col className="rule-category-column" />
+                      <col className="rule-origin-column" />
+                      <col className="ledger-actions" />
+                    </colgroup>
+                    <Table.Header>
+                      <Table.Row>
+                        <Table.Head>Ordem</Table.Head>
+                        <Table.Head>Regra</Table.Head>
+                        <Table.Head>Categoria</Table.Head>
+                        <Table.Head>Origem</Table.Head>
+                        <Table.Head>
+                          <span className="sr-only">Ações</span>
+                        </Table.Head>
+                      </Table.Row>
+                    </Table.Header>
+                    <Table.Body>
+                      {rules.map((r) => {
+                        const categoryAppearance = data.categories.find(
+                          (c) => c.id === r.categoryId,
+                        );
+                        return (
+                          <Table.Row key={r.id}>
+                            <Table.Cell className="ledger-number">
+                              <span className="sr-only">Prioridade </span>
+                              {r.priority}
+                            </Table.Cell>
+                            <Table.Cell className="ledger-lead">
+                              <div className="ledger-primary">
+                                <div>
+                                  <span>
+                                    {r.name}{" "}
+                                    {!r.enabled && (
+                                      <Badge variant="secondary">Pausada</Badge>
+                                    )}
+                                  </span>
+                                  <small>{ruleSummary({ rule: r })}</small>
+                                </div>
+                              </div>
+                            </Table.Cell>
+                            <Table.Cell>
+                              <CategoryLabel
+                                category={categoryAppearance}
+                                label={
+                                  categoryAppearance?.name ??
+                                  "Categoria não identificada"
+                                }
+                              />
+                            </Table.Cell>
+                            <Table.Cell className="ledger-muted">
+                              {r.pack ? `Pacote ${r.pack.id}` : "Pessoal"}
+                            </Table.Cell>
+                            <Table.Cell className="ledger-actions">
+                              <OrganizationMenu
+                                href={ruleTransactionsHref(r, params, basePath)}
+                                item={r}
+                                kind="rule"
+                                linkLabel={ruleLinkLabel(r)}
+                                onOpen={openItem}
+                              />
+                            </Table.Cell>
+                          </Table.Row>
+                        );
+                      })}
+                    </Table.Body>
+                  </Table>
                 </LayerCard>
               ) : (
                 <EmptyView title="Nenhuma regra encontrada">
@@ -459,6 +473,7 @@ function GroupPanel({
   snapshot: PortalResponse;
   spaceId: string;
 }) {
+  const search = params.get("q") ?? "";
   if (!current) {
     return (
       <EmptyView title="Grupo não encontrado">
@@ -472,7 +487,15 @@ function GroupPanel({
       className="entity-panel"
     >
       <header className="entity-panel-header">
-        <h2 id="group-heading">{current.name}</h2>
+        <div className="group-identity">
+          <h2 id="group-heading">{current.name}</h2>
+          <p className="group-facts">
+            {/* The type repeats the name for the default personal group. */}
+            {groupTypes[current.type] !== current.name &&
+              `${groupTypes[current.type]} · `}
+            {current.currency} · mês começa no dia {current.monthStartDay}
+          </p>
+        </div>
         <OrganizationActions
           href={scopedHref(
             `${basePath}/transactions`,
@@ -489,35 +512,27 @@ function GroupPanel({
           onOpen={onOpen}
         />
       </header>
-      <dl className="detail-list">
-        <div>
-          <dt>Tipo</dt>
-          <dd>{groupTypes[current.type]}</dd>
-        </div>
-        <div>
-          <dt>Moeda</dt>
-          <dd>{current.currency}</dd>
-        </div>
-        <div>
-          <dt>Início do mês</dt>
-          <dd>Dia {current.monthStartDay}</dd>
-        </div>
-      </dl>
-      <WorkspaceDetails
-        defaultOpen
-        hint={String(
-          data.categories.filter((category) => !category.hidden).length,
-        )}
-        title="Categorias"
-      >
-        <CategoryOrganization
-          api={api}
-          catalog={data}
-          saved={saved}
-          snapshot={snapshot}
-          spaceId={spaceId}
-        />
-      </WorkspaceDetails>
+      <QuerySearch
+        action={`${basePath}/categories`}
+        compact
+        label="Buscar categoria"
+        name="q"
+        params={params}
+      />
+      <CategoryOrganization
+        api={api}
+        catalog={{
+          ...data,
+          categories: data.categories.filter((category) =>
+            category.name
+              .toLocaleLowerCase("pt-BR")
+              .includes(search.toLocaleLowerCase("pt-BR")),
+          ),
+        }}
+        saved={saved}
+        snapshot={snapshot}
+        spaceId={spaceId}
+      />
       <WorkspaceDetails
         hint={String(data.tags.length)}
         title="Etiquetas"
@@ -546,7 +561,7 @@ function GroupScope({
 }: {
   basePath: string;
   newGroup?: (() => void) | undefined;
-  page: "rules" | "groups";
+  page: "rules" | "categories";
   params: URLSearchParams;
   spaceId: string;
   spaces: WorkspaceCatalog["spaces"];
@@ -586,7 +601,7 @@ function OrganizationFilters({
   activeCount: number;
   basePath: string;
   catalog: WorkspaceCatalog;
-  page: "rules" | "groups";
+  page: "rules" | "categories";
   params: URLSearchParams;
   snapshot: PortalResponse;
   spaceId: string;
@@ -598,7 +613,7 @@ function OrganizationFilters({
       activeCount={activeCount}
       context={
         {
-          groups: `Categorias e etiquetas: ${current?.name ?? spaceId}`,
+          categories: `Categorias e etiquetas: ${current?.name ?? spaceId}`,
           rules: current?.name ?? spaceId,
         }[page]
       }
@@ -628,24 +643,22 @@ function OrganizationFilters({
         snapshot={snapshot}
         space={false}
       />
+      <input
+        name="q"
+        type="hidden"
+        value={params.get("q") ?? ""}
+      />
       {page === "rules" && (
-        <>
-          <input
-            name="q"
-            type="hidden"
-            value={params.get("q") ?? ""}
-          />
-          <Select
-            defaultValue={params.get("enabled") ?? ""}
-            items={[
-              { label: "Todas as regras", value: "" },
-              { label: "Ativas", value: "true" },
-              { label: "Pausadas", value: "false" },
-            ]}
-            label="Estado"
-            name="enabled"
-          />
-        </>
+        <Select
+          defaultValue={params.get("enabled") ?? ""}
+          items={[
+            { label: "Todas as regras", value: "" },
+            { label: "Ativas", value: "true" },
+            { label: "Pausadas", value: "false" },
+          ]}
+          label="Estado"
+          name="enabled"
+        />
       )}
     </WorkspaceFilters>
   );
@@ -719,6 +732,49 @@ function OrganizationActions({
         </DropdownMenu.Content>
       </DropdownMenu>
     </div>
+  );
+}
+
+// Row variant of OrganizationActions: every action lives in the trailing ⋯.
+function OrganizationMenu({
+  item,
+  kind,
+  href,
+  linkLabel,
+  onOpen,
+}: {
+  item: { id: string; name: string };
+  kind: "rule" | "space";
+  href: string;
+  linkLabel: string;
+  onOpen: (event: MouseEvent<HTMLElement>) => void;
+}) {
+  const noun = kind === "rule" ? "regra" : "grupo";
+  return (
+    <RowMenu
+      items={[
+        {
+          "data-id": item.id,
+          "data-kind": kind,
+          icon: <PencilSimpleIcon size={16} />,
+          key: "edit",
+          label: `Editar ${noun}`,
+          onClick: onOpen,
+        },
+        { href, key: "open", label: linkLabel },
+        {
+          "data-id": item.id,
+          "data-kind": kind,
+          "data-remove": "true",
+          key: "remove",
+          label: `Excluir ${noun}`,
+          onClick: onOpen,
+          separated: true,
+          variant: "danger",
+        },
+      ]}
+      label={`Ações de ${item.name}`}
+    />
   );
 }
 

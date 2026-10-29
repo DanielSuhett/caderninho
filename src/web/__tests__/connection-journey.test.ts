@@ -28,7 +28,7 @@ test("bank identity uses provider institution metadata, never a guess from the a
   assert.equal(html.includes("Conectado · histórico importado"), false);
 });
 
-test("a recognized bank offers a correction while an unknown one invites a choice", () => {
+test("a recognized bank keeps its actions in the row menu while an unknown one invites a choice", () => {
   const recognized = connectionFixture({
     accounts: {
       a: {
@@ -57,10 +57,12 @@ test("a recognized bank offers a correction while an unknown one invites a choic
         manage: async () => ({ ok: true as const }),
       }),
     );
-  assert.ok(html(recognized).includes("Corrigir banco de Banco Sintético"));
+  assert.ok(html(recognized).includes("Ações de Banco Sintético"));
   assert.equal(html(recognized).includes("Escolher banco"), false);
   assert.ok(html(connectionFixture()).includes("Escolher banco"));
-  assert.equal(html(connectionFixture()).includes("Corrigir banco de"), false);
+  assert.ok(
+    html(connectionFixture()).includes("Ações de Banco não identificado"),
+  );
 });
 
 test("failures name their cause and keep the published data", () => {

@@ -12,7 +12,6 @@ export type { FixedCategoryKey } from "./category.entity";
 export {
   CategoryIcon,
   categoryCatalog,
-  defaultCategoryGroups,
   fixedCategories,
   fixedCategoryId,
   pluggyCategory,
@@ -63,8 +62,11 @@ export {
   type FinancialIdentityFilter,
   financialIdentity,
   type Institution,
+  institutionLogoSrc,
   institutionLogoUrl,
+  LOGO_PROXY_PATH,
   matchesFinancialIdentity,
+  PLUGGY_LOGO_ORIGIN,
 } from "./financial-identity.entity";
 export {
   FinancialIdentitySchema,
@@ -109,7 +111,6 @@ export type {
   BillPayment,
   CardSettings,
   Category,
-  CategoryGroup,
   Contribution,
   Goal,
   Installment,
@@ -151,6 +152,8 @@ export {
 export type {
   AggregateQuery,
   Cursor,
+  MonthlyRollupData,
+  MonthlyRollupTotals,
   TransactionFilter,
   TransactionQuery,
 } from "./query.entity";
@@ -161,6 +164,15 @@ export {
   SpendingGroupBy,
   TransactionOrder,
 } from "./query.entity";
+export type { EmergencyReserve } from "./reserve.entity";
+export {
+  closedMonths,
+  emergencyReservePlan,
+  fixedCostBreakdown,
+  ReserveHealth,
+  reserveDefaults,
+  reserveId,
+} from "./reserve.entity";
 export {
   categoryOverrides,
   planRuleApplication,

@@ -149,7 +149,6 @@ function Allocation({
   );
   return (
     <AnalysisSection
-      currency={currency}
       hint="Composição da posição bruta. Exclui posições resgatadas e fora do patrimônio."
       title={title}
     >

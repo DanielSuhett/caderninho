@@ -18,15 +18,6 @@ export interface DraftAlternative {
   conditions: DraftCondition[];
   id: string;
 }
-export const conditionFields = [
-  { label: "Descrição", value: "description" },
-  { label: "Movimento", value: "direction" },
-  { label: "Estado", value: "status" },
-  { label: "Conta", value: "accountId" },
-  { label: "Pessoa", value: "personId" },
-  { label: "Valor absoluto", value: "amount" },
-  { label: "Data", value: "date" },
-];
 export function conditionDraft(field = "description"): DraftCondition {
   const operators: Record<string, string> = {
     amount: RuleOperator.gte,

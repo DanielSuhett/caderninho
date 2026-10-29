@@ -2,7 +2,7 @@
 
 Gerado por `npm run docs:mcp` a partir do registro de ferramentas.
 
-104 ferramentas: 34 consultas/prévias, 69 escritas locais e 1 operação de sincronização.
+102 ferramentas: 34 consultas/prévias, 67 escritas locais e 1 operação de sincronização.
 
 | Ferramenta | Operação | Schema de saída | Descrição |
 | --- | --- | --- | --- |
@@ -19,7 +19,6 @@ Gerado por `npm run docs:mcp` a partir do registro de ferramentas.
 | `complete_goal` | escrita local | — | Concluir meta manualmente. |
 | `complete_installment` | escrita local | — | Alterar conclusão manual sem inventar pagamentos. |
 | `create_category` | escrita local | — | Criar categoria personalizada. |
-| `create_category_group` | escrita local | — | Criar agrupador de categorias com nome, ícone e cor. |
 | `create_goal` | escrita local | — | Criar meta financeira. |
 | `create_manual_account` | escrita local | — | Criar conta ou cartão manual. |
 | `create_manual_installment` | escrita local | — | Criar plano e recorrência de parcelas sem gerar transações futuras. |
@@ -34,7 +33,6 @@ Gerado por `npm run docs:mcp` a partir do registro de ferramentas.
 | `deactivate_recurrence` | escrita local | — | Desativar projeções futuras. |
 | `delete_card` | escrita local | — | Excluir apresentação de cartão adicional, preservando histórico. |
 | `delete_category` | escrita local | — | Excluir categoria personalizada e reatribuir referências à categoria de sistema do mesmo tipo. |
-| `delete_category_group` | escrita local | — | Remover agrupador; suas categorias e transações são preservadas e ficam sem grupo. |
 | `delete_goal` | escrita local | — | Excluir meta e contribuições locais; preservar transações. |
 | `delete_manual_account` | escrita local | — | Excluir conta manual vazia; recusa referências financeiras ativas. |
 | `delete_manual_investment` | escrita local | — | Excluir investimento manual e remover vínculo de metas. |
@@ -53,7 +51,7 @@ Gerado por `npm run docs:mcp` a partir do registro de ferramentas.
 | `get_card_commitments` | consulta/prévia | sim | Compromissos observados de contas CREDIT: gastos efetivos POSTED, pendentes e futuras importadas separados; parcelas por mês, categorias e limites explícitos. Créditos classificados como despesa reduzem o gasto. Não prevê parcelas ausentes, não soma pagamento de fatura e não confunde ocupação observada com limite bancário. |
 | `get_cards` | consulta/prévia | — | Cartões principais e adicionais identificados na origem; ids estáveis e suporte a include_hidden. |
 | `get_categories` | consulta/prévia | — | Listar registros locais e importados, incluindo ocultos quando solicitado. |
-| `get_category_groups` | consulta/prévia | — | Listar agrupadores de categorias de um espaço; não são espaços financeiros. |
+| `get_emergency_reserve` | consulta/prévia | — | Reserva de emergência de uma pessoa: média do custo fixo dos últimos meses fechados × meses configurados, comparada aos saldos vinculados. |
 | `get_goal_plan` | consulta/prévia | — | Quanto guardar por mês, arredondado para cima em unidades mínimas; sem presumir rendimento. |
 | `get_goals` | consulta/prévia | — | Metas locais com valor, prazo e vínculo patrimonial; use get_goal_plan para calcular aportes. |
 | `get_installments` | consulta/prévia | — | Planos manuais e candidatos derivados de metadados; agrupamento da origem é estimativa, não prova de pagamento. |
@@ -90,6 +88,7 @@ Gerado por `npm run docs:mcp` a partir do registro de ferramentas.
 | `replace_manual_loan_schedule` | escrita local | — | Criar cronograma SAC exato; juros mensais em pontos-base e arredondamento half-up. |
 | `set_budget` | escrita local | — | Ativar orçamento e definir total mensal por espaço. |
 | `set_category_limit` | escrita local | — | Definir limite com orçamento ativado. |
+| `set_emergency_reserve` | escrita local | — | Configurar a reserva de emergência de uma pessoa: meses de custo fixo e contas ou investimentos que a compõem. |
 | `set_investment_inclusion` | escrita local | — | Definir participação no patrimônio. |
 | `set_loan_visibility` | escrita local | — | Ocultar ou restaurar empréstimo. |
 | `set_notification_preference` | escrita local | — | Guardar preferência de canal; não configura nem comprova entrega de notificações. |
@@ -99,9 +98,8 @@ Gerado por `npm run docs:mcp` a partir do registro de ferramentas.
 | `unlink_goal_transaction` | escrita local | — | Desvincular transação e contribuição associada sem excluir histórico. |
 | `unmark_bill_paid` | escrita local | — | Alterar apenas confirmação manual da fatura; nunca enviar pagamento ao banco. |
 | `update_account_settings` | escrita local | — | Editar apresentação e definir limite local de cartão; null restaura o limite importado. Não altera o banco. Ciclo somente para cartões manuais. |
-| `update_card` | escrita local | — | Renomear ou ocultar cartão adicional. |
-| `update_category` | escrita local | — | Configurar ícone, cor e grupo de qualquer categoria. Nomes de categorias fixas são protegidos. |
-| `update_category_group` | escrita local | — | Editar nome, ícone ou cor de um agrupador de categorias. |
+| `update_card` | escrita local | — | Renomear, ocultar ou vincular a uma pessoa um cartão; personId null volta ao titular da conta. creditLimitMinor define um sublimite local para cartão adicional; null volta a compartilhar o limite da conta. |
+| `update_category` | escrita local | — | Configurar ícone, cor e custo fixo de qualquer categoria. Nomes de categorias fixas são protegidos. |
 | `update_goal` | escrita local | — | Atualizar meta financeira. |
 | `update_installment` | escrita local | — | Renomear plano e parcelas vinculadas ou alterar categoria. |
 | `update_manual_investment` | escrita local | — | Editar investimento manual. |

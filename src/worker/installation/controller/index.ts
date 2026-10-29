@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { type Context, Hono } from "hono";
 import { deleteCookie } from "hono/cookie";
 import type { z } from "zod/v4";
 
@@ -12,6 +12,7 @@ import {
   ItemActionSchema,
   PortalMutationSchema,
   PortalQuerySchema,
+  type PortalResponse,
   RevokeGrantSchema,
   RULE_IMPORT_MAX_BYTES,
   RuleJobCommandSchema,
@@ -20,7 +21,13 @@ import {
   SyncActionSchema,
   SyncHistorySelectionSchema,
 } from "../../../contracts";
-import { accountPage, renderPage } from "../../../web";
+import { tryCatch } from "../../../shared";
+import {
+  accountPage,
+  pageRequests,
+  referenceDay,
+  renderPage,
+} from "../../../web";
 import {
   assistantGrants,
   revokeAssistantGrant,
@@ -90,19 +97,124 @@ export function installationRoutes(access: Hono<PortalEnv>) {
     }
     return input;
   };
-  app.get("/account", (c) => c.html(renderPage(accountPage())));
+  const portalState = async (c: Context<PortalEnv>) => ({
+    ...(await installationService(c.env).state()),
+    csrf: c.get("session").csrf,
+    origin: requestOrigin(c.req.raw),
+  });
+  const runQuery = (
+    env: PortalEnv["Bindings"],
+    query: z.output<typeof PortalQuerySchema>["query"],
+  ) => {
+    const service = planningService(env);
+    if (query.tool === "get_portal_cards") {
+      return service.cards(query);
+    }
+    if (query.tool === "get_portal_transactions") {
+      return service.portalTransactions(query);
+    }
+    if (
+      query.tool === "get_overview" ||
+      query.tool === "generate_chart" ||
+      query.tool === "get_investments"
+    ) {
+      return service.execute(query, {
+        cardBrand: query.cardBrand,
+        institutionId: query.institutionId,
+      });
+    }
+    return service.execute(query);
+  };
+  // The current page's first answers travel with the document. Keys are the
+  // queries as the page builds them, so its caches adopt these answers.
+  const pageAnswers = async (
+    c: Context<PortalEnv>,
+    path: string,
+    state: PortalResponse,
+  ) => {
+    const url = new URL(c.req.url);
+    const requests = pageRequests(
+      `/account${path ? `/${path.slice(0, -1)}` : ""}`,
+      url.searchParams,
+      state,
+      referenceDay(),
+    );
+    if (!requests) {
+      return;
+    }
+    const { csrf } = c.get("session");
+    const answers = Promise.all([
+      workspaceCatalog(c.env, requests.spaceId),
+      ...requests.queries.map(async (query) => ({
+        data: await runQuery(
+          c.env,
+          PortalQuerySchema.parse({ csrf, query }).query,
+        ),
+        key: JSON.stringify(query),
+        tool: query.tool,
+      })),
+    ]);
+    // Best effort: a slow or failed answer leaves the page to request it.
+    const { data, error } = await tryCatch(
+      Promise.race([
+        answers,
+        new Promise<null>((resolve) => setTimeout(resolve, 1200, null)),
+      ]),
+    );
+    if (error || !data) {
+      return;
+    }
+    const [catalog, ...results] = data;
+    return { catalog: { data: catalog, spaceId: requests.spaceId }, results };
+  };
+  // The build writes one shell per page with its chunks preloaded. The Worker
+  // adds the installation state, so the panel needs no extra request to start.
+  const accountDocument = async (c: Context<PortalEnv>, path: string) => {
+    const assets = c.env.ASSETS;
+    const [shell, state] = await Promise.all([
+      assets &&
+        tryCatch(async () => {
+          const response = await assets.fetch(
+            new URL(`/account-shell/${path}`, c.req.url),
+          );
+          if (!response.ok) {
+            throw new Error("ACCOUNT_SHELL_UNAVAILABLE");
+          }
+          return response.text();
+        }),
+      tryCatch(() => portalState(c)),
+    ]);
+    const html = shell && !shell.error ? shell.data : renderPage(accountPage());
+    // Best effort: without inline state the panel reads it from the API.
+    if (state.error) {
+      return c.html(html);
+    }
+    const page = await pageAnswers(c, path, state.data);
+    const boot = JSON.stringify({
+      ...state.data,
+      ...(page && { page }),
+    }).replaceAll("<", "\\u003c");
+    return c.html(
+      html.replace(
+        "</body>",
+        `<script id="account-boot" type="application/json">${boot}</script></body>`,
+      ),
+    );
+  };
+  app.get("/account", (c) => accountDocument(c, ""));
   for (const path of [
     "cards",
     "transactions",
     "investments",
+    "reserve",
     "rules",
+    "categories",
     "groups",
     "sync",
     "connections",
     "audit",
-    "design-system",
   ]) {
-    app.get(`/account/${path}`, (c) => c.html(renderPage(accountPage())));
+    app.get(`/account/${path}`, (c) => accountDocument(c, `${path}/`));
   }
   app.get("/api/account/audit", async (c) => {
     const input = AuditSelectionSchema.parse(c.req.query());
@@ -136,26 +248,7 @@ export function installationRoutes(access: Hono<PortalEnv>) {
       PortalQuerySchema,
       RULE_IMPORT_MAX_BYTES + 16_384,
     );
-    const service = planningService(c.env);
-    if (input.query.tool === "get_portal_cards") {
-      return c.json(await service.cards(input.query));
-    }
-    if (input.query.tool === "get_portal_transactions") {
-      return c.json(await service.portalTransactions(input.query));
-    }
-    if (
-      input.query.tool === "get_overview" ||
-      input.query.tool === "generate_chart" ||
-      input.query.tool === "get_investments"
-    ) {
-      return c.json(
-        await service.execute(input.query, {
-          cardBrand: input.query.cardBrand,
-          institutionId: input.query.institutionId,
-        }),
-      );
-    }
-    return c.json(await service.execute(input.query));
+    return c.json(await runQuery(c.env, input.query));
   });
   app.post("/api/account/planning", async (c) => {
     const input = await command(
@@ -202,13 +295,7 @@ export function installationRoutes(access: Hono<PortalEnv>) {
       ),
     ),
   );
-  app.get("/api/account", async (c) =>
-    c.json({
-      ...(await installationService(c.env).state()),
-      csrf: c.get("session").csrf,
-      origin: requestOrigin(c.req.raw),
-    }),
-  );
+  app.get("/api/account", async (c) => c.json(await portalState(c)));
   app.post("/api/account/manage", async (c) => {
     const input = await command(
       c.req.raw,

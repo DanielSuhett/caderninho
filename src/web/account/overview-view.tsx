@@ -1,23 +1,40 @@
 import { Banner } from "@cloudflare/kumo/components/banner";
-import { Select } from "@cloudflare/kumo/components/select";
 import { useCallback, useState } from "react";
 
-import type { PortalResponse } from "../../contracts";
-import { ChartType, SpendingGroupBy, TransactionOrder } from "../../domain";
+import type {
+  PortalQueryResults,
+  PortalResponse,
+  WorkspaceCatalog,
+} from "../../contracts";
 import { tryCatch } from "../../shared";
 import type { createAccountApi } from "./account-api";
 import { navigateWorkspace, workspaceHref } from "./account-navigation";
-import { monthPeriod, selectedMonth, shiftMonth } from "./dashboard-period";
+import { monthPeriod, selectedMonth } from "./dashboard-period";
+import { FieldSelect } from "./field-select";
 import { FinancialDashboard } from "./financial-dashboard";
 import { displayCurrency } from "./financial-presentation";
-import { identityParameters } from "./identity-filters";
+import {
+  identityParameters,
+  overviewRequests,
+  referenceDay,
+} from "./page-requests";
 import { PeriodPicker } from "./period-picker";
 import { PersonStack } from "./person-identity";
+import { createViewCache } from "./read-cache";
 import { SetupProgress } from "./setup-progress";
 import { TransactionEditing } from "./transaction-editing";
 import { ScopeFields } from "./workspace-filters";
 import { ResourceFeedback, useResource } from "./workspace-resource";
 import { WorkspaceFilters, WorkspaceHeading } from "./workspace-ui";
+
+interface OverviewData {
+  catalog: WorkspaceCatalog;
+  monthly: PortalQueryResults["generate_chart"]["data"] | null;
+  observedAt: string;
+  overview: PortalQueryResults["get_overview"]["data"];
+  recent: PortalQueryResults["get_portal_transactions"];
+}
+const views = createViewCache<OverviewData>();
 
 export function OverviewView({
   api,
@@ -27,57 +44,19 @@ export function OverviewView({
   snapshot: PortalResponse;
 }) {
   const [params] = useState(() => new URLSearchParams(location.search));
-  const referenceDay = new Date().toLocaleDateString("sv-SE", {
-    timeZone: "America/Sao_Paulo",
-  });
-  const month = selectedMonth(params.get("month"), referenceDay);
+  const day = referenceDay();
+  const month = selectedMonth(params.get("month"), day);
   const period = monthPeriod(month);
   const spaceId = params.get("space") || "personal";
   const personId = params.get("person") ?? "";
   const load = useCallback(
-    async (signal: AbortSignal, fresh = false) => {
-      const queryPeriod = monthPeriod(month);
-      const scope = {
-        spaceId,
-        ...(personId && { personId }),
-        ...identityParameters(params),
-      };
+    async (signal: AbortSignal, fresh = false): Promise<OverviewData> => {
+      const requests = overviewRequests(params, day);
       const [overview, monthly, catalog, recent] = await Promise.all([
-        api.query(
-          { tool: "get_overview", ...scope, ...queryPeriod },
-          snapshot.csrf,
-          signal,
-          fresh,
-        ),
-        tryCatch(() =>
-          api.query(
-            {
-              tool: "generate_chart",
-              ...scope,
-              from: `${shiftMonth(month, -23)}-01`,
-              groupBy: SpendingGroupBy.month,
-              to: queryPeriod.to,
-              type: ChartType.line,
-            },
-            snapshot.csrf,
-            signal,
-            fresh,
-          ),
-        ),
-        api.catalog(spaceId, signal, fresh),
-        api.query(
-          {
-            tool: "get_portal_transactions",
-            ...scope,
-            ...queryPeriod,
-            future: false,
-            limit: 6,
-            order: TransactionOrder.date_desc,
-          },
-          snapshot.csrf,
-          signal,
-          fresh,
-        ),
+        api.query(requests.overview, snapshot.csrf, signal, fresh),
+        tryCatch(() => api.query(requests.chart, snapshot.csrf, signal, fresh)),
+        api.catalog(requests.spaceId, signal, fresh),
+        api.query(requests.recent, snapshot.csrf, signal, fresh),
       ]);
       return {
         catalog,
@@ -87,9 +66,9 @@ export function OverviewView({
         recent,
       };
     },
-    [api, month, personId, snapshot.csrf, spaceId, params],
+    [api, day, snapshot.csrf, params],
   );
-  const resource = useResource(load);
+  const resource = useResource(load, views);
   const { data } = resource;
   const changeMonth = useCallback((value: string) => {
     const destination = new URL(location.href);
@@ -151,7 +130,7 @@ export function OverviewView({
         type="hidden"
         value={month}
       />
-      <Select
+      <FieldSelect
         className="w-full"
         defaultValue={currency}
         items={currencies.map((value) => ({ label: value, value }))}

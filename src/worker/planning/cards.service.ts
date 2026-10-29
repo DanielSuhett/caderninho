@@ -126,6 +126,7 @@ function portalCardsOf(
       const { confirmed, future, pending } = activity.result();
       return {
         confirmed,
+        creditLimitMinor: entry.primary ? null : entry.creditLimitMinor,
         future,
         hidden: entry.hidden,
         id: entry.id,

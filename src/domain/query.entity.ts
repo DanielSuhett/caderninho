@@ -18,6 +18,22 @@ export const AggregateGroupBy = {
 export type AggregateGroupBy =
   (typeof AggregateGroupBy)[keyof typeof AggregateGroupBy];
 
+/** Monthly totals per currency, with bigint minor amounts as strings. */
+export interface MonthlyRollupTotals {
+  cashFlow: string;
+  count: number;
+  expense: string;
+  income: string;
+  unclassified: number;
+  unclassifiedAmount: string;
+  unclassifiedUnknown: number;
+  unknown: number;
+}
+export interface MonthlyRollupData {
+  expenses: Record<string, string>;
+  totals: Record<string, MonthlyRollupTotals>;
+}
+
 export interface TransactionFilter {
   accountIds?: string[] | undefined;
   category?: string | undefined;

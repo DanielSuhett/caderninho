@@ -1,8 +1,11 @@
+import { Badge } from "@cloudflare/kumo/components/badge";
 import { Empty } from "@cloudflare/kumo/components/empty";
 import { LayerCard } from "@cloudflare/kumo/components/layer-card";
 import { Link } from "@cloudflare/kumo/components/link";
-import { PencilSimpleIcon } from "@phosphor-icons/react";
-import { lazy, Suspense, useCallback, useMemo } from "react";
+import { Meter } from "@cloudflare/kumo/components/meter";
+import { Tabs } from "@cloudflare/kumo/components/tabs";
+import { CaretRightIcon, PencilSimpleIcon } from "@phosphor-icons/react";
+import { lazy, Suspense, useCallback, useMemo, useState } from "react";
 
 import type {
   PortalCard,
@@ -14,17 +17,26 @@ import { tryCatch } from "../../shared";
 import { formatBalance, type MoneyTone } from "../money";
 import { MoneyValue } from "../money-value";
 import { UiIconButton } from "../ui";
+import { AccountAvatar } from "./account-identity";
+import { workspaceHref } from "./account-navigation";
 import { AnalysisSection } from "./analysis-section";
 import { CardInstallments } from "./card-installments";
-import { cardLabel, cardPercentage } from "./card-presentation";
+import {
+  cardDigitsLabel,
+  cardMonthSpend,
+  cardPercentage,
+} from "./card-presentation";
+import {
+  CardTransactions,
+  type ReadCardTransactions,
+} from "./card-transactions";
 import { CategoryLabel } from "./category-appearance";
 import { ChartViewport } from "./chart-viewport";
-import { CreditLimitCard } from "./credit-limit-card";
-import { monthLabel } from "./dashboard-period";
+import { monthLabel, monthPeriod } from "./dashboard-period";
+import { DisclosureItem } from "./disclosure-item";
 import { FinancialMetric } from "./financial-metric";
 import { InfoTip } from "./info-tip";
 import { PersonAvatar } from "./person-identity";
-import { dayLabel, momentLabel } from "./workspace-resource";
 
 const CategoryChart = lazy(async () => {
   const { data, error } = await tryCatch(() => import("./card-category-chart"));
@@ -74,162 +86,246 @@ function CardMetric({
     </FinancialMetric>
   );
 }
-function AccountCardRow({
+// Cards without a sublimit are measured against the shared account limit, so
+// every row reads like the account above it.
+// The card's share of its limit: its own sublimit when set, otherwise the
+// account limit already shown above, so only a sublimit repeats its value.
+function CardLimitMeter({
   card,
   currency,
-  showOwner,
-  onEdit,
+  accountLimit,
 }: {
   card: PortalCard;
   currency: string;
-  showOwner: boolean;
-  onEdit?: ((card: PortalCard) => void) | undefined;
+  accountLimit: string | null;
 }) {
-  const edit = useCallback(() => onEdit?.(card), [card, onEdit]);
+  const limit = card.creditLimitMinor ?? accountLimit;
+  const usage = cardPercentage(cardMonthSpend(card), limit);
+  if (!(usage && limit)) {
+    return null;
+  }
   return (
-    <li>
-      <span className="account-card-name">
+    <Meter
+      customValue={usage.label}
+      label={
+        card.creditLimitMinor === null
+          ? "Do limite total"
+          : `Sublimite · ${formatBalance(limit, currency)}`
+      }
+      value={usage.meter}
+    />
+  );
+}
+function AccountCardRow({
+  card,
+  currency,
+  accountLimit,
+  showOwner,
+}: {
+  card: PortalCard;
+  currency: string;
+  accountLimit: string | null;
+  showOwner: boolean;
+}) {
+  return (
+    <li data-hidden={card.hidden}>
+      <div className="account-card-row">
         {showOwner ? (
           <PersonAvatar
             person={{ id: card.personId, name: card.personName }}
             size={24}
           />
         ) : null}
-        {cardLabel(card)}
-      </span>
-      <span>{amountLabel(card.confirmed.totalMinor, currency)}</span>
-      {!!onEdit && (
-        <UiIconButton
-          label={`Editar ${cardLabel(card)}`}
-          onClick={edit}
-        >
-          <PencilSimpleIcon
-            aria-hidden
-            size={20}
-          />
-        </UiIconButton>
-      )}
+        <span className="account-card-name">
+          {cardDigitsLabel(card)}
+          {!!card.hidden && <Badge variant="secondary">Oculto</Badge>}
+        </span>
+        <span className="account-card-amount">
+          {amountLabel(cardMonthSpend(card), currency)}
+        </span>
+      </div>
+      <CardLimitMeter
+        accountLimit={accountLimit}
+        card={card}
+        currency={currency}
+      />
     </li>
   );
 }
+// Every card of the account, primary first and hidden last, in one list of
+// the drill-down.
 function AccountCards({
   cards,
   currency,
+  accountLimit,
   showOwner,
-  onEdit,
 }: {
   cards: PortalCard[];
   currency: string;
+  accountLimit: string | null;
   showOwner: boolean;
-  onEdit?: ((card: PortalCard) => void) | undefined;
 }) {
   if (cards.length < 2 && !cards.some((card) => card.number)) {
     return null;
   }
-  const hiddenCards = cards.filter((card) => card.hidden);
+  const ordered = cards.toSorted(
+    (a, b) =>
+      Number(a.hidden) - Number(b.hidden) ||
+      Number(b.primary) - Number(a.primary),
+  );
   return (
-    <>
-      <ul
-        aria-label="Cartões desta conta"
-        className="account-cards"
-      >
-        {cards
-          .filter((card) => !card.hidden)
-          .map((card) => (
-            <AccountCardRow
-              card={card}
-              currency={currency}
-              key={card.id}
-              onEdit={onEdit}
-              showOwner={showOwner}
-            />
-          ))}
-      </ul>
-      {!!hiddenCards.length && (
-        <details className="account-cards-hidden">
-          <summary>Cartões ocultos ({hiddenCards.length})</summary>
-          <ul className="account-cards">
-            {hiddenCards.map((card) => (
-              <AccountCardRow
-                card={card}
-                currency={currency}
-                key={card.id}
-                onEdit={onEdit}
-                showOwner={showOwner}
-              />
-            ))}
-          </ul>
-        </details>
-      )}
-    </>
+    <ul
+      aria-label="Cartões desta conta"
+      className="account-cards"
+    >
+      {ordered.map((card) => (
+        <AccountCardRow
+          accountLimit={accountLimit}
+          card={card}
+          currency={currency}
+          key={card.id}
+          showOwner={showOwner}
+        />
+      ))}
+    </ul>
   );
 }
+function shortDay(day: string) {
+  return `${day.slice(8, 10)}/${day.slice(5, 7)}`;
+}
+function LimitValue({
+  label,
+  value,
+  currency,
+}: {
+  label: string;
+  value: string | null;
+  currency: string;
+}) {
+  return (
+    <div>
+      <dt>{label}</dt>
+      <dd>{amountLabel(value, currency)}</dd>
+    </div>
+  );
+}
+// One short collapsible row per account: identity, use and meter on top;
+// values, dates and the account's cards only when opened.
 function LimitCard({
   account,
   showOwner,
   onEdit,
-  onEditCard,
 }: {
   account: PortalCards["accounts"][number];
   showOwner: boolean;
   onEdit?: ((account: PortalCards["accounts"][number]) => void) | undefined;
-  onEditCard?: ((card: PortalCard) => void) | undefined;
 }) {
   const edit = useCallback(() => onEdit?.(account), [account, onEdit]);
-  return (
-    <CreditLimitCard
-      action={
-        onEdit && (
-          <UiIconButton
-            label={`Editar limite de ${account.name}`}
-            onClick={edit}
-          >
-            <PencilSimpleIcon
-              aria-hidden
-              size={20}
-            />
-          </UiIconButton>
-        )
-      }
-      allocated={account.allocatedMinor}
-      available={account.availableCreditMinor}
-      currency={account.currency}
-      estimated={account.creditEstimated}
-      identity={account.identity}
-      limit={account.creditLimitMinor}
-      name={`${account.name}${account.cardNumber ? ` · ${account.cardNumber}` : ""}`}
-      person={
-        showOwner
-          ? { id: account.personId, name: account.personName }
-          : undefined
-      }
-    >
-      <AccountCards
-        cards={account.cards}
-        currency={account.currency}
-        onEdit={onEditCard}
-        showOwner={showOwner}
-      />
-      <p>Observado em {momentLabel(account.balanceObservedAt)}</p>
-      {!!account.creditEstimated && (
-        <p>
-          Limite local. O disponível estimado usa a ocupação importada; não
-          altera o banco.
-        </p>
-      )}
-      {!!(account.closeDate || account.dueDate) && (
-        <p>
-          {account.closeDate
-            ? `Fecha em ${dayLabel(account.closeDate)}`
-            : "Fechamento não informado"}{" "}
-          ·{" "}
-          {account.dueDate
-            ? `Vence em ${dayLabel(account.dueDate)}`
-            : "Vencimento não informado"}
-        </p>
-      )}
-    </CreditLimitCard>
+  const usage = cardPercentage(
+    account.allocatedMinor,
+    account.creditLimitMinor,
   );
+  const dates = [
+    account.closeDate && `fecha ${shortDay(account.closeDate)}`,
+    account.dueDate && `vence ${shortDay(account.dueDate)}`,
+  ].filter(Boolean);
+  return (
+    <LayerCard className="cards-limit-row">
+      <DisclosureItem
+        leading={
+          <AccountAvatar
+            account={{
+              identity: account.identity,
+              name: account.name,
+              type: "CREDIT",
+            }}
+            person={
+              showOwner
+                ? { id: account.personId, name: account.personName }
+                : undefined
+            }
+          />
+        }
+        summary={
+          <span className="cards-limit-summary">
+            <span className="cards-limit-line">
+              <span className="cards-limit-name">
+                {account.cardNumber
+                  ? `•••• ${account.cardNumber}`
+                  : account.name}
+              </span>
+            </span>
+            {!!usage && (
+              <Meter
+                customValue={usage.label}
+                label="Ocupação"
+                value={usage.meter}
+              />
+            )}
+            <span className="cards-limit-meta">
+              {amountLabel(account.allocatedMinor, account.currency)} de{" "}
+              {amountLabel(account.creditLimitMinor, account.currency)}
+              {!!account.creditEstimated && " · estimado"}
+            </span>
+          </span>
+        }
+      >
+        <div className="cards-limit-panel">
+          <dl className="cards-limit-values">
+            <LimitValue
+              currency={account.currency}
+              label="Disponível"
+              value={account.availableCreditMinor}
+            />
+            {!!dates.length && (
+              <div>
+                <dt>Fatura</dt>
+                <dd>{dates.join(" · ")}</dd>
+              </div>
+            )}
+          </dl>
+          {!!onEdit && (
+            <UiIconButton
+              label={`Editar limite de ${account.name}`}
+              onClick={edit}
+            >
+              <PencilSimpleIcon
+                aria-hidden
+                size={20}
+              />
+            </UiIconButton>
+          )}
+        </div>
+        <AccountCards
+          accountLimit={account.creditLimitMinor}
+          cards={account.cards}
+          currency={account.currency}
+          showOwner={showOwner}
+        />
+      </DisclosureItem>
+    </LayerCard>
+  );
+}
+
+// Opens Transações with every card of the month in the clicked category,
+// keeping the current space and person.
+function categoryTransactionsHref(month: string, categoryId: string | null) {
+  const current = new URLSearchParams(
+    typeof location === "undefined" ? "" : location.search,
+  );
+  const params = new URLSearchParams({ cards: "on", ...monthPeriod(month) });
+  for (const key of ["space", "person"]) {
+    const value = current.get(key);
+    if (value) {
+      params.set(key, value);
+    }
+  }
+  if (categoryId) {
+    params.set("categoryId", categoryId);
+  } else {
+    params.set("uncategorized", "on");
+  }
+  return workspaceHref(`/account/transactions?${params}`);
 }
 
 function Categories({
@@ -250,7 +346,6 @@ function Categories({
   const hasValues = groups.some((group) => BigInt(group.knownMinor) > 0n);
   return (
     <AnalysisSection
-      currency={data.currency}
       hint={`${monthLabel(data.month)} · compras confirmadas antes dos estornos`}
       title="Gastos por categoria"
     >
@@ -287,23 +382,35 @@ function Categories({
                 className="financial-category-row"
                 key={group.categoryId ?? "uncategorized"}
               >
-                <CategoryLabel
-                  category={categories.find(
-                    (category) => category.id === group.categoryId,
-                  )}
-                  label={
-                    categories.find(
+                <a
+                  className="financial-category-link"
+                  href={categoryTransactionsHref(data.month, group.categoryId)}
+                >
+                  <CategoryLabel
+                    category={categories.find(
                       (category) => category.id === group.categoryId,
-                    )?.name ?? "Sem categoria"
-                  }
-                />
-                <span className="financial-category-amount">
-                  {amountLabel(group.totalMinor, data.currency)}
-                  <span className="cards-note">
-                    {cardPercentage(group.totalMinor, data.purchases.totalMinor)
-                      ?.label ?? "Não informada"}
+                    )}
+                    label={
+                      categories.find(
+                        (category) => category.id === group.categoryId,
+                      )?.name ?? "Sem categoria"
+                    }
+                  />
+                  <span className="financial-category-amount">
+                    {amountLabel(group.totalMinor, data.currency)}
+                    <span className="cards-note">
+                      {cardPercentage(
+                        group.totalMinor,
+                        data.purchases.totalMinor,
+                      )?.label ?? "Não informada"}
+                    </span>
                   </span>
-                </span>
+                  <CaretRightIcon
+                    aria-hidden="true"
+                    className="financial-category-caret"
+                    size={16}
+                  />
+                </a>
               </li>
             ))}
           </ul>
@@ -319,6 +426,34 @@ function Categories({
     </AnalysisSection>
   );
 }
+function CardInstallmentList({
+  data,
+  nextHref,
+  showOwner,
+}: {
+  data: PortalCards;
+  nextHref: string | null;
+  showOwner: boolean;
+}) {
+  return (
+    <>
+      {data.installments.length ? (
+        <CardInstallments
+          data={data}
+          showOwner={showOwner}
+        />
+      ) : (
+        <Empty
+          className="border-0 bg-transparent shadow-none"
+          description="Escolha outro mês no topo ou confira suas conexões."
+          size="sm"
+          title="Nenhuma parcela recebida neste mês"
+        />
+      )}
+      {!!nextHref && <Link href={nextHref}>Mais parcelas deste mês</Link>}
+    </>
+  );
+}
 export function CardsDashboard({
   data,
   categories,
@@ -326,7 +461,7 @@ export function CardsDashboard({
   showOwner,
   nextHref,
   onEditLimit,
-  onEditCard,
+  readTransactions,
 }: {
   data: PortalCards;
   categories: WorkspaceCatalog["categories"];
@@ -336,8 +471,11 @@ export function CardsDashboard({
   onEditLimit?:
     | ((account: PortalCards["accounts"][number]) => void)
     | undefined;
-  onEditCard?: ((card: PortalCard) => void) | undefined;
+  readTransactions?: ReadCardTransactions | undefined;
 }) {
+  const [activity, setActivity] = useState<string>(
+    readTransactions ? "transactions" : "installments",
+  );
   const visibleAccounts = data.accounts.filter(
     (account) =>
       account.currency === data.currency &&
@@ -367,13 +505,6 @@ export function CardsDashboard({
             label="Futuros conhecidos"
           />
         </dl>
-        {!!data.refunds.count && (
-          <p className="cards-note">
-            Compras: {amountLabel(data.purchases.totalMinor, data.currency)} ·
-            estornos classificados:{" "}
-            {amountLabel(data.refunds.totalMinor, data.currency)}.
-          </p>
-        )}
       </LayerCard>
       <div className="card-analysis-grid">
         <Categories
@@ -396,37 +527,49 @@ export function CardsDashboard({
                   account={account}
                   key={account.id}
                   onEdit={onEditLimit}
-                  onEditCard={onEditCard}
                   showOwner={showOwner}
                 />
               ))}
             </div>
           ) : (
-            <p className="cards-note">
-              Nenhum cartão com limite nesta moeda. Compras podem estar em uma
-              moeda diferente da conta.
-            </p>
+            <Empty
+              className="border-0 bg-transparent shadow-none"
+              size="sm"
+              title="Nenhum cartão com limite nesta moeda"
+            />
           )}
         </section>
       </div>
-      <section aria-labelledby="card-installments-heading">
+      <section aria-labelledby="card-activity-heading">
         <header className="section-heading">
-          <h2 id="card-installments-heading">Parcelamentos</h2>
+          <h2 id="card-activity-heading">Movimentações</h2>
         </header>
-        {data.installments.length ? (
-          <CardInstallments
-            data={data}
+        {!!readTransactions && (
+          <Tabs
+            className="transaction-tabs"
+            onValueChange={setActivity}
+            tabs={[
+              { label: "Transações", value: "transactions" },
+              { label: "Parcelamentos", value: "installments" },
+            ]}
+            value={activity}
+            variant="underline"
+          />
+        )}
+        {activity === "transactions" && readTransactions ? (
+          <CardTransactions
+            accounts={visibleAccounts}
+            categories={categories}
+            read={readTransactions}
             showOwner={showOwner}
           />
         ) : (
-          <Empty
-            className="border-0 bg-transparent shadow-none"
-            description="Escolha outro mês no topo ou confira suas conexões."
-            size="sm"
-            title="Nenhuma parcela recebida neste mês"
+          <CardInstallmentList
+            data={data}
+            nextHref={nextHref}
+            showOwner={showOwner}
           />
         )}
-        {!!nextHref && <Link href={nextHref}>Mais parcelas deste mês</Link>}
       </section>
     </div>
   );

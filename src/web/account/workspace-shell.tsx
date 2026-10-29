@@ -84,9 +84,11 @@ export function WorkspaceFrame({
 export function SidebarFrame({
   brandHref,
   children,
+  tools,
 }: {
   brandHref: string;
   children: ReactNode;
+  tools?: ReactNode;
 }) {
   const { state, isMobile, openMobile } = useSidebar();
   const restoreMenuTrigger = useCallback(() => {
@@ -152,6 +154,7 @@ export function SidebarFrame({
       </Sidebar.Header>
       <Sidebar.Content>{children}</Sidebar.Content>
       <Sidebar.Footer className="workspace-sidebar-footer">
+        {tools}
         {!isMobile && (
           <>
             <SyncStatusIndicator />

@@ -302,7 +302,7 @@ export function landingPage({
                   Você controla o acesso
                 </dt>
                 <dd>
-                  Acompanhe chamadas e revogue autorizações na Auditoria MCP.
+                  Acompanhe chamadas e revogue autorizações na Observabilidade.
                 </dd>
               </div>
             </dl>
@@ -548,8 +548,8 @@ export function landingPage({
                 <div>
                   <h3>Confirme a conexão</h3>
                   <p>
-                    Peça o status do Caderninho. Confira a chamada em Auditoria
-                    MCP e a data da última importação.
+                    Peça o status do Caderninho. Confira a chamada em
+                    Observabilidade e a data da última importação.
                   </p>
                 </div>
               </li>

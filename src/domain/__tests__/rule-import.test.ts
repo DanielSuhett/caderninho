@@ -36,6 +36,7 @@ const pack: RuleImportPackage = {
 };
 function category(overrides: Partial<Category> = {}): Category {
   return {
+    fixedCost: false,
     hidden: false,
     id: "local-books",
     kind: "expense",

@@ -1,37 +1,38 @@
 # Categorias e classificação
 
-## Relação com grupos e espaços
+## Espaços e custo fixo
 
-Um espaço financeiro (Pessoal, Família etc.) contém categorias e agrupadores de
-categorias. Um agrupador contém várias categorias. Uma categoria pertence a zero
-ou um agrupador, sempre no mesmo espaço. O agrupador é organização visual; não
-altera valores, natureza financeira, regras ou classificação das transações.
+Um espaço financeiro (Pessoal, Família etc.) contém categorias. Não há
+agrupadores: a única organização é o campo `fixedCost`, que marca as categorias
+de despesa que compõem o custo fixo mensal e dimensionam a reserva de
+emergência. O campo não altera valores, natureza financeira, regras nem
+classificação das transações.
 
-`planning_categories` guarda categorias com `icon`, `color` e `groupId`.
-`planning_category_groups` guarda `id` e JSON tipado com
-`spaceId`, `name`, `icon` e `color`, conforme as outras tabelas de planejamento.
-O schema inicial cria os agrupadores e as 33 categorias fixas visíveis do espaço
-Pessoal. Novos espaços recebem o mesmo catálogo. Os nomes fixos
-não podem ser alterados nem excluídos. Ícone, cor, grupo e limite são editáveis.
-Categorias personalizadas conservam seus próprios IDs e referências.
-
-Remover um agrupador deixa suas categorias com `groupId=null`. Não remove
-categorias nem altera transações. Os ícones usam uma lista fechada do produto;
+`planning_categories` guarda categorias com `icon`, `color` e `fixedCost`. O
+schema inicial cria as 33 categorias fixas visíveis do espaço Pessoal, com
+Aluguel, Energia, Gás, Internet, Financiamento, Seguro, Impostos e taxas,
+Faculdade, Farmácia, Saúde e Mercado já em custo fixo. Novos espaços recebem o
+mesmo catálogo. Os nomes fixos não podem ser alterados nem excluídos. Ícone,
+cor, custo fixo e limite são editáveis. Categorias personalizadas conservam
+seus próprios IDs e referências. Os ícones usam uma lista fechada do produto;
 cores aceitam somente `#RRGGBB`.
+
+A migração `0003_fixed_cost_reserve.sql` remove `groupId` das categorias,
+marca o custo fixo padrão nas categorias de sistema e exclui
+`planning_category_groups`.
 
 ## MCP e portal
 
-As ferramentas novas são `get_category_groups`, `create_category_group`,
-`update_category_group` e `delete_category_group`. `get_categories` retorna os
-campos de aparência, vínculo e `system`. `create_category` e `update_category`
-aceitam `icon`, `color` e `groupId`; `groupId=null` remove o vínculo.
+`get_categories` retorna os campos de aparência, `fixedCost` e `system`, e
+aceita o filtro `fixedCost`. `create_category` e `update_category` aceitam
+`icon`, `color` e `fixedCost`.
 
 As mutações usam os contratos existentes: `spaceId`, `confirmed=true` e
-`idempotency_key`. O planejamento valida referências entre espaços e publica
-categoria/grupo/revisão/recibo atomicamente. `/api/account/catalog` inclui
-`categoryGroups` e os campos das categorias. O painel Grupos mostra os
-agrupadores e permite editar categorias e criar/editar/remover agrupadores.
-A demonstração usa os mesmos contratos e dados sintéticos, sem gravar no banco.
+`idempotency_key`. O planejamento valida o espaço e publica
+categoria/revisão/recibo atomicamente. `/api/account/catalog` inclui os campos
+das categorias. A página Categorias liga e desliga o custo fixo por categoria;
+a página Reserva soma essas categorias. A demonstração usa os mesmos contratos
+e dados sintéticos, sem gravar no banco.
 
 ## Prioridade e fallback
 
@@ -59,7 +60,7 @@ Fonte oficial da árvore de categorias:
 
 ## Evidência
 
-Testes locais cobrem catálogo inicial, CRUD/vínculos/idempotência/escopo,
+Testes locais cobrem catálogo inicial, custo fixo/idempotência/escopo,
 mapeamento determinístico da Pluggy e precedência manual.
 Deploy, migração remota e importação real exigem validação separada.
 

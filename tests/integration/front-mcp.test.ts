@@ -317,7 +317,7 @@ test("a reversed financial period is a rejected request in both HTTP and MCP", a
   assert.equal(front.status, 400);
 });
 
-test("MCP edits of category groups, categories, rules and spaces round-trip to the front with confirmation and replay", async () => {
+test("MCP edits of categories, rules and spaces round-trip to the front with confirmation and replay", async () => {
   await collect(
     source([
       transaction({ category: "Shopping", description: "Mercado sintético" }),
@@ -325,53 +325,35 @@ test("MCP edits of category groups, categories, rules and spaces round-trip to t
   );
   const f = await client();
   const id = (value: unknown) => z.object({ id: z.string() }).parse(value).id;
-  const groupFields = {
-    color: "#123456",
-    icon: "gift",
-    idempotency_key: "group-create",
-    name: "Projeto",
-  };
-  const group = await f.write("create_category_group", groupFields);
-  assert.equal(group.error, false);
-  const groupId = id(group.value);
-  assert.deepEqual(await f.write("create_category_group", groupFields), group);
-  const conflict = await f.write("create_category_group", {
-    ...groupFields,
-    name: "Outro projeto",
-  });
-  assert.equal(conflict.error, true);
-  assert.deepEqual(conflict.value, { error: "IDEMPOTENCY_CONFLICT" });
-  assert.equal(
-    (
-      await f.write("update_category_group", {
-        color: "#7c3aed",
-        icon: "star",
-        id: groupId,
-        name: "Projeto revisado",
-      })
-    ).error,
-    false,
-  );
   const categoryId = "personal:fixed:mercado";
   assert.equal(
     (
       await f.write("update_category", {
         color: "#7c3aed",
-        groupId,
+        fixedCost: false,
         icon: "gift",
         id: categoryId,
       })
     ).error,
     false,
   );
-  const custom = await f.write("create_category", {
+  const customFields = {
     color: "#abcdef",
-    groupId,
+    fixedCost: true,
     icon: "home",
+    idempotency_key: "category-create",
     kind: "expense",
     name: "Categoria sintética",
-  });
+  };
+  const custom = await f.write("create_category", customFields);
   assert.equal(custom.error, false);
+  assert.deepEqual(await f.write("create_category", customFields), custom);
+  const conflict = await f.write("create_category", {
+    ...customFields,
+    name: "Outra categoria",
+  });
+  assert.equal(conflict.error, true);
+  assert.deepEqual(conflict.value, { error: "IDEMPOTENCY_CONFLICT" });
   assert.equal(
     (
       await f.write("update_category", {
@@ -423,20 +405,18 @@ test("MCP edits of category groups, categories, rules and spaces round-trip to t
     "1000",
   );
   const categories = await f.call("get_categories", { include_hidden: true });
-  const groups = await f.call("get_category_groups");
   const rules = await f.call("get_rules");
   const spaces = await f.call("get_spaces");
   const tags = await f.call("get_tags");
   const records = z.object({
     data: z.object({ records: z.array(z.unknown()) }),
   });
-  for (const reply of [categories, groups, rules, spaces, tags]) {
+  for (const reply of [categories, rules, spaces, tags]) {
     assert.equal(reply.error, false);
   }
   const front = WorkspaceCatalogSchema.parse(await (await f.catalog()).json());
   const mcpCatalog = WorkspaceCatalogSchema.parse({
     categories: records.parse(categories.value).data.records,
-    categoryGroups: records.parse(groups.value).data.records,
     rules: records.parse(rules.value).data.records,
     spaces: records.parse(spaces.value).data.records,
     tags: records.parse(tags.value).data.records,
@@ -447,8 +427,8 @@ test("MCP edits of category groups, categories, rules and spaces round-trip to t
     "#7c3aed",
   );
   assert.equal(
-    front.categoryGroups.find((row) => row.id === groupId)?.name,
-    "Projeto revisado",
+    front.categories.find((row) => row.id === id(custom.value))?.fixedCost,
+    true,
   );
   assert.equal(
     front.rules.find((row) => row.id === ruleId)?.categoryId,
@@ -488,18 +468,10 @@ test("MCP edits of category groups, categories, rules and spaces round-trip to t
     (await f.write("delete_category", { id: id(custom.value) })).error,
     false,
   );
-  assert.equal(
-    (await f.write("delete_category_group", { id: groupId })).error,
-    false,
-  );
   const final = WorkspaceCatalogSchema.parse(await (await f.catalog()).json());
   assert.equal(final.rules.length, 0);
   assert.equal(
-    final.categories.find((row) => row.id === categoryId)?.groupId,
-    null,
-  );
-  assert.equal(
-    final.categoryGroups.some((row) => row.id === groupId),
+    final.categories.find((row) => row.id === categoryId)?.fixedCost,
     false,
   );
   const createdSpace = await f.write("create_space", {
@@ -529,7 +501,7 @@ test("MCP edits of category groups, categories, rules and spaces round-trip to t
         records: z.array(
           z.object({
             color: z.string(),
-            groupId: z.string().nullable(),
+            fixedCost: z.boolean(),
             icon: z.string(),
           }),
         ),

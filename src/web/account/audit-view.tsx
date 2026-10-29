@@ -1,11 +1,11 @@
 import { Badge } from "@cloudflare/kumo/components/badge";
 import { Banner } from "@cloudflare/kumo/components/banner";
 import { LayerCard } from "@cloudflare/kumo/components/layer-card";
-import { Meter } from "@cloudflare/kumo/components/meter";
 import { Select } from "@cloudflare/kumo/components/select";
 import { Table } from "@cloudflare/kumo/components/table";
 import {
   type MouseEvent,
+  type ReactNode,
   useCallback,
   useEffect,
   useRef,
@@ -14,24 +14,30 @@ import {
 
 import type { AuditReport, PortalResponse } from "../../contracts";
 import { tryCatch } from "../../shared";
-import { UiButton, UiLink } from "../ui";
+import { UiLink } from "../ui";
 import type { createAccountApi } from "./account-api";
 import { workspaceHref } from "./account-navigation";
 import { BackofficeDialog } from "./backoffice-dialog";
 import { CursorPagination } from "./cursor-pagination";
 import { DisclosureItem } from "./disclosure-item";
+import { InfoTip } from "./info-tip";
+import {
+  ActivityChart,
+  averageMs,
+  BarGauge,
+  errorRate,
+  percent,
+  Sparkline,
+} from "./observability-charts";
+import { createViewCache } from "./read-cache";
+import { RowMenu } from "./row-menu";
 import { EmptyView } from "./workspace-filters";
 import {
   momentLabel,
   ResourceFeedback,
   useResource,
 } from "./workspace-resource";
-import {
-  WorkspaceDetails,
-  WorkspaceFilters,
-  WorkspaceHeading,
-  WorkspaceMetrics,
-} from "./workspace-ui";
+import { WorkspaceFilters, WorkspaceHeading } from "./workspace-ui";
 
 function bytes(value: number) {
   if (value < 1024) {
@@ -41,20 +47,6 @@ function bytes(value: number) {
     return `${(value / 1024).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} KiB`;
   }
   return `${(value / 1_048_576).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} MiB`;
-}
-function CompactBytes({ value }: { value: number }) {
-  const [amount, unit] = bytes(value).split(" ");
-  return (
-    <span className="audit-byte">
-      <span>{amount}</span>
-      <small>{unit}</small>
-    </span>
-  );
-}
-function rate(errors: number, total: number) {
-  return total
-    ? `${((100 * errors) / total).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`
-    : "—";
 }
 function clientLabel(data: AuditReport, id: string | null) {
   return (
@@ -68,6 +60,86 @@ const outcomes = {
   failed: "Falhou",
   success: "Concluída",
 };
+const toolLabels = new Map([
+  ["caderninho_aggregate", "Totais"],
+  ["caderninho_status", "Estado"],
+  ["caderninho_sync", "Sincronizar"],
+  ["caderninho_transactions", "Transações"],
+]);
+const toolLabel = (tool: string | null) =>
+  tool ? (toolLabels.get(tool) ?? tool) : "Protocolo MCP";
+
+function toolRows(recent: AuditReport["recent"]) {
+  const counts = new Map<string, { errors: number; value: number }>();
+  for (const row of recent) {
+    const key = toolLabel(row.tool);
+    const current = counts.get(key) ?? { errors: 0, value: 0 };
+    current.value += 1;
+    current.errors += row.outcome === "failed" ? 1 : 0;
+    counts.set(key, current);
+  }
+  return [...counts]
+    .map(([name, row]) => ({
+      id: name,
+      meta: row.errors ? `${row.errors} com falha` : "sem falhas",
+      name,
+      value: row.value,
+    }))
+    .sort((a, b) => b.value - a.value);
+}
+
+function Stat({
+  label,
+  hint,
+  value,
+  spark,
+}: {
+  label: string;
+  hint?: string;
+  value: ReactNode;
+  spark: ReactNode;
+}) {
+  return (
+    <div className="obs-stat">
+      <dt>
+        {label}
+        {!!hint && <InfoTip label={label}>{hint}</InfoTip>}
+      </dt>
+      <dd>{value}</dd>
+      <dd className="obs-stat-spark">{spark}</dd>
+    </div>
+  );
+}
+
+function Panel({
+  id,
+  title,
+  tip,
+  children,
+}: {
+  id: string;
+  title: string;
+  tip?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <section
+      aria-labelledby={id}
+      className="obs-panel"
+    >
+      <h2
+        className="heading-tip"
+        id={id}
+      >
+        {title}
+        {!!tip && <InfoTip label={title}>{tip}</InfoTip>}
+      </h2>
+      <LayerCard className="ledger-surface obs-surface">{children}</LayerCard>
+    </section>
+  );
+}
+
+const views = createViewCache<AuditReport>();
 
 export function AuditView({
   api,
@@ -91,16 +163,8 @@ export function AuditView({
       ),
     [api, params],
   );
-  const resource = useResource(load);
+  const resource = useResource(load, views);
   const { data } = resource;
-  const [activityOpen, setActivityOpen] = useState(false);
-  const activitySection = useRef<HTMLDivElement>(null);
-  const showActivity = useCallback(() => {
-    setActivityOpen(true);
-    requestAnimationFrame(() =>
-      activitySection.current?.scrollIntoView({ block: "start" }),
-    );
-  }, []);
   const [confirm, setConfirm] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
@@ -111,8 +175,8 @@ export function AuditView({
   useEffect(() => () => mutation.current?.abort(), []);
   const cancelRevoke = useCallback(() => setConfirm(null), []);
   const askRevoke = useCallback(
-    (event: MouseEvent<HTMLButtonElement>) =>
-      setConfirm(event.currentTarget.value),
+    (event: MouseEvent<HTMLElement>) =>
+      setConfirm(event.currentTarget.dataset.grant ?? null),
     [],
   );
   const revoke = useCallback(async () => {
@@ -164,7 +228,7 @@ export function AuditView({
     <>
       <WorkspaceHeading
         filters={filters}
-        title="Auditoria MCP"
+        title="Observabilidade"
       />
 
       <BackofficeDialog
@@ -203,26 +267,81 @@ export function AuditView({
       )}
       {!!data && (
         <>
-          {!!data.totals.errors && (
-            <Banner
-              action={
-                <UiButton
-                  onClick={showActivity}
-                  type="button"
-                  variant="secondary"
+          {data.totals.requests ? (
+            <>
+              <dl className="obs-stats">
+                <Stat
+                  label="Requisições"
+                  spark={
+                    <Sparkline
+                      tone="accent"
+                      values={data.daily.map((day) => day.requests)}
+                    />
+                  }
+                  value={data.totals.requests.toLocaleString("pt-BR")}
+                />
+                <Stat
+                  hint={`${data.totals.errors} falhas e ${data.totals.cancelled} interrupções no período.`}
+                  label="Taxa de erro"
+                  spark={
+                    <Sparkline
+                      tone="danger"
+                      values={data.daily.map(errorRate)}
+                    />
+                  }
+                  value={percent(errorRate(data.totals))}
+                />
+                <Stat
+                  label="Latência média"
+                  spark={
+                    <Sparkline
+                      tone="accent"
+                      values={data.daily.map(averageMs)}
+                    />
+                  }
+                  value={
+                    <>
+                      {averageMs(data.totals).toLocaleString("pt-BR")}
+                      <small className="obs-unit">ms</small>
+                    </>
+                  }
+                />
+                <Stat
+                  hint="Corpos produzidos pelo Worker, sem cabeçalhos nem compressão. Não são tokens de IA."
+                  label="Dados enviados"
+                  spark={
+                    <Sparkline
+                      tone="accent"
+                      values={data.daily.map((day) => day.outputBytes)}
+                    />
+                  }
+                  value={bytes(data.totals.outputBytes)}
+                />
+              </dl>
+              <div className="obs-grid">
+                <Panel
+                  id="obs-activity"
+                  tip={`Dias em UTC desde ${momentLabel(data.since)}. Histórico de 30 dias, sem argumentos, respostas financeiras, tokens ou senhas.`}
+                  title="Requisições por dia"
                 >
-                  Ver atividade
-                </UiButton>
-              }
-              className="feedback"
-              description={
-                <>
-                  {data.totals.errors}{" "}
-                  {data.totals.errors === 1 ? "falha" : "falhas"} no período.
-                </>
-              }
-              variant="alert"
-            />
+                  <ActivityChart daily={data.daily} />
+                </Panel>
+                <Panel
+                  id="obs-tools"
+                  tip={`Contagem das ${data.recent.length} requisições mais recentes.`}
+                  title="Ferramentas"
+                >
+                  <BarGauge
+                    label="Uso por ferramenta"
+                    rows={toolRows(data.recent)}
+                  />
+                </Panel>
+              </div>
+            </>
+          ) : (
+            <EmptyView title="Sem atividade no período">
+              Quando um assistente consultar seus dados, o uso aparece aqui.
+            </EmptyView>
           )}
           <section
             aria-labelledby="audit-access"
@@ -238,92 +357,99 @@ export function AuditView({
               </UiLink>
             </div>
             {data.grants.length ? (
-              <LayerCard
-                aria-label="Assistentes autorizados"
-                className="record-list"
-                render={<ul />}
-              >
-                {data.grants.map((grant) => (
-                  <li key={grant.id}>
-                    <DisclosureItem
-                      className="record-item"
-                      summary={
-                        <>
-                          <span className="record-title">
-                            {grant.clientName}
-                          </span>
-                          <span className="record-context">
-                            Último uso:{" "}
-                            {momentLabel(
-                              data.clients.find(
-                                (c) => c.clientId === grant.clientId,
-                              )?.lastSeen ?? null,
+              <LayerCard className="ledger-surface">
+                <Table
+                  aria-label="Assistentes autorizados"
+                  className="ledger-table"
+                  layout="fixed"
+                >
+                  <colgroup>
+                    <col />
+                    <col className="audit-time-column" />
+                    <col className="audit-time-column" />
+                    <col className="audit-time-column" />
+                    <col className="audit-time-column" />
+                    <col className="ledger-actions" />
+                  </colgroup>
+                  <Table.Header>
+                    <Table.Row>
+                      <Table.Head>Assistente</Table.Head>
+                      <Table.Head className="ledger-number">
+                        Requisições
+                      </Table.Head>
+                      <Table.Head>Último uso</Table.Head>
+                      <Table.Head>Autorizado em</Table.Head>
+                      <Table.Head>Expiração</Table.Head>
+                      <Table.Head>
+                        <span className="sr-only">Ações</span>
+                      </Table.Head>
+                    </Table.Row>
+                  </Table.Header>
+                  <Table.Body>
+                    {data.grants.map((grant) => {
+                      const usage = data.clients.find(
+                        (c) => c.clientId === grant.clientId,
+                      );
+                      return (
+                        <Table.Row key={grant.id}>
+                          <Table.Cell>
+                            <div className="ledger-primary">
+                              <div>
+                                <span>{grant.clientName}</span>
+                                <small>
+                                  {data.recent.find(
+                                    (r) => r.clientId === grant.clientId,
+                                  )?.model ??
+                                    (grant.scope.join(", ") || "Acesso ao MCP")}
+                                </small>
+                              </div>
+                            </div>
+                          </Table.Cell>
+                          <Table.Cell className="ledger-number">
+                            {(usage?.requests ?? 0).toLocaleString("pt-BR")}
+                            {!!usage?.errors && (
+                              <small className="obs-unit">
+                                {percent(errorRate(usage))} erro
+                              </small>
                             )}
-                          </span>
-                          {!!grant.expiresAt && (
-                            <span className="record-meta">
-                              Expira em{" "}
-                              {momentLabel(
-                                new Date(grant.expiresAt * 1000).toISOString(),
-                              )}
-                            </span>
-                          )}
-                        </>
-                      }
-                    >
-                      <div className="record-detail">
-                        <dl className="detail-list">
-                          <div>
-                            <dt>Autorizado em</dt>
-                            <dd>
-                              {momentLabel(
-                                new Date(grant.createdAt * 1000).toISOString(),
-                              )}
-                            </dd>
-                          </div>
-
-                          <div>
-                            <dt>Aplicativo</dt>
-                            <dd>
-                              <code>{grant.clientId}</code>
-                            </dd>
-                          </div>
-                          <div>
-                            <dt>Permissões OAuth</dt>
-                            <dd>{grant.scope.join(", ") || "Acesso ao MCP"}</dd>
-                          </div>
-                          <div>
-                            <dt>Expiração</dt>
-                            <dd>
-                              {grant.expiresAt
-                                ? momentLabel(
-                                    new Date(
-                                      grant.expiresAt * 1000,
-                                    ).toISOString(),
-                                  )
-                                : "Sem prazo declarado"}
-                            </dd>
-                          </div>
-                        </dl>
-                        <p className="muted">
-                          Nome declarado pelo cliente. Autorização não indica
-                          conexão online; o último uso se refere ao período
-                          selecionado.
-                        </p>
-                        <UiButton
-                          className="quiet-action"
-                          disabled={busy}
-                          onClick={askRevoke}
-                          type="button"
-                          value={grant.id}
-                          variant="ghost"
-                        >
-                          Revogar acesso
-                        </UiButton>
-                      </div>
-                    </DisclosureItem>
-                  </li>
-                ))}
+                          </Table.Cell>
+                          <Table.Cell className="ledger-muted">
+                            {momentLabel(usage?.lastSeen ?? null)}
+                          </Table.Cell>
+                          <Table.Cell className="ledger-muted ledger-wide">
+                            {momentLabel(
+                              new Date(grant.createdAt * 1000).toISOString(),
+                            )}
+                          </Table.Cell>
+                          <Table.Cell className="ledger-muted ledger-wide">
+                            {grant.expiresAt
+                              ? momentLabel(
+                                  new Date(
+                                    grant.expiresAt * 1000,
+                                  ).toISOString(),
+                                )
+                              : "Sem prazo"}
+                          </Table.Cell>
+                          <Table.Cell className="ledger-actions">
+                            <RowMenu
+                              items={[
+                                {
+                                  "data-grant": grant.id,
+                                  disabled: busy,
+                                  key: "revoke",
+                                  label: "Revogar acesso",
+                                  onClick: askRevoke,
+                                  variant: "danger",
+                                },
+                              ]}
+                              label={`Ações de ${grant.clientName}`}
+                            />
+                          </Table.Cell>
+                        </Table.Row>
+                      );
+                    })}
+                  </Table.Body>
+                </Table>
               </LayerCard>
             ) : (
               <EmptyView title="Nenhum assistente autorizado">
@@ -345,236 +471,68 @@ export function AuditView({
               }
             />
           </section>
-          <div ref={activitySection}>
-            <WorkspaceDetails
-              hint={`${data.totals.requests} requisições`}
-              onOpenChange={setActivityOpen}
-              open={activityOpen}
-              title="Atividade"
-            >
-              <WorkspaceMetrics
-                items={[
-                  {
-                    label: "Chamadas de ferramentas",
-                    value: data.totals.toolCalls,
-                  },
-                  {
-                    label: "Falhas / interrupções",
-                    value: `${data.totals.errors} / ${data.totals.cancelled}`,
-                  },
-                  {
-                    label: "Entrada / saída",
-                    value: (
-                      <span className="audit-volume">
-                        <CompactBytes value={data.totals.inputBytes} />
-                        <span>/</span>
-                        <CompactBytes value={data.totals.outputBytes} />
-                      </span>
-                    ),
-                  },
-                  {
-                    label: "Duração média",
-                    value: data.totals.requests ? (
-                      <span className="audit-duration">
-                        {Math.round(
-                          data.totals.durationMs / data.totals.requests,
-                        ).toLocaleString("pt-BR")}
-                        <small>ms</small>
-                      </span>
-                    ) : (
-                      "—"
-                    ),
-                  },
-                ]}
-              />
-              {data.totals.requests ? (
-                <>
-                  <section aria-labelledby="audit-trend">
-                    <h2 id="audit-trend">Dias com atividade · UTC</h2>
-                    <p className="muted">
-                      Escala relativa: 0 a{" "}
-                      {Math.max(...data.daily.map((day) => day.requests), 1)}{" "}
-                      requisições, o máximo observado neste período. Não
-                      representa cota.
-                    </p>
-                    <div className="audit-bars">
-                      {data.daily.map((day) => (
-                        <div
-                          className="audit-day"
-                          key={day.day}
-                        >
-                          <span>
-                            {day.day.slice(5).split("-").reverse().join("/")}
-                          </span>
-                          <Meter
-                            indicatorClassName="audit-activity-indicator"
-                            label={`${day.day}: ${day.requests} requisições, ${day.errors} falhas`}
-                            max={Math.max(
-                              ...data.daily.map((d) => d.requests),
-                              1,
-                            )}
-                            min={0}
-                            showValue={false}
-                            value={day.requests}
-                          />
-                          <span>
-                            {day.requests} <small>· {day.errors} falhas</small>
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </section>
-                  <section aria-labelledby="audit-model">
-                    <h2 id="audit-model">Modelos informados pelos clientes</h2>
-                    <p className="muted">
-                      O servidor não identifica o modelo automaticamente. Sem
-                      declaração, mostramos “Não informado”; o nome recebido não
-                      é verificado.
-                    </p>
-                    <div className="audit-table-wrap">
-                      <Table className="audit-table">
-                        <Table.Header>
-                          <Table.Row>
-                            <Table.Head>Modelo</Table.Head>
-                            <Table.Head>Chamadas de ferramentas</Table.Head>
-                            <Table.Head>Falhas</Table.Head>
-                            <Table.Head>Taxa de erro</Table.Head>
-                            <Table.Head>Entrada / saída</Table.Head>
-                          </Table.Row>
-                        </Table.Header>
-                        <Table.Body>
-                          {data.models.map((row) => (
-                            <Table.Row key={row.model ?? "unknown"}>
-                              <Table.Cell data-label="Modelo">
-                                {row.model ?? "Não informado"}
-                              </Table.Cell>
-                              <Table.Cell data-label="Chamadas de ferramentas">
-                                {row.toolCalls}
-                              </Table.Cell>
-                              <Table.Cell data-label="Falhas">
-                                {row.errors}
-                              </Table.Cell>
-                              <Table.Cell data-label="Taxa de erro">
-                                {rate(row.errors, row.toolCalls)}
-                              </Table.Cell>
-                              <Table.Cell data-label="Entrada / saída">
-                                {bytes(row.inputBytes)} /{" "}
-                                {bytes(row.outputBytes)}
-                              </Table.Cell>
-                            </Table.Row>
-                          ))}
-                        </Table.Body>
-                      </Table>
-                    </div>
-                  </section>
-                  <section aria-labelledby="audit-clients">
-                    <h2 id="audit-clients">Volume por cliente</h2>
-                    <div className="audit-table-wrap">
-                      <Table className="audit-table">
-                        <Table.Header>
-                          <Table.Row>
-                            <Table.Head>Cliente</Table.Head>
-                            <Table.Head>Requisições</Table.Head>
-                            <Table.Head>Falhas</Table.Head>
-                            <Table.Head>Entrada / saída</Table.Head>
-                          </Table.Row>
-                        </Table.Header>
-                        <Table.Body>
-                          {data.clients.map((row) => (
-                            <Table.Row key={row.clientId ?? "unknown"}>
-                              <Table.Cell data-label="Cliente">
-                                {clientLabel(data, row.clientId)}
-                              </Table.Cell>
-                              <Table.Cell data-label="Requisições">
-                                {row.requests}
-                              </Table.Cell>
-                              <Table.Cell data-label="Falhas">
-                                {row.errors}
-                              </Table.Cell>
-                              <Table.Cell data-label="Entrada / saída">
-                                {bytes(row.inputBytes)} /{" "}
-                                {bytes(row.outputBytes)}
-                              </Table.Cell>
-                            </Table.Row>
-                          ))}
-                        </Table.Body>
-                      </Table>
-                    </div>
-                  </section>
-                  <DisclosureItem
-                    className="audit-events"
-                    summary={`Requisições recentes · ${data.recent.length}`}
+          {!!data.recent.length && (
+            <div className="workspace-section">
+              <DisclosureItem
+                className="audit-events"
+                summary={`Registro de requisições · ${data.recent.length}`}
+              >
+                <LayerCard className="ledger-surface">
+                  <Table
+                    aria-label="Registro de requisições"
+                    className="ledger-table"
                   >
-                    <div className="audit-table-wrap">
-                      <Table className="audit-table">
-                        <Table.Header>
-                          <Table.Row>
-                            <Table.Head>Horário</Table.Head>
-                            <Table.Head>Ferramenta</Table.Head>
-                            <Table.Head>Resultado</Table.Head>
-                            <Table.Head>Cliente / modelo</Table.Head>
-                            <Table.Head>Duração / saída</Table.Head>
-                          </Table.Row>
-                        </Table.Header>
-                        <Table.Body>
-                          {data.recent.map((row) => (
-                            <Table.Row key={row.id}>
-                              <Table.Cell data-label="Horário">
-                                {momentLabel(row.startedAt)}
-                              </Table.Cell>
-                              <Table.Cell data-label="Ferramenta">
-                                {row.tool ?? "Protocolo MCP"}
-                              </Table.Cell>
-                              <Table.Cell data-label="Resultado">
-                                <Badge
-                                  variant={
-                                    row.outcome === "failed"
-                                      ? "error"
-                                      : "secondary"
-                                  }
-                                >
-                                  {outcomes[row.outcome]} · HTTP {row.status}
-                                </Badge>
-                              </Table.Cell>
-                              <Table.Cell data-label="Cliente / modelo">
-                                {clientLabel(data, row.clientId)}
-                                <small>
-                                  {row.model ?? "Modelo não informado"}
-                                </small>
-                              </Table.Cell>
-                              <Table.Cell data-label="Duração / saída">
-                                {row.durationMs} ms · {bytes(row.outputBytes)}
-                              </Table.Cell>
-                            </Table.Row>
-                          ))}
-                        </Table.Body>
-                      </Table>
-                    </div>
-                  </DisclosureItem>
-                </>
-              ) : (
-                <p className="muted">Sem atividade registrada no período.</p>
-              )}
-            </WorkspaceDetails>
-          </div>
-          <WorkspaceDetails title="O que estes números medem">
-            <p>
-              Janela desde {momentLabel(data.since)}. Histórico consultável de
-              30 dias; nenhum argumento, resposta financeira, token ou senha é
-              armazenado. Bytes são os corpos consumidos e produzidos pelo
-              Worker, sem cabeçalhos, TLS ou compressão de rede. Não são tokens
-              de IA nem custos do modelo.
-            </p>
-            <p>
-              Chamadas interrompidas têm volume parcial. A taxa por modelo
-              divide falhas por chamadas daquele modelo. As listas mostram até
-              100 modelos/clientes e 50 requisições recentes; totais e série
-              usam todo o período. Tentativas sem autenticação ficam nos
-              diagnósticos de segurança, fora deste painel. Registros anteriores
-              a 30 dias são removidos na próxima atividade. A gravação é best
-              effort; uma indisponibilidade da auditoria pode deixar lacunas.
-            </p>
-          </WorkspaceDetails>
+                    <Table.Header>
+                      <Table.Row>
+                        <Table.Head>Ferramenta</Table.Head>
+                        <Table.Head>Assistente</Table.Head>
+                        <Table.Head>Horário</Table.Head>
+                        <Table.Head className="ledger-number">
+                          Duração
+                        </Table.Head>
+                        <Table.Head>Resultado</Table.Head>
+                      </Table.Row>
+                    </Table.Header>
+                    <Table.Body>
+                      {data.recent.map((row) => (
+                        <Table.Row key={row.id}>
+                          <Table.Cell className="ledger-lead">
+                            {toolLabel(row.tool)}
+                          </Table.Cell>
+                          <Table.Cell className="ledger-muted">
+                            {clientLabel(data, row.clientId)}
+                          </Table.Cell>
+                          <Table.Cell className="ledger-muted">
+                            {momentLabel(row.startedAt)}
+                          </Table.Cell>
+                          <Table.Cell className="ledger-muted ledger-number">
+                            {row.durationMs} ms
+                          </Table.Cell>
+                          <Table.Cell>
+                            {row.outcome === "success" ? (
+                              <span className="sync-done">
+                                {outcomes[row.outcome]}
+                              </span>
+                            ) : (
+                              <Badge
+                                variant={
+                                  row.outcome === "failed"
+                                    ? "error"
+                                    : "secondary"
+                                }
+                              >
+                                {outcomes[row.outcome]} · HTTP {row.status}
+                              </Badge>
+                            )}
+                          </Table.Cell>
+                        </Table.Row>
+                      ))}
+                    </Table.Body>
+                  </Table>
+                </LayerCard>
+              </DisclosureItem>
+            </div>
+          )}
         </>
       )}
     </>

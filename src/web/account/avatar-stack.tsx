@@ -1,5 +1,8 @@
 import { Tooltip } from "@cloudflare/kumo/components/tooltip";
-import type { ReactNode } from "react";
+import { type MouseEvent, type ReactNode, useCallback, useState } from "react";
+
+import { navigateWorkspace } from "./account-navigation";
+import { BackofficeDialog } from "./backoffice-dialog";
 
 export interface AvatarPart {
   content: ReactNode;
@@ -39,6 +42,32 @@ export function AvatarStack({
   decorative?: boolean;
 }) {
   const interactive = !decorative && items.some((item) => item.href);
+  // A stray tap on an avatar must not reshape the page: filtering asks first.
+  const [pending, setPending] = useState<AvatarPart | null>(null);
+  const close = useCallback(() => setPending(null), []);
+  const confirm = useCallback(() => {
+    if (pending?.href) {
+      navigateWorkspace(new URL(pending.href, location.href));
+    }
+    setPending(null);
+  }, [pending]);
+  const ask = useCallback(
+    (event: MouseEvent<HTMLAnchorElement>) => {
+      if (
+        event.button !== 0 ||
+        event.metaKey ||
+        event.ctrlKey ||
+        event.shiftKey
+      ) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      const { key } = event.currentTarget.dataset;
+      setPending(items.find((item) => item.key === key) ?? null);
+    },
+    [items],
+  );
   const parts = items.map((item, index) => {
     const contents = (
       <>
@@ -63,7 +92,9 @@ export function AvatarStack({
             aria-current={item.selected ? "true" : undefined}
             aria-label={item.label}
             className="avatar-part avatar-filter-link"
+            data-key={item.key}
             href={item.href}
+            onClick={ask}
           >
             {contents}
           </a>
@@ -97,7 +128,31 @@ export function AvatarStack({
       {parts}
     </span>
   );
-  return interactive || decorative ? (
+  if (interactive) {
+    return (
+      <>
+        {stack}
+        {!!pending && (
+          <BackofficeDialog
+            busy={false}
+            close={close}
+            dirty={false}
+            open
+            presentation="confirmation"
+            primaryAction={{
+              children: pending.selected ? "Remover filtro" : "Filtrar",
+              onClick: confirm,
+              type: "button",
+            }}
+            title={`${pending.label}?`}
+          >
+            {null}
+          </BackofficeDialog>
+        )}
+      </>
+    );
+  }
+  return decorative ? (
     stack
   ) : (
     <Tooltip

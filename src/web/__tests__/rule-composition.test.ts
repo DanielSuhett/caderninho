@@ -90,7 +90,7 @@ test("OR branches preserve their AND conditions and cannot bypass global scope, 
     [
       [
         ["Descrição", "contém", "“PENDING”"],
-        ["Valor absoluto", "≥", "90.071.992.547.409,93 BRL"],
+        ["Valor absoluto", "≥", "R$ 90.071.992.547.409,93"],
       ],
       [
         ["Pessoa", "é", "Pessoa exemplo"],
@@ -100,7 +100,7 @@ test("OR branches preserve their AND conditions and cannot bypass global scope, 
   );
   assert.equal(
     model.alternatives[0]?.conditions[1]?.value,
-    "90.071.992.547.409,93 BRL",
+    "R$ 90.071.992.547.409,93",
   );
   assert.equal(model.alternatives[0]?.conditions[1]?.monetary, true);
   assert.equal(model.alternatives[0]?.conditions[0]?.monetary, false);

@@ -37,6 +37,7 @@
     "pino": "10.4.0",
     "pluggy-connect-sdk": "2.14.2",
     "pluggy-sdk": "0.92.0",
+    "preact": "11.1.0",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "zod": "4.6.7"
@@ -48,6 +49,7 @@
     "@types/node": "24.19.2",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
+    "postcss": "8.5.30",
     "tsx": "4.23.15",
     "typescript": "7.0.2",
     "ultracite": "8.0.1",

@@ -1,4 +1,3 @@
-import { useKumoToastManager } from "@cloudflare/kumo/components/toast";
 import {
   lazy,
   type ReactNode,
@@ -11,6 +10,7 @@ import {
 import type { PortalResponse, WorkspaceCatalog } from "../../contracts";
 import { tryCatch } from "../../shared";
 import type { OrganizationApi } from "./account-api";
+import { notify } from "./notify";
 import {
   type EditableTransaction,
   TransactionEditingContext,
@@ -57,7 +57,6 @@ export function TransactionEditing({
   } | null>(null);
   const [open, setOpen] = useState(false);
   const [session, setSession] = useState(0);
-  const { add: notify } = useKumoToastManager();
   const choose = useCallback(
     (row: EditableTransaction, action: Action) => {
       if (revision === undefined) {
@@ -80,7 +79,7 @@ export function TransactionEditing({
       variant: "success",
     });
     saved?.();
-  }, [notify, saved, selection]);
+  }, [saved, selection]);
   const accountChoices = useMemo(
     () =>
       accounts.map((account) => ({

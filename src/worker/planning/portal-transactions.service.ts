@@ -15,7 +15,12 @@ import { installmentGroupKey } from "../../domain/card-installments";
 import { transactionBillPayments } from "./bills.service";
 import { planningCursor } from "./cursor";
 import type { PlanningRepository, PlanningSnapshot } from "./entity";
-import { found, transactionStream, validateSelection } from "./projection";
+import {
+  cardCatalog,
+  found,
+  transactionStream,
+  validateSelection,
+} from "./projection";
 
 type PageRow = z.infer<
   typeof PortalTransactionListSchema
@@ -110,6 +115,30 @@ function record(
   };
 }
 
+// Charges without a known card number follow the primary card, as in Cartões.
+function cardFilter(input: PortalTransactionQuery, snapshot: PlanningSnapshot) {
+  if (!input.cardId) {
+    return;
+  }
+  const catalog = cardCatalog(snapshot, snapshot.state).filter(
+    (entry) => !entry.deleted,
+  );
+  const card = found(
+    catalog.find(
+      (entry) => entry.id === input.cardId && entry.spaceId === input.spaceId,
+    ),
+  );
+  const numbers = new Set(
+    catalog
+      .filter((entry) => entry.accountId === card.accountId)
+      .map((entry) => entry.number),
+  );
+  return (row: InstallmentRow) =>
+    row.accountId === card.accountId &&
+    (row.cardNumber === card.number ||
+      (card.primary && !numbers.has(row.cardNumber ?? "")));
+}
+
 export async function portalTransactions(
   input: PortalTransactionQuery,
   snapshot: PlanningSnapshot,
@@ -128,6 +157,7 @@ export async function portalTransactions(
   const details = new Map(
     snapshot.transactionDetails.map((item) => [item.id, item]),
   );
+  const ofCard = cardFilter(input, snapshot);
   const creditAccounts = new Set(
     accountList
       .filter((account) => account.type === AccountType.CREDIT)
@@ -196,6 +226,12 @@ export async function portalTransactions(
   })) {
     const extra = details.get(page.id);
     const item = record(page, extra, billPayment(page, extra));
+    if (
+      (ofCard && !ofCard(item)) ||
+      (input.cardsOnly && !creditAccounts.has(item.accountId))
+    ) {
+      continue;
+    }
     const groupKey = creditAccounts.has(item.accountId)
       ? installmentGroupKey(item)
       : null;

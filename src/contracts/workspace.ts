@@ -6,6 +6,7 @@ import {
   CategoryIconSchema,
   CategoryKind,
   FinancialIdentitySchema,
+  ReserveHealth,
   RunStatus,
   SpaceType,
   SpendingGroupBy,
@@ -31,6 +32,8 @@ import { RuleFilterSchema } from "./rules";
 export const PortalTransactionQuerySchema =
   planningTools.get_transaction_purchases.schema.extend({
     ...identityFilterFields,
+    cardId: z.string().min(1).max(160).optional(),
+    cardsOnly: z.boolean().optional(),
     tool: z.literal("get_portal_transactions"),
     transactionId: z.string().min(1).max(160).optional(),
   });
@@ -45,6 +48,7 @@ export const PortalQuerySchema = z
       planningTools.get_card_commitments.command,
       planningTools.preview_rule_import.command,
       planningTools.get_accounts.command,
+      planningTools.get_emergency_reserve.command,
       planningTools.get_transactions.command,
       planningTools.get_overview.command.extend(identityFilterFields),
       planningTools.generate_chart.command.extend({
@@ -88,7 +92,7 @@ const CategoryListSchema = z.object({
     records: z.array(
       named.extend({
         color: CategoryColorSchema.default("#64748b"),
-        groupId: id.nullable().default(null),
+        fixedCost: z.boolean().default(false),
         hidden: z.boolean(),
         icon: CategoryIconSchema.default("shopping"),
         kind: z.enum([
@@ -181,10 +185,45 @@ export const PortalTransactionListSchema = z.object({
   }),
   partial: z.boolean(),
 });
+export const EmergencyReserveSchema = z.object({
+  data: z.object({
+    averageMinor: z.string(),
+    categories: z.array(
+      named.extend({
+        averageMinor: z.string(),
+        color: CategoryColorSchema.optional(),
+        icon: CategoryIconSchema.optional(),
+        lowestMinor: minor,
+        reductionMinor: z.string(),
+      }),
+    ),
+    coveredMonths: z.number().nullable(),
+    currency: z.string(),
+    health: z.enum(ReserveHealth).nullable(),
+    monthly: z.array(z.object({ amountMinor: z.string(), month: z.string() })),
+    months: z.number().int(),
+    personId: id,
+    reductionMinor: z.string(),
+    remainingMinor: minor,
+    savedMinor: minor,
+    sources: z.array(
+      named.extend({
+        balanceMinor: minor,
+        identity: FinancialIdentitySchema.nullish(),
+        kind: z.enum(["account", "investment"]),
+        linked: z.boolean(),
+      }),
+    ),
+    surplusMinor: minor,
+    targetMinor: z.string(),
+  }),
+});
+export type ReserveReport = z.infer<typeof EmergencyReserveSchema>["data"];
 const portalQueryResponses = {
   generate_chart: MonthlySpendingResponseSchema,
   get_accounts: AccountListSchema,
   get_card_commitments: CardCommitmentsResponseSchema,
+  get_emergency_reserve: EmergencyReserveSchema,
   get_investments: InvestmentListSchema,
   get_overview: FinancialOverviewResponseSchema,
   get_portal_cards: PortalCardsSchema,
@@ -237,11 +276,6 @@ export const CatalogSelectionSchema = z
   .strict();
 export const WorkspaceCatalogSchema = z.object({
   categories: CategoryListSchema.shape.data.shape.records,
-  categoryGroups: z
-    .array(
-      named.extend({ color: CategoryColorSchema, icon: CategoryIconSchema }),
-    )
-    .default([]),
   rules: RuleListSchema.shape.data.shape.records,
   spaces: SpaceListSchema.shape.data.shape.records,
   tags: TagListSchema.shape.data.shape.records,
@@ -276,6 +310,7 @@ export const PortalMutationSchema = z
       planningTools.update_card.command
         .pick({
           confirmed: true,
+          creditLimitMinor: true,
           expected_revision: true,
           hidden: true,
           id: true,
@@ -293,15 +328,13 @@ export const PortalMutationSchema = z
       planningTools.create_category.command,
       planningTools.update_category.command,
       planningTools.delete_category.command,
-      planningTools.create_category_group.command,
-      planningTools.update_category_group.command,
-      planningTools.delete_category_group.command,
       planningTools.create_rule.command,
       planningTools.update_rule.command,
       planningTools.delete_rule.command,
       planningTools.create_space.command,
       planningTools.update_space.command,
       planningTools.delete_space.command,
+      planningTools.set_emergency_reserve.command,
     ]),
     csrf: z.string(),
   })

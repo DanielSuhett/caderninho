@@ -1,8 +1,4 @@
-import {
-  type Category,
-  type CategoryGroup,
-  CategoryKind,
-} from "./planning.entity";
+import { type Category, CategoryKind } from "./planning.entity";
 
 export const CategoryIcon = {
   activity: "activity",
@@ -23,292 +19,271 @@ export type CategoryIcon = (typeof CategoryIcon)[keyof typeof CategoryIcon];
 export const fixedCategories = [
   {
     description: "Academias, musculação e atividades físicas",
-    group: "bem-estar",
     icon: CategoryIcon.activity,
     key: "academia",
     name: "Academia",
+    tone: "bem-estar",
   },
   {
     description: "Aluguel de moradia",
-    group: "casa",
     icon: CategoryIcon.home,
     key: "aluguel",
     name: "Aluguel",
+    tone: "casa",
   },
   {
     description:
       "Assinaturas de software, streaming, jogos e serviços digitais",
-    group: "lazer",
     icon: CategoryIcon.star,
     key: "assinaturas",
     name: "Assinaturas",
+    tone: "lazer",
   },
   {
     description: "Água, condomínio, móveis, utensílios e despesas da casa",
-    group: "casa",
     icon: CategoryIcon.home,
     key: "casa",
     name: "Casa",
+    tone: "casa",
   },
   {
     description:
       "Festa, cerimônia e preparativos de casamento explicitamente identificados",
-    group: "compromissos",
     icon: CategoryIcon.heart,
     key: "casamento",
     name: "Casamento",
+    tone: "compromissos",
   },
   {
     description: "Gasolina, etanol, diesel e abastecimento de veículos",
-    group: "transporte",
     icon: CategoryIcon.car,
     key: "combustivel",
     name: "Combustível",
+    tone: "transporte",
   },
   {
     description: "Compras de roupas, eletrônicos, brinquedos e outros produtos",
-    group: "cotidiano",
     icon: CategoryIcon.shopping,
     key: "compras",
     name: "Compras",
+    tone: "cotidiano",
   },
   {
     description: "Táxi, aplicativos de transporte e transporte público",
-    group: "transporte",
     icon: CategoryIcon.car,
     key: "corridas",
     name: "Corridas",
+    tone: "transporte",
   },
   {
     description: "Cabeleireiro, barbearia, beleza, higiene e estética",
-    group: "bem-estar",
     icon: CategoryIcon.heart,
     key: "cuidados-pessoais",
     name: "Cuidados Pessoais",
+    tone: "bem-estar",
   },
   {
     description: "Cursos livres, online, técnicos e de idiomas",
-    group: "educacao",
     icon: CategoryIcon.book,
     key: "cursos",
     name: "Cursos",
+    tone: "educacao",
   },
   {
     description: "Doações e contribuições beneficentes",
-    group: "compromissos",
     icon: CategoryIcon.gift,
     key: "doacoes",
     name: "Doações",
+    tone: "compromissos",
   },
   {
     description:
       "Escola, creche, livros e despesas educacionais sem modalidade específica",
-    group: "educacao",
     icon: CategoryIcon.book,
     key: "educacao-geral",
     name: "Educação Geral",
+    tone: "educacao",
   },
   {
     description: "Conta de energia elétrica",
-    group: "casa",
     icon: CategoryIcon.home,
     key: "energia",
     name: "Energia",
+    tone: "casa",
   },
   {
     description: "Estacionamento, pedágio e tags de veículos",
-    group: "transporte",
     icon: CategoryIcon.car,
     key: "estacionamento-pedagio",
     name: "Estacionamento e Pedágio",
+    tone: "transporte",
   },
   {
     description: "Graduação, pós-graduação e mensalidades universitárias",
-    group: "educacao",
     icon: CategoryIcon.book,
     key: "faculdade",
     name: "Faculdade",
+    tone: "educacao",
   },
   {
     description: "Medicamentos e compras em farmácias",
-    group: "bem-estar",
     icon: CategoryIcon.heart,
     key: "farmacia",
     name: "Farmácia",
+    tone: "bem-estar",
   },
   {
     description: "Parcelas de empréstimos e financiamentos, juros de crédito",
-    group: "financas",
     icon: CategoryIcon.money,
     key: "financiamento",
     name: "Financiamento",
+    tone: "financas",
   },
   {
     description: "Gás de cozinha e gás encanado residencial",
-    group: "casa",
     icon: CategoryIcon.home,
     key: "gas",
     name: "Gás",
+    tone: "casa",
   },
   {
     description: "Impostos, tarifas bancárias, multas e taxas",
-    group: "financas",
     icon: CategoryIcon.money,
     key: "impostos-taxas",
     name: "Impostos e Taxas",
+    tone: "financas",
   },
   {
     description: "Internet, telefonia e telecomunicações",
-    group: "casa",
     icon: CategoryIcon.home,
     key: "internet",
     name: "Internet",
+    tone: "casa",
   },
   {
     description:
       "Aplicações, resgates, previdência e rendimentos de investimentos",
-    group: "financas",
     icon: CategoryIcon.money,
     key: "investimentos",
     name: "Investimentos",
+    tone: "financas",
   },
   {
     description: "Lanchonetes, cafés, padarias e pequenas refeições",
-    group: "alimentacao",
     icon: CategoryIcon.utensils,
     key: "lanches",
     name: "Lanches",
+    tone: "alimentacao",
   },
   {
     description: "Lavagem, limpeza e passadoria de roupas",
-    group: "cotidiano",
     icon: CategoryIcon.home,
     key: "lavanderia",
     name: "Lavanderia",
+    tone: "cotidiano",
   },
   {
     description: "Passeios, cinema, shows, viagens, jogos e entretenimento",
-    group: "lazer",
     icon: CategoryIcon.star,
     key: "lazer",
     name: "Lazer",
+    tone: "lazer",
   },
   {
     description: "Consertos, manutenção de veículos e reparos",
-    group: "cotidiano",
     icon: CategoryIcon.home,
     key: "manutencao",
     name: "Manutenção",
+    tone: "cotidiano",
   },
   {
     description: "Supermercado, feira, açougue e alimentos para casa",
-    group: "alimentacao",
     icon: CategoryIcon.shopping,
     key: "mercado",
     name: "Mercado",
+    tone: "alimentacao",
   },
   {
     description: "Dentistas e tratamentos odontológicos",
-    group: "bem-estar",
     icon: CategoryIcon.heart,
     key: "odontologia",
     name: "Odontologia",
+    tone: "bem-estar",
   },
   {
     description:
       "Ração, produtos para animais, veterinários e cuidados com pets",
-    group: "cotidiano",
     icon: CategoryIcon.heart,
     key: "petshop",
     name: "Petshop",
+    tone: "cotidiano",
   },
   {
     description: "Restaurantes, refeições e delivery de comida",
-    group: "alimentacao",
     icon: CategoryIcon.utensils,
     key: "restaurantes",
     name: "Restaurantes",
+    tone: "alimentacao",
   },
   {
     description:
       "Salário, pró-labore, aposentadoria, benefícios e renda do trabalho",
-    group: "financas",
     icon: CategoryIcon.briefcase,
     key: "salario-renda",
     name: "Salário e Renda",
+    tone: "financas",
   },
   {
     description: "Consultas, exames, hospitais, óticas e serviços de saúde",
-    group: "bem-estar",
     icon: CategoryIcon.heart,
     key: "saude-geral",
     name: "Saúde Geral",
+    tone: "bem-estar",
   },
   {
     description: "Seguros de vida, saúde, casa e veículos",
-    group: "compromissos",
     icon: CategoryIcon.heart,
     key: "seguro",
     name: "Seguro",
+    tone: "compromissos",
   },
   {
     description:
       "Transferências entre contas e pagamento de fatura sem compra identificável; PIX sozinho não identifica finalidade",
-    group: "financas",
     icon: CategoryIcon.transfer,
     key: "transferencias",
     name: "Transferências",
+    tone: "financas",
   },
 ] as const;
 export type FixedCategoryKey = (typeof fixedCategories)[number]["key"];
 
-export const defaultCategoryGroups = [
-  { color: "#64748b", icon: CategoryIcon.home, key: "casa", name: "Casa" },
-  {
-    color: "#0891b2",
-    icon: CategoryIcon.shopping,
-    key: "cotidiano",
-    name: "Cotidiano",
-  },
-  {
-    color: "#d97706",
-    icon: CategoryIcon.utensils,
-    key: "alimentacao",
-    name: "Alimentação",
-  },
-  {
-    color: "#2563eb",
-    icon: CategoryIcon.car,
-    key: "transporte",
-    name: "Transporte",
-  },
-  {
-    color: "#db2777",
-    icon: CategoryIcon.heart,
-    key: "bem-estar",
-    name: "Saúde e bem-estar",
-  },
-  {
-    color: "#7c3aed",
-    icon: CategoryIcon.book,
-    key: "educacao",
-    name: "Educação",
-  },
-  { color: "#059669", icon: CategoryIcon.star, key: "lazer", name: "Lazer" },
-  {
-    color: "#be123c",
-    icon: CategoryIcon.gift,
-    key: "compromissos",
-    name: "Compromissos",
-  },
-  {
-    color: "#475569",
-    icon: CategoryIcon.money,
-    key: "financas",
-    name: "Finanças",
-  },
-] as const;
-
+// Default colors of the classifier catalog, by family of categories.
+const categoryTones = {
+  alimentacao: "#d97706",
+  "bem-estar": "#db2777",
+  casa: "#64748b",
+  compromissos: "#be123c",
+  cotidiano: "#0891b2",
+  educacao: "#7c3aed",
+  financas: "#475569",
+  lazer: "#059669",
+  transporte: "#2563eb",
+} as const;
+// Categories that start as part of the fixed monthly cost.
+const defaultFixedCost: ReadonlySet<FixedCategoryKey> = new Set([
+  "aluguel",
+  "energia",
+  "faculdade",
+  "farmacia",
+  "financiamento",
+  "gas",
+  "impostos-taxas",
+  "internet",
+  "mercado",
+  "saude-geral",
+  "seguro",
+]);
 export function fixedCategoryId(spaceId: string, key: FixedCategoryKey) {
   return key === "transferencias"
     ? `${spaceId}:transfer`
@@ -324,20 +299,11 @@ function categoryKind(key: FixedCategoryKey): Category["kind"] {
   return CategoryKind.expense;
 }
 export function categoryCatalog(spaceId: string) {
-  const categoryGroups = defaultCategoryGroups.map((group) => ({
-    color: group.color,
-    icon: group.icon,
-    id: `${spaceId}:group:${group.key}`,
-    name: group.name,
-    spaceId,
-  }));
   const categories = fixedCategories.map(
     (category) =>
       ({
-        color:
-          defaultCategoryGroups.find((group) => group.key === category.group)
-            ?.color ?? "#64748b",
-        groupId: `${spaceId}:group:${category.group}`,
+        color: categoryTones[category.tone],
+        fixedCost: defaultFixedCost.has(category.key),
         hidden: false,
         icon: category.icon,
         id: fixedCategoryId(spaceId, category.key),
@@ -348,10 +314,7 @@ export function categoryCatalog(spaceId: string) {
         system: true,
       }) satisfies Category,
   );
-  return { categories, categoryGroups } satisfies {
-    categories: Category[];
-    categoryGroups: CategoryGroup[];
-  };
+  return { categories } satisfies { categories: Category[] };
 }
 
 // All labels in Pluggy's published category tree, plus names used by older categorizers.

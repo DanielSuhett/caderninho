@@ -1,39 +1,39 @@
 import { Banner } from "@cloudflare/kumo/components/banner";
 import { Link } from "@cloudflare/kumo/components/link";
-import { Select } from "@cloudflare/kumo/components/select";
-import { type ComponentProps, useCallback, useState } from "react";
+import { useCallback, useState } from "react";
 
-import {
-  type PortalResponse,
-  PortalTransactionQuerySchema,
-  type WorkspaceCatalog,
+import type {
+  PortalQueryResults,
+  PortalResponse,
+  WorkspaceCatalog,
 } from "../../contracts";
-import {
-  TransactionDirection,
-  TransactionOrder,
-  TransactionStatus,
-} from "../../domain";
-import { UiCheckbox } from "../ui";
 import type { createAccountApi } from "./account-api";
 import { workspaceHref } from "./account-navigation";
 import { CursorPagination } from "./cursor-pagination";
-import {
-  AccountFilter,
-  CatalogField,
-  DateRangeFields,
-  QuerySearch,
-} from "./filter-fields";
-import { identityParameters } from "./identity-filters";
+import { deferred } from "./deferred";
+import { transactionRequests } from "./page-requests";
 import { PersonStack } from "./person-identity";
+import { QuerySearch } from "./query-search";
+import { createViewCache } from "./read-cache";
 import {
   CategorizationGuide,
   TransactionTabs,
 } from "./transaction-categorization";
 import { TransactionEditing } from "./transaction-editing";
 import { TransactionList } from "./transaction-list";
-import { EmptyView, ScopeFields } from "./workspace-filters";
+import { EmptyView } from "./workspace-filters";
 import { dayLabel, ResourceFeedback, useResource } from "./workspace-resource";
 import { WorkspaceFilters, WorkspaceHeading } from "./workspace-ui";
+
+const TransactionFilterFields = deferred(
+  async () =>
+    (await import("./transaction-filter-fields")).TransactionFilterFields,
+);
+const views = createViewCache<{
+  accounts: PortalQueryResults["get_accounts"]["data"]["records"];
+  catalog: WorkspaceCatalog;
+  result: PortalQueryResults["get_portal_transactions"];
+}>();
 
 export function TransactionsView({
   api,
@@ -46,38 +46,11 @@ export function TransactionsView({
   const spaceId = params.get("space") || "personal";
   const load = useCallback(
     async (signal: AbortSignal, fresh = false) => {
-      const query = PortalTransactionQuerySchema.parse({
-        ...identityParameters(params),
-        future: params.get("future") === "on",
-        limit: 50,
-        order: TransactionOrder.date_desc,
-        spaceId,
-        tool: "get_portal_transactions",
-        ...Object.fromEntries(
-          [
-            "cursor",
-            "from",
-            "to",
-            "text",
-            "direction",
-            "status",
-            "accountId",
-            "categoryId",
-          ].flatMap((key) => (params.get(key) ? [[key, params.get(key)]] : [])),
-        ),
-        ...(params.get("person") && { personId: params.get("person") }),
-        include_ignored: params.get("ignored") === "on",
-        uncategorized: params.get("uncategorized") === "on",
-      });
+      const requests = transactionRequests(params);
       const [catalog, accounts, result] = await Promise.all([
-        api.catalog(spaceId, signal, fresh),
-        api.query(
-          { include_hidden: true, spaceId, tool: "get_accounts" },
-          snapshot.csrf,
-          signal,
-          fresh,
-        ),
-        api.query(query, snapshot.csrf, signal, fresh),
+        api.catalog(requests.spaceId, signal, fresh),
+        api.query(requests.accounts, snapshot.csrf, signal, fresh),
+        api.query(requests.transactions, snapshot.csrf, signal, fresh),
       ]);
       return {
         accounts: accounts.data.records,
@@ -85,9 +58,9 @@ export function TransactionsView({
         result,
       };
     },
-    [api, snapshot.csrf, spaceId, params],
+    [api, snapshot.csrf, params],
   );
-  const resource = useResource(load);
+  const resource = useResource(load, views);
   const { data } = resource;
   const presentation = data
     ? transactionFilterContext({
@@ -167,7 +140,7 @@ export function TransactionsView({
                 <>
                   Histórico parcial.{" "}
                   <Link
-                    href={workspaceHref("/account/sync")}
+                    href={workspaceHref("/account/connections")}
                     variant="current"
                   >
                     Ver importações
@@ -190,7 +163,6 @@ export function TransactionsView({
               categories={data.catalog.categories}
               records={data.result.data.records}
               referenceDay={data.result.data.referenceDay}
-              showAccount={presentation.showAccount}
               showOwner={showOwner}
             />
           ) : (
@@ -328,112 +300,4 @@ function scopeLabel({
     return fallback;
   }
   return items.find((item) => item.id === value)?.name ?? missing;
-}
-
-function TransactionFilterFields({
-  catalog,
-  accounts,
-  multiplePeople,
-  showOwner,
-  params,
-  snapshot,
-}: {
-  catalog: WorkspaceCatalog;
-  accounts: ComponentProps<typeof AccountFilter>["accounts"];
-  multiplePeople: boolean;
-  showOwner: boolean;
-  params: URLSearchParams;
-  snapshot: PortalResponse;
-}) {
-  const future = params.get("future") === "on";
-  return (
-    <>
-      <ScopeFields
-        catalog={catalog}
-        params={params}
-        person={multiplePeople}
-        snapshot={snapshot}
-      />
-      <input
-        name="text"
-        type="hidden"
-        value={params.get("text") ?? ""}
-      />
-      {!!params.get("uncategorized") && (
-        <input
-          name="uncategorized"
-          type="hidden"
-          value="on"
-        />
-      )}
-      <div className="advanced-filter-grid">
-        <DateRangeFields
-          from={params.get("from") ?? ""}
-          to={params.get("to") ?? ""}
-        />
-        <Select
-          defaultValue={params.get("direction") ?? ""}
-          items={[
-            { label: "Entradas e saídas", value: "" },
-            { label: "Saídas", value: TransactionDirection.DEBIT },
-            { label: "Entradas", value: TransactionDirection.CREDIT },
-          ]}
-          label="Movimento"
-          name="direction"
-        />
-        <AccountFilter
-          accounts={accounts}
-          showOwner={showOwner}
-          value={params.get("accountId") ?? ""}
-        />
-        {params.get("uncategorized") !== "on" && (
-          <CatalogField
-            defaultValue={params.get("categoryId") ?? ""}
-            items={[
-              { label: "Todas as categorias", value: "" },
-              ...catalog.categories
-                .filter((c) => !c.hidden || c.id === params.get("categoryId"))
-                .map((c) => ({
-                  appearance: c,
-                  label: c.name,
-                  value: c.id,
-                })),
-            ]}
-            label="Categoria"
-            name="categoryId"
-          />
-        )}
-        <Select
-          defaultValue={params.get("status") ?? ""}
-          items={[
-            { label: "Todos", value: "" },
-            {
-              label: "Registradas na origem",
-              value: TransactionStatus.POSTED,
-            },
-            {
-              label: "Pendentes na origem",
-              value: TransactionStatus.PENDING,
-            },
-          ]}
-          label="Estado"
-          name="status"
-        />
-        <div className="checkbox-label">
-          <UiCheckbox
-            defaultChecked={future}
-            label="Lançamentos futuros"
-            name="future"
-          />
-        </div>
-        <div className="checkbox-label">
-          <UiCheckbox
-            defaultChecked={params.get("ignored") === "on"}
-            label="Incluir ignoradas"
-            name="ignored"
-          />
-        </div>
-      </div>
-    </>
-  );
 }

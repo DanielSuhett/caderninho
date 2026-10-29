@@ -33,7 +33,7 @@ export function Consent({
         description={
           <>
             Essa autorização não permite movimentar dinheiro nos bancos. Você
-            pode revogar o acesso pela Auditoria MCP.
+            pode revogar o acesso pela Observabilidade.
           </>
         }
         variant="default"

@@ -36,10 +36,9 @@ export function FinancialMetric({
           {value === null ? (
             <span className="metric-unavailable">Indisponível</span>
           ) : (
-            <MoneyValue value={value.slice(0, -(currency.length + 1))} />
+            <MoneyValue value={value} />
           )}
         </span>
-        <span className="metric-currency"> {currency}</span>
       </dd>
       {!!children && <dd className="metric-note">{children}</dd>}
     </div>

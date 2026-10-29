@@ -46,6 +46,7 @@ export const PortalCardInstallmentSchema = z.object({
 });
 export const PortalCardSchema = z.object({
   confirmed: amount,
+  creditLimitMinor: minor.nullable(),
   future: amount,
   hidden: z.boolean(),
   id,

@@ -2,10 +2,10 @@ import { Banner } from "@cloudflare/kumo/components/banner";
 import { Input } from "@cloudflare/kumo/components/input";
 
 import type { HouseholdCommand, PortalResponse } from "../../contracts";
-import { UiButton, UiCheckbox } from "../ui";
+import { UiButton } from "../ui";
+import { UiCheckbox } from "../ui-checkbox";
 import type { ManagementOutcome } from "./account-feedback";
 import { DisclosureItem } from "./disclosure-item";
-import { PersonEditor } from "./person-editor";
 import {
   type HouseholdEditorModel,
   useHouseholdEditor,
@@ -14,48 +14,26 @@ export function HouseholdPanel({
   snapshot,
   busy,
   manage,
+  personId,
 }: {
   snapshot: PortalResponse;
   busy: boolean;
+  // Settings follow the person chosen on the page, never everyone at once.
+  personId: string;
   manage: (input: HouseholdCommand) => Promise<ManagementOutcome>;
 }) {
   const editor = useHouseholdEditor({ csrf: snapshot.csrf, manage });
+  const profiles = snapshot.profiles.filter(
+    (profile) => profile.personId === personId,
+  );
 
   return (
     <section
-      aria-labelledby="household-heading"
+      aria-label="Pessoas e perfis"
       className="household-panel"
     >
-      <div className="section-heading">
-        <div>
-          <h2
-            id="household-heading"
-            tabIndex={-1}
-          >
-            Ajustes avançados
-          </h2>
-        </div>
-      </div>
-      <p>
-        Atualize acessos existentes. Novos bancos reutilizam o acesso da pessoa.
-      </p>
-      <div className="people-editor">
-        {snapshot.people.map((person) => (
-          <PersonEditor
-            busy={busy}
-            key={person.id}
-            onSubmit={editor.savePerson}
-            person={person}
-          >
-            <HouseholdFeedback
-              editor={editor}
-              target={person.id}
-            />
-          </PersonEditor>
-        ))}
-      </div>
-      <div className="profile-grid">
-        {snapshot.profiles.map((profile) => (
+      <div className="profile-list">
+        {profiles.map((profile) => (
           <DisclosureItem
             className="profile-editor"
             key={profile.id}
@@ -63,8 +41,7 @@ export function HouseholdPanel({
               <>
                 <strong>{profile.name}</strong>
                 <span className="muted">
-                  {snapshot.people.find((p) => p.id === profile.personId)?.name}{" "}
-                  · {profile.connectionCount}{" "}
+                  {profile.connectionCount}{" "}
                   {profile.connectionCount === 1 ? "conexão" : "conexões"} ·{" "}
                   {profileLabel(profile)}
                 </span>
@@ -96,10 +73,6 @@ export function HouseholdPanel({
                   name="enabled"
                 />
               </div>
-              <p className="muted">
-                Para trocar o segredo, preencha os dois campos. Outra aplicação
-                exige um novo perfil.
-              </p>
               <CredentialFields
                 required={false}
                 suffix={profile.id}
@@ -118,11 +91,6 @@ export function HouseholdPanel({
           </DisclosureItem>
         ))}
       </div>
-      <p className="muted">
-        O Meu Pluggy gratuito permite até cinco conexões por titular. Adicionar
-        um perfil aqui não altera o limite do provedor. Pessoas cadastradas
-        compartilham o acesso desta instalação.
-      </p>
     </section>
   );
 }

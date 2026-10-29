@@ -21,9 +21,27 @@ export function Portal({ children }: { children: ReactNode }) {
   );
 }
 
-export function accountPage({ demo = false }: { demo?: boolean } = {}) {
+export interface AccountAssets {
+  account: string;
+  script: string;
+  stylesheets: string[];
+}
+
+export function accountPage({
+  demo = false,
+  preload = [],
+  assets,
+}: {
+  demo?: boolean;
+  // Built chunk paths for this route; the browser fetches them in parallel
+  // with the entry instead of one round trip later.
+  preload?: string[];
+  // Content-hashed entry and styles; without them the stable names load.
+  assets?: AccountAssets;
+} = {}) {
   return (
     <Document
+      {...(assets && { stylesheets: assets.stylesheets })}
       title={
         demo
           ? "Demonstração · Caderninho"
@@ -36,23 +54,32 @@ export function accountPage({ demo = false }: { demo?: boolean } = {}) {
           name="robots"
         />
       )}
+      {preload.map((path) => (
+        <link
+          href={`/${path}`}
+          key={path}
+          rel="modulepreload"
+        />
+      ))}
       <link
-        href="/preload-helper.js"
-        rel="modulepreload"
-      />
-      <link
-        href="/account.css"
+        href={assets?.account ?? "/account.css"}
         rel="stylesheet"
       />
       <div id="account-root">
-        <p
-          className="account-start"
+        <div
+          className="account-start account-boot"
           role="status"
         >
-          {demo
-            ? "Abrindo demonstração com dados fictícios…"
-            : "Verificando sua instalação…"}
-        </p>
+          <p>
+            {demo
+              ? "Abrindo demonstração com dados fictícios…"
+              : "Verificando sua instalação…"}
+          </p>
+          <span
+            aria-hidden="true"
+            className="account-boot-progress"
+          />
+        </div>
       </div>
       <noscript>
         {demo
@@ -60,7 +87,7 @@ export function accountPage({ demo = false }: { demo?: boolean } = {}) {
           : "Ative JavaScript para usar o painel. O acesso MCP continua disponível."}
       </noscript>
       <script
-        src={demo ? "/demo.js" : "/account.js"}
+        src={assets?.script ?? (demo ? "/demo.js" : "/account.js")}
         type="module"
       />
     </Document>

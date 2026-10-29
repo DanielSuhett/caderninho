@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   cardBrandKey,
   type FinancialIdentity,
-  institutionLogoUrl,
+  institutionLogoSrc,
   type Person,
   type PositionBank,
 } from "../../domain";
@@ -55,6 +55,7 @@ function AccountLogo({ src, credit }: { src: string | null; credit: boolean }) {
     <span
       aria-hidden="true"
       className="account-avatar"
+      data-brand={credit || undefined}
     >
       {src && failed !== src ? (
         <img
@@ -81,7 +82,7 @@ export function AccountAvatar({
   person?: Person | undefined;
   filterable?: boolean;
 }) {
-  const bank = institutionLogoUrl(account.identity?.institution?.logoUrl);
+  const bank = institutionLogoSrc(account.identity?.institution?.logoUrl);
   const brand = account.identity?.cardBrand;
   const card = brand ? (brands[cardBrandKey(brand)] ?? null) : null;
   const credit = account.type === "CREDIT" || !!brand;
@@ -121,7 +122,8 @@ export function AccountAvatar({
     });
   }
   const institution = account.identity?.institution;
-  if (institution || !brand) {
+  // Card purchases show the brand only, keeping every row at two avatars.
+  if (!brand) {
     items.push({
       content: (
         <AccountLogo
@@ -163,7 +165,7 @@ export function BankAvatar({ banks }: { banks: PositionBank[] }) {
     content: (
       <AccountLogo
         credit={false}
-        src={institutionLogoUrl(bank.logoUrl)}
+        src={institutionLogoSrc(bank.logoUrl)}
       />
     ),
     key: bank.id,

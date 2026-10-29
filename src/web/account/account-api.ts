@@ -16,9 +16,9 @@ import {
   type SyncHistoryResult,
   type WorkspaceCatalog,
 } from "../../contracts";
-import { fetchJson } from "../../shared";
+import { fetchJson, tryCatchSync } from "../../shared";
 import { AccountRequestError } from "./account-feedback";
-import { createReadCache, type ReadCache } from "./read-cache";
+import { clearViews, createReadCache, type ReadCache } from "./read-cache";
 
 const failureCodes = Object.values(AccountFailureCode);
 
@@ -33,10 +33,40 @@ export type OrganizationApi = Pick<
   | "ruleJobs"
 >;
 
+export type PrefetchedQuery = {
+  [Tool in PortalQuery["tool"]]: {
+    tool: Tool;
+    key: string;
+    data: PortalQueryResults[Tool];
+  };
+}[PortalQuery["tool"]];
+
+// The installation state, plus the current page's first answers when the
+// Worker had them in time. Keys match what the page will ask for.
+export interface AccountBoot extends PortalResponse {
+  page?: {
+    catalog?: { spaceId: string; data: WorkspaceCatalog };
+    results: PrefetchedQuery[];
+  };
+}
+
+// The Worker inlines the installation state into the page it serves, so the
+// panel renders without waiting one more round trip for its first read.
+export function readBoot(): AccountBoot | undefined {
+  const text = document.getElementById("account-boot")?.textContent;
+  if (!text) {
+    return;
+  }
+  const { data, error } = tryCatchSync(() => JSON.parse(text));
+  return error ? undefined : data;
+}
+
 export function createAccountApi(
   origin: string,
   fetcher: typeof fetch = fetch,
+  boot?: AccountBoot,
 ) {
+  let initial: PortalResponse | undefined = boot;
   // Responses come from this installation's typed API: only inputs are parsed.
   const caches = {
     audit: createReadCache<AuditReport>(),
@@ -49,6 +79,7 @@ export function createAccountApi(
     generate_chart: createReadCache(),
     get_accounts: createReadCache(),
     get_card_commitments: createReadCache(),
+    get_emergency_reserve: createReadCache(),
     get_investments: createReadCache(),
     get_overview: createReadCache(),
     get_portal_cards: createReadCache(),
@@ -56,10 +87,26 @@ export function createAccountApi(
     get_transactions: createReadCache(),
     preview_rule_import: createReadCache(),
   };
+  const primeQuery = <Tool extends PortalQuery["tool"]>(
+    tool: Tool,
+    key: string,
+    data: PortalQueryResults[Tool],
+  ) => queries[tool].prime(key, Promise.resolve(data));
+  for (const result of boot?.page?.results ?? []) {
+    primeQuery(result.tool, result.key, result.data);
+  }
+  const bootCatalog = boot?.page?.catalog;
+  if (bootCatalog) {
+    caches.catalog.prime(
+      `catalog:${bootCatalog.spaceId}`,
+      Promise.resolve(bootCatalog.data),
+    );
+  }
   const clearCaches = () => {
     for (const cache of [...Object.values(caches), ...Object.values(queries)]) {
       cache.clear();
     }
+    clearViews();
   };
   // A rejected request may carry an allowlisted cause for the panel.
   const inspect = (response: Response) => {
@@ -162,6 +209,30 @@ export function createAccountApi(
       csrf: string,
       signal: AbortSignal,
     ) => request("/planning", signal, { command, csrf }),
+    // The entry starts these before the page mounts; see page-requests.ts.
+    prefetch: <Tool extends PortalQuery["tool"]>(
+      query: PortalQuery & { tool: Tool },
+      csrf: string,
+    ) =>
+      queries[query.tool].prime(
+        JSON.stringify(query),
+        request<PortalQueryResults[Tool]>(
+          "/query",
+          new AbortController().signal,
+          {
+            csrf,
+            query,
+          },
+        ),
+      ),
+    prefetchCatalog: (spaceId: string) =>
+      caches.catalog.prime(
+        `catalog:${spaceId}`,
+        request<WorkspaceCatalog>(
+          `/catalog?${new URLSearchParams({ spaceId })}`,
+          new AbortController().signal,
+        ),
+      ),
     previewRule: async (input: RulePreviewInput, signal: AbortSignal) =>
       request<RulePreviewResult>("/rule-preview", signal, input),
     query: async <Tool extends PortalQuery["tool"]>(
@@ -176,7 +247,13 @@ export function createAccountApi(
           request<PortalQueryResults[Tool]>("/query", signal, { csrf, query }),
         fresh,
       ),
-    read: async (signal: AbortSignal) => request<PortalResponse>("", signal),
+    read: (signal: AbortSignal) => {
+      const state = initial;
+      initial = undefined;
+      return state
+        ? Promise.resolve(state)
+        : request<PortalResponse>("", signal);
+    },
     revokeGrant: async (grantId: string, csrf: string, signal: AbortSignal) =>
       request<{ ok: true }>("/revoke-grant", signal, { csrf, grantId }),
     ruleJob: async (

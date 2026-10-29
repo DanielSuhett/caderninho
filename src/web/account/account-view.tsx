@@ -5,17 +5,18 @@ import type { HouseholdCommand, PortalResponse } from "../../contracts";
 import { sourceIdentity } from "../../domain";
 import { tryCatch } from "../../shared";
 import { UiButton } from "../ui";
-import { createAccountApi } from "./account-api";
+import { createAccountApi, readBoot } from "./account-api";
 import {
   accountFailureMessage,
   connectFailureMessage,
   type ManagementOutcome,
 } from "./account-feedback";
-import { accountPath, useWorkspaceNavigation } from "./account-navigation";
+import { accountPath } from "./account-navigation";
 import { createConnectWidget } from "./connect-widget";
 import type { ConnectionActivity } from "./connection-journey";
 import type { DashboardView as DashboardComponent } from "./dashboard-view";
 import { createImportMonitor } from "./import-monitor";
+import { useWorkspaceNavigation } from "./use-workspace-navigation";
 import { WorkspacePageError } from "./workspace-page";
 import { WorkspaceView } from "./workspace-view";
 
@@ -45,13 +46,13 @@ export function AccountView({
   const personId = new URLSearchParams(location.search).get("person") ?? "";
   const lifetime = useRef<AbortController | null>(null);
   const locked = useRef<boolean>(false);
-  const snapshotFingerprint = useRef("");
+  const snapshotFingerprint = useRef<string>("");
   const readVersion = useRef(0);
   const schedulePoll = useRef<((active: boolean) => void) | null>(null);
   const refreshNow = useRef<(() => void) | null>(null);
   const cancelAttempt = useRef<(() => Promise<void>) | null>(null);
   const [api] = useState(
-    () => suppliedApi ?? createAccountApi(location.origin),
+    () => suppliedApi ?? createAccountApi(location.origin, fetch, readBoot()),
   );
   const [widget] = useState(createConnectWidget);
   const refresh = useCallback(
@@ -66,7 +67,11 @@ export function AccountView({
       setReadError(false);
       const fingerprint = JSON.stringify(state);
       if (fingerprint !== snapshotFingerprint.current) {
-        api.invalidate();
+        // The first snapshot has nothing to invalidate and must keep the
+        // page requests the entry already started.
+        if (snapshotFingerprint.current) {
+          api.invalidate();
+        }
         setDataVersion((value) => value + 1);
         snapshotFingerprint.current = fingerprint;
         setSnapshot(state);
@@ -355,12 +360,18 @@ export function AccountView({
   const onRefresh = useCallback(() => refreshNow.current?.(), []);
   if (!snapshot) {
     return (
-      <div className="account-start">
+      <div className="account-start account-boot">
         <p role="status">
           {readError
             ? "Não foi possível carregar sua instalação. Tente novamente ou entre com sua senha."
             : "Carregando sua instalação…"}
         </p>
+        {!readError && (
+          <span
+            aria-hidden="true"
+            className="account-boot-progress"
+          />
+        )}
         {readError ? (
           <p>
             <UiButton
@@ -393,6 +404,7 @@ export function AccountView({
         cancel={onCancel}
         command={onCommand}
         connect={onConnect}
+        history={api.history}
         institutions={api.institutions}
         key={route}
         manage={onManage}

@@ -16,14 +16,15 @@ import type {
   BillPayment,
   CardSettings,
   Category,
-  CategoryGroup,
   Checkpoint,
   Contribution,
+  EmergencyReserve,
   Goal,
   Installment,
   Institution,
   Investment,
   Loan,
+  MonthlyRollupData,
   NotificationPreference,
   Recurrence,
   Rule,
@@ -107,10 +108,6 @@ export const planningSpaces = sqliteTable("planning_spaces", {
   data: text("data", { mode: "json" }).$type<Space>().notNull(),
   id: text("id").primaryKey(),
 });
-export const planningCategoryGroups = sqliteTable("planning_category_groups", {
-  data: text("data", { mode: "json" }).$type<CategoryGroup>().notNull(),
-  id: text("id").primaryKey(),
-});
 export const planningAccounts = sqliteTable("planning_accounts", {
   data: text("data", { mode: "json" }).$type<AccountSettings>().notNull(),
   id: text("id").primaryKey(),
@@ -145,6 +142,10 @@ export const planningInstallments = sqliteTable("planning_installments", {
 });
 export const planningGoals = sqliteTable("planning_goals", {
   data: text("data", { mode: "json" }).$type<Goal>().notNull(),
+  id: text("id").primaryKey(),
+});
+export const planningReserves = sqliteTable("planning_reserves", {
+  data: text("data", { mode: "json" }).$type<EmergencyReserve>().notNull(),
   id: text("id").primaryKey(),
 });
 export const planningContributions = sqliteTable("planning_contributions", {
@@ -192,6 +193,16 @@ export const planningRevision = sqliteTable("planning_revision", {
   id: integer("id").primaryKey(),
   revision: integer("revision").notNull(),
 });
+export const planningMonthlyRollups = sqliteTable(
+  "planning_monthly_rollups",
+  {
+    data: text("data", { mode: "json" }).$type<MonthlyRollupData>().notNull(),
+    month: text("month").notNull(),
+    scope: text("scope").notNull(),
+    version: text("version").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.scope, t.month] })],
+);
 export const planningReceipts = sqliteTable("planning_receipts", {
   createdAt: text("created_at").notNull(),
   digest: text("digest").notNull(),

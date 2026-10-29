@@ -176,3 +176,17 @@ export function institutionLogoUrl(value: string | null | undefined) {
     return null;
   }
 }
+
+export const PLUGGY_LOGO_ORIGIN =
+  "https://cdn.pluggy.ai/assets/connector-icons/";
+export const LOGO_PROXY_PATH = "/logos/";
+
+// Pluggy serves icons with max-age=0; the deploy proxies them under its own
+// path so browsers keep them without revalidating on every navigation.
+export function institutionLogoSrc(value: string | null | undefined) {
+  const url = institutionLogoUrl(value);
+  if (!url?.startsWith(PLUGGY_LOGO_ORIGIN)) {
+    return url;
+  }
+  return `${LOGO_PROXY_PATH}${url.slice(PLUGGY_LOGO_ORIGIN.length)}`;
+}

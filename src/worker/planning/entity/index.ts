@@ -2,6 +2,7 @@ import type {
   AccountDetails,
   Bill,
   ConnectionOwner,
+  MonthlyRollupData,
   Person,
   PlanningAccount,
   PlanningState,
@@ -36,10 +37,14 @@ export type PlanningRead =
   | "tags"
   | "rules"
   | "categories"
-  | "categoryGroups"
   | "spaces"
   | "notifications";
 export type PlanningResult = Record<string, unknown>;
+export interface MonthlyRollup {
+  data: MonthlyRollupData;
+  month: string;
+  version: string;
+}
 export interface PlanningRepository {
   commit: (input: {
     before: PlanningSnapshot;
@@ -49,11 +54,13 @@ export interface PlanningRepository {
     result: PlanningResult;
     now: string;
   }) => Promise<void>;
+  monthlyRollups: (scope: string, months: string[]) => Promise<MonthlyRollup[]>;
   read: (resource?: PlanningRead) => Promise<PlanningSnapshot>;
   receipt: (
     key: string,
   ) => Promise<{ digest: string; result: PlanningResult } | undefined>;
   revision: () => Promise<number>;
+  saveMonthlyRollups: (scope: string, rows: MonthlyRollup[]) => Promise<void>;
   transactions: (
     ids?: string[],
     selection?: TransactionRead,

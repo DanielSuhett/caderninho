@@ -2,17 +2,27 @@ import { Banner } from "@cloudflare/kumo/components/banner";
 import { Select } from "@cloudflare/kumo/components/select";
 import { useCallback, useState } from "react";
 
-import type { PortalResponse } from "../../contracts";
+import type {
+  PortalQueryResults,
+  PortalResponse,
+  WorkspaceCatalog,
+} from "../../contracts";
 import { investmentPortfolio } from "../../domain";
 import type { createAccountApi } from "./account-api";
 import { AccountIdentity } from "./account-identity";
 import { workspaceHref } from "./account-navigation";
-import { identityParameters } from "./identity-filters";
 import { InvestorDashboard, investmentTypeNames } from "./investor-dashboard";
+import { identityParameters } from "./page-requests";
 import { PersonStack } from "./person-identity";
+import { createViewCache } from "./read-cache";
 import { ScopeFields } from "./workspace-filters";
 import { ResourceFeedback, useResource } from "./workspace-resource";
 import { WorkspaceFilters, WorkspaceHeading } from "./workspace-ui";
+
+const views = createViewCache<{
+  catalog: WorkspaceCatalog;
+  result: PortalQueryResults["get_investments"];
+}>();
 
 export function InvestmentsView({
   api,
@@ -49,7 +59,7 @@ export function InvestmentsView({
     },
     [api, snapshot.csrf, spaceId, personId, params],
   );
-  const resource = useResource(load);
+  const resource = useResource(load, views);
   const records = resource.data?.result.data.records ?? [];
   const currencies = [
     ...new Set([currency, ...records.map((row) => row.currency)]),

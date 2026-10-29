@@ -8,6 +8,7 @@ import type {
 } from "./finance.entity";
 import type { FinancialIdentity } from "./financial-identity.entity";
 import type { InvestmentDetails } from "./investment.entity";
+import type { EmergencyReserve } from "./reserve.entity";
 import type { RuleFilter } from "./rules.entity";
 
 export const SpaceType = {
@@ -56,6 +57,8 @@ export interface AccountSettings {
 }
 export interface CardSettings {
   accountId: string;
+  // Local sublimit of an additional card; null or absent shares the account limit.
+  creditLimitMinor?: string | null;
   deleted: boolean;
   hidden: boolean;
   id: string;
@@ -85,7 +88,8 @@ export interface TransactionEdit {
 }
 export interface Category {
   color?: string;
-  groupId?: string | null;
+  // Part of the fixed monthly cost that sizes the emergency reserve.
+  fixedCost: boolean;
   hidden: boolean;
   icon?: CategoryIcon;
   id: string;
@@ -94,13 +98,6 @@ export interface Category {
   name: string;
   spaceId: string;
   system: boolean;
-}
-export interface CategoryGroup {
-  color: string;
-  icon: CategoryIcon;
-  id: string;
-  name: string;
-  spaceId: string;
 }
 export interface Tag {
   color: string;
@@ -258,7 +255,6 @@ export interface PlanningState {
   billPayments: BillPayment[];
   cards: CardSettings[];
   categories: Category[];
-  categoryGroups: CategoryGroup[];
   contributions: Contribution[];
   edits: TransactionEdit[];
   goals: Goal[];
@@ -267,6 +263,7 @@ export interface PlanningState {
   loans: Loan[];
   notifications: NotificationPreference[];
   recurrences: Recurrence[];
+  reserves: EmergencyReserve[];
   rules: Rule[];
   schedules: ScheduledPayment[];
   spaces: Space[];

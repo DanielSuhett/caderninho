@@ -7,6 +7,7 @@ import {
   CategoryKind,
   ChartType,
   NotificationChannel,
+  reserveDefaults,
   SpaceType,
   SpendingGroupBy,
   TransactionDirection,
@@ -46,9 +47,9 @@ const mutation = {
   spaceId: id,
 };
 const listing = { ...scope, include_hidden: z.boolean().default(false) };
-const categoryAppearance = {
+const categoryFields = {
   color: CategoryColorSchema.optional(),
-  groupId: id.nullable().optional(),
+  fixedCost: z.boolean().optional(),
   icon: CategoryIconSchema.optional(),
 };
 const period = { ...scope, from: day, to: day };
@@ -234,24 +235,12 @@ export const planningTools = {
     schema: z
       .object({
         ...mutation,
-        ...categoryAppearance,
+        ...categoryFields,
         kind: z.enum([
           CategoryKind.income,
           CategoryKind.expense,
           CategoryKind.transfer,
         ]),
-        name: text,
-      })
-      .strict(),
-  }),
-  create_category_group: planningTool("create_category_group", {
-    description: "Criar agrupador de categorias com nome, ícone e cor.",
-    readOnly: false,
-    schema: z
-      .object({
-        ...mutation,
-        color: CategoryColorSchema,
-        icon: CategoryIconSchema,
         name: text,
       })
       .strict(),
@@ -389,12 +378,6 @@ export const planningTools = {
     readOnly: false,
     schema: z.object({ ...mutation, id }).strict(),
   }),
-  delete_category_group: planningTool("delete_category_group", {
-    description:
-      "Remover agrupador; suas categorias e transações são preservadas e ficam sem grupo.",
-    readOnly: false,
-    schema: z.object({ ...mutation, id }).strict(),
-  }),
   delete_goal: planningTool("delete_goal", {
     description: "Excluir meta e contribuições locais; preservar transações.",
     readOnly: false,
@@ -522,14 +505,14 @@ export const planningTools = {
       "Listar registros locais e importados, incluindo ocultos quando solicitado.",
     readOnly: true,
     schema: z
-      .object({ ...listing, groupId: id.nullable().optional() })
+      .object({ ...listing, fixedCost: z.boolean().optional() })
       .strict(),
   }),
-  get_category_groups: planningTool("get_category_groups", {
+  get_emergency_reserve: planningTool("get_emergency_reserve", {
     description:
-      "Listar agrupadores de categorias de um espaço; não são espaços financeiros.",
+      "Reserva de emergência de uma pessoa: média do custo fixo dos últimos meses fechados × meses configurados, comparada aos saldos vinculados.",
     readOnly: true,
-    schema: z.object({ ...scope }).strict(),
+    schema: z.object({ ...scope, personId: id }).strict(),
   }),
   get_goal_plan: planningTool("get_goal_plan", {
     description:
@@ -857,6 +840,20 @@ export const planningTools = {
     readOnly: false,
     schema: z.object({ ...mutation, amountMinor: amount, id }).strict(),
   }),
+  set_emergency_reserve: planningTool("set_emergency_reserve", {
+    description:
+      "Configurar a reserva de emergência de uma pessoa: meses de custo fixo e contas ou investimentos que a compõem.",
+    readOnly: false,
+    schema: z
+      .object({
+        ...mutation,
+        accountIds: z.array(id).max(50),
+        investmentIds: z.array(id).max(50),
+        months: z.number().int().min(1).max(reserveDefaults.maxMonths),
+        personId: id,
+      })
+      .strict(),
+  }),
   set_investment_inclusion: planningTool("set_investment_inclusion", {
     description: "Definir participação no patrimônio.",
     readOnly: false,
@@ -922,11 +919,12 @@ export const planningTools = {
   }),
   update_card: planningTool("update_card", {
     description:
-      "Renomear, ocultar ou vincular a uma pessoa um cartão; personId null volta ao titular da conta.",
+      "Renomear, ocultar ou vincular a uma pessoa um cartão; personId null volta ao titular da conta. creditLimitMinor define um sublimite local para cartão adicional; null volta a compartilhar o limite da conta.",
     readOnly: false,
     schema: z
       .object({
         ...mutation,
+        creditLimitMinor: amount.nullable().optional(),
         expected_revision: z.number().int().nonnegative().optional(),
         hidden: z.boolean().optional(),
         id,
@@ -937,26 +935,13 @@ export const planningTools = {
   }),
   update_category: planningTool("update_category", {
     description:
-      "Configurar ícone, cor e grupo de qualquer categoria. Nomes de categorias fixas são protegidos.",
+      "Configurar ícone, cor e custo fixo de qualquer categoria. Nomes de categorias fixas são protegidos.",
     readOnly: false,
     schema: z
       .object({
         ...mutation,
-        ...categoryAppearance,
+        ...categoryFields,
         hidden: z.boolean().optional(),
-        id,
-        name: text.optional(),
-      })
-      .strict(),
-  }),
-  update_category_group: planningTool("update_category_group", {
-    description: "Editar nome, ícone ou cor de um agrupador de categorias.",
-    readOnly: false,
-    schema: z
-      .object({
-        ...mutation,
-        color: CategoryColorSchema.optional(),
-        icon: CategoryIconSchema.optional(),
         id,
         name: text.optional(),
       })

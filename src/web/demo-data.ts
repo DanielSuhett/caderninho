@@ -55,6 +55,30 @@ function hasAmount(
 function totalAmount(value: bigint, unknown: number) {
   return unknown ? null : value.toString();
 }
+/** Classified expense per account in the period, as the overview reports it. */
+export function demoAccountExpenses(from: string, to: string, data: DemoData) {
+  const expenses = new Map<string, bigint>();
+  for (const row of data.records.filter(hasAmount)) {
+    const kind = data.categories.find(
+      (category) => category.id === row.category,
+    )?.kind;
+    if (
+      kind !== CategoryKind.expense ||
+      row.date < from ||
+      row.date > to ||
+      row.date > demoReferenceDay ||
+      row.status !== TransactionStatus.POSTED ||
+      row.ignored
+    ) {
+      continue;
+    }
+    expenses.set(
+      row.accountId,
+      (expenses.get(row.accountId) ?? 0n) - BigInt(row.amountMinor),
+    );
+  }
+  return expenses;
+}
 export function demoSummary(
   from: string,
   to: string,

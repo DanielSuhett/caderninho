@@ -51,24 +51,6 @@ export function useHouseholdEditor({
     },
     [manage],
   );
-  const savePerson = useCallback(
-    async (event: FormEvent<HTMLFormElement>) => {
-      event.preventDefault();
-      const form = event.currentTarget;
-      const values = new FormData(form);
-      await submit(
-        {
-          action: "save_person",
-          csrf,
-          name: values.get("name"),
-          ...(values.has("photo") && { photo: values.get("photo") || null }),
-          ...(form.dataset.id && { id: form.dataset.id }),
-        },
-        form.dataset.id ?? "person",
-      );
-    },
-    [csrf, submit],
-  );
   const saveProfile = useCallback(
     async (event: FormEvent<HTMLFormElement>) => {
       event.preventDefault();
@@ -100,7 +82,7 @@ export function useHouseholdEditor({
     [csrf, submit],
   );
 
-  return { feedback, notice, savePerson, saveProfile };
+  return { feedback, notice, saveProfile };
 }
 
 export type HouseholdEditorModel = ReturnType<typeof useHouseholdEditor>;

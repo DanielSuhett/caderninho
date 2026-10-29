@@ -2,16 +2,16 @@ import { Badge } from "@cloudflare/kumo/components/badge";
 import { Sidebar } from "@cloudflare/kumo/components/sidebar";
 import { Tooltip } from "@cloudflare/kumo/components/tooltip";
 import {
-  ArrowsClockwiseIcon,
+  ArrowCounterClockwiseIcon,
   BankIcon,
+  ChartLineIcon,
   CreditCardIcon,
-  FoldersIcon,
   HouseIcon,
+  LifebuoyIcon,
   ListChecksIcon,
-  PaletteIcon,
   ReceiptIcon,
-  ShieldCheckIcon,
   SignOutIcon,
+  TagIcon,
 } from "@phosphor-icons/react";
 import {
   type FocusEvent,
@@ -26,16 +26,16 @@ import {
 
 import type { PortalResponse } from "../../contracts";
 import { tryCatch } from "../../shared";
+import { UiIconButton, UiLink } from "../ui";
 import type { createAccountApi } from "./account-api";
-import { accountPath, workspaceHref } from "./account-navigation";
+import { accountPath } from "./account-navigation";
 import type { AuditView as AuditComponent } from "./audit-view";
-import type { DesignSystemView as DesignSystemComponent } from "./design-system-view";
+import { warmWhenIdle } from "./deferred";
 import type { OrganizationView as OrganizationComponent } from "./organization-view";
 import type { OverviewView as OverviewComponent } from "./overview-view";
 import { PersonDirectory } from "./person-identity";
-import { warmPage } from "./route-preload";
+import { pageLoaders, warmPage } from "./route-preload";
 import { focusPageSearch, isSearchShortcut } from "./search-shortcut";
-import type { SyncHistoryView as SyncHistoryComponent } from "./sync-history-view";
 import { TransactionReaderProvider } from "./transaction-reader";
 import type { TransactionsView as TransactionsComponent } from "./transactions-view";
 import { WorkspacePageError } from "./workspace-page";
@@ -48,6 +48,11 @@ const loadInvestments = async () => {
   return { default: error ? WorkspacePageError : data.InvestmentsView };
 };
 const InvestmentsView = memo(lazy(loadInvestments));
+const loadReserve = async () => {
+  const { data, error } = await tryCatch(() => import("./reserve-view"));
+  return { default: error ? WorkspacePageError : data.ReserveView };
+};
+const ReserveView = memo(lazy(loadReserve));
 const loadOverview = async () => {
   const { data, error } = await tryCatch(() => import("./overview-view"));
   if (error) {
@@ -67,26 +72,12 @@ const loadAudit = async () => {
   }
   return { default: data.AuditView };
 };
-const loadDesignSystem = async () => {
-  const { data, error } = await tryCatch(() => import("./design-system-view"));
-  if (error) {
-    return { default: WorkspacePageError };
-  }
-  return { default: data.DesignSystemView };
-};
 const loadOrganization = async () => {
   const { data, error } = await tryCatch(() => import("./organization-view"));
   if (error) {
     return { default: WorkspacePageError };
   }
   return { default: data.OrganizationView };
-};
-const loadSyncHistory = async () => {
-  const { data, error } = await tryCatch(() => import("./sync-history-view"));
-  if (error) {
-    return { default: WorkspacePageError };
-  }
-  return { default: data.SyncHistoryView };
 };
 const loadTransactions = async () => {
   const { data, error } = await tryCatch(() => import("./transactions-view"));
@@ -97,14 +88,8 @@ const loadTransactions = async () => {
 };
 const OverviewView = memo(lazy<typeof OverviewComponent>(loadOverview));
 const AuditView = memo(lazy<typeof AuditComponent>(loadAudit));
-const DesignSystemView = memo(
-  lazy<typeof DesignSystemComponent>(loadDesignSystem),
-);
 const OrganizationView = memo(
   lazy<typeof OrganizationComponent>(loadOrganization),
-);
-const SyncHistoryView = memo(
-  lazy<typeof SyncHistoryComponent>(loadSyncHistory),
 );
 const TransactionsView = memo(
   lazy<typeof TransactionsComponent>(loadTransactions),
@@ -138,21 +123,17 @@ const pages = [
     path: "/account/rules",
   },
   {
-    icon: FoldersIcon,
-    name: "Grupos",
-    path: "/account/groups",
+    icon: TagIcon,
+    name: "Categorias",
+    path: "/account/categories",
   },
-  {
-    icon: ArrowsClockwiseIcon,
-    name: "Sincronizações",
-    path: "/account/sync",
-  },
+  { icon: LifebuoyIcon, name: "Reserva", path: "/account/reserve" },
   {
     icon: BankIcon,
-    name: "Pessoas",
+    name: "Conexões",
     path: "/account/connections",
   },
-  { icon: ShieldCheckIcon, name: "Auditoria MCP", path: "/account/audit" },
+  { icon: ChartLineIcon, name: "Observabilidade", path: "/account/audit" },
 ];
 
 export function WorkspaceView({
@@ -176,6 +157,7 @@ export function WorkspaceView({
   busy: boolean;
   demo?: boolean;
 }) {
+  useEffect(() => warmWhenIdle(pageLoaders), []);
   useEffect(() => {
     const listen = (event: KeyboardEvent) => {
       if (isSearchShortcut(event) && focusPageSearch()) {
@@ -220,12 +202,12 @@ export function WorkspaceView({
       />
     );
   }
-  if (path === "/account/rules" || path === "/account/groups") {
+  if (path === "/account/rules" || path === "/account/categories") {
     content = (
       <OrganizationView
         api={api}
         key={route}
-        page={path.endsWith("rules") ? "rules" : "groups"}
+        page={path.endsWith("rules") ? "rules" : "categories"}
         snapshot={snapshot}
       />
     );
@@ -239,9 +221,9 @@ export function WorkspaceView({
       />
     );
   }
-  if (path === "/account/sync") {
+  if (path === "/account/reserve") {
     content = (
-      <SyncHistoryView
+      <ReserveView
         api={api}
         key={route}
         snapshot={snapshot}
@@ -256,9 +238,6 @@ export function WorkspaceView({
         snapshot={snapshot}
       />
     );
-  }
-  if (path === "/account/design-system") {
-    content = <DesignSystemView key={route} />;
   }
   return (
     <ResourceVersion value={dataVersion}>
@@ -339,7 +318,41 @@ function WorkspaceNavigation({
   const params = new URLSearchParams(location.search);
   const reset = useCallback(() => location.reload(), []);
   return (
-    <SidebarFrame brandHref={scopedHref("/account", params)}>
+    <SidebarFrame
+      brandHref={scopedHref("/account", params)}
+      {...(demo && {
+        tools: (
+          <>
+            <Tooltip
+              content="Instalar minha cópia"
+              render={
+                <UiLink
+                  aria-label="Instalar minha cópia"
+                  href="/#install-title"
+                  shape="square"
+                  variant="ghost"
+                >
+                  <HouseIcon
+                    aria-hidden
+                    size={20}
+                  />
+                </UiLink>
+              }
+            />
+            <UiIconButton
+              label="Restaurar demonstração"
+              onClick={reset}
+              variant="ghost"
+            >
+              <ArrowCounterClockwiseIcon
+                aria-hidden
+                size={20}
+              />
+            </UiIconButton>
+          </>
+        ),
+      })}
+    >
       <nav aria-label="Páginas do Caderninho">
         {[
           {
@@ -349,12 +362,16 @@ function WorkspaceNavigation({
               "/account/transactions",
               "/account/cards",
               "/account/investments",
+              "/account/reserve",
             ],
           },
-          { name: "Organização", paths: ["/account/rules", "/account/groups"] },
+          {
+            name: "Organização",
+            paths: ["/account/categories", "/account/rules"],
+          },
           {
             name: "Instalação",
-            paths: ["/account/connections", "/account/sync", "/account/audit"],
+            paths: ["/account/connections", "/account/audit"],
           },
         ].map((group) => (
           <Sidebar.Group key={group.name}>
@@ -384,27 +401,6 @@ function WorkspaceNavigation({
       </nav>
       <Sidebar.Group>
         <Sidebar.Menu>
-          <Sidebar.MenuButton
-            active={path === "/account/design-system"}
-            className="text-base"
-            href={workspaceHref("/account/design-system")}
-            icon={PaletteIcon}
-            onFocus={preloadPage}
-            onMouseEnter={preloadPage}
-            tooltip="Referência visual"
-          >
-            Referência visual
-          </Sidebar.MenuButton>
-          {demo ? (
-            <>
-              <Sidebar.MenuButton href="/#install-title">
-                Instalar minha cópia
-              </Sidebar.MenuButton>
-              <Sidebar.MenuButton onClick={reset}>
-                Restaurar demonstração
-              </Sidebar.MenuButton>
-            </>
-          ) : null}
           <Sidebar.MenuButton
             className="text-base"
             disabled={busy}

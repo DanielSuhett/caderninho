@@ -77,7 +77,7 @@ test("the card scope keeps card selection inline and limits the filter dialog to
   assert.equal(cardPercentage(null, "100"), null);
 });
 
-test("known zero limits and missing provider limits have different explanations", () => {
+test("known zero limits show their value and missing limits stay unavailable, both without a meter", () => {
   const report = demoCards(query, initialDemoData);
   function render(limit: string | null) {
     return renderToStaticMarkup(
@@ -99,12 +99,11 @@ test("known zero limits and missing provider limits have different explanations"
     );
   }
   const zero = render("0");
-  assert.ok(zero.includes("0,00 BRL"));
-  assert.ok(zero.includes("Limite informado não é positivo"));
-  assert.equal(zero.includes("limite ou disponível não informado"), false);
+  assert.ok(zero.includes("R$ 0,00"));
+  assert.equal(zero.includes("Ocupação"), false);
   const unknown = render(null);
   assert.ok(unknown.includes("Não informado"));
-  assert.ok(unknown.includes("limite ou disponível não informado"));
+  assert.equal(unknown.includes("Ocupação"), false);
 });
 test("card labels always keep the observed last digits visible", () => {
   assert.equal(

@@ -36,14 +36,17 @@ export const FinancialSummarySchema = z.object({
 export const FinancialOverviewSchema = FinancialSummarySchema.extend({
   accounts: z.array(
     z.object({
+      availableCreditMinor: nullableMinor.optional(),
       balanceMinor: nullableMinor,
       balanceObservedAt: z.string().nullable().optional(),
+      creditLimitMinor: nullableMinor.optional(),
       currency: z.string(),
       hidden: z.boolean(),
       id: z.string(),
       identity: FinancialIdentitySchema.nullish(),
       manual: z.boolean(),
       name: z.string(),
+      periodExpenseMinor: minor.optional(),
       personId: z.string(),
       type: z.enum([AccountType.BANK, AccountType.CREDIT]),
     }),

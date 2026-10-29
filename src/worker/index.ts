@@ -6,6 +6,7 @@ import { authenticatedFetch } from "./auth/controller";
 import type { Bindings } from "./bindings";
 import { installationService, syncService } from "./composition";
 import { failureStatus, requestCategory } from "./http";
+import { fetchInstitutionLogo } from "./institutions/controller";
 import { fetchMcp } from "./mcp";
 import {
   classifyFailure,
@@ -57,6 +58,7 @@ function createRoutes(ctx: ExecutionContext) {
     );
   });
 
+  routes.get("/logos/*", (c) => fetchInstitutionLogo(c.req.raw, ctx));
   routes.all("*", (c) =>
     authenticatedFetch(c.req.raw, c.env, ctx, (request, bindings, access) =>
       fetchMcp(request, bindings, access),

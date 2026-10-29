@@ -13,6 +13,7 @@ import { RunStatus } from "../domain";
 import { demoAccounts, demoReferenceDay } from "../fixtures/finance";
 import { demoPortalFixture } from "../fixtures/workspace";
 import { tryCatch } from "../shared";
+import { demoAuditReport } from "./demo-audit";
 import { createDemoSession } from "./demo-session";
 import { randomId } from "./random-id";
 
@@ -108,25 +109,7 @@ export function createDemoFetch(
         const { days } = AuditSelectionSchema.parse(
           Object.fromEntries(url.searchParams),
         );
-        return {
-          clients: [],
-          daily: [],
-          days,
-          grantCursor: null,
-          grants: [],
-          models: [],
-          recent: [],
-          since: `${demoReferenceDay}T00:00:00.000Z`,
-          totals: {
-            cancelled: 0,
-            durationMs: 0,
-            errors: 0,
-            inputBytes: 0,
-            outputBytes: 0,
-            requests: 0,
-            toolCalls: 0,
-          },
-        };
+        return demoAuditReport(days, demoReferenceDay);
       }
       default:
         return null;

@@ -158,17 +158,16 @@ await test("an older response cannot overwrite a newer explicit refresh of the s
   );
 });
 
-await test("demo rules and groups keep their public route during client navigation", () => {
+await test("demo rules and categories keep their public route during client navigation", () => {
   const current = new URL("https://example.test/demo?month=2026-10");
   for (const path of [
     "/demo/rules",
     "/demo/rules/",
-    "/demo/groups",
-    "/demo/groups/",
+    "/demo/categories",
+    "/demo/categories/",
     "/demo/connections/",
     "/demo/sync/",
     "/demo/audit/",
-    "/demo/design-system/",
   ]) {
     assert.equal(
       isWorkspaceUrl(new URL(`${path}?space=personal`, current), current),
@@ -188,6 +187,6 @@ await test("the same app routes resolve under private and demo prefixes without 
     workspaceHref("/account/cards?month=2026-10", "/account"),
     "/account/cards?month=2026-10",
   );
-  assert.equal(workspaceHref("/demo/groups", "/demo"), "/demo/groups");
+  assert.equal(workspaceHref("/demo/categories", "/demo"), "/demo/categories");
   assert.equal(workspaceHref("/", "/demo"), "/");
 });

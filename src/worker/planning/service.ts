@@ -33,7 +33,6 @@ const catalogReads = new Map<PlanningQuery["tool"], PlanningRead>([
   ["get_tags", "tags"],
   ["get_rules", "rules"],
   ["get_categories", "categories"],
-  ["get_category_groups", "categoryGroups"],
   ["get_spaces", "spaces"],
   ["get_notification_preferences", "notifications"],
 ]);

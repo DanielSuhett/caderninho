@@ -3,7 +3,11 @@ import { Empty } from "@cloudflare/kumo/components/empty";
 import { Select } from "@cloudflare/kumo/components/select";
 import { useCallback, useState } from "react";
 
-import type { PortalResponse } from "../../contracts";
+import type {
+  PortalQueryResults,
+  PortalResponse,
+  WorkspaceCatalog,
+} from "../../contracts";
 import { localDay } from "../../domain";
 import type { createAccountApi } from "./account-api";
 import { navigateWorkspace, workspaceHref } from "./account-navigation";
@@ -16,13 +20,18 @@ import {
   scopeParameters,
 } from "./card-presentation";
 import { selectedMonth } from "./dashboard-period";
-import { identityParameters } from "./identity-filters";
+import { identityParameters } from "./page-requests";
 import { PeriodPicker } from "./period-picker";
 import { PersonStack } from "./person-identity";
+import { createViewCache } from "./read-cache";
 import { ScopeFields } from "./workspace-filters";
 import { ResourceFeedback, useResource } from "./workspace-resource";
 import { WorkspaceFilters, WorkspaceHeading } from "./workspace-ui";
 import "./cards.css";
+
+const views = createViewCache<
+  PortalQueryResults["get_portal_cards"] & { catalog: WorkspaceCatalog }
+>();
 
 export function CardsView({
   api,
@@ -79,7 +88,7 @@ export function CardsView({
       spaceId,
     ],
   );
-  const resource = useResource(load);
+  const resource = useResource(load, views);
   const changeMonth = useCallback((value: string) => {
     const target = new URL(location.href);
     target.searchParams.set("month", value);

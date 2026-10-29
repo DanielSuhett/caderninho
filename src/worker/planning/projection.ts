@@ -81,6 +81,7 @@ export function cardCatalog(snapshot: PlanningSnapshot, state: PlanningState) {
     {
       id: string;
       accountId: string;
+      creditLimitMinor: string | null;
       identity: FinancialIdentity | null;
       number: string;
       name: string;
@@ -119,6 +120,7 @@ export function cardCatalog(snapshot: PlanningSnapshot, state: PlanningState) {
       const owner = snapshot.people.find((p) => p.id === setting?.personId);
       result.set(id, {
         accountId: account.id,
+        creditLimitMinor: setting?.creditLimitMinor ?? null,
         deleted: setting?.deleted ?? false,
         hidden: setting?.hidden ?? account.hidden,
         id,

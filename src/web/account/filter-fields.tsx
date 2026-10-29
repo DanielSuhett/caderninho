@@ -1,19 +1,10 @@
 import { Combobox } from "@cloudflare/kumo/components/combobox";
 import type { DateRange } from "@cloudflare/kumo/components/date-picker";
 import { Input } from "@cloudflare/kumo/components/input";
-import { InputGroup } from "@cloudflare/kumo/components/input-group";
 import { Loader } from "@cloudflare/kumo/components/loader";
 import { Popover } from "@cloudflare/kumo/components/popover";
-import { Select } from "@cloudflare/kumo/components/select";
-import { CalendarIcon, MagnifyingGlassIcon } from "@phosphor-icons/react";
-import {
-  type ChangeEvent,
-  type ComponentProps,
-  lazy,
-  Suspense,
-  useCallback,
-  useState,
-} from "react";
+import { CalendarIcon } from "@phosphor-icons/react";
+import { type ChangeEvent, lazy, Suspense, useCallback, useState } from "react";
 
 import type { Person } from "../../domain";
 import { UiButton } from "../ui";
@@ -26,99 +17,6 @@ const Calendar = lazy(async () => {
   );
   return { default: DatePicker };
 });
-
-export function SearchField({
-  label,
-  ...props
-}: ComponentProps<typeof InputGroup.Input> & { label: string }) {
-  return (
-    <InputGroup label={label}>
-      <InputGroup.Addon>
-        <MagnifyingGlassIcon
-          aria-hidden
-          size={16}
-        />
-      </InputGroup.Addon>
-      <InputGroup.Input
-        aria-label={label}
-        {...props}
-        type="search"
-      />
-    </InputGroup>
-  );
-}
-
-// A GET search preserves applied scope/filters and starts again without a cursor.
-export function QuerySearch({
-  action,
-  params,
-  name,
-  label,
-  compact = false,
-}: {
-  action: string;
-  params: URLSearchParams;
-  name: "text" | "q";
-  label: string;
-  compact?: boolean;
-}) {
-  return (
-    <form
-      action={action}
-      className="query-search"
-      data-compact={compact}
-      method="get"
-    >
-      {[...params.entries()]
-        .filter(([key]) => key !== name && key !== "cursor")
-        .map(([key, value]) => (
-          <input
-            key={key}
-            name={key}
-            type="hidden"
-            value={value}
-          />
-        ))}
-      {compact ? (
-        <InputGroup>
-          <InputGroup.Input
-            aria-keyshortcuts="/"
-            aria-label={label}
-            defaultValue={params.get(name) ?? ""}
-            enterKeyHint="search"
-            maxLength={240}
-            name={name}
-            placeholder={label}
-            type="search"
-          />
-          <InputGroup.Addon align="end">
-            <InputGroup.Button
-              icon={MagnifyingGlassIcon}
-              tooltip="Buscar"
-              type="submit"
-            />
-          </InputGroup.Addon>
-        </InputGroup>
-      ) : (
-        <>
-          <SearchField
-            defaultValue={params.get(name) ?? ""}
-            label={label}
-            maxLength={240}
-            name={name}
-            placeholder="Ex.: mercado"
-          />
-          <UiButton
-            type="submit"
-            variant="secondary"
-          >
-            Buscar
-          </UiButton>
-        </>
-      )}
-    </form>
-  );
-}
 
 interface CatalogOption {
   account?: AccountAppearance;
@@ -160,28 +58,6 @@ export function AccountFilter({
       value: account.id,
     })),
   ];
-  if (accounts.length <= 8) {
-    return (
-      <Select
-        className="w-full"
-        defaultValue={value}
-        items={items.map((item) => ({
-          label:
-            "account" in item ? (
-              <AccountIdentity
-                account={item.account}
-                person={item.owner}
-              />
-            ) : (
-              item.label
-            ),
-          value: item.value,
-        }))}
-        label="Conta"
-        name="accountId"
-      />
-    );
-  }
   return (
     <CatalogField
       defaultValue={value}

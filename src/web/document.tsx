@@ -8,11 +8,13 @@ export function Document({
   head,
   children,
   themeSwitching = true,
+  stylesheets,
 }: {
   title: string;
   head?: ReactNode;
   children: ReactNode;
   themeSwitching?: boolean;
+  stylesheets?: string[];
 }) {
   return (
     <html
@@ -26,7 +28,10 @@ export function Document({
           name="viewport"
         />
         <title>{title}</title>
-        <DesignHead themeSwitching={themeSwitching} />
+        <DesignHead
+          themeSwitching={themeSwitching}
+          {...(stylesheets && { stylesheets })}
+        />
         {head}
       </head>
       <body>
