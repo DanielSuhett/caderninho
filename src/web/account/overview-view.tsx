@@ -7,7 +7,7 @@ import type {
   WorkspaceCatalog,
 } from "../../contracts";
 import { tryCatch } from "../../shared";
-import type { createAccountApi } from "./account-api";
+import type { AccountApi } from "./account-api";
 import { navigateWorkspace, workspaceHref } from "./account-navigation";
 import { monthPeriod, selectedMonth } from "./dashboard-period";
 import { FieldSelect } from "./field-select";
@@ -24,7 +24,11 @@ import { createViewCache } from "./read-cache";
 import { SetupProgress } from "./setup-progress";
 import { TransactionEditing } from "./transaction-editing";
 import { ScopeFields } from "./workspace-filters";
-import { ResourceFeedback, useResource } from "./workspace-resource";
+import {
+  ResourceFeedback,
+  ResourcePlaceholder,
+  usePageResource,
+} from "./workspace-resource";
 import { WorkspaceFilters, WorkspaceHeading } from "./workspace-ui";
 
 interface OverviewData {
@@ -40,7 +44,7 @@ export function OverviewView({
   api,
   snapshot,
 }: {
-  api: ReturnType<typeof createAccountApi>;
+  api: AccountApi;
   snapshot: PortalResponse;
 }) {
   const [params] = useState(() => new URLSearchParams(location.search));
@@ -50,13 +54,19 @@ export function OverviewView({
   const spaceId = params.get("space") || "personal";
   const personId = params.get("person") ?? "";
   const load = useCallback(
-    async (signal: AbortSignal, fresh = false): Promise<OverviewData> => {
+    async (
+      source: AccountApi,
+      signal: AbortSignal,
+      fresh = false,
+    ): Promise<OverviewData> => {
       const requests = overviewRequests(params, day);
       const [overview, monthly, catalog, recent] = await Promise.all([
-        api.query(requests.overview, snapshot.csrf, signal, fresh),
-        tryCatch(() => api.query(requests.chart, snapshot.csrf, signal, fresh)),
-        api.catalog(requests.spaceId, signal, fresh),
-        api.query(requests.recent, snapshot.csrf, signal, fresh),
+        source.query(requests.overview, snapshot.csrf, signal, fresh),
+        tryCatch(() =>
+          source.query(requests.chart, snapshot.csrf, signal, fresh),
+        ),
+        source.catalog(requests.spaceId, signal, fresh),
+        source.query(requests.recent, snapshot.csrf, signal, fresh),
       ]);
       return {
         catalog,
@@ -66,9 +76,9 @@ export function OverviewView({
         recent,
       };
     },
-    [api, day, snapshot.csrf, params],
+    [day, snapshot.csrf, params],
   );
-  const resource = useResource(load, views);
+  const resource = usePageResource(api, load, views);
   const { data } = resource;
   const changeMonth = useCallback((value: string) => {
     const destination = new URL(location.href);
@@ -107,37 +117,39 @@ export function OverviewView({
     `/account/transactions?${transactionScope}`,
   );
   const filters = data ? (
-    <WorkspaceFilters
-      action={workspaceHref("/account")}
-      activeCount={Number(!!personId) + Number(spaceId !== "personal")}
-      context={context}
-      identities={data.overview.accounts}
-      identity={
-        <PersonStack
-          people={snapshot.people}
-          personId={personId}
+    <ResourcePlaceholder active={resource.placeholder}>
+      <WorkspaceFilters
+        action={workspaceHref("/account")}
+        activeCount={Number(!!personId) + Number(spaceId !== "personal")}
+        context={context}
+        identities={data.overview.accounts}
+        identity={
+          <PersonStack
+            people={snapshot.people}
+            personId={personId}
+          />
+        }
+        showClear={!!personId || spaceId !== "personal"}
+      >
+        <ScopeFields
+          catalog={data.catalog}
+          params={params}
+          snapshot={snapshot}
         />
-      }
-      showClear={!!personId || spaceId !== "personal"}
-    >
-      <ScopeFields
-        catalog={data.catalog}
-        params={params}
-        snapshot={snapshot}
-      />
-      <input
-        name="month"
-        type="hidden"
-        value={month}
-      />
-      <FieldSelect
-        className="w-full"
-        defaultValue={currency}
-        items={currencies.map((value) => ({ label: value, value }))}
-        label="Moeda"
-        name="currency"
-      />
-    </WorkspaceFilters>
+        <input
+          name="month"
+          type="hidden"
+          value={month}
+        />
+        <FieldSelect
+          className="w-full"
+          defaultValue={currency}
+          items={currencies.map((value) => ({ label: value, value }))}
+          label="Moeda"
+          name="currency"
+        />
+      </WorkspaceFilters>
+    </ResourcePlaceholder>
   ) : null;
   return (
     <>
@@ -155,7 +167,7 @@ export function OverviewView({
       <SetupProgress snapshot={snapshot} />
       <ResourceFeedback {...resource} />
       {!!data && (
-        <>
+        <ResourcePlaceholder active={resource.placeholder}>
           {!!data.overview.partial && (
             <Banner
               description={
@@ -191,7 +203,7 @@ export function OverviewView({
               transactionsHref={transactionsHref}
             />
           </TransactionEditing>
-        </>
+        </ResourcePlaceholder>
       )}
     </>
   );

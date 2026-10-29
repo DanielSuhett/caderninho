@@ -80,7 +80,7 @@ function CardTransactionGroup({
     type: "CREDIT",
   };
   return (
-    <LayerCard className="cards-purchase cards-limit-row">
+    <LayerCard className="cards-limit-row">
       <DisclosureItem
         leading={
           <AccountAvatar

@@ -7,7 +7,7 @@ import type {
   PortalResponse,
   WorkspaceCatalog,
 } from "../../contracts";
-import type { createAccountApi } from "./account-api";
+import type { AccountApi } from "./account-api";
 import { workspaceHref } from "./account-navigation";
 import { CursorPagination } from "./cursor-pagination";
 import { deferred } from "./deferred";
@@ -22,7 +22,12 @@ import {
 import { TransactionEditing } from "./transaction-editing";
 import { TransactionList } from "./transaction-list";
 import { EmptyView } from "./workspace-filters";
-import { dayLabel, ResourceFeedback, useResource } from "./workspace-resource";
+import {
+  dayLabel,
+  ResourceFeedback,
+  ResourcePlaceholder,
+  usePageResource,
+} from "./workspace-resource";
 import { WorkspaceFilters, WorkspaceHeading } from "./workspace-ui";
 
 const TransactionFilterFields = deferred(
@@ -39,18 +44,18 @@ export function TransactionsView({
   api,
   snapshot,
 }: {
-  api: ReturnType<typeof createAccountApi>;
+  api: AccountApi;
   snapshot: PortalResponse;
 }) {
   const [params] = useState(() => new URLSearchParams(location.search));
   const spaceId = params.get("space") || "personal";
   const load = useCallback(
-    async (signal: AbortSignal, fresh = false) => {
+    async (source: AccountApi, signal: AbortSignal, fresh = false) => {
       const requests = transactionRequests(params);
       const [catalog, accounts, result] = await Promise.all([
-        api.catalog(requests.spaceId, signal, fresh),
-        api.query(requests.accounts, snapshot.csrf, signal, fresh),
-        api.query(requests.transactions, snapshot.csrf, signal, fresh),
+        source.catalog(requests.spaceId, signal, fresh),
+        source.query(requests.accounts, snapshot.csrf, signal, fresh),
+        source.query(requests.transactions, snapshot.csrf, signal, fresh),
       ]);
       return {
         accounts: accounts.data.records,
@@ -58,9 +63,9 @@ export function TransactionsView({
         result,
       };
     },
-    [api, snapshot.csrf, params],
+    [snapshot.csrf, params],
   );
-  const resource = useResource(load, views);
+  const resource = usePageResource(api, load, views);
   const { data } = resource;
   const presentation = data
     ? transactionFilterContext({
@@ -85,112 +90,116 @@ export function TransactionsView({
       <TransactionTabs
         basePath={workspaceHref("/account/transactions")}
         params={params}
-        uncategorizedCount={data?.result.data.uncategorizedCount}
+        {...(!resource.placeholder && {
+          uncategorizedCount: data?.result.data.uncategorizedCount,
+        })}
       />
       <ResourceFeedback {...resource} />
       {!!data && !!presentation && (
-        <TransactionEditing
-          accounts={data.accounts}
-          api={api}
-          catalog={data.catalog}
-          revision={data.result.data.revision}
-          saved={resource.retry}
-          snapshot={snapshot}
-          spaceId={spaceId}
-        >
-          <WorkspaceFilters
-            action={
-              params.get("uncategorized") === "on"
-                ? workspaceHref("/account/transactions?uncategorized=on")
-                : workspaceHref("/account/transactions")
-            }
-            activeCount={presentation.activeCount}
-            context={presentation.context}
-            identities={data.accounts}
-            identity={
-              <PersonStack
-                people={snapshot.people}
-                personId={params.get("person") ?? ""}
-              />
-            }
-            leading={
-              <QuerySearch
-                action={workspaceHref("/account/transactions")}
-                compact
-                label="Buscar transação"
-                name="text"
-                params={params}
-              />
-            }
-            showClear={presentation.activeCount > 0 || spaceId !== "personal"}
+        <ResourcePlaceholder active={resource.placeholder}>
+          <TransactionEditing
+            accounts={data.accounts}
+            api={api}
+            catalog={data.catalog}
+            revision={data.result.data.revision}
+            saved={resource.retry}
+            snapshot={snapshot}
+            spaceId={spaceId}
           >
-            <TransactionFilterFields
-              accounts={data.accounts}
-              catalog={data.catalog}
-              multiplePeople={presentation.multiplePeople}
-              params={params}
-              showOwner={showOwner}
-              snapshot={snapshot}
-            />
-          </WorkspaceFilters>
-          {!!data.result.partial && (
-            <Banner
-              className="feedback"
-              description={
-                <>
-                  Histórico parcial.{" "}
-                  <Link
-                    href={workspaceHref("/account/connections")}
-                    variant="current"
-                  >
-                    Ver importações
-                  </Link>
-                </>
-              }
-              variant="secondary"
-            />
-          )}
-          {params.get("uncategorized") === "on" && (
-            <CategorizationGuide
-              categories={data.catalog.categories}
-              params={params}
-              records={data.result.data.records}
-            />
-          )}
-          {data.result.data.records.length ? (
-            <TransactionList
-              accounts={data.accounts}
-              categories={data.catalog.categories}
-              records={data.result.data.records}
-              referenceDay={data.result.data.referenceDay}
-              showOwner={showOwner}
-            />
-          ) : (
-            <EmptyView
-              title={
+            <WorkspaceFilters
+              action={
                 params.get("uncategorized") === "on"
-                  ? "Nenhuma transação sem categoria neste recorte"
-                  : "Nenhuma transação neste recorte"
+                  ? workspaceHref("/account/transactions?uncategorized=on")
+                  : workspaceHref("/account/transactions")
               }
+              activeCount={presentation.activeCount}
+              context={presentation.context}
+              identities={data.accounts}
+              identity={
+                <PersonStack
+                  people={snapshot.people}
+                  personId={params.get("person") ?? ""}
+                />
+              }
+              leading={
+                <QuerySearch
+                  action={workspaceHref("/account/transactions")}
+                  compact
+                  label="Buscar transação"
+                  name="text"
+                  params={params}
+                />
+              }
+              showClear={presentation.activeCount > 0 || spaceId !== "personal"}
             >
-              {future
-                ? "Nenhum lançamento futuro encontrado. Volte ao histórico ou altere os filtros."
-                : "Altere os filtros ou importe seus bancos em Pessoas."}
-            </EmptyView>
-          )}
-          <CursorPagination
-            first={
-              params.has("cursor")
-                ? workspaceHref(`/account/transactions?${first}`)
-                : null
-            }
-            next={
-              data.result.data.cursor
-                ? workspaceHref(`/account/transactions?${next}`)
-                : null
-            }
-          />
-        </TransactionEditing>
+              <TransactionFilterFields
+                accounts={data.accounts}
+                catalog={data.catalog}
+                multiplePeople={presentation.multiplePeople}
+                params={params}
+                showOwner={showOwner}
+                snapshot={snapshot}
+              />
+            </WorkspaceFilters>
+            {!!data.result.partial && (
+              <Banner
+                className="feedback"
+                description={
+                  <>
+                    Histórico parcial.{" "}
+                    <Link
+                      href={workspaceHref("/account/connections")}
+                      variant="current"
+                    >
+                      Ver importações
+                    </Link>
+                  </>
+                }
+                variant="secondary"
+              />
+            )}
+            {params.get("uncategorized") === "on" && (
+              <CategorizationGuide
+                categories={data.catalog.categories}
+                params={params}
+                records={data.result.data.records}
+              />
+            )}
+            {data.result.data.records.length ? (
+              <TransactionList
+                accounts={data.accounts}
+                categories={data.catalog.categories}
+                records={data.result.data.records}
+                referenceDay={data.result.data.referenceDay}
+                showOwner={showOwner}
+              />
+            ) : (
+              <EmptyView
+                title={
+                  params.get("uncategorized") === "on"
+                    ? "Nenhuma transação sem categoria neste recorte"
+                    : "Nenhuma transação neste recorte"
+                }
+              >
+                {future
+                  ? "Nenhum lançamento futuro encontrado. Volte ao histórico ou altere os filtros."
+                  : "Altere os filtros ou importe seus bancos em Pessoas."}
+              </EmptyView>
+            )}
+            <CursorPagination
+              first={
+                params.has("cursor")
+                  ? workspaceHref(`/account/transactions?${first}`)
+                  : null
+              }
+              next={
+                data.result.data.cursor
+                  ? workspaceHref(`/account/transactions?${next}`)
+                  : null
+              }
+            />
+          </TransactionEditing>
+        </ResourcePlaceholder>
       )}
     </>
   );

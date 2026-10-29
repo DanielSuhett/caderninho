@@ -41,7 +41,6 @@ import type { TransactionsView as TransactionsComponent } from "./transactions-v
 import { WorkspacePageError } from "./workspace-page";
 import { ResourceVersion, scopedHref } from "./workspace-resource";
 import { SidebarFrame, WorkspaceFrame } from "./workspace-shell";
-import { WorkspaceSkeleton } from "./workspace-ui";
 
 const loadInvestments = async () => {
   const { data, error } = await tryCatch(() => import("./investments-view"));
@@ -296,7 +295,7 @@ export function WorkspaceView({
                   />
                 </div>
               )}
-              <Suspense fallback={<WorkspaceSkeleton />}>{content}</Suspense>
+              <Suspense fallback={null}>{content}</Suspense>
             </div>
           </WorkspaceFrame>
         </TransactionReaderProvider>

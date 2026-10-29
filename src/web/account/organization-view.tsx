@@ -44,8 +44,9 @@ import { ScopePicker } from "./scope-picker";
 import { EmptyView, ScopeFields } from "./workspace-filters";
 import {
   ResourceFeedback,
+  ResourcePlaceholder,
   scopedHref,
-  useResource,
+  usePageResource,
 } from "./workspace-resource";
 import {
   WorkspaceDetails,
@@ -152,10 +153,10 @@ export function OrganizationView({
     Boolean,
   ).length;
   const load = useCallback(
-    async (signal: AbortSignal, fresh = false) => {
+    async (source: OrganizationApi, signal: AbortSignal, fresh = false) => {
       const [catalog, accountList] = await Promise.all([
-        api.catalog(spaceId, signal, fresh),
-        api.query(
+        source.catalog(spaceId, signal, fresh),
+        source.query(
           { include_hidden: true, spaceId, tool: "get_accounts" },
           snapshot.csrf,
           signal,
@@ -167,9 +168,9 @@ export function OrganizationView({
         accounts: accountList.data.records,
       };
     },
-    [api, spaceId, snapshot.csrf],
+    [spaceId, snapshot.csrf],
   );
-  const resource = useResource(load, views);
+  const resource = usePageResource(api, load, views);
   const { data } = resource;
   const rules = data?.rules.filter(
     (r) =>
@@ -179,7 +180,7 @@ export function OrganizationView({
           .includes((params.get("q") ?? "").toLocaleLowerCase("pt-BR"))) &&
       (!params.get("enabled") || String(r.enabled) === params.get("enabled")),
   );
-  const ready = !!data;
+  const ready = !!data && !resource.placeholder;
   useEffect(() => {
     if (!ready) {
       return;
@@ -306,7 +307,7 @@ export function OrganizationView({
       )}
       <ResourceFeedback {...resource} />
       {!!data && (
-        <>
+        <ResourcePlaceholder active={resource.placeholder}>
           {(page === "categories" || data.spaces.length > 1) && (
             <GroupScope
               basePath={basePath}
@@ -446,7 +447,7 @@ export function OrganizationView({
               spaceId={spaceId}
             />
           )}
-        </>
+        </ResourcePlaceholder>
       )}
     </>
   );

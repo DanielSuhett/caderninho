@@ -15,7 +15,7 @@ import {
 import type { AuditReport, PortalResponse } from "../../contracts";
 import { tryCatch } from "../../shared";
 import { UiLink } from "../ui";
-import type { createAccountApi } from "./account-api";
+import type { AccountApi } from "./account-api";
 import { workspaceHref } from "./account-navigation";
 import { BackofficeDialog } from "./backoffice-dialog";
 import { CursorPagination } from "./cursor-pagination";
@@ -35,7 +35,8 @@ import { EmptyView } from "./workspace-filters";
 import {
   momentLabel,
   ResourceFeedback,
-  useResource,
+  ResourcePlaceholder,
+  usePageResource,
 } from "./workspace-resource";
 import { WorkspaceFilters, WorkspaceHeading } from "./workspace-ui";
 
@@ -145,13 +146,13 @@ export function AuditView({
   api,
   snapshot,
 }: {
-  api: ReturnType<typeof createAccountApi>;
+  api: AccountApi;
   snapshot: PortalResponse;
 }) {
   const [params] = useState(() => new URLSearchParams(location.search));
   const load = useCallback(
-    (signal: AbortSignal, fresh = false) =>
-      api.audit(
+    (source: AccountApi, signal: AbortSignal, fresh = false) =>
+      source.audit(
         new URLSearchParams({
           days: params.get("days") || "7",
           ...(params.get("grantCursor") && {
@@ -161,9 +162,9 @@ export function AuditView({
         signal,
         fresh,
       ),
-    [api, params],
+    [params],
   );
-  const resource = useResource(load, views);
+  const resource = usePageResource(api, load, views);
   const { data } = resource;
   const [confirm, setConfirm] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -266,7 +267,7 @@ export function AuditView({
         />
       )}
       {!!data && (
-        <>
+        <ResourcePlaceholder active={resource.placeholder}>
           {data.totals.requests ? (
             <>
               <dl className="obs-stats">
@@ -533,7 +534,7 @@ export function AuditView({
               </DisclosureItem>
             </div>
           )}
-        </>
+        </ResourcePlaceholder>
       )}
     </>
   );

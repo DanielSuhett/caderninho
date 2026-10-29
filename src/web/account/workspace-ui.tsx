@@ -1,5 +1,4 @@
 import { Badge } from "@cloudflare/kumo/components/badge";
-import { SkeletonLine } from "@cloudflare/kumo/components/loader";
 import { Text } from "@cloudflare/kumo/components/text";
 import { Toolbar } from "@cloudflare/kumo/components/toolbar";
 import { SlidersHorizontalIcon } from "@phosphor-icons/react";
@@ -41,36 +40,6 @@ export function WorkspaceHeading({
         </div>
       )}
     </header>
-  );
-}
-
-export function WorkspaceSkeleton() {
-  return (
-    <div
-      aria-busy="true"
-      className="workspace-skeleton"
-      role="status"
-    >
-      <span className="sr-only">Carregando dados salvos…</span>
-      {["first", "second", "third", "fourth"].map((row) => (
-        <div
-          aria-hidden
-          className="skeleton-row"
-          key={row}
-        >
-          <SkeletonLine
-            blockHeight={16}
-            maxWidth={80}
-            minWidth={60}
-          />
-          <SkeletonLine
-            blockHeight={16}
-            maxWidth={60}
-            minWidth={40}
-          />
-        </div>
-      ))}
-    </div>
   );
 }
 

@@ -24,7 +24,7 @@ import { formatBalance } from "../money";
 import { randomId } from "../random-id";
 import { UiButton, UiLink } from "../ui";
 import { UiCheckbox } from "../ui-checkbox";
-import type { createAccountApi } from "./account-api";
+import type { AccountApi } from "./account-api";
 import { AccountAvatar } from "./account-identity";
 import { workspaceHref } from "./account-navigation";
 import { BackofficeDialog } from "./backoffice-dialog";
@@ -34,7 +34,11 @@ import { PersonAvatar, PersonIdentity } from "./person-identity";
 import { createViewCache } from "./read-cache";
 import { ScopePicker } from "./scope-picker";
 import { EmptyView } from "./workspace-filters";
-import { ResourceFeedback, useResource } from "./workspace-resource";
+import {
+  ResourceFeedback,
+  ResourcePlaceholder,
+  usePageResource,
+} from "./workspace-resource";
 import { WorkspaceHeading } from "./workspace-ui";
 
 type Source = ReserveReport["sources"][number];
@@ -69,16 +73,14 @@ const sourceAppearance = (source: Source) => ({
   name: source.name,
 });
 
+type ReserveApi = Pick<AccountApi, "invalidate" | "planning" | "query">;
 const views = createViewCache<PortalQueryResults["get_emergency_reserve"]>();
 
 export function ReserveView({
   api,
   snapshot,
 }: {
-  api: Pick<
-    ReturnType<typeof createAccountApi>,
-    "invalidate" | "planning" | "query"
-  >;
+  api: ReserveApi;
   snapshot: PortalResponse;
 }) {
   const [params] = useState(() => new URLSearchParams(location.search));
@@ -88,16 +90,16 @@ export function ReserveView({
   const [editing, setEditing] = useState(false);
   const [session, setSession] = useState(0);
   const load = useCallback(
-    (signal: AbortSignal, fresh: boolean) =>
-      api.query(
+    (source: ReserveApi, signal: AbortSignal, fresh: boolean) =>
+      source.query(
         { personId, spaceId, tool: "get_emergency_reserve" },
         snapshot.csrf,
         signal,
         fresh,
       ),
-    [api, personId, snapshot.csrf, spaceId],
+    [personId, snapshot.csrf, spaceId],
   );
-  const resource = useResource(load, views);
+  const resource = usePageResource(api, load, views);
   const report = resource.data?.data;
   const configure = useCallback(() => {
     setSession((value) => value + 1);
@@ -136,46 +138,48 @@ export function ReserveView({
       )}
       <ResourceFeedback {...resource} />
       {!!report && (
-        <section
-          aria-labelledby="reserve-heading"
-          className="entity-panel"
-        >
-          <header className="entity-panel-header">
-            <h2 id="reserve-heading">
-              {person ? <PersonIdentity person={person} /> : "Reserva"}
-            </h2>
-            <div className="entity-panel-actions">
-              <UiButton
-                icon={GearSixIcon}
-                onClick={configure}
-                type="button"
-              >
-                Configurar
-              </UiButton>
-            </div>
-          </header>
-          <ReserveSummary report={report} />
-          <FixedCostTable
-            report={report}
-            spaceId={spaceId}
-          />
-          <SourceTable
-            configure={configure}
-            report={report}
-          />
-          {session > 0 && (
-            <ReserveEditor
-              api={api}
-              close={close}
-              csrf={snapshot.csrf}
-              key={session}
-              open={editing}
+        <ResourcePlaceholder active={resource.placeholder}>
+          <section
+            aria-labelledby="reserve-heading"
+            className="entity-panel"
+          >
+            <header className="entity-panel-header">
+              <h2 id="reserve-heading">
+                {person ? <PersonIdentity person={person} /> : "Reserva"}
+              </h2>
+              <div className="entity-panel-actions">
+                <UiButton
+                  icon={GearSixIcon}
+                  onClick={configure}
+                  type="button"
+                >
+                  Configurar
+                </UiButton>
+              </div>
+            </header>
+            <ReserveSummary report={report} />
+            <FixedCostTable
               report={report}
-              saved={saved}
               spaceId={spaceId}
             />
-          )}
-        </section>
+            <SourceTable
+              configure={configure}
+              report={report}
+            />
+            {session > 0 && (
+              <ReserveEditor
+                api={api}
+                close={close}
+                csrf={snapshot.csrf}
+                key={session}
+                open={editing}
+                report={report}
+                saved={saved}
+                spaceId={spaceId}
+              />
+            )}
+          </section>
+        </ResourcePlaceholder>
       )}
     </>
   );
@@ -448,7 +452,7 @@ function ReserveEditor({
   close,
   saved,
 }: {
-  api: Pick<ReturnType<typeof createAccountApi>, "planning">;
+  api: Pick<AccountApi, "planning">;
   csrf: string;
   report: ReserveReport;
   spaceId: string;

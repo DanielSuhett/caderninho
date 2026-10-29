@@ -1,6 +1,7 @@
 import { Banner } from "@cloudflare/kumo/components/banner";
 import {
   createContext,
+  type ReactNode,
   useCallback,
   useContext,
   useEffect,
@@ -10,6 +11,7 @@ import {
 
 import { tryCatch } from "../../shared";
 import { UiButton } from "../ui";
+import type { AccountApi } from "./account-api";
 import {
   accountPath,
   workspaceBasePath,
@@ -17,15 +19,19 @@ import {
 } from "./account-navigation";
 import { DisclosureItem } from "./disclosure-item";
 import type { ViewCache } from "./read-cache";
-import { WorkspaceSkeleton } from "./workspace-ui";
 
 export const ResourceVersion = createContext(0);
+
+// Before data exists, a slow first read waits LOADING_DELAY and then shows the
+// placeholder answer, if one was given.
+const LOADING_DELAY = 150;
 
 // With a view cache, a page the user returns to renders its last result at
 // once and refreshes quietly; errors still surface over the stale data.
 export function useResource<T>(
   load: (signal: AbortSignal, fresh: boolean) => Promise<T>,
   view?: ViewCache<T>,
+  placeholder?: (signal: AbortSignal) => Promise<T>,
 ) {
   const [version, setVersion] = useState(0);
   const sourceVersion = useContext(ResourceVersion);
@@ -36,6 +42,7 @@ export function useResource<T>(
     data: T | undefined;
     error: boolean;
     loading: boolean;
+    placeholder?: T;
   }>(() => {
     const data = view?.get(key);
     return { data, error: false, loading: data === undefined };
@@ -57,6 +64,24 @@ export function useResource<T>(
         loading: true,
       }));
     }
+    const timer =
+      placeholder &&
+      setTimeout(() => {
+        // Best effort: without a placeholder the page stays blank until data.
+        tryCatch(() => placeholder(controller.signal)).then(
+          ({ data, error }) => {
+            if (controller.signal.aborted || error) {
+              return;
+            }
+            setState((previous) =>
+              previous.loading && previous.data === undefined
+                ? { ...previous, placeholder: data }
+                : previous,
+            );
+          },
+          () => undefined,
+        );
+      }, LOADING_DELAY);
     tryCatch(() => load(controller.signal, version > 0 || sourceChanged)).then(
       ({ data, error }) => {
         if (controller.signal.aborted) {
@@ -75,20 +100,79 @@ export function useResource<T>(
       },
       () => undefined,
     );
-    return () => controller.abort();
-  }, [load, version, sourceVersion, view, key]);
-  return { ...state, retry };
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [load, placeholder, version, sourceVersion, view, key]);
+  return {
+    data: state.data ?? state.placeholder,
+    error: state.error,
+    loading: state.loading,
+    placeholder: state.data === undefined && state.placeholder !== undefined,
+    retry,
+  };
+}
+
+// A page read whose first slow load renders the page itself over demo
+// answers, so the skeleton matches what the page will show.
+export function usePageResource<T, Read extends keyof AccountApi>(
+  api: Pick<AccountApi, Read>,
+  load: (
+    api: Pick<AccountApi, Read>,
+    signal: AbortSignal,
+    fresh: boolean,
+  ) => Promise<T>,
+  view?: ViewCache<T>,
+) {
+  const read = useCallback(
+    (signal: AbortSignal, fresh: boolean) => load(api, signal, fresh),
+    [api, load],
+  );
+  const placeholder = useCallback(
+    async (signal: AbortSignal) => {
+      const { placeholderApi } = await import("../demo-placeholder");
+      return load(placeholderApi(), signal, false);
+    },
+    [load],
+  );
+  return useResource(read, view, placeholder);
+}
+
+// Placeholder content keeps the real layout but hides every value behind a
+// bar and takes no input; the real content mounts fresh when it arrives.
+export function ResourcePlaceholder({
+  active,
+  children,
+}: {
+  active: boolean;
+  children: ReactNode;
+}) {
+  if (!active) {
+    return children;
+  }
+  return (
+    <div
+      aria-hidden
+      className="resource-placeholder"
+      inert
+    >
+      {children}
+    </div>
+  );
 }
 export function ResourceFeedback({
   error,
   loading,
   retry,
   data,
+  placeholder,
 }: {
   error: boolean;
   loading: boolean;
   retry: () => void;
   data?: unknown;
+  placeholder?: boolean;
 }) {
   const [showLoading, setShowLoading] = useState(false);
   useEffect(() => {
@@ -96,14 +180,21 @@ export function ResourceFeedback({
       setShowLoading(false);
       return;
     }
-    const timer = setTimeout(() => setShowLoading(true), 150);
+    const timer = setTimeout(() => setShowLoading(true), LOADING_DELAY);
     return () => clearTimeout(timer);
   }, [loading]);
   const first = new URLSearchParams(location.search);
   first.delete("cursor");
   first.delete("grantCursor");
-  if (loading && !data) {
-    return showLoading ? <WorkspaceSkeleton /> : null;
+  if (placeholder || (loading && !data)) {
+    return showLoading ? (
+      <span
+        className="sr-only"
+        role="status"
+      >
+        Carregando dados salvos…
+      </span>
+    ) : null;
   }
   if (loading && showLoading) {
     return (

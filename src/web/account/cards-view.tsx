@@ -9,7 +9,7 @@ import type {
   WorkspaceCatalog,
 } from "../../contracts";
 import { localDay } from "../../domain";
-import type { createAccountApi } from "./account-api";
+import type { AccountApi } from "./account-api";
 import { navigateWorkspace, workspaceHref } from "./account-navigation";
 import { CardFilter } from "./card-filter";
 import { CardsWithLimitEditor } from "./card-limit-editor";
@@ -25,10 +25,15 @@ import { PeriodPicker } from "./period-picker";
 import { PersonStack } from "./person-identity";
 import { createViewCache } from "./read-cache";
 import { ScopeFields } from "./workspace-filters";
-import { ResourceFeedback, useResource } from "./workspace-resource";
+import {
+  ResourceFeedback,
+  ResourcePlaceholder,
+  usePageResource,
+} from "./workspace-resource";
 import { WorkspaceFilters, WorkspaceHeading } from "./workspace-ui";
 import "./cards.css";
 
+type CardsApi = Pick<AccountApi, "catalog" | "query" | "planning">;
 const views = createViewCache<
   PortalQueryResults["get_portal_cards"] & { catalog: WorkspaceCatalog }
 >();
@@ -38,10 +43,7 @@ export function CardsView({
   snapshot,
   basePath = workspaceHref("/account/cards"),
 }: {
-  api: Pick<
-    ReturnType<typeof createAccountApi>,
-    "catalog" | "query" | "planning"
-  >;
+  api: CardsApi;
   snapshot: PortalResponse;
   basePath?: string;
 }) {
@@ -54,13 +56,13 @@ export function CardsView({
   const requestedCurrency = params.get("currency");
   const cursor = params.get("cursor");
   const load = useCallback(
-    async (signal: AbortSignal, fresh: boolean) => {
-      const catalog = await api.catalog(spaceId, signal, fresh);
+    async (source: CardsApi, signal: AbortSignal, fresh: boolean) => {
+      const catalog = await source.catalog(spaceId, signal, fresh);
       const currency =
         requestedCurrency ??
         catalog.spaces.find((space) => space.id === spaceId)?.currency ??
         "BRL";
-      const result = await api.query(
+      const result = await source.query(
         {
           currency,
           month,
@@ -79,7 +81,6 @@ export function CardsView({
       accountId,
       cardId,
       params,
-      api,
       cursor,
       month,
       personId,
@@ -88,7 +89,7 @@ export function CardsView({
       spaceId,
     ],
   );
-  const resource = useResource(load, views);
+  const resource = usePageResource(api, load, views);
   const changeMonth = useCallback((value: string) => {
     const target = new URL(location.href);
     target.searchParams.set("month", value);
@@ -149,42 +150,44 @@ export function CardsView({
     activeFilters,
   ].some(Boolean);
   const filters = filterChoices && data && result && (
-    <WorkspaceFilters
-      action={basePath}
-      activeCount={activeFilters}
-      context={context}
-      identities={data.accounts}
-      identity={
-        <PersonStack
-          people={snapshot.people}
-          personId={personId}
-        />
-      }
-      showClear={activeFilters > 0}
-    >
-      <div className="cards-page cards-filter-fields">
-        <ScopeFields
-          catalog={result.catalog}
-          params={params}
-          person={snapshot.people.length > 1 || !!personId}
-          snapshot={snapshot}
-        />
-        {cardControl}
-        {currencyControl}
-        <input
-          name="month"
-          type="hidden"
-          value={month}
-        />
-        {!currencyControl && (
-          <input
-            name="currency"
-            type="hidden"
-            value={data.currency}
+    <ResourcePlaceholder active={resource.placeholder}>
+      <WorkspaceFilters
+        action={basePath}
+        activeCount={activeFilters}
+        context={context}
+        identities={data.accounts}
+        identity={
+          <PersonStack
+            people={snapshot.people}
+            personId={personId}
           />
-        )}
-      </div>
-    </WorkspaceFilters>
+        }
+        showClear={activeFilters > 0}
+      >
+        <div className="cards-page cards-filter-fields">
+          <ScopeFields
+            catalog={result.catalog}
+            params={params}
+            person={snapshot.people.length > 1 || !!personId}
+            snapshot={snapshot}
+          />
+          {cardControl}
+          {currencyControl}
+          <input
+            name="month"
+            type="hidden"
+            value={month}
+          />
+          {!currencyControl && (
+            <input
+              name="currency"
+              type="hidden"
+              value={data.currency}
+            />
+          )}
+        </div>
+      </WorkspaceFilters>
+    </ResourcePlaceholder>
   );
   return (
     <div className="cards-page">
@@ -202,7 +205,7 @@ export function CardsView({
       </WorkspaceHeading>
       <ResourceFeedback {...resource} />
       {!!data && !!result && (
-        <>
+        <ResourcePlaceholder active={resource.placeholder}>
           {!!result.partial && (
             <Banner
               description="Esta visão usa somente os dados já recebidos. Confira o estado das conexões."
@@ -234,7 +237,7 @@ export function CardsView({
               title="Nenhuma conta de cartão neste recorte"
             />
           )}
-        </>
+        </ResourcePlaceholder>
       )}
     </div>
   );

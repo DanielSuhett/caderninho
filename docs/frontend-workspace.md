@@ -92,8 +92,13 @@ O cache de leitura usa a chave completa, 20 entradas e dez segundos na memória;
 atualização manual ignora cache. Escritas invalidam antes e depois da requisição,
 e leituras anteriores não repovoam o cache. Uma leitura antiga também não pode
 sobrescrever uma atualização mais recente da mesma chave. Falhas não são armazenadas.
-Skeleton
-aparece após 150 ms. Não persistir esse cache financeiro no navegador.
+Após 150 ms sem dados, a página carregada por `usePageResource` renderiza os
+próprios componentes com respostas da demo (mesmo escopo, pessoa mapeada para a
+primeira da demo e datas à mesma distância de hoje) dentro de
+`ResourcePlaceholder`: inerte, oculto à leitura assistiva e com cada valor
+trocado por uma barra. O skeleton tem a forma e a quantidade de itens da demo;
+os dados reais montam do zero ao chegar. Não persistir esse cache financeiro no
+navegador.
 
 A confirmação do widget registra o banco com `deferImport: true`. Ao concluir
 Pessoas, o loading pede somente as primeiras importações ainda não admitidas.
@@ -223,19 +228,27 @@ grupos não se oferece controle vazio nem percentuais ou indicadores inventados.
 
 ## Editor de regras e grupos
 
-Nova regra separa nome, categoria, prioridade e estado das condições. Presets
-editáveis em BRL substituem só filtros: não escolhem categoria nem inferem
-transferência entre contas próprias. Até quatro alternativas OU, com oito
-condições E cada; campos globais continuam obrigatórios. Texto ignora caixa
-ASCII A–Z, mantendo acentos literais. Dinheiro exige moeda e magnitude exata;
-datas têm limites inclusivos. Referência ausente não significa Todas.
+Nova regra é um wizard em um Dialog: Início → Condições → Categoria → Salvar
+(editar começa em Condições). O início escolhe a jornada: beneficiário (CNPJ/CPF
+ou nome de quem recebeu, com fallback para o estabelecimento do cartão),
+descrição, modelo pronto ou regra avançada. Jornadas simples restringem a saídas
+por padrão e “Refinar com mais condições” converte o rascunho no construtor
+avançado, sem perdê-lo. Regras existentes reabrem na jornada mais simples que as
+representa; escopo legado (conta, movimento, texto) é dobrado nas alternativas.
+Criar a partir de uma transação pré-preenche o beneficiário quando o provedor o
+informa. Até quatro alternativas OU, com oito condições E cada. Texto ignora caixa
+ASCII A–Z, mantendo acentos literais; documento compara só dígitos. Dinheiro
+exige moeda e magnitude exata; datas têm limites inclusivos.
 
 Prévia espera 500 ms após mudar filtros, cancela a anterior e ignora respostas
-antigas; nome/categoria/prioridade não disparam nova consulta. Exibe até cinco
-amostras e contagem parcial acima de 10 mil registros. Correspondência não prova
-alteração, precedência ou categoria diferente. Regras pessoais precedem defaults,
-depois menor prioridade e ID. Salvar afeta novas importações; reaplicar histórico
-é ação explícita. Excluir conserva classificações anteriores.
+antigas. Exibe até cinco amostras com o beneficiário e contagem parcial acima de
+10 mil registros; o primeiro beneficiário encontrado sugere o nome da regra.
+Regras pessoais precedem defaults, depois menor prioridade e ID. A última etapa
+revisa a regra e oferece “Salvar e reclassificar”: salva e dispara o job de
+reaplicação do grupo, que preserva categorias manuais; o Dialog acompanha o
+progresso e mostra quantas transações mudaram, e pode seguir em segundo plano.
+Desligar a reclassificação salva só para as próximas importações. Excluir
+conserva classificações anteriores.
 
 Grupo é espaço de planejamento: nome, tipo, moeda e início do mês; editar preserva
 moeda. Não concede acesso nem muda titularidade. O pessoal é protegido; remover

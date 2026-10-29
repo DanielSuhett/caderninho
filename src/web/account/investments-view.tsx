@@ -8,7 +8,7 @@ import type {
   WorkspaceCatalog,
 } from "../../contracts";
 import { investmentPortfolio } from "../../domain";
-import type { createAccountApi } from "./account-api";
+import type { AccountApi } from "./account-api";
 import { AccountIdentity } from "./account-identity";
 import { workspaceHref } from "./account-navigation";
 import { InvestorDashboard, investmentTypeNames } from "./investor-dashboard";
@@ -16,9 +16,14 @@ import { identityParameters } from "./page-requests";
 import { PersonStack } from "./person-identity";
 import { createViewCache } from "./read-cache";
 import { ScopeFields } from "./workspace-filters";
-import { ResourceFeedback, useResource } from "./workspace-resource";
+import {
+  ResourceFeedback,
+  ResourcePlaceholder,
+  usePageResource,
+} from "./workspace-resource";
 import { WorkspaceFilters, WorkspaceHeading } from "./workspace-ui";
 
+type InvestmentsApi = Pick<AccountApi, "query" | "catalog">;
 const views = createViewCache<{
   catalog: WorkspaceCatalog;
   result: PortalQueryResults["get_investments"];
@@ -29,7 +34,7 @@ export function InvestmentsView({
   snapshot,
   basePath = workspaceHref("/account/investments"),
 }: {
-  api: Pick<ReturnType<typeof createAccountApi>, "query" | "catalog">;
+  api: InvestmentsApi;
   snapshot: PortalResponse;
   basePath?: string;
 }) {
@@ -40,9 +45,9 @@ export function InvestmentsView({
   const type = params.get("type") ?? "";
   const institutionId = params.get("institutionId") ?? "";
   const load = useCallback(
-    async (signal: AbortSignal, fresh: boolean) => {
+    async (source: InvestmentsApi, signal: AbortSignal, fresh: boolean) => {
       const [result, catalog] = await Promise.all([
-        api.query(
+        source.query(
           {
             spaceId,
             tool: "get_investments",
@@ -53,13 +58,13 @@ export function InvestmentsView({
           signal,
           fresh,
         ),
-        api.catalog(spaceId, signal, fresh),
+        source.catalog(spaceId, signal, fresh),
       ]);
       return { catalog, result };
     },
-    [api, snapshot.csrf, spaceId, personId, params],
+    [snapshot.csrf, spaceId, personId, params],
   );
-  const resource = useResource(load, views);
+  const resource = usePageResource(api, load, views);
   const records = resource.data?.result.data.records ?? [];
   const currencies = [
     ...new Set([currency, ...records.map((row) => row.currency)]),
@@ -91,90 +96,92 @@ export function InvestmentsView({
     spaceId !== "personal",
   ].some(Boolean);
   const filters = filterChoices && resource.data && (
-    <WorkspaceFilters
-      action={basePath}
-      activeCount={activeFilters.length}
-      context="Carteira do investidor"
-      identities={records}
-      identity={
-        <PersonStack
-          people={snapshot.people}
-          personId={personId}
+    <ResourcePlaceholder active={resource.placeholder}>
+      <WorkspaceFilters
+        action={basePath}
+        activeCount={activeFilters.length}
+        context="Carteira do investidor"
+        identities={records}
+        identity={
+          <PersonStack
+            people={snapshot.people}
+            personId={personId}
+          />
+        }
+        showClear={!!activeFilters.length}
+      >
+        <ScopeFields
+          catalog={resource.data.catalog}
+          identityFilters={false}
+          params={params}
+          snapshot={snapshot}
         />
-      }
-      showClear={!!activeFilters.length}
-    >
-      <ScopeFields
-        catalog={resource.data.catalog}
-        identityFilters={false}
-        params={params}
-        snapshot={snapshot}
-      />
-      {types.length > 1 || type ? (
-        <Select
-          className="w-full"
-          defaultValue={type}
-          items={[
-            { label: "Todas as classes", value: "" },
-            ...types.map((value) => ({
-              label: investmentTypeNames[value] ?? value,
-              value,
-            })),
-          ]}
-          label="Classe"
-          name="type"
-        />
-      ) : (
-        <input
-          name="type"
-          type="hidden"
-          value={type}
-        />
-      )}
-      {institutions.size > 1 || institutionId ? (
-        <Select
-          className="w-full"
-          defaultValue={institutionId}
-          items={[
-            { label: "Todas as instituições", value: "" },
-            ...[...institutions.values()].map((institution) => ({
-              label: (
-                <AccountIdentity
-                  account={{
-                    identity: { cardBrand: null, institution },
-                    name: institution.name,
-                  }}
-                />
-              ),
-              value: institution.id,
-            })),
-          ]}
-          label="Instituição"
-          name="institutionId"
-        />
-      ) : (
-        <input
-          name="institutionId"
-          type="hidden"
-          value={institutionId}
-        />
-      )}
-      {currencies.length > 1 ? (
-        <Select
-          className="w-full"
-          defaultValue={currency}
-          items={currencies.map((value) => ({ label: value, value }))}
-          label="Moeda"
-          name="currency"
-        />
-      ) : (
-        <input
-          name="currency"
-          type="hidden"
-          value={currency}
-        />
-      )}
-    </WorkspaceFilters>
+        {types.length > 1 || type ? (
+          <Select
+            className="w-full"
+            defaultValue={type}
+            items={[
+              { label: "Todas as classes", value: "" },
+              ...types.map((value) => ({
+                label: investmentTypeNames[value] ?? value,
+                value,
+              })),
+            ]}
+            label="Classe"
+            name="type"
+          />
+        ) : (
+          <input
+            name="type"
+            type="hidden"
+            value={type}
+          />
+        )}
+        {institutions.size > 1 || institutionId ? (
+          <Select
+            className="w-full"
+            defaultValue={institutionId}
+            items={[
+              { label: "Todas as instituições", value: "" },
+              ...[...institutions.values()].map((institution) => ({
+                label: (
+                  <AccountIdentity
+                    account={{
+                      identity: { cardBrand: null, institution },
+                      name: institution.name,
+                    }}
+                  />
+                ),
+                value: institution.id,
+              })),
+            ]}
+            label="Instituição"
+            name="institutionId"
+          />
+        ) : (
+          <input
+            name="institutionId"
+            type="hidden"
+            value={institutionId}
+          />
+        )}
+        {currencies.length > 1 ? (
+          <Select
+            className="w-full"
+            defaultValue={currency}
+            items={currencies.map((value) => ({ label: value, value }))}
+            label="Moeda"
+            name="currency"
+          />
+        ) : (
+          <input
+            name="currency"
+            type="hidden"
+            value={currency}
+          />
+        )}
+      </WorkspaceFilters>
+    </ResourcePlaceholder>
   );
   return (
     <>
@@ -184,7 +191,7 @@ export function InvestmentsView({
       />
       <ResourceFeedback {...resource} />
       {!!resource.data && (
-        <>
+        <ResourcePlaceholder active={resource.placeholder}>
           {!!resource.data.result.partial && (
             <Banner
               description="Algumas posições ainda não foram recebidas."
@@ -198,7 +205,7 @@ export function InvestmentsView({
             people={snapshot.people}
             showOwner={!personId}
           />
-        </>
+        </ResourcePlaceholder>
       )}
     </>
   );

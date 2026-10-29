@@ -290,3 +290,5 @@ export function createAccountApi(
       }),
   };
 }
+
+export type AccountApi = ReturnType<typeof createAccountApi>;
