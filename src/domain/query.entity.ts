@@ -3,6 +3,9 @@ import type { TransactionDirection, TransactionStatus } from "./finance.entity";
 export const TransactionOrder = { date_desc: "date_desc", id: "id" } as const;
 export type TransactionOrder =
   (typeof TransactionOrder)[keyof typeof TransactionOrder];
+export const TransactionDetail = { compact: "compact", full: "full" } as const;
+export type TransactionDetail =
+  (typeof TransactionDetail)[keyof typeof TransactionDetail];
 
 export const SpendingGroupBy = {
   category: "category",
@@ -58,6 +61,7 @@ export interface Cursor {
 }
 export interface TransactionQuery {
   cursor?: Cursor | undefined;
+  detail?: TransactionDetail | undefined;
   filter?: TransactionFilter | undefined;
   limit: number;
 }

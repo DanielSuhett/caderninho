@@ -323,6 +323,7 @@ await test("native Workflow, 10k/100k volume and persistent installation", {
         async function readPage(cursor: Cursor | null): Promise<void> {
           const response = await fetch(`${base}/query`, {
             body: JSON.stringify({
+              detail: "full",
               filter: { connectionIds: [connection] },
               limit: 200,
               ...(cursor && { cursor }),

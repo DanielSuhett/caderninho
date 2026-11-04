@@ -68,9 +68,15 @@ test("identification survives atomic import, financial queries, portal/MCP plann
   await collect(source([row]));
   const finance = createFinancialService(createFinancialRepository(env.DB));
   assert.deepEqual(
-    (await finance.query({ limit: 10 })).records[0]?.identification,
+    (await finance.query({ detail: "full", limit: 10 })).records[0]
+      ?.identification,
     transactionIdentification,
   );
+  const compact = (await finance.query({ limit: 10 })).records[0]
+    ?.identification;
+  assert.equal(compact?.merchant?.cnpj, "00.000.000/0001-91");
+  assert.equal(compact?.paymentData?.receiver?.routingNumberISPB, undefined);
+  assert.equal(compact?.updatedAt, undefined);
   const app = fixture();
   const cookie = cookies(await login(app));
   await Promise.all(
@@ -102,14 +108,19 @@ test("identification survives atomic import, financial queries, portal/MCP plann
     ]),
     "2026-10-03T00:00:00Z",
   );
-  const [updated] = (await finance.query({ limit: 10 })).records;
+  const [updated] = (await finance.query({ detail: "full", limit: 10 }))
+    .records;
   assert.ok(updated);
   assert.equal(updated.identification?.merchant?.name, "Novo nome sintético");
   assert.equal(updated.amountMinor, "-1000");
   await collect(source([transaction()]), "2026-10-04T00:00:00Z");
-  assert.equal(
-    (await finance.query({ limit: 10 })).records[0]?.identification,
-    null,
+  await Promise.all(
+    (["compact", "full"] as const).map(async (detail) =>
+      assert.equal(
+        (await finance.query({ detail, limit: 10 })).records[0]?.identification,
+        null,
+      ),
+    ),
   );
 });
 
@@ -119,7 +130,7 @@ test("large-page scalar writes preserve identification exactly", async () => {
     source([transaction({ ...transactionIdentificationInput, description })]),
   );
   const finance = createFinancialService(createFinancialRepository(env.DB));
-  const [row] = (await finance.query({ limit: 1 })).records;
+  const [row] = (await finance.query({ detail: "full", limit: 1 })).records;
   assert.equal(row?.description, description);
   assert.deepEqual(row?.identification, transactionIdentification);
 });
