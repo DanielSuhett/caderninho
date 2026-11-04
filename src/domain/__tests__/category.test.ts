@@ -10,11 +10,11 @@ import {
 
 const hexColorPattern = /^#[a-f\d]{6}$/i;
 
-test("the classifier catalog has exactly the 33 requested categories with the fixed cost preselected in every space", () => {
-  assert.equal(fixedCategories.length, 33);
+test("the classifier catalog has exactly the 34 requested categories with the fixed cost preselected in every space", () => {
+  assert.equal(fixedCategories.length, 34);
   assert.equal(
     new Set(fixedCategories.map((category) => category.name)).size,
-    33,
+    34,
   );
   for (const spaceId of ["personal", "family"]) {
     const { categories } = categoryCatalog(spaceId);

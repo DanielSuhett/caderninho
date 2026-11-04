@@ -768,6 +768,25 @@ export const planningTools = {
     readOnly: true,
     schema: z.object({ ...RuleImportFields, spaceId: id }).strict(),
   }),
+  preview_trip: planningTool("preview_trip", {
+    description:
+      "Separar as saídas de uma viagem (from–to, até 62 dias) em trip, routine e review, com motivos, sem gravar. Routine: transferência para si, débito automático, boleto/fatura, cobrança recorrente, parcela anterior, compra fora do período (data da compra no cartão) ou comércio digital. Review: contraparte sem nome, gateway (MP*, PAYPAL*) ou contraparte já vista no histórico-base. Trip: contraparte nova no histórico-base. Mostre os três grupos ao proprietário; só depois da aprovação aplique categoryId com batch_edit_transactions nos IDs aprovados e, se ele quiser, uma etiqueta da viagem com create_tag e attach_transaction_tags.",
+    readOnly: true,
+    schema: z
+      .object({
+        ...scope,
+        baselineMonths: z
+          .number()
+          .int()
+          .min(1)
+          .max(12)
+          .default(6)
+          .describe("Meses antes de from usados para reconhecer contrapartes."),
+        from: day,
+        to: day,
+      })
+      .strict(),
+  }),
   reconcile_scheduled_payment: planningTool("reconcile_scheduled_payment", {
     description:
       "Conciliar próxima parcela com transação compatível ou criar lançamento manual; nunca inicia pagamento bancário.",

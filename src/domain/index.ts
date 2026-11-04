@@ -225,3 +225,5 @@ export {
   transactionMatchesText,
 } from "./transaction.entity";
 export { TransactionIdentificationSchema } from "./transaction.schema";
+export type { TripCandidate } from "./trip.entity";
+export { classifyTrip, TripReason, TripVerdict } from "./trip.entity";
