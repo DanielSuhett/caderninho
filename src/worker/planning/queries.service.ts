@@ -3,6 +3,7 @@ import {
   AccountType,
   CategoryKind,
   cardCredit,
+  classifyTrip,
   closedMonths,
   compareRules,
   detectSubscriptions,
@@ -10,6 +11,7 @@ import {
   type FinancialIdentityFilter,
   financialCharts,
   financialIdentity,
+  fixedCategoryId,
   fixedCostBreakdown,
   investmentPortfolio,
   localDay,
@@ -26,6 +28,7 @@ import {
   TransactionOrder,
   type TransactionProjection,
   TransactionStatus,
+  TripVerdict,
 } from "../../domain";
 import { type ProjectedPayment, recurrencePayments } from "./billing";
 import { effectiveBills } from "./bills.service";
@@ -1248,7 +1251,105 @@ export async function planningQuery(
       truncated: truncated || candidates.length > input.limit,
     };
   }
+  async function handlePreviewTrip(
+    input: Extract<PlanningCommand, { tool: "preview_trip" }>,
+  ) {
+    validatePeriod(input);
+    const dayMilliseconds = 86_400_000;
+    const shift = (value: string, days: number) =>
+      new Date(Date.parse(value) + days * dayMilliseconds)
+        .toISOString()
+        .slice(0, 10);
+    if (Date.parse(input.to) - Date.parse(input.from) > 61 * dayMilliseconds) {
+      throw new Error(PlanningError.INVALID_PERIOD);
+    }
+    const baselineFrom = monthDate(input.from, -input.baselineMonths);
+    // Card purchases made during the trip can post up to a week later.
+    const scanTo = shift(input.to, 7);
+    const scanLimit = 20_000;
+    const history: TransactionProjection[] = [];
+    const window: TransactionProjection[] = [];
+    let scannedCount = 0;
+    let truncated = false;
+    for await (const row of stream({
+      ...querySelection,
+      from: baselineFrom,
+      to: scanTo,
+    })) {
+      if (scannedCount === scanLimit) {
+        truncated = true;
+        break;
+      }
+      scannedCount += 1;
+      const kind = classification(row, state);
+      if (kind === CategoryKind.income) {
+        continue;
+      }
+      const details = metadata.get(row.id);
+      const projected = { ...row, ...(details && { details }) };
+      if (row.date < input.from) {
+        history.push(projected);
+        continue;
+      }
+      window.push(projected);
+    }
+    const recurringIds = new Set(
+      detectSubscriptions({
+        minOccurrences: 3,
+        transactions: [...history, ...window],
+      }).flatMap((candidate) =>
+        candidate.evidence.map((charge) => charge.transactionId),
+      ),
+    );
+    const records = classifyTrip({
+      from: input.from,
+      history,
+      recurringIds,
+      to: input.to,
+      transactions: window,
+    });
+    const categoryId = fixedCategoryId(input.spaceId, "viagens");
+    const totals = Object.values(TripVerdict).map((verdict) => {
+      const rows = records.filter((row) => row.verdict === verdict);
+      const amounts = new Map<string, bigint>();
+      for (const row of rows) {
+        const amount = BigInt(row.amountMinor ?? "0");
+        amounts.set(
+          row.currency,
+          (amounts.get(row.currency) ?? 0n) + (amount < 0n ? -amount : amount),
+        );
+      }
+      return {
+        count: rows.length,
+        outflows: [...amounts].map(([currency, amount]) => ({
+          amountMinor: amount.toString(),
+          currency,
+        })),
+        unknownAmountCount: rows.filter((row) => row.amountMinor === null)
+          .length,
+        verdict,
+      };
+    });
+    return {
+      baselineFrom,
+      categoryId: state.categories.some(
+        (category) => category.id === categoryId,
+      )
+        ? categoryId
+        : null,
+      estimated: true,
+      records,
+      referenceDay: day,
+      scanLimit,
+      scannedCount,
+      selection: { ...querySelection, from: input.from, to: input.to },
+      totals,
+      truncated,
+    };
+  }
   switch (command.tool) {
+    case "preview_trip":
+      return await handlePreviewTrip(command);
     case "get_subscriptions":
       return await handleGetSubscriptions(command);
     case "get_card_commitments":

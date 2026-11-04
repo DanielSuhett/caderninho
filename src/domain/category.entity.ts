@@ -9,6 +9,7 @@ export const CategoryIcon = {
   heart: "heart",
   home: "home",
   money: "money",
+  plane: "plane",
   shopping: "shopping",
   star: "star",
   transfer: "transfer",
@@ -183,7 +184,7 @@ export const fixedCategories = [
     tone: "cotidiano",
   },
   {
-    description: "Passeios, cinema, shows, viagens, jogos e entretenimento",
+    description: "Passeios, cinema, shows, jogos e entretenimento",
     icon: CategoryIcon.star,
     key: "lazer",
     name: "Lazer",
@@ -254,6 +255,14 @@ export const fixedCategories = [
     key: "transferencias",
     name: "Transferências",
     tone: "financas",
+  },
+  {
+    description:
+      "Hospedagem, passagens, milhas e despesas feitas durante viagens",
+    icon: CategoryIcon.plane,
+    key: "viagens",
+    name: "Viagens",
+    tone: "lazer",
   },
 ] as const;
 export type FixedCategoryKey = (typeof fixedCategories)[number]["key"];
@@ -450,16 +459,21 @@ export const pluggyCategoryRules: readonly {
       "Stadiums and arenas",
       "Landmarks and museums",
       "Cinema, theater and concerts",
+      "Gambling",
+      "Lottery",
+      "Online bet",
+      "Leisure",
+    ],
+  },
+  {
+    category: "viagens",
+    labels: [
       "Travel",
       "Airport and airlines",
       "Accommodation",
       "Accomodation",
       "Mileage programs",
       "Bus tickets",
-      "Gambling",
-      "Lottery",
-      "Online bet",
-      "Leisure",
     ],
   },
   { category: "doacoes", labels: ["Donations"] },

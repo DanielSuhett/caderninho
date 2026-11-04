@@ -42,7 +42,7 @@ test("fixed catalog, fixed-cost toggle, protected names and scoped assignments r
   );
   assert.equal(
     catalog.categories.filter((category) => !category.hidden).length,
-    33,
+    34,
   );
   assert.equal(
     catalog.categories.find(
@@ -99,7 +99,7 @@ test("fixed catalog, fixed-cost toggle, protected names and scoped assignments r
   );
   assert.equal(
     other.categories.filter((category) => !category.hidden).length,
-    33,
+    34,
   );
   assert.equal(
     other.categories.find(

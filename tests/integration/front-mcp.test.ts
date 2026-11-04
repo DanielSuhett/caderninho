@@ -508,7 +508,7 @@ test("MCP edits of categories, rules and spaces round-trip to the front with con
       }),
     })
     .parse(other.value);
-  assert.equal(appearance.data.records.length, 35);
+  assert.equal(appearance.data.records.length, 36);
   const wrongScope = await f.write("update_category", {
     color: "#112233",
     id: categoryId,
