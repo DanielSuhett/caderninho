@@ -56,14 +56,16 @@ const merchantCodeRanges: Record<
   MerchantCodeGroup,
   readonly (readonly [number, number])[]
 > = {
-  // Network services, cable/streaming, software, digital goods, direct
-  // marketing and continuity billing are paid from anywhere.
+  // Network services, cable/streaming, software, digital goods, catalog and
+  // telemarketing sales and continuity billing are paid from anywhere.
   digital: [
     [4816, 4816],
     [4899, 4899],
     [5734, 5735],
     [5815, 5818],
-    [5960, 5969],
+    // 5963 is door-to-door selling, the one in-person code of the group.
+    [5960, 5962],
+    [5964, 5969],
     [7372, 7372],
   ],
   // Airlines, car rental, lodging, passenger transport, travel agencies,

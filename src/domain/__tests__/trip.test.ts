@@ -184,6 +184,19 @@ test("card purchases made in the period are kept even when posted later; others 
   ]);
 });
 
+test("door-to-door sellers are not treated as digital merchants", () => {
+  const result = verdicts([
+    outflow({
+      date: "2026-03-12",
+      description: "Vendedor de praia",
+      identification: { creditCardMetadata: { payeeMCC: "5963" } },
+    }),
+  ]);
+  assert.deepEqual(result, [
+    ["Vendedor de praia", TripVerdict.trip, [TripReason.newCounterparty]],
+  ]);
+});
+
 test("provider travel labels map to the Viagens category", () => {
   for (const label of [
     "Travel",
