@@ -10,6 +10,7 @@ import {
   RunStatus,
   SpaceType,
   SpendingGroupBy,
+  TransactionDetail,
   TransactionDirection,
   TransactionIdentificationSchema,
   TransactionStatus,
@@ -29,9 +30,17 @@ import {
 } from "./rule-import";
 import { RuleFilterSchema } from "./rules";
 
+// The panel renders the provider's full identification; MCP pages default to compact.
+const fullDetail = {
+  detail: z
+    .enum([TransactionDetail.compact, TransactionDetail.full])
+    .default(TransactionDetail.full),
+};
+
 export const PortalTransactionQuerySchema =
   planningTools.get_transaction_purchases.schema.extend({
     ...identityFilterFields,
+    ...fullDetail,
     cardId: z.string().min(1).max(160).optional(),
     cardsOnly: z.boolean().optional(),
     tool: z.literal("get_portal_transactions"),
@@ -49,7 +58,7 @@ export const PortalQuerySchema = z
       planningTools.preview_rule_import.command,
       planningTools.get_accounts.command,
       planningTools.get_emergency_reserve.command,
-      planningTools.get_transactions.command,
+      planningTools.get_transactions.command.extend(fullDetail),
       planningTools.get_overview.command.extend(identityFilterFields),
       planningTools.generate_chart.command.extend({
         ...identityFilterFields,

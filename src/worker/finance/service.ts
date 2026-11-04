@@ -1,6 +1,8 @@
 import {
   type AggregateQuery,
+  compactTransaction,
   localDay,
+  TransactionDetail,
   type TransactionQuery,
 } from "../../domain";
 import { hash } from "../../shared";
@@ -23,7 +25,15 @@ export function createFinancialService(
           connectionIds: [...new Set(input.filter.connectionIds)].sort(),
         }),
       };
-      return repository.query(input, await hash(filter), localDay(now()));
+      const result = await repository.query(
+        input,
+        await hash(filter),
+        localDay(now()),
+      );
+      if (input.detail === TransactionDetail.full) {
+        return result;
+      }
+      return { ...result, records: result.records.map(compactTransaction) };
     },
   };
 }

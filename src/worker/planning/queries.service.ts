@@ -4,6 +4,7 @@ import {
   CategoryKind,
   cardCredit,
   closedMonths,
+  compactTransaction,
   compareRules,
   detectSubscriptions,
   emergencyReservePlan,
@@ -22,6 +23,7 @@ import {
   reserveDefaults,
   reserveId,
   SpendingGroupBy,
+  TransactionDetail,
   TransactionDirection,
   TransactionOrder,
   type TransactionProjection,
@@ -684,7 +686,7 @@ export async function planningQuery(
     input: Extract<PlanningCommand, { tool: "get_transactions" }>,
   ) {
     validatePeriod(input);
-    const { cursor, limit, tool: _tool, ...filter } = input;
+    const { cursor, detail, limit, tool: _tool, ...filter } = input;
     const cursorState = await planningCursor({
       cursor,
       filter,
@@ -713,7 +715,10 @@ export async function planningQuery(
         ? cursorState.encode(order.key(found(records.at(-1))))
         : null,
       partial: snapshot.partial,
-      records,
+      records:
+        detail === TransactionDetail.full
+          ? records
+          : records.map(compactTransaction),
       referenceDay: day,
       selection: {
         ...querySelection,

@@ -143,3 +143,108 @@ export function transactionCounterparty(
     name: receiver?.name || merchant?.name || merchant?.businessName || null,
   };
 }
+
+function compactParticipant(
+  participant: TransactionParticipant | null | undefined,
+): TransactionParticipant | undefined {
+  const document = participant?.documentNumber;
+  const compact = {
+    ...(document?.value && {
+      documentNumber: {
+        ...(document.type && { type: document.type }),
+        value: document.value,
+      },
+    }),
+    ...(participant?.name && { name: participant.name }),
+  };
+  return Object.keys(compact).length ? compact : undefined;
+}
+
+function compactPayment(
+  payment: TransactionPayment | null | undefined,
+): TransactionPayment | undefined {
+  const payer = compactParticipant(payment?.payer);
+  const receiver = compactParticipant(payment?.receiver);
+  const compact = {
+    ...(payer && { payer }),
+    ...(payment?.paymentMethod && { paymentMethod: payment.paymentMethod }),
+    ...(payment?.reason && { reason: payment.reason }),
+    ...(receiver && { receiver }),
+  };
+  return Object.keys(compact).length ? compact : undefined;
+}
+
+function compactCard(
+  card: TransactionCard | null | undefined,
+): TransactionCard | undefined {
+  const installmentNumber = card?.installmentNumber ?? null;
+  const totalInstallments = card?.totalInstallments ?? null;
+  const compact = {
+    ...(card?.billPostDate && { billPostDate: card.billPostDate }),
+    ...(card?.cardNumber && { cardNumber: card.cardNumber }),
+    ...(installmentNumber !== null && { installmentNumber }),
+    ...(card?.payeeMCC && { payeeMCC: card.payeeMCC }),
+    ...(totalInstallments !== null && { totalInstallments }),
+  };
+  return Object.keys(compact).length ? compact : undefined;
+}
+
+function compactMerchant(
+  merchant: TransactionMerchant | null | undefined,
+): TransactionMerchant | undefined {
+  const compact = {
+    ...(merchant?.businessName && { businessName: merchant.businessName }),
+    ...(merchant?.category && { category: merchant.category }),
+    ...(merchant?.cnae && { cnae: merchant.cnae }),
+    ...(merchant?.cnpj && { cnpj: merchant.cnpj }),
+    ...(merchant?.name && { name: merchant.name }),
+  };
+  return Object.keys(compact).length ? compact : undefined;
+}
+
+// MCP pages default to this view: provider fields that identify the
+// counterparty, the card charge and the operation, without nulls, audit
+// timestamps or values the record already carries at the top level. The
+// record keeps `identification: null` when nothing identifying remains.
+export function compactTransaction<
+  Row extends {
+    category: string | null;
+    description: string;
+    identification?: TransactionIdentification | null | undefined;
+  },
+>(
+  row: Row,
+): Omit<Row, "identification"> & {
+  identification: TransactionIdentification | null;
+} {
+  const { identification, ...rest } = row;
+  const card = compactCard(identification?.creditCardMetadata);
+  const merchant = compactMerchant(identification?.merchant);
+  const payment = compactPayment(identification?.paymentData);
+  const category = identification?.category;
+  const descriptionRaw = identification?.descriptionRaw;
+  const compact = {
+    ...(identification?.amountInAccountCurrency && {
+      amountInAccountCurrency: identification.amountInAccountCurrency,
+    }),
+    ...(category && category !== row.category && { category }),
+    ...(identification?.categoryId && {
+      categoryId: identification.categoryId,
+    }),
+    ...(card && { creditCardMetadata: card }),
+    ...(descriptionRaw &&
+      descriptionRaw !== row.description && { descriptionRaw }),
+    ...(merchant && { merchant }),
+    ...(identification?.operationType && {
+      operationType: identification.operationType,
+    }),
+    ...(identification?.operationTypeAdditionalInfo && {
+      operationTypeAdditionalInfo: identification.operationTypeAdditionalInfo,
+    }),
+    ...(payment && { paymentData: payment }),
+  };
+  return {
+    ...rest,
+    identification: Object.keys(compact).length ? compact : null,
+  };
+}

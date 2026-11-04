@@ -6,8 +6,10 @@ import type {
 } from "../../contracts";
 import {
   AccountType,
+  compactTransaction,
   localDay,
   type PlanningTransaction,
+  TransactionDetail,
   type TransactionDetails,
   transactionMatchesText,
 } from "../../domain";
@@ -147,7 +149,7 @@ export async function portalTransactions(
 ) {
   const { accountList } = validateSelection(input, snapshot);
   const day = localDay(now);
-  const { cursor, limit, tool: _tool, ...filter } = input;
+  const { cursor, detail, limit, tool: _tool, ...filter } = input;
   const cursorState = await planningCursor({
     cursor,
     filter: { ...filter, referenceDay: day },
@@ -259,7 +261,13 @@ export async function portalTransactions(
   const last = records.at(-1);
   return {
     cursor: more && last ? cursorState.encode(key(last)) : null,
-    records,
+    records:
+      detail === TransactionDetail.full
+        ? records
+        : records.map((row) => ({
+            ...compactTransaction(row),
+            installments: row.installments.map(compactTransaction),
+          })),
     referenceDay: day,
     revision: snapshot.revision,
     uncategorizedCount,

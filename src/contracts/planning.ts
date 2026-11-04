@@ -15,6 +15,7 @@ import {
   TransactionStatus,
 } from "../domain";
 import { CardCommitmentsQuerySchema } from "./card-commitments";
+import { TransactionDetailSchema } from "./finance";
 import { RuleImportFields } from "./rule-import";
 import { RuleFieldsSchema, RulePreviewQuerySchema } from "./rules";
 
@@ -666,6 +667,7 @@ export const planningTools = {
       .object({
         ...selection,
         cursor: z.string().max(4096).optional(),
+        detail: TransactionDetailSchema,
         future: z.boolean().default(false),
         limit: z.number().int().min(1).max(500).default(100),
         order: z
@@ -677,12 +679,13 @@ export const planningTools = {
   }),
   get_transactions: planningTool("get_transactions", {
     description:
-      "Histórico efetivo com edições locais e paginação consistente. Para últimas compras envie order=date_desc e limit=5; não some páginas para calcular totais.",
+      "Histórico efetivo com edições locais e paginação consistente. Para últimas compras envie order=date_desc e limit=5; para períodos, prefira limit até 50 por página. identification vem compacta; detail=full só para conferir registros específicos. Não some páginas para calcular totais.",
     readOnly: true,
     schema: z
       .object({
         ...selection,
         cursor: z.string().max(4096).optional(),
+        detail: TransactionDetailSchema,
         limit: z.number().int().min(1).max(500).default(100),
         order: z
           .enum([TransactionOrder.id, TransactionOrder.date_desc])

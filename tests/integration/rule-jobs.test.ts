@@ -135,6 +135,7 @@ test("an import job accepts every valid rule, skips the rest and reapplies the w
 
   const planning = createPlanningService(createPlanningRepository(env.DB));
   const rows = await planning.execute({
+    detail: "compact",
     from: "2026-09-01",
     include_ignored: false,
     limit: 5,

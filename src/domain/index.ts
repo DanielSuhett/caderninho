@@ -162,6 +162,7 @@ export {
   Metric,
   MetricDefinition,
   SpendingGroupBy,
+  TransactionDetail,
   TransactionOrder,
 } from "./query.entity";
 export type { EmergencyReserve } from "./reserve.entity";
@@ -220,6 +221,7 @@ export type {
   TransactionPayment,
 } from "./transaction.entity";
 export {
+  compactTransaction,
   documentDigits,
   transactionCounterparty,
   transactionMatchesText,

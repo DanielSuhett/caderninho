@@ -4,6 +4,7 @@ import {
   AggregateGroupBy,
   type AggregateQuery,
   Metric,
+  TransactionDetail,
   TransactionDirection,
   type TransactionFilter,
   type TransactionQuery,
@@ -13,6 +14,12 @@ import {
 const identifier = z.string().min(1).max(160);
 const day = z.iso.date();
 const amount = z.string().regex(/^-?(0|[1-9]\d{0,29})$/);
+export const TransactionDetailSchema = z
+  .enum([TransactionDetail.compact, TransactionDetail.full])
+  .default(TransactionDetail.compact)
+  .describe(
+    "compact omite nulos, auditoria e campos repetidos de identification; full devolve o payload completo da origem. Use full só para conferir um registro específico.",
+  );
 const TransactionFilterSchema = z
   .object({
     accountIds: z
@@ -120,6 +127,7 @@ export const TransactionQuerySchema = z
       })
       .strict()
       .optional(),
+    detail: TransactionDetailSchema,
     filter: TransactionFilterSchema.optional(),
     limit: z
       .number()

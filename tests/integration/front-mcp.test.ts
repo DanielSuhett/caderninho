@@ -193,11 +193,29 @@ test("MCP purchases match the front's grouped installments, identification and p
   });
   assert.equal(front.status, 200);
   const expected = PortalTransactionListSchema.parse(await front.json());
-  const mcp = await f.call("get_transaction_purchases", selection);
+  const mcp = await f.call("get_transaction_purchases", {
+    ...selection,
+    detail: "full",
+  });
   assert.equal(mcp.status, 200);
   assert.equal(mcp.error, false, JSON.stringify(mcp.value));
   const actual = PortalTransactionListSchema.parse(mcp.value);
   assert.deepEqual(actual, expected);
+  const compact = PortalTransactionListSchema.parse(
+    (await f.call("get_transaction_purchases", selection)).value,
+  );
+  const [compactPurchase] = compact.data.records;
+  assert.deepEqual(compactPurchase?.identification?.merchant, {
+    cnpj: "00.000.000/0001-91",
+    name: "Comerciante sintético",
+  });
+  assert.equal(compactPurchase?.identification?.createdAt, undefined);
+  assert.equal(
+    compactPurchase?.installments[2]?.identification?.creditCardMetadata
+      ?.installmentNumber,
+    3,
+  );
+  assert.ok(JSON.stringify(compact).length < JSON.stringify(actual).length);
   const [purchase] = actual.data.records;
   assert.ok(purchase);
   assert.equal(purchase.anchorDate, "2024-01-12");
