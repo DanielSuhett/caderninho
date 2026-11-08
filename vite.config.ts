@@ -359,9 +359,11 @@ function copyPortalAssets(): Plugin {
           ),
         ),
       );
-      await cp(new URL("rule-packs/", output), new URL("rule-packs/", site), {
-        recursive: true,
-      });
+      await Promise.all(
+        ["bancos/", "rule-packs/"].map((name) =>
+          cp(new URL(name, output), new URL(name, site), { recursive: true }),
+        ),
+      );
       await cp(new URL("chunks/", output), new URL("chunks/", site), {
         recursive: true,
       });
