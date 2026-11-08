@@ -60,8 +60,12 @@ const totalsSchema = z.object({
 });
 
 test("a fresh installation connects/reconnects the widget, imports cumulative pages and grants/revokes assistant access", async () => {
+  // Anchor the fake clock to the real day: KV rejects grant expirations that
+  // are already past in wall-clock time, so a fixed date expires the test.
+  const day = 86_400_000;
+  const start = Math.floor(Date.now() / day) * day + day / 2;
   vi.useFakeTimers({ toFake: ["Date"] });
-  vi.setSystemTime(new Date("2026-10-01T12:00:00Z"));
+  vi.setSystemTime(start);
   const apiKey = syntheticJwt("installation-private-api-key");
   const connectToken = "synthetic-limited-widget-token";
   const responses: string[] = [];
@@ -121,7 +125,7 @@ test("a fresh installation connects/reconnects the widget, imports cumulative pa
     }
     assert.equal(url.pathname, "/v2/transactions");
     assert.equal(url.searchParams.get("accountId"), accountId);
-    const secondWindow = Date.now() >= Date.parse("2026-10-02T12:00:00Z");
+    const secondWindow = Date.now() >= start + day;
     const after = url.searchParams.get("after");
     const firstId = secondWindow ? b : a;
     const lastId = secondWindow ? c : b;
@@ -288,7 +292,7 @@ test("a fresh installation connects/reconnects the widget, imports cumulative pa
       .groups[0]?.totalMinor,
     "900719925474099303",
   );
-  vi.setSystemTime(new Date("2026-10-02T12:00:00Z"));
+  vi.setSystemTime(start + day);
   const renewed = cookies(await login(app));
   // A fresh access token is needed after 24h; owner login does not replace old grants.
   assistant = await grant(app, renewed);
