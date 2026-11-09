@@ -7,6 +7,9 @@ import {
   type SubscriptionCandidate,
   TransactionDirection,
   TransactionStatus,
+  type TripCandidate,
+  TripReason,
+  TripVerdict,
 } from "../domain";
 import { CardCommitmentsResponseSchema } from "./card-commitments";
 import { FinancialOverviewSchema, FinancialSummarySchema } from "./dashboard";
@@ -111,7 +114,46 @@ export const SubscriptionsResultSchema = envelope(
   }),
 );
 
+export const TripPreviewResultSchema = envelope(
+  z.object({
+    baselineFrom: z.iso.date(),
+    categoryId: z.string().nullable(),
+    estimated: z.literal(true),
+    records: z.array(
+      z.object({
+        accountId: z.string(),
+        amountMinor: minor.nullable(),
+        counterparty: z.string().nullable(),
+        currency: z.string(),
+        date: z.iso.date(),
+        description: z.string(),
+        id: z.string(),
+        mcc: z.string().nullable(),
+        purchaseDay: z.iso.date(),
+        reasons: z.array(z.enum(TripReason)),
+        verdict: z.enum(TripVerdict),
+      }) satisfies z.ZodType<TripCandidate>,
+    ),
+    referenceDay: z.iso.date(),
+    scanLimit: z.number().int().positive(),
+    scannedCount: z.number().int().nonnegative(),
+    selection,
+    totals: z.array(
+      z.object({
+        count: z.number().int().nonnegative(),
+        outflows: z.array(
+          z.object({ amountMinor: minor, currency: z.string() }),
+        ),
+        unknownAmountCount: z.number().int().nonnegative(),
+        verdict: z.enum(TripVerdict),
+      }),
+    ),
+    truncated: z.boolean(),
+  }),
+);
+
 export const planningOutputSchemas = new Map<string, z.ZodType>([
+  ["preview_trip", TripPreviewResultSchema],
   ["get_investments", envelope(InvestmentListSchema.shape.data)],
   ["get_subscriptions", SubscriptionsResultSchema],
   ["get_card_commitments", CardCommitmentsResponseSchema],

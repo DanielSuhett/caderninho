@@ -1,5 +1,6 @@
 import {
   ActivityIcon,
+  AirplaneTiltIcon,
   ArrowsLeftRightIcon,
   BookOpenIcon,
   BriefcaseIcon,
@@ -35,6 +36,7 @@ const icons: Record<
   heart: HeartIcon,
   home: HouseIcon,
   money: WalletIcon,
+  plane: AirplaneTiltIcon,
   shopping: ShoppingBagIcon,
   star: StarIcon,
   transfer: ArrowsLeftRightIcon,
@@ -49,6 +51,7 @@ const labels: Record<IconName, string> = {
   heart: "Coração",
   home: "Casa",
   money: "Finanças",
+  plane: "Viagem",
   shopping: "Compras",
   star: "Estrela",
   transfer: "Transferência",
