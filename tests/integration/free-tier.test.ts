@@ -151,7 +151,7 @@ test("daily reconciliation skips unchanged writes and still accepts source corre
   });
   await collect(source([corrected]), "2026-10-03T00:00:00.000Z");
   const finance = createFinancialService(createFinancialRepository(env.DB));
-  const page = await finance.query({ limit: 50 });
+  const page = await finance.query({ detail: "full", limit: 50 });
   assert.equal(page.records.length, 1);
   assert.deepEqual(page.records[0], {
     accountId: "a",

@@ -30,7 +30,7 @@ const definitions = [
   },
   {
     description:
-      "Consultar histórico local por campos conhecidos. Cursor exige mesmo estado da seleção; categoria e descrição vêm da origem.",
+      "Consultar histórico local por campos conhecidos. Cursor exige mesmo estado da seleção; categoria e descrição vêm da origem. identification vem compacta; detail=full devolve o payload completo.",
     name: ToolName.transactions,
     readOnly: true,
     schema: TransactionQuerySchema,
